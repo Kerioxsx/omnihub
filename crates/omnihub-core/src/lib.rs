@@ -17,4 +17,5 @@ pub mod remote;
 pub mod settings;
 pub mod storage;
 pub mod system;
+pub mod thumbs;
 pub mod vault;

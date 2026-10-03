@@ -166,6 +166,7 @@ pub fn run(args: Vec<String>) {
             commands::storage_open_cached,
             commands::storage_children,
             commands::storage_treemap,
+            commands::storage_thumb,
             commands::storage_top_files,
             commands::storage_extensions,
             commands::storage_search,

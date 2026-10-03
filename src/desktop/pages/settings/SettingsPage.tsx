@@ -241,6 +241,18 @@ export function SettingsPage() {
                 ]}
               />
             </Row>
+            <Row title="Explorer view" hint="How the Explorer tab shows a folder. You can also switch on the tab itself.">
+              <Select value={s.storage.explorerView} onChange={(e) => void update({ storage: { explorerView: e.target.value as typeof s.storage.explorerView } })} className="w-[200px]" aria-label="Explorer view">
+                <option value="split">Treemap + list</option>
+                <option value="list">Details list</option>
+                <option value="grid">Grid with previews</option>
+                <option value="treemap">Treemap only</option>
+                <option value="sunburst">Rings (sunburst)</option>
+              </Select>
+            </Row>
+            <Row title="Image previews in the grid" hint="Reads image files to make small previews; turn off on slow or network drives.">
+              <Switch checked={s.storage.gridPreviews} onChange={(v) => void update({ storage: { gridPreviews: v } })} label="Image previews" />
+            </Row>
             <Row title="Include hidden and system files">
               <Switch checked={s.storage.showHidden} onChange={(v) => void update({ storage: { showHidden: v } })} label="Show hidden files" />
             </Row>

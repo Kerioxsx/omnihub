@@ -50,6 +50,7 @@ pub struct AppCore {
     pub power: PowerScheduler,
     pub bridges: Bridges,
     pub remote: RemoteServer,
+    pub thumbs: crate::thumbs::Thumbs,
 }
 
 impl AppCore {
@@ -74,6 +75,7 @@ impl AppCore {
             power: PowerScheduler::new(events.clone(), audit.clone(), opts.dry_run_power),
             bridges: Bridges::new(),
             remote: RemoteServer::new(db.clone(), events.clone()),
+            thumbs: crate::thumbs::Thumbs::default(),
             paths,
             settings,
             events,

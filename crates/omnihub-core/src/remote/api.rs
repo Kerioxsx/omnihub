@@ -383,19 +383,13 @@ async fn fs_list(State(core): State<Ctx>, Query(q): Query<PathQuery>) -> ApiResu
 
 async fn fs_thumb(State(core): State<Ctx>, Query(q): Query<PathQuery>) -> ApiResult<Response> {
     let p = allowed_path(&core, &q.path)?;
-    if kind_of(&p.to_string_lossy()) != "image" || std::fs::metadata(&p)?.len() > 60 << 20 {
+    if !crate::thumbs::is_previewable(&p) {
         return Err(ApiError::bad("not a previewable image"));
     }
     let size = q.size.unwrap_or(256).clamp(64, 1024);
-    let bytes = tokio::task::spawn_blocking(move || -> ApiResult<Vec<u8>> {
-        let img = image::open(&p).map_err(|e| ApiError::bad(e.to_string()))?;
-        let t = img.thumbnail(size, size).to_rgb8();
-        let mut out = std::io::Cursor::new(Vec::new());
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 78).encode_image(&t)?;
-        Ok(out.into_inner())
-    })
-    .await??;
-    Ok(([(header::CONTENT_TYPE, "image/jpeg"), (header::CACHE_CONTROL, "private, max-age=600")], bytes).into_response())
+    let c = core.clone();
+    let bytes = tokio::task::spawn_blocking(move || c.thumbs.jpeg(&p, size)).await?.map_err(|e| ApiError::bad(e.to_string()))?;
+    Ok(([(header::CONTENT_TYPE, "image/jpeg"), (header::CACHE_CONTROL, "private, max-age=600")], (*bytes).clone()).into_response())
 }
 
 #[derive(Deserialize)]

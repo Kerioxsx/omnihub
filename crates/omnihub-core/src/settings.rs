@@ -68,6 +68,12 @@ pub struct StorageSettings {
     pub cleanup: CleanupOptions,
     pub show_hidden: bool,
     pub size_metric: SizeMetric,
+    /// How the Explorer tab shows a folder.
+    pub explorer_view: ExplorerView,
+    /// Tile size of the grid view: "sm", "md" or "lg".
+    pub grid_size: String,
+    /// Show previews of images in the grid view.
+    pub grid_previews: bool,
 }
 
 impl Default for StorageSettings {
@@ -78,8 +84,27 @@ impl Default for StorageSettings {
             cleanup: CleanupOptions::default(),
             show_hidden: true,
             size_metric: SizeMetric::Size,
+            explorer_view: ExplorerView::Split,
+            grid_size: "md".into(),
+            grid_previews: true,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum ExplorerView {
+    /// Treemap next to the details list.
+    #[default]
+    Split,
+    /// Details list across the whole width.
+    List,
+    /// Tiles with icons or image previews.
+    Grid,
+    /// The treemap alone.
+    Treemap,
+    /// Rings: each folder's share of its parent.
+    Sunburst,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]

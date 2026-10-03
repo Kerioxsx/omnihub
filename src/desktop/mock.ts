@@ -5,6 +5,7 @@
 
 import type { CaptureKind, DeepPartial, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
+import { scene } from './mock/art';
 import * as core from './mock/core';
 import { volumes } from './mock/drives';
 import * as media from './mock/media';
@@ -56,6 +57,10 @@ const handlers: Record<string, Handler> = {
   storage_open_cached: (a) => storage.openCached(str(a, 'root')),
   storage_children: (a) => storage.children(str(a, 'scanId'), num(a, 'node'), sortKey(a), bool(a, 'descending', true), num(a, 'offset', 0), num(a, 'limit', 500)),
   storage_treemap: (a) => storage.treemap(str(a, 'scanId'), num(a, 'node'), num(a, 'depth', 3), num(a, 'maxItems', 1500)),
+  storage_thumb: (a) => {
+    const path = str(a, 'path');
+    return /\.(jpe?g|png|gif|webp|bmp)$/i.test(path) ? scene(path, (['game', 'desktop', 'browser', 'code'] as const)[path.length % 4], 320, 200) : null;
+  },
   storage_top_files: (a) => storage.topFiles(str(a, 'scanId'), num(a, 'node'), num(a, 'n', 100)),
   storage_extensions: (a) => storage.extensions(str(a, 'scanId'), num(a, 'node')),
   storage_search: (a) => storage.search(str(a, 'scanId'), obj<SearchQuery>(a, 'query')),

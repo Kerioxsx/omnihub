@@ -106,6 +106,8 @@ export interface ChildrenPage {
 
 export type SortKey = 'size' | 'alloc' | 'name' | 'modified' | 'files';
 
+export type ExplorerView = 'split' | 'list' | 'grid' | 'treemap' | 'sunburst';
+
 export interface TreemapItem {
   /** 4294967295 for the folded "N smaller items" entry */
   id: number;
@@ -626,6 +628,10 @@ export interface Settings {
     cleanup: { largeFileMin: number; largeFileAgeDays: number; installerAgeDays: number };
     showHidden: boolean;
     sizeMetric: 'size' | 'alloc';
+    /** How the Explorer tab shows a folder. */
+    explorerView: ExplorerView;
+    gridSize: 'sm' | 'md' | 'lg';
+    gridPreviews: boolean;
   };
   notes: {
     claudeFolder: string | null;

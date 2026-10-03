@@ -794,6 +794,20 @@ pub async fn remote_inbox_remove(core: Core<'_>, id: String) -> Res<()> {
     Ok(())
 }
 
+/// A small preview of an image file as a data URL (`None` for other files).
+#[tauri::command]
+pub async fn storage_thumb(core: Core<'_>, path: String, size: u32) -> Res<Option<String>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let p = Path::new(&path);
+        if !omnihub_core::thumbs::is_previewable(p) {
+            return Ok(None);
+        }
+        Ok(core.thumbs.data_url(p, size).ok())
+    })
+    .await
+}
+
 /// Text currently on the PC clipboard (to send to a phone).
 #[tauri::command]
 pub async fn clipboard_text() -> Res<Option<String>> {
