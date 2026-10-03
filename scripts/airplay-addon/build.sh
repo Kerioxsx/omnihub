@@ -39,7 +39,7 @@ cp "$PREFIX/libexec/gstreamer-1.0/gst-plugin-scanner.exe" "$STAGE/bin/"
 # ! audioconvert ! audioresample ! volume ! autoaudiosink, cover art and text).
 PLUGINS=(
   coreelements app audioconvert audioresample volume playback typefindfunctions
-  videoconvertscale pango autodetect videofilter imagefreeze jpeg directsound
+  videoconvertscale pango autodetect videofilter imagefreeze jpeg level audioparsers directsound
   videoparsersbad d3d11 d3d12 wasapi wasapi2 libav
 )
 for p in "${PLUGINS[@]}"; do

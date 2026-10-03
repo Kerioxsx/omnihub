@@ -248,7 +248,7 @@ pub fn check(program: &Path, port: Option<u16>, proto: Proto, what: &str) -> Fir
     {
         let program_s = program.to_string_lossy().into_owned();
         let what = what.to_string();
-        let res = std::thread::spawn(move || win::read_state()).join().unwrap_or_else(|_| Err(std::io::Error::other("firewall check panicked")));
+        let res = std::thread::spawn(win::read_state).join().unwrap_or_else(|_| Err(std::io::Error::other("firewall check panicked")));
         match res {
             Ok((rules, profiles, active, networks)) => {
                 let (verdict, infos) = evaluate(&rules, &profiles, &program_s, port, proto);
