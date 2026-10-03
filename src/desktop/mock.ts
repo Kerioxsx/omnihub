@@ -165,6 +165,15 @@ const handlers: Record<string, Handler> = {
   scrcpy_connect: (a) => remote.scrcpyConnect(str(a, 'addr')),
   scrcpy_pair: (a) => remote.scrcpyPair(str(a, 'addr'), str(a, 'code')),
   sunshine_status: () => remote.sunshineStatus(),
+  airplay_status: () => remote.airplayStatus(),
+  airplay_install: () => remote.airplayInstall(),
+  airplay_uninstall: () => remote.airplayUninstall(),
+  airplay_start: () => remote.airplayStart(),
+  airplay_stop: () => remote.airplayStop(),
+  airplay_keep_on_top: (a) => void core.updateSettings({ screen: { airplayKeepOnTop: bool(a, 'on') } }),
+  airplay_place: () => undefined,
+  airplay_firewall: () => remote.airplayFirewall(),
+  airplay_fix_firewall: () => remote.airplayFixFirewall(),
 };
 
 const FAST = new Set(['vault_strength', 'vault_touch', 'vault_status', 'system_stats', 'vault_generate', 'storage_progress', 'storage_duplicates_progress', 'remote_status']);

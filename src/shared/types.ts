@@ -601,6 +601,47 @@ export interface ScrcpyOptions {
   control: boolean;
 }
 
+export interface AirPlayOptions {
+  /** Name the iPhone shows in Screen Mirroring. */
+  name: string;
+  quality: '1080p' | '1440p' | '4k';
+  fps: number;
+  audio: boolean;
+  requirePin: boolean;
+  lowLatency: boolean;
+  fullscreen: boolean;
+}
+
+export interface AirPlayClient {
+  name: string;
+  model: string;
+  deviceId: string;
+}
+
+export interface InstallProgress {
+  phase: 'download' | 'verify' | 'unpack' | string;
+  done: number;
+  total: number;
+}
+
+export interface AirPlayStatus {
+  supported: boolean;
+  installed: boolean;
+  source: 'addon' | 'custom' | 'found' | null;
+  path: string | null;
+  version: string | null;
+  running: boolean;
+  /** An iPhone is mirroring right now (the video window is open). */
+  mirroring: boolean;
+  name: string;
+  pin: string | null;
+  client: AirPlayClient | null;
+  error: string | null;
+  log: string[];
+  install: InstallProgress | null;
+  downloadUrl: string;
+}
+
 export interface SunshineStatus {
   installed: boolean;
   path: string | null;
@@ -681,6 +722,11 @@ export interface Settings {
     maxFps: number;
     scrcpyPath: string | null;
     sunshinePath: string | null;
+    airplay: AirPlayOptions;
+    airplayKeepOnTop: boolean;
+    airplayPip: boolean;
+    airplayAutoStart: boolean;
+    uxplayPath: string | null;
   };
 }
 

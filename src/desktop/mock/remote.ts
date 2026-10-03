@@ -1,6 +1,6 @@
 // Phone companion server, power actions and screen-sharing bridges.
 
-import type { AdbDevice, Device, FirewallReport, InboxItem, LanAddress, MonitorInfo, NetworkInfo, PairingInfo, PendingPower, PowerAction, Preset, RemoteDiagnostics, ScrcpyOptions, ScrcpyStatus, ServerStatus, SunshineStatus, ViewerInfo, Visit } from '@shared/types';
+import type { AdbDevice, AirPlayStatus, Device, FirewallReport, InboxItem, LanAddress, MonitorInfo, NetworkInfo, PairingInfo, PendingPower, PowerAction, Preset, RemoteDiagnostics, ScrcpyOptions, ScrcpyStatus, ServerStatus, SunshineStatus, ViewerInfo, Visit } from '@shared/types';
 import { emit } from './bus';
 import { audit, flags, onSettingsChange, settings } from './core';
 import { fakeQr } from './art';
@@ -401,4 +401,114 @@ export function scrcpyPair(addr: string, code: string): string {
 
 export function sunshineStatus(): SunshineStatus {
   return { installed: true, path: 'C:\\Program Files\\Sunshine\\sunshine.exe', running: false, webUi: 'https://localhost:47990' };
+}
+
+// ---------- iPhone mirroring (AirPlay) ----------
+
+const airplay: AirPlayStatus = {
+  supported: true,
+  installed: query().get('airplay') === 'installed' || query().get('airplay') === 'running',
+  source: null,
+  path: null,
+  version: null,
+  running: false,
+  mirroring: false,
+  name: '',
+  pin: null,
+  client: null,
+  error: null,
+  log: [],
+  install: null,
+  downloadUrl: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.0/OmniHub-AirPlay-addon-x64.zip',
+};
+function query() {
+  return typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+}
+function markInstalled() {
+  airplay.installed = true;
+  airplay.source = 'addon';
+  airplay.path = 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\addons\\airplay\\bin\\uxplay.exe';
+  airplay.version = 'UxPlay 1.74';
+}
+if (airplay.installed) markInstalled();
+let airplayFirewallOk = false;
+
+export function airplayStatus(): AirPlayStatus {
+  return structuredClone(airplay);
+}
+
+export function airplayInstall(): void {
+  const total = 69_668_591;
+  let done = 0;
+  airplay.install = { phase: 'download', done, total };
+  const t = setInterval(() => {
+    done = Math.min(total, done + total / 14);
+    airplay.install = { phase: done < total ? 'download' : 'unpack', done, total };
+    emit('airplay:install', airplay.install);
+    if (done >= total) {
+      clearInterval(t);
+      setTimeout(() => {
+        airplay.install = null;
+        markInstalled();
+        emit('airplay:install', { phase: 'done' });
+        emit('airplay:changed', {});
+        audit('desktop', 'airplay.install', airplay.downloadUrl);
+      }, 700);
+    }
+  }, 260);
+}
+
+export function airplayUninstall(): void {
+  airplayStop();
+  airplay.installed = false;
+  airplay.source = airplay.path = airplay.version = null;
+  emit('airplay:changed', {});
+}
+
+export function airplayStart(): string | null {
+  if (!airplay.installed) throw new Error('The AirPlay receiver is not installed.');
+  const o = settings.screen.airplay;
+  airplay.running = true;
+  airplay.name = o.name;
+  airplay.pin = o.requirePin ? String(1000 + Math.floor(Math.random() * 9000)) : null;
+  airplay.log = ['UxPlay 1.74: An Open-Source AirPlay mirroring and audio-streaming server.', 'using network ports UDP 7011 6001 6000 TCP 7100 7000 7001', 'Initialized server socket(s)'];
+  emit('airplay:changed', {});
+  if (query().get('airplay') !== 'idle') {
+    demoTimers.push(
+      setTimeout(() => {
+        if (!airplay.running) return;
+        airplay.client = { name: "Alex's iPhone", model: 'iPhone16,2', deviceId: '5E:12:AB:CD:00:01' };
+        airplay.mirroring = true;
+        airplay.log.push("connection request from Alex's iPhone (iPhone16,2) with deviceID = 5E:12:AB:CD:00:01");
+        emit('airplay:client', airplay.client);
+        emit('airplay:changed', { mirroring: true });
+      }, 3500),
+    );
+  }
+  return airplay.pin;
+}
+
+export function airplayStop(): void {
+  airplay.running = false;
+  airplay.mirroring = false;
+  airplay.client = null;
+  airplay.pin = null;
+  emit('airplay:changed', {});
+}
+
+export function airplayFirewall(): FirewallReport {
+  return {
+    supported: true,
+    program: airplay.path ?? '',
+    networks: [{ id: '{6B2C1E54-3A9D-4F1B-9C6E-2D8A7F0B4E31}', name: 'Home Wi-Fi', category: 'private' }],
+    activeProfiles: 2,
+    verdict: airplayFirewallOk ? 'allowed' : 'noRule',
+    rules: [],
+    message: airplayFirewallOk ? 'Windows Firewall lets phones reach the AirPlay receiver.' : 'Windows Firewall has no rule allowing the AirPlay receiver, so it blocks phones by default.',
+  };
+}
+
+export function airplayFixFirewall(): FirewallReport {
+  airplayFirewallOk = true;
+  return airplayFirewall();
 }

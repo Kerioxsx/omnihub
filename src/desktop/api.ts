@@ -171,6 +171,15 @@ export const api = {
     scrcpyConnect: (addr: string) => call<string>('scrcpy_connect', { addr }),
     scrcpyPair: (addr: string, code: string) => call<string>('scrcpy_pair', { addr, code }),
     sunshineStatus: () => call<T.SunshineStatus>('sunshine_status'),
+    airplayStatus: () => call<T.AirPlayStatus>('airplay_status'),
+    airplayInstall: () => call<void>('airplay_install'),
+    airplayUninstall: () => call<void>('airplay_uninstall'),
+    airplayStart: () => call<string | null>('airplay_start'),
+    airplayStop: () => call<void>('airplay_stop'),
+    airplayKeepOnTop: (on: boolean) => call<void>('airplay_keep_on_top', { on }),
+    airplayPlace: (how: 'pip' | 'center') => call<void>('airplay_place', { how }),
+    airplayFirewall: () => call<T.FirewallReport>('airplay_firewall'),
+    airplayFixFirewall: (includePublic: boolean) => call<T.FirewallReport>('airplay_fix_firewall', { includePublic }),
   },
 };
 

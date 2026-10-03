@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use omnihub_core::apps::AppInfo;
 use omnihub_core::audit::AuditEntry;
+use omnihub_core::capture::airplay::AirPlayStatus;
 use omnihub_core::capture::bridges::{ScrcpyOptions, ScrcpyStatus, SunshineStatus};
 use omnihub_core::capture::screenshots::{CaptureKind, PendingRegion, Rect, Screenshot, ShotFilter};
 use omnihub_core::capture::stream::{self, MonitorInfo, Preset};
@@ -990,6 +991,98 @@ pub async fn sunshine_status(core: Core<'_>) -> Res<SunshineStatus> {
     blocking(move || {
         let path = core.settings.get().screen.sunshine_path;
         Ok(core.bridges.sunshine_status(path.as_deref()))
+    })
+    .await
+}
+
+// ---------- iPhone mirroring (AirPlay) ----------
+
+#[tauri::command]
+pub async fn airplay_status(core: Core<'_>) -> Res<AirPlayStatus> {
+    Ok(core.airplay.status(core.settings.get().screen.uxplay_path.as_deref()))
+}
+
+/// Download and install the AirPlay add-on in the background
+/// (progress arrives as `airplay:install` events).
+#[tauri::command]
+pub async fn airplay_install(core: Core<'_>) -> Res<()> {
+    let core = core.inner().clone();
+    std::thread::spawn(move || {
+        let url = core.airplay.status(None).download_url;
+        let res = core.airplay.install_addon(&url, omnihub_core::capture::airplay::pinned_sha256());
+        core.audit.record("desktop", "airplay.install", &url, res.is_ok());
+        if let Err(e) = res {
+            tracing::warn!("AirPlay add-on install failed: {e}");
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn airplay_uninstall(core: Core<'_>) -> Res<()> {
+    core.airplay.uninstall_addon().map_err(err)
+}
+
+/// Start the receiver with the saved options; returns the PIN if one is needed.
+#[tauri::command]
+pub async fn airplay_start(core: Core<'_>) -> Res<Option<String>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let s = core.settings.get().screen;
+        let pin = core.airplay.start(s.uxplay_path.as_deref(), &s.airplay, s.airplay_keep_on_top, s.airplay_pip).map_err(err)?;
+        core.audit.record("desktop", "airplay.start", &s.airplay.name, true);
+        Ok(pin)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn airplay_stop(core: Core<'_>) -> Res<()> {
+    core.airplay.stop();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn airplay_keep_on_top(core: Core<'_>, on: bool) -> Res<()> {
+    core.airplay.set_keep_on_top(on);
+    core.update_settings(&serde_json::json!({ "screen": { "airplayKeepOnTop": on } })).map_err(err)?;
+    Ok(())
+}
+
+/// "pip" (small, bottom-right) or "center".
+#[tauri::command]
+pub async fn airplay_place(core: Core<'_>, how: String) -> Res<()> {
+    core.airplay.place_window(&how);
+    Ok(())
+}
+
+fn uxplay_exe(core: &AppCore) -> Res<PathBuf> {
+    core.airplay.find(core.settings.get().screen.uxplay_path.as_deref()).map(|(p, _)| p).ok_or_else(|| "the AirPlay receiver is not installed".to_string())
+}
+
+#[tauri::command]
+pub async fn airplay_firewall(core: Core<'_>) -> Res<FirewallReport> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let exe = uxplay_exe(&core)?;
+        Ok(firewall::check(&exe, None, Proto::Any, "the AirPlay receiver"))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn airplay_fix_firewall(core: Core<'_>, include_public: bool) -> Res<FirewallReport> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let exe = uxplay_exe(&core)?;
+        let mut mask = firewall::PROFILE_PRIVATE | firewall::PROFILE_DOMAIN;
+        if include_public {
+            mask |= firewall::PROFILE_PUBLIC;
+        }
+        let res = firewall::allow_program(&exe, "OmniHub AirPlay receiver", mask);
+        core.audit.record("desktop", "firewall.allow", &format!("AirPlay receiver ({})", firewall::profile_names(mask).join(", ")), res.is_ok());
+        res.map_err(err)?;
+        Ok(firewall::check(&exe, None, Proto::Any, "the AirPlay receiver"))
     })
     .await
 }

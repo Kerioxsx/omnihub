@@ -252,6 +252,15 @@ pub fn run(args: Vec<String>) {
             commands::scrcpy_connect,
             commands::scrcpy_pair,
             commands::sunshine_status,
+            commands::airplay_status,
+            commands::airplay_install,
+            commands::airplay_uninstall,
+            commands::airplay_start,
+            commands::airplay_stop,
+            commands::airplay_keep_on_top,
+            commands::airplay_place,
+            commands::airplay_firewall,
+            commands::airplay_fix_firewall,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OmniHub");

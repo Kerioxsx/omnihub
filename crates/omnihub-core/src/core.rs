@@ -51,6 +51,7 @@ pub struct AppCore {
     pub bridges: Bridges,
     pub remote: RemoteServer,
     pub thumbs: crate::thumbs::Thumbs,
+    pub airplay: crate::capture::airplay::AirPlay,
 }
 
 impl AppCore {
@@ -76,6 +77,7 @@ impl AppCore {
             bridges: Bridges::new(),
             remote: RemoteServer::new(db.clone(), events.clone()),
             thumbs: crate::thumbs::Thumbs::default(),
+            airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
             paths,
             settings,
             events,
@@ -112,6 +114,11 @@ impl AppCore {
         if s.remote.enabled && !self.remote.is_running() {
             if let Err(e) = self.remote.start(self.clone()) {
                 tracing::error!("companion server failed to start: {e}");
+            }
+        }
+        if s.screen.airplay_auto_start && self.airplay.find(s.screen.uxplay_path.as_deref()).is_some() {
+            if let Err(e) = self.airplay.start(s.screen.uxplay_path.as_deref(), &s.screen.airplay, s.screen.airplay_keep_on_top, s.screen.airplay_pip) {
+                tracing::warn!("AirPlay receiver failed to start: {e}");
             }
         }
         let send_to = s.remote.send_to_menu;
@@ -167,6 +174,12 @@ impl AppCore {
         }
         if before.notes.claude_folder != after.notes.claude_folder {
             self.notes.watch_folder(after.notes.claude_folder.as_deref().map(std::path::Path::new));
+        }
+        if (before.screen.airplay != after.screen.airplay || before.screen.uxplay_path != after.screen.uxplay_path) && self.airplay.is_running() {
+            let sc = &after.screen;
+            if let Err(e) = self.airplay.start(sc.uxplay_path.as_deref(), &sc.airplay, sc.airplay_keep_on_top, sc.airplay_pip) {
+                tracing::warn!("could not restart the AirPlay receiver: {e}");
+            }
         }
         let r0 = &before.remote;
         let r1 = &after.remote;

@@ -264,11 +264,31 @@ pub struct ScreenShareSettings {
     pub max_fps: u32,
     pub scrcpy_path: Option<String>,
     pub sunshine_path: Option<String>,
+    /// iPhone → PC mirroring (AirPlay receiver).
+    pub airplay: crate::capture::airplay::AirPlayOptions,
+    /// Keep the iPhone window above other windows.
+    pub airplay_keep_on_top: bool,
+    /// Put the iPhone window small in the bottom-right corner when it opens.
+    pub airplay_pip: bool,
+    /// Start the receiver whenever OmniHub starts.
+    pub airplay_auto_start: bool,
+    /// Use this uxplay instead of the add-on.
+    pub uxplay_path: Option<String>,
 }
 
 impl Default for ScreenShareSettings {
     fn default() -> Self {
-        ScreenShareSettings { preset: "balanced".into(), max_fps: 60, scrcpy_path: None, sunshine_path: None }
+        ScreenShareSettings {
+            preset: "balanced".into(),
+            max_fps: 60,
+            scrcpy_path: None,
+            sunshine_path: None,
+            airplay: crate::capture::airplay::AirPlayOptions { name: format!("{} (OmniHub)", gethostname::gethostname().to_string_lossy()), ..Default::default() },
+            airplay_keep_on_top: false,
+            airplay_pip: false,
+            airplay_auto_start: false,
+            uxplay_path: None,
+        }
     }
 }
 
