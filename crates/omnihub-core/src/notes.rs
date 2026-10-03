@@ -268,12 +268,12 @@ impl Notes {
     pub fn export(&self, id: &str, folder: &Path, opts: &ExportOptions) -> Result<Note, NotesError> {
         let note = self.get(id)?;
         std::fs::create_dir_all(folder)?;
-        let folder = std::fs::canonicalize(folder)?;
+        let folder = crate::paths::canonical(folder)?;
         let previous = note
             .exported_path
             .as_ref()
             .map(PathBuf::from)
-            .filter(|p| p.parent().and_then(|d| std::fs::canonicalize(d).ok()).is_some_and(|d| d == folder));
+            .filter(|p| p.parent().and_then(|d| crate::paths::canonical(d).ok()).is_some_and(|d| d == folder));
         let path = previous.unwrap_or_else(|| {
             let date = chrono::DateTime::from_timestamp(note.created, 0).map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
             let base = format!("{date}-{}", slugify(&note.title));
@@ -305,7 +305,7 @@ impl Notes {
         let mut s = String::from("# Ideas for Claude\n\nExported from OmniHub. Newest first.\n\n");
         let mut rows: Vec<&Note> = ideas
             .iter()
-            .filter(|n| n.exported_path.as_ref().is_some_and(|p| Path::new(p).parent().and_then(|d| std::fs::canonicalize(d).ok()).as_deref() == Some(folder)))
+            .filter(|n| n.exported_path.as_ref().is_some_and(|p| Path::new(p).parent().and_then(|d| crate::paths::canonical(d).ok()).as_deref() == Some(folder)))
             .collect();
         rows.sort_by_key(|n| std::cmp::Reverse(n.updated));
         for n in rows {
@@ -322,7 +322,9 @@ impl Notes {
     /// Files in the Claude folder, newest first.
     pub fn folder_files(&self, folder: &Path) -> Result<Vec<FolderFile>, NotesError> {
         let mut out = Vec::new();
-        for e in std::fs::read_dir(folder)? {
+        // Canonical, so paths match the exported paths stored on notes.
+        let folder = crate::paths::canonical(folder)?;
+        for e in std::fs::read_dir(&folder)? {
             let e = e?;
             let meta = e.metadata()?;
             let name = e.file_name().to_string_lossy().to_string();
@@ -354,8 +356,8 @@ impl Notes {
 
     /// Read a text file from the Claude folder (refuses paths outside it).
     pub fn read_folder_file(&self, folder: &Path, path: &Path) -> Result<String, NotesError> {
-        let folder = std::fs::canonicalize(folder)?;
-        let path = std::fs::canonicalize(path)?;
+        let folder = crate::paths::canonical(folder)?;
+        let path = crate::paths::canonical(path)?;
         if !path.starts_with(&folder) {
             return Err(NotesError::OutsideFolder);
         }
@@ -469,7 +471,9 @@ mod tests {
         let reply = files.iter().find(|f| f.name == "reply-from-claude.md").unwrap();
         assert!(!reply.from_omnihub);
         assert_eq!(reply.preview, "Here is a plan");
-        assert!(files.iter().find(|f| f.path == out.exported_path.clone().unwrap()).unwrap().from_omnihub);
+        let exported_name = path.file_name().unwrap().to_string_lossy().to_string();
+        assert!(files.iter().find(|f| f.name == exported_name).unwrap().from_omnihub);
+        assert!(!out.exported_path.as_deref().unwrap().starts_with(r"\\?\"), "exported paths are shown to people: no verbatim prefix");
         assert_eq!(n.read_folder_file(&folder, &folder.join("reply-from-claude.md")).unwrap(), "Here is a plan");
         let outside = dir.path().join("secret.txt");
         std::fs::write(&outside, "no").unwrap();

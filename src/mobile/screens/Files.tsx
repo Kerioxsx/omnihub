@@ -45,7 +45,7 @@ import { FileIcon, kindOf } from './fileKinds';
 import { UploadsPanel } from './Uploads';
 import { useBackHandler } from '../lib/back';
 import { copyText } from '../lib/clipboard';
-import { cx, errorMessage, limiter, sepOf, useInView, vibrate } from '../lib/util';
+import { cx, errorMessage, limiter, sepOf, shortPath, useInView, vibrate } from '../lib/util';
 
 type SortKey = 'name' | 'size' | 'date';
 type Listing = Awaited<ReturnType<typeof client.list>>;
@@ -112,6 +112,11 @@ function rootIcon(name: string): ReactNode {
   if (n.includes('music')) return <Music size={22} />;
   if (n.includes('phone')) return <Smartphone size={22} />;
   return <Folder size={22} />;
+}
+
+function countLabel(folders: number, files: number): string {
+  const parts = [folders && `${folders} folder${folders > 1 ? 's' : ''}`, files && `${files} file${files > 1 ? 's' : ''}`].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Empty';
 }
 
 const norm = (p: string) => (sepOf(p) === '\\' ? p.toLowerCase().replace(/\\+$/, '') : p.replace(/\/+$/, ''));
@@ -322,7 +327,7 @@ export function FilesScreen({ active }: { active: boolean }) {
                 </IconButton>
                 <div className="min-w-0 flex-1 px-1">
                   <div className="truncate font-display text-[19px] font-bold leading-tight">{current}</div>
-                  <div className="text-xs text-dim">{listing ? `${entries.filter((e) => e.isDir).length} folders · ${fileCount} files` : 'Loading…'}</div>
+                  <div className="text-xs text-dim">{listing ? countLabel(entries.filter((e) => e.isDir).length, fileCount) : 'Loading…'}</div>
                 </div>
                 <IconButton label="Sort and view options" onClick={() => setOptionsOpen(true)}>
                   <ArrowUpDown size={18} />
@@ -367,7 +372,7 @@ export function FilesScreen({ active }: { active: boolean }) {
                     <div className={cx('grid h-11 w-11 place-items-center rounded-2xl', r.name === 'From phone' ? 'grad-bg text-white' : 'bg-violet-500/15 text-violet-400')}>{rootIcon(r.name)}</div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[16px] font-semibold">{r.name}</div>
-                      <div className="truncate text-xs text-faint">{r.name === 'From phone' ? 'Where uploads from this phone go' : r.path}</div>
+                      <div className="truncate text-xs text-faint">{r.name === 'From phone' ? 'Where uploads from this phone go' : shortPath(r.path)}</div>
                     </div>
                     <ChevronRight size={18} className="text-faint" />
                   </button>
@@ -727,11 +732,11 @@ function UploadSheet({ open, onClose, here, incoming, onQueued }: { open: boolea
 
   return (
     <Sheet open={open} onClose={onClose} title="Send to PC" subtitle="Resumable — pause any time, or retry if Wi-Fi drops.">
-      <div className="pb-2">
+      <div className="pb-2 pt-2">
         <div className="mb-2 text-[13px] font-semibold text-dim">Save to</div>
         <div className="space-y-2">
           {here && <DestOption active={dest === 'here'} onClick={() => setDest('here')} icon={<FolderOpen size={19} />} title={here.name} sub="This folder" />}
-          <DestOption active={dest === 'incoming'} onClick={() => setDest('incoming')} icon={<Smartphone size={19} />} title={incoming?.name ?? 'From phone'} sub={incoming?.path ?? 'The PC’s incoming folder'} />
+          <DestOption active={dest === 'incoming'} onClick={() => setDest('incoming')} icon={<Smartphone size={19} />} title={incoming?.name ?? 'From phone'} sub={incoming ? shortPath(incoming.path, 40) : 'The PC’s incoming folder'} />
         </div>
         <div className="mb-2 mt-5 text-[13px] font-semibold text-dim">Choose</div>
         <div className="space-y-2">

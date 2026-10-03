@@ -10,10 +10,11 @@ import { cx, vibrate, useInterval } from '../lib/util';
 
 const TLS_NOTE_KEY = 'omnihub.tlsNoteSeen';
 
-function pairError(e: unknown): string {
+function pairError(e: unknown, viaLink: boolean): string {
   if (e instanceof ApiError) {
     if (e.status === 429) return 'Too many attempts. Wait a minute, then try again.';
     if (e.status === 403 && /not open/i.test(e.message)) return "Pairing isn't open — on the PC click “Pair a phone”, then try again.";
+    if (e.status === 403 && /wrong/i.test(e.message) && viaLink) return 'This pairing link has expired or was already used. Enter the 6-digit code from the PC instead, or scan a fresh QR code.';
     if (e.status === 403 && /wrong/i.test(e.message)) return "That code didn't match. Check the 6 digits shown on the PC.";
     return e.message;
   }
@@ -64,7 +65,7 @@ export function PairScreen({ info, onPaired }: { info: ServerInfo | null; onPair
       vibrate([12, 40, 18]);
       onPaired(r.serverName);
     } catch (e) {
-      setError(pairError(e));
+      setError(pairError(e, !!secret));
       vibrate([30, 60, 30]);
       setShake((s) => s + 1);
       if (!secret) {
@@ -155,7 +156,7 @@ export function PairScreen({ info, onPaired }: { info: ServerInfo | null; onPair
                   autoFocus={!secret}
                   disabled={busy}
                 />
-                <div className="grid grid-cols-6 gap-2">
+                <div className="flex items-center gap-2">
                   {Array.from({ length: 6 }, (_, i) => {
                     const ch = pin[i];
                     const isCaret = focused && i === Math.min(pin.length, 5) && !busy;
@@ -163,10 +164,10 @@ export function PairScreen({ info, onPaired }: { info: ServerInfo | null; onPair
                       <div
                         key={i}
                         className={cx(
-                          'num grid aspect-[4/5] place-items-center rounded-2xl border text-[26px] font-bold transition-all',
+                          'num grid aspect-[4/5] min-w-0 flex-1 place-items-center rounded-2xl border text-[26px] font-bold transition-all',
                           ch ? 'border-accent/60 bg-accent-soft text-fg' : 'border-line bg-surface',
                           isCaret && 'border-accent shadow-[0_0_0_3px_var(--accent-soft)]',
-                          i === 2 && 'mr-1.5',
+                          i === 3 && 'ml-2',
                         )}
                       >
                         {ch ?? (isCaret ? <span className="h-7 w-0.5 animate-pulse rounded bg-accent" /> : '')}

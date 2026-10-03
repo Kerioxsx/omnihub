@@ -138,15 +138,30 @@ impl RemoteServer {
             Bind::Localhost => net::localhost(),
         };
         let addr = SocketAddr::new(ip, s.port);
-        // Bind synchronously so "port in use" is reported to the caller.
-        let listener = match std::net::TcpListener::bind(addr).or_else(|e| {
-            // Dual-stack [::] may be unavailable; fall back to IPv4.
-            if s.bind == Bind::Lan {
-                std::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], s.port)))
-            } else {
-                Err(e)
+        // Bind synchronously so "port in use" is reported to the caller. A
+        // server stopped a moment ago may still hold the port while its
+        // graceful shutdown finishes, so retry briefly.
+        let bind = || {
+            std::net::TcpListener::bind(addr).or_else(|e| {
+                // Dual-stack [::] may be unavailable; fall back to IPv4.
+                if s.bind == Bind::Lan && e.kind() != std::io::ErrorKind::AddrInUse {
+                    std::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], s.port)))
+                } else {
+                    Err(e)
+                }
+            })
+        };
+        let mut attempt = bind();
+        for _ in 0..30 {
+            match &attempt {
+                Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                    std::thread::sleep(Duration::from_millis(100));
+                    attempt = bind();
+                }
+                _ => break,
             }
-        }) {
+        }
+        let listener = match attempt {
             Ok(l) => l,
             Err(e) => {
                 let msg = format!("cannot listen on port {}: {e}", s.port);
@@ -215,10 +230,15 @@ impl RemoteServer {
         match r.as_ref() {
             Some(r) => {
                 let scheme = if r.tls { "https" } else { "http" };
-                let urls = match r.bind {
-                    Bind::Localhost => vec![format!("{scheme}://localhost:{}", r.port)],
+                let mut urls: Vec<String> = match r.bind {
+                    Bind::Localhost => vec![],
                     Bind::Lan => net::lan_addresses().into_iter().map(|a| format!("{scheme}://{}:{}", a.ip, r.port)).collect(),
                 };
+                // Always reachable from this PC (and through USB tethering or
+                // a tunnel), and the only option without a LAN address.
+                if urls.is_empty() {
+                    urls.push(format!("{scheme}://localhost:{}", r.port));
+                }
                 ServerStatus { running: true, port: r.port, tls: r.tls, bind: r.bind, urls, fingerprint: r.fingerprint.clone(), error: None, viewers, pairing_open: self.pairing.is_open() }
             }
             None => ServerStatus { running: false, port: 0, tls: false, bind: Bind::Lan, urls: vec![], fingerprint: None, error: self.last_error.lock().clone(), viewers, pairing_open: false },

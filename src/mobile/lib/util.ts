@@ -66,6 +66,16 @@ export function sepOf(path: string): string {
   return path.includes('\\') && !path.startsWith('/') ? '\\' : '/';
 }
 
+/** "…/Users/me/Desktop" for long paths (the end is the informative part). */
+export function shortPath(p: string, max = 34): string {
+  if (p.length <= max) return p;
+  const sep = sepOf(p);
+  const parts = p.split(sep).filter(Boolean);
+  let out = parts[parts.length - 1] ?? p;
+  for (let i = parts.length - 2; i >= 0 && out.length + parts[i].length + 1 <= max - 2; i--) out = parts[i] + sep + out;
+  return `…${sep}${out}`;
+}
+
 export function greeting(): string {
   const h = new Date().getHours();
   if (h < 5) return 'Good night';
@@ -126,7 +136,7 @@ export function useKeyboardInset(): number {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const on = () => setInset(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
+    const on = () => setInset(keyboardInset(vv));
     vv.addEventListener('resize', on);
     vv.addEventListener('scroll', on);
     on();
@@ -136,6 +146,12 @@ export function useKeyboardInset(): number {
     };
   }, []);
   return inset;
+}
+
+/** Height the on-screen keyboard covers, or 0 (ignores toolbar jitter). */
+export function keyboardInset(vv: VisualViewport): number {
+  const covered = Math.round(document.documentElement.clientHeight - vv.height - vv.offsetTop);
+  return covered > 80 ? covered : 0;
 }
 
 /** Calls `onVisible` once the element scrolls near the viewport. */

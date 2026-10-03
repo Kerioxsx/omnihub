@@ -268,8 +268,12 @@ mod tests {
         let root = dir.path();
         fs::create_dir_all(root.join("a/b/c")).unwrap();
         fs::create_dir_all(root.join("empty")).unwrap();
-        let mut f = fs::File::create(root.join("a/b/c/deep.bin")).unwrap();
-        f.write_all(&vec![7u8; 100_000]).unwrap();
+        {
+            // Closed before the walk: Windows only updates the size in the
+            // directory entry when the handle is closed.
+            let mut f = fs::File::create(root.join("a/b/c/deep.bin")).unwrap();
+            f.write_all(&vec![7u8; 100_000]).unwrap();
+        }
         fs::write(root.join("a/one.txt"), b"hello").unwrap();
         fs::write(root.join("top.dat"), vec![1u8; 4000]).unwrap();
         #[cfg(unix)]

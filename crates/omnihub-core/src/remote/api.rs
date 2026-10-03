@@ -681,12 +681,13 @@ async fn vault_session(State(core): State<Ctx>, Extension(dev): Extension<Device
 
 fn with_session<T>(core: &AppCore, dev: &Device, headers: &HeaderMap, f: impl FnOnce(&mut VaultSession) -> ApiResult<T>) -> ApiResult<T> {
     vault_allowed(core)?;
-    let token = headers.get("x-vault-session").and_then(|v| v.to_str().ok()).ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "unlock the vault first"))?;
+    // 423 Locked, not 401: a locked vault must not look like an unpaired phone.
+    let token = headers.get("x-vault-session").and_then(|v| v.to_str().ok()).ok_or_else(|| ApiError::new(StatusCode::LOCKED, "unlock the vault first"))?;
     let mut sessions = core.remote.vault_sessions.lock();
-    let s = sessions.get_mut(token).ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "the vault locked; unlock it again"))?;
+    let s = sessions.get_mut(token).ok_or_else(|| ApiError::new(StatusCode::LOCKED, "the vault locked; unlock it again"))?;
     if s.device_id != dev.id || s.last_used.elapsed() > super::VAULT_SESSION_IDLE {
         sessions.remove(token);
-        return Err(ApiError::new(StatusCode::UNAUTHORIZED, "the vault locked; unlock it again"));
+        return Err(ApiError::new(StatusCode::LOCKED, "the vault locked; unlock it again"));
     }
     s.last_used = Instant::now();
     f(s)
@@ -735,9 +736,18 @@ struct SocketQuery {
     preset: Option<String>,
 }
 
-/// Topics forwarded to phones.
-fn phone_topic(topic: &str) -> bool {
-    ["transfer:", "inbox:", "power:", "notes:", "screen:"].iter().any(|p| topic.starts_with(p))
+/// Whether an event goes to a given phone. Transfers and inbox offers are
+/// private to the device they concern; other phones' names and file names
+/// are never sent.
+fn for_phone(ev: &crate::events::Event, device_id: &str) -> bool {
+    let owner = || ev.payload.get("deviceId").and_then(|d| d.as_str());
+    if ev.topic.starts_with("transfer:") {
+        return owner() == Some(device_id);
+    }
+    if ev.topic == "inbox:new" {
+        return owner().is_none_or(|d| d == device_id);
+    }
+    ["power:", "notes:"].iter().any(|p| ev.topic.starts_with(p))
 }
 
 async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws: WebSocketUpgrade) -> ApiResult<Response> {
@@ -750,20 +760,13 @@ async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws
         let (mut tx, mut rx) = socket.split();
         let mut events = core.events.subscribe();
         let mut ping = tokio::time::interval(Duration::from_secs(25));
+        let mut revoked_check = tokio::time::interval(Duration::from_secs(5));
         loop {
             tokio::select! {
                 ev = events.recv() => {
                     let Ok(ev) = ev else { continue };
-                    if !phone_topic(&ev.topic) {
+                    if !for_phone(&ev, &device_id) {
                         continue;
-                    }
-                    // Inbox offers addressed to another device stay private.
-                    if ev.topic == "inbox:new" {
-                        if let Some(d) = ev.payload.get("deviceId").and_then(|d| d.as_str()) {
-                            if d != device_id {
-                                continue;
-                            }
-                        }
                     }
                     let text = serde_json::to_string(&ev).unwrap_or_default();
                     if tx.send(Message::Text(text.into())).await.is_err() {
@@ -781,10 +784,12 @@ async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws
                         break;
                     }
                 }
-            }
-            // A revoked device is disconnected.
-            if core.remote.devices.get(&device_id).ok().flatten().is_none_or(|d| d.revoked) {
-                break;
+                _ = revoked_check.tick() => {
+                    // A revoked device is disconnected within seconds.
+                    if core.remote.devices.get(&device_id).ok().flatten().is_none_or(|d| d.revoked) {
+                        break;
+                    }
+                }
             }
         }
     }))

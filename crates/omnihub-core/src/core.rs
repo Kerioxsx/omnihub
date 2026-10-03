@@ -107,7 +107,7 @@ impl AppCore {
             let dir = core.screenshot_dir();
             let _ = core.screenshots.sync_folder(&dir);
         });
-        if s.remote.enabled {
+        if s.remote.enabled && !self.remote.is_running() {
             if let Err(e) = self.remote.start(self.clone()) {
                 tracing::error!("companion server failed to start: {e}");
             }

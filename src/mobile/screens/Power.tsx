@@ -84,7 +84,7 @@ function PendingBody({ label, action, by, left, total, busy, onCancel }: { label
             <Icon size={14} /> {running ? 'Running now' : 'Scheduled'}
           </div>
           <div className="font-display text-xl font-bold leading-tight">{running ? `${label}…` : `${label} in ${formatCountdown(left)}`}</div>
-          <div className="mt-0.5 truncate text-xs text-dim">Requested by {by.replace(/^phone:/, '')} · the PC shows a cancel banner too</div>
+          <div className="mt-0.5 line-clamp-2 text-xs text-dim">Requested by {by.replace(/^phone:/, '')} · the PC shows a cancel banner too</div>
         </div>
       </div>
       {!running && (
@@ -269,20 +269,20 @@ function HoldCard({ action, label, disabled, wide, onConfirm }: { action: PowerA
       }}
       onKeyUp={stop}
       onBlur={stop}
-      className={cx('card relative flex select-none items-center gap-3.5 overflow-hidden p-4 text-left [-webkit-touch-callout:none] disabled:opacity-45', wide && 'col-span-2')}
+      className={cx('card relative flex select-none overflow-hidden p-4 text-left [-webkit-touch-callout:none] disabled:opacity-45', wide ? 'col-span-2 items-center gap-3.5' : 'flex-col items-start gap-3')}
       style={{ transform: `scale(${1 - p * 0.03})`, transition: p === 0 ? 'transform .2s' : 'none' }}
     >
       <div className="pointer-events-none absolute inset-0 origin-left" style={{ background: `linear-gradient(90deg, ${m.ring}33, ${m.ring}1a)`, transform: `scaleX(${p})` }} />
       <div className="relative">
-        <Ring value={p} size={52} stroke={3.5} color={m.ring} track="transparent">
-          <div className={cx('grid h-11 w-11 place-items-center rounded-full', m.tone)}>
-            <Icon size={21} />
+        <Ring value={p} size={56} stroke={3.5} color={m.ring} track="transparent">
+          <div className={cx('grid h-12 w-12 place-items-center rounded-full', m.tone)}>
+            <Icon size={22} />
           </div>
         </Ring>
       </div>
       <div className="relative min-w-0">
         <div className="text-[16px] font-semibold">{label}</div>
-        <div className="text-xs text-dim">{p >= 1 ? 'Confirmed' : p > 0 ? 'Keep holding…' : wide ? `${m.desc} · hold` : 'Press & hold'}</div>
+        <div className="text-xs text-dim">{p >= 1 ? 'Confirmed' : p > 0 ? 'Keep holding…' : wide ? `${m.desc} · press & hold` : m.desc}</div>
       </div>
     </button>
   );

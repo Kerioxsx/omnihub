@@ -206,7 +206,7 @@ export function App() {
   return (
     <div className="relative h-full">
       <ConnectionBanner />
-      <main className="absolute inset-0">
+      <main className="absolute inset-0 overflow-hidden">
         {panel('home', <HomeScreen active={tab === 'home'} openMore={(p) => (setMorePage(p), setTab('more'))} />)}
         {panel('files', <FilesScreen active={tab === 'files'} />)}
         {!hidden.includes('screen') && panel('screen', <ScreenScreen active={tab === 'screen'} />)}

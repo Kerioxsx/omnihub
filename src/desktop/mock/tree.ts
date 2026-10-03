@@ -217,38 +217,68 @@ export class FakeTree {
 
   /**
    * Size-ordered nested items for a treemap, at most `maxItems` in total.
-   * The budget is spent breadth-first so every level stays complete before
-   * deeper levels are filled (see the report: the Rust version is depth-first).
+   * The budget is spent best-first: the largest folder not yet expanded is
+   * always expanded next, so the item budget goes to what is actually
+   * visible (see the report: the Rust version spends it depth-first).
    */
   treemap(id: number, depth: number, maxItems: number): TreemapItem {
     const mk = (n: FNode): TreemapItem => ({ id: n.id, name: n.name, size: n.size, isDir: n.isDir, ext: n.isDir ? null : extensionOf(n.name), folded: 0, children: [] });
-    const root = mk(this.node(id));
+    const rootNode = this.node(id);
+    const root = mk(rootNode);
+    const floor = Math.max(1, Math.floor(rootNode.size / 50000));
     let budget = Math.max(1, maxItems);
-    let frontier: [TreemapItem, number][] = [[root, depth]];
-    while (frontier.length) {
-      const next: [TreemapItem, number][] = [];
-      for (const [item, d] of frontier) {
-        if (!item.isDir || d === 0 || item.size === 0) continue;
-        const kids = this.liveChildren(item.id).sort((a, b) => b.size - a.size);
-        const min = Math.max(1, Math.floor(item.size / 1000));
-        let foldedSize = 0;
-        let folded = 0;
-        for (const c of kids) {
-          if (budget === 0 || c.size < min) {
-            foldedSize += c.size;
-            folded++;
-            continue;
-          }
-          budget--;
-          const child = mk(c);
-          item.children.push(child);
-          next.push([child, d - 1]);
-        }
-        if (folded > 0 && foldedSize > 0) {
-          item.children.push({ id: FOLDED_ID, name: `${folded} smaller items`, size: foldedSize, isDir: false, ext: null, folded, children: [] });
+    // Max-heap by size of folders waiting to be expanded.
+    const heap: [TreemapItem, number][] = [[root, depth]];
+    const push = (e: [TreemapItem, number]) => {
+      heap.push(e);
+      let i = heap.length - 1;
+      while (i > 0) {
+        const p = (i - 1) >> 1;
+        if (heap[p][0].size >= heap[i][0].size) break;
+        [heap[p], heap[i]] = [heap[i], heap[p]];
+        i = p;
+      }
+    };
+    const pop = (): [TreemapItem, number] => {
+      const top = heap[0];
+      const last = heap.pop()!;
+      if (heap.length) {
+        heap[0] = last;
+        let i = 0;
+        for (;;) {
+          const l = i * 2 + 1;
+          const r = l + 1;
+          let m = i;
+          if (l < heap.length && heap[l][0].size > heap[m][0].size) m = l;
+          if (r < heap.length && heap[r][0].size > heap[m][0].size) m = r;
+          if (m === i) break;
+          [heap[m], heap[i]] = [heap[i], heap[m]];
+          i = m;
         }
       }
-      frontier = next;
+      return top;
+    };
+    while (heap.length && budget > 0) {
+      const [item, d] = pop();
+      if (!item.isDir || d === 0 || item.size === 0) continue;
+      const kids = this.liveChildren(item.id).sort((a, b) => b.size - a.size);
+      const min = Math.max(floor, Math.floor(item.size / 1000));
+      let foldedSize = 0;
+      let folded = 0;
+      for (const c of kids) {
+        if (budget === 0 || c.size < min) {
+          foldedSize += c.size;
+          folded++;
+          continue;
+        }
+        budget--;
+        const child = mk(c);
+        item.children.push(child);
+        if (c.isDir) push([child, d - 1]);
+      }
+      if (folded > 0 && foldedSize > 0) {
+        item.children.push({ id: FOLDED_ID, name: `${folded} smaller items`, size: foldedSize, isDir: false, ext: null, folded, children: [] });
+      }
     }
     return root;
   }

@@ -273,7 +273,7 @@ fn https_and_phone_vault() {
         assert_eq!(v["value"], "wifi-secret-123");
         c.delete(format!("{base}/api/vault/session")).header("authorization", &auth).header("x-vault-session", &session).send().await.unwrap();
         let r = c.get(format!("{base}/api/vault/entries")).header("authorization", &auth).header("x-vault-session", &session).send().await.unwrap();
-        assert_eq!(r.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(r.status(), StatusCode::LOCKED);
     });
     drop(rt);
     fx.core.remote.stop();

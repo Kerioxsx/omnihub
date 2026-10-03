@@ -5,7 +5,7 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { Plus, Search, X, Lightbulb, NotebookPen, Sparkles, Pin, Tag, Send } from 'lucide-react';
 import type { Note, NoteKind } from '@shared/types';
-import { formatDateTime, formatRelative } from '@shared/format';
+import { basename, formatDateTime, formatRelative } from '@shared/format';
 import { client } from '../client';
 import { toast } from '../state';
 import { PullToRefresh } from '../ui/PullToRefresh';
@@ -30,7 +30,10 @@ export function renderMarkdown(md: string): string {
 function excerpt(md: string): string {
   return md
     .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/[#>*_`~\-[\]()!]/g, '')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+(\[[ xX]\]\s+)?/gm, '')
+    .replace(/(\*\*|\*|`|~~)(?=\S)([^\n]*?\S)\1/g, '$2')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 160);
@@ -222,7 +225,7 @@ function ComposeSheet({ open, onClose, defaultKind, claudeFolder, onSaved }: { o
       setTitle('');
       setBody('');
       setTags('');
-      toast.success(n.exportedPath ? 'Saved and sent to Claude' : kind === 'idea' ? 'Idea saved' : 'Note saved', n.exportedPath ?? undefined);
+      toast.success(n.exportedPath ? 'Saved and sent to Claude' : kind === 'idea' ? 'Idea saved' : 'Note saved', n.exportedPath ? `Saved as ${basename(n.exportedPath)}` : undefined);
       onSaved();
     } catch (e) {
       toast.error("Couldn't save", errorMessage(e));

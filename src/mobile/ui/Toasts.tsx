@@ -31,7 +31,7 @@ export function Toasts({ aboveTabs }: { aboveTabs: boolean }) {
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[15px] font-semibold leading-snug">{t.title}</div>
-              {t.body && <div className="mt-0.5 line-clamp-2 break-all text-[13px] text-dim">{t.body}</div>}
+              {t.body && <div className="mt-0.5 line-clamp-2 text-[13px] text-dim [overflow-wrap:anywhere]">{t.body}</div>}
             </div>
             {t.action && (
               <button

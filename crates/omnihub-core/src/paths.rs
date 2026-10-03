@@ -5,6 +5,26 @@ use std::path::{Path, PathBuf};
 
 pub const APP_DIR_NAME: &str = "OmniHub";
 
+/// `std::fs::canonicalize` on Windows returns verbatim paths (`\\?\C:\...`).
+/// Turn them back into ordinary paths for display and comparison.
+pub fn simplify(p: PathBuf) -> PathBuf {
+    let s = p.to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        if rest.as_bytes().get(1) == Some(&b':') {
+            return PathBuf::from(rest);
+        }
+    }
+    p
+}
+
+/// Canonicalize and simplify.
+pub fn canonical(p: &Path) -> io::Result<PathBuf> {
+    std::fs::canonicalize(p).map(simplify)
+}
+
 #[derive(Debug, Clone)]
 pub struct AppPaths {
     /// Settings and the paired-device database.
@@ -56,5 +76,18 @@ impl AppPaths {
 
     pub fn vault_file(&self) -> PathBuf {
         self.data.join("vault.ohv")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verbatim_prefixes_are_removed() {
+        assert_eq!(simplify(PathBuf::from(r"\\?\C:\Users\me")), PathBuf::from(r"C:\Users\me"));
+        assert_eq!(simplify(PathBuf::from(r"\\?\UNC\server\share\x")), PathBuf::from(r"\\server\share\x"));
+        assert_eq!(simplify(PathBuf::from(r"\\?\Volume{abc}\x")), PathBuf::from(r"\\?\Volume{abc}\x"));
+        assert_eq!(simplify(PathBuf::from("/home/me")), PathBuf::from("/home/me"));
     }
 }

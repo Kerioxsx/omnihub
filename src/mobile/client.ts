@@ -78,14 +78,11 @@ export async function request<T>(method: string, path: string, body?: unknown, h
 }
 
 /**
- * The server answers 401 both for an unknown/revoked device token and for an
- * expired *vault session* ("unlock the vault first" / "the vault locked").
- * Only the former means this phone is no longer paired.
+ * A 401 means this phone is not (or no longer) paired. An expired vault
+ * session is 423 Locked and never unpairs the phone.
  */
-export function isDeviceAuthFailure(path: string, message: string): boolean {
-  if (path === '/api/pair') return false;
-  if (path.startsWith('/api/vault/')) return /pair this phone|no longer paired/i.test(message);
-  return true;
+export function isDeviceAuthFailure(path: string, _message: string): boolean {
+  return path !== '/api/pair';
 }
 
 export interface ServerInfo {

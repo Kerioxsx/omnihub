@@ -127,7 +127,7 @@ export const useUploads = create<UploadsStore>((set, get) => {
       const n = batchDone;
       batchDone = 0;
       const last = [...get().items].reverse().find((i) => i.state === 'done');
-      toast.success(n === 1 ? `Sent ${last?.name ?? 'file'} to the PC` : `${n} files sent to the PC`, n === 1 ? last?.path : undefined);
+      toast.success(n === 1 ? `Sent ${last?.name ?? 'file'} to the PC` : `${n} files sent to the PC`, last ? `Saved in ${last.dirLabel}` : undefined);
     }
   };
 

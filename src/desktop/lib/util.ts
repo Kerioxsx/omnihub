@@ -118,3 +118,19 @@ export function mergeDeep<T>(target: T, patch: unknown): T {
 
 export const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform);
 export const MOD_LABEL = isMac ? '⌘' : 'Ctrl';
+
+/** Plain-text preview of Markdown (for list snippets). */
+export function plainSnippet(md: string, max = 160): string {
+  return md
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/gm, '')
+    .replace(/^\s*([-*+]|\d+\.)\s+/gm, '')
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_~`|]/g, '')
+    .replace(/^-{3,}$/gm, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}

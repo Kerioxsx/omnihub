@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Cpu, MemoryStick, HardDrive, Download, X, Inbox, Sparkles, Send, FolderOpen, MonitorPlay, Power, Clock, Lightbulb, ChevronRight, NotebookPen } from 'lucide-react';
-import { formatBytes, formatRelative } from '@shared/format';
+import { basename, formatBytes, formatRelative } from '@shared/format';
 import { client, type Status } from '../client';
 import { useApp, useInbox, usePower, toast, type Tab } from '../state';
 import { PullToRefresh } from '../ui/PullToRefresh';
@@ -13,7 +13,7 @@ import { cx, errorMessage, formatUptime, greeting, useInterval, usePageVisible }
 import { FileIcon } from './fileKinds';
 
 export function HomeScreen({ active, openMore }: { active: boolean; openMore: (page: 'notes') => void }) {
-  const { info, socket, setTab } = useApp();
+  const { info, socket, online, setTab } = useApp();
   const visible = usePageVisible();
   const [status, setStatus] = useState<Status | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export function HomeScreen({ active, openMore }: { active: boolean; openMore: (p
   };
 
   const f = info?.features;
-  const connected = socket === 'open';
+  const connected = socket === 'open' && online;
   const shortcuts: { tab: Tab; label: string; hint: string; icon: React.ReactNode; tone: string }[] = [
     { tab: 'files', label: 'Files', hint: 'Browse & send', icon: <FolderOpen size={22} />, tone: 'from-violet-500/25 to-violet-500/5 text-violet-300' },
     ...(f?.screen ? [{ tab: 'screen' as Tab, label: 'Screen', hint: f.control ? 'View & control' : 'View live', icon: <MonitorPlay size={22} />, tone: 'from-cyan-500/25 to-cyan-500/5 text-cyan-300' }] : []),
@@ -58,11 +58,11 @@ export function HomeScreen({ active, openMore }: { active: boolean; openMore: (p
           <Logo size={42} className="drop-shadow-[0_6px_18px_rgba(91,92,240,.35)]" />
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-medium text-dim">{greeting()}</div>
-            <h1 className="truncate font-display text-[26px] font-bold leading-tight tracking-tight">{status?.hostname || info?.name || 'Your PC'}</h1>
+            <h1 className="truncate font-display text-[26px] font-bold leading-tight tracking-tight">{info?.name || status?.hostname || 'Your PC'}</h1>
           </div>
           <div className={cx('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold', connected ? 'bg-good/12 text-good' : 'bg-warn/12 text-warn')}>
             <span className={cx('h-2 w-2 rounded-full', connected ? 'dot-live bg-good' : 'bg-warn')} />
-            {connected ? 'Online' : 'Connecting'}
+            {connected ? 'Online' : online ? 'Connecting' : 'Offline'}
           </div>
         </header>
 
@@ -73,7 +73,10 @@ export function HomeScreen({ active, openMore }: { active: boolean; openMore: (p
           {status ? (
             <>
               <div className="flex items-center gap-2 text-[13px] text-dim">
-                <span className="truncate">{status.os || info?.platform}</span>
+                <span className="truncate">
+                  {status.hostname && status.hostname !== info?.name ? `${status.hostname} · ` : ''}
+                  {status.os || info?.platform}
+                </span>
                 <span className="text-faint">·</span>
                 <span className="flex shrink-0 items-center gap-1">
                   <Clock size={13} /> up {formatUptime(status.uptime)}
@@ -179,15 +182,15 @@ export function HomeScreen({ active, openMore }: { active: boolean; openMore: (p
 function Gauge({ icon, label, value, text, sub }: { icon: React.ReactNode; label: string; value: number; text: string; sub: string }) {
   const color = value > 0.9 ? 'var(--bad)' : value > 0.75 ? 'var(--warn)' : undefined;
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-surface p-3">
-      <Ring value={value} size={64} stroke={7} color={color}>
-        <span className="num text-[15px] font-bold">{text}</span>
-      </Ring>
-      <div className="min-w-0">
-        <div className="flex items-center gap-1 text-[13px] font-semibold text-dim">
-          {icon} {label}
-        </div>
-        <div className="mt-0.5 text-xs leading-snug text-faint">{sub}</div>
+    <div className="rounded-2xl bg-surface p-3">
+      <div className="flex items-center gap-1.5 text-[13px] font-semibold text-dim">
+        {icon} {label}
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <Ring value={value} size={60} stroke={6.5} color={color}>
+          <span className="num text-[15px] font-bold">{text}</span>
+        </Ring>
+        <div className="min-w-0 text-xs leading-snug text-faint">{sub}</div>
       </div>
     </div>
   );
@@ -257,7 +260,7 @@ function IdeaComposer({ onOpenNotes }: { onOpenNotes: () => void }) {
       const n = await client.createNote({ kind: 'idea', title: title.trim() || body.trim().split('\n')[0].slice(0, 80), body, sendToClaude: toClaude && claudeFolder !== false });
       setTitle('');
       setBody('');
-      if (n.exportedPath) toast.success('Idea sent to Claude', n.exportedPath, { label: 'Notes', run: onOpenNotes });
+      if (n.exportedPath) toast.success('Idea sent to Claude', `Saved as ${basename(n.exportedPath)}`, { label: 'Notes', run: onOpenNotes });
       else toast.success('Idea saved on the PC', claudeFolder === false ? 'Set a Claude folder in OmniHub on the PC to export ideas.' : undefined, { label: 'Notes', run: onOpenNotes });
     } catch (e) {
       toast.error("Couldn't save the idea", errorMessage(e));

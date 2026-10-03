@@ -163,7 +163,7 @@ function Entries({ session, active, onExpired }: { session: string; active: bool
       setEntries(r.entries);
       setError(null);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) return onExpired();
+      if (e instanceof ApiError && e.status === 423) return onExpired();
       setError(errorMessage(e));
     }
   };
@@ -263,7 +263,7 @@ function EntrySheet({ session, entry, onClose, onExpired }: { session: string; e
       useVault.getState().touch();
       return r.value;
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
+      if (err instanceof ApiError && err.status === 423) {
         onClose();
         onExpired();
       } else toast.error("Couldn't read the vault", errorMessage(err));

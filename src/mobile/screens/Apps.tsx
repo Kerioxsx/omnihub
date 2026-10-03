@@ -95,7 +95,7 @@ export function AppsPage({ onBack }: { onBack: () => void }) {
   return (
     <div className="h-full">
       <PullToRefresh onRefresh={load}>
-        <SubHeader title="Apps" subtitle={apps ? `${apps.length} on the PC` : 'On the PC'} onBack={onBack} />
+        <SubHeader title="Apps" subtitle={apps?.length ? `${apps.length} on the PC` : 'On the PC'} onBack={onBack} />
         <div className="px-safe pb-tabbar">
           <div className="relative">
             <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />

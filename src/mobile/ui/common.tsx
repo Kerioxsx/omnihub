@@ -134,7 +134,7 @@ export function Segmented<T extends string>({ value, options, onChange, classNam
           onClick={() => onChange(o.value)}
           className={cx(
             'flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-semibold transition-colors',
-            o.value === value ? 'bg-elev text-fg shadow-[0_2px_10px_-4px_rgba(0,0,0,.4)]' : 'text-dim',
+            o.value === value ? 'bg-white/[.13] text-fg shadow-[0_2px_10px_-4px_rgba(0,0,0,.4)] light:bg-white' : 'text-dim',
           )}
         >
           {o.label}

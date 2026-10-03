@@ -42,7 +42,7 @@ import { Button, Empty, ErrorState, PageHeader, Skeleton } from '../ui/common';
 import { Sheet } from '../ui/Sheet';
 import { useBackHandler } from '../lib/back';
 import { keepAwake } from '../lib/wakelock';
-import { cx, errorMessage, vibrate, usePageVisible } from '../lib/util';
+import { cx, errorMessage, keyboardInset, vibrate, usePageVisible } from '../lib/util';
 
 type ScreenInfo = Awaited<ReturnType<typeof client.screenInfo>>;
 type Mode = 'view' | 'trackpad' | 'touch';
@@ -225,8 +225,8 @@ interface Pt {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-function drawCursor(ctx: CanvasRenderingContext2D, x: number, y: number, frameW: number) {
-  const s = Math.max(1, frameW / 1280) * 1.1;
+/** Draw the pointer; `s` = frame pixels per screen pixel, so it stays ~20 px tall on the phone. */
+function drawCursor(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(s, s);
@@ -291,6 +291,7 @@ function Viewer({
   const pipe = useRef<{ decoding: boolean; queued: ReturnType<typeof parseFrame> }>({ decoding: false, queued: null });
   const decodeMs = useRef(0);
   const lastCursor = useRef<{ x: number; y: number } | null>(null);
+  const cursorScale = useRef(1);
   const visible = usePageVisible();
 
   const [conn, setConn] = useState<Conn>('connecting');
@@ -353,7 +354,7 @@ function Viewer({
     ctx.drawImage(img, 0, 0, h.width, h.height);
     if (h.cursor) {
       lastCursor.current = h.cursor;
-      drawCursor(ctx, h.cursor.x, h.cursor.y, h.width);
+      drawCursor(ctx, h.cursor.x, h.cursor.y, cursorScale.current);
     }
   };
 
@@ -488,6 +489,7 @@ function Viewer({
   const fit = frame && box.w ? Math.min(box.w / frame.w, box.h / frame.h) : 1;
   const dispW = frame ? frame.w * fit : 0;
   const dispH = frame ? frame.h * fit : 0;
+  if (frame && dispW) cursorScale.current = Math.max(1, frame.w / (dispW * zoom.z));
   const ox = (box.w - dispW) / 2;
   const oy = (box.h - dispH) / 2;
 
@@ -897,9 +899,9 @@ function Viewer({
               </div>
             </div>
 
-            {portraitForLandscape && rotateHint && !isFs && (
-              <div className="pointer-events-auto absolute inset-x-0 top-[calc(var(--safe-top)+64px)] flex justify-end px-[max(12px,var(--safe-right))]">
-                <button onClick={() => setRotateHint(false)} className="hud-glass flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold">
+            {portraitForLandscape && rotateHint && !isFs && !kbOpen && (
+              <div className="pointer-events-auto absolute inset-x-0 bottom-[calc(var(--safe-bottom)+112px)] flex justify-center px-4">
+                <button onClick={() => setRotateHint(false)} className="hud-glass flex items-center gap-2 rounded-full px-3.5 py-2 text-xs font-semibold">
                   <Smartphone size={15} className="rotate-90" /> Turn sideways for a bigger view
                 </button>
               </div>
@@ -911,12 +913,12 @@ function Viewer({
                   <div className="hud-glass flex flex-1 rounded-2xl p-1">
                     {(
                       [
-                        ['view', <Eye key="v" size={16} />, 'View'],
-                        ['trackpad', <MousePointer2 key="t" size={16} />, 'Trackpad'],
-                        ['touch', <Hand key="h" size={16} />, 'Touch'],
+                        ['view', <Eye key="v" size={15} />, 'View'],
+                        ['trackpad', <MousePointer2 key="t" size={15} />, 'Trackpad'],
+                        ['touch', <Hand key="h" size={15} />, 'Touch'],
                       ] as [Mode, ReactNode, string][]
                     ).map(([m, icon, label]) => (
-                      <button key={m} onClick={() => setMode(m)} className={cx('flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold transition-colors', effMode === m ? 'bg-white text-black' : 'text-white/80')}>
+                      <button key={m} onClick={() => setMode(m)} aria-pressed={effMode === m} className={cx('flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-xl px-1 text-[12.5px] font-semibold transition-colors [&>svg]:shrink-0', effMode === m ? 'bg-white text-black' : 'text-white/80')}>
                         {icon}
                         {label}
                       </button>
@@ -1032,7 +1034,7 @@ function KeyboardPanel({ send, onClose }: { send: (m: ViewerMessage) => void; on
     input.current?.focus();
     const vv = window.visualViewport;
     if (!vv) return;
-    const on = () => setKbInset(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
+    const on = () => setKbInset(keyboardInset(vv));
     vv.addEventListener('resize', on);
     on();
     return () => vv.removeEventListener('resize', on);

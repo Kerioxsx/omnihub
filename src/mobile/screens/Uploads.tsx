@@ -10,7 +10,7 @@ import { ProgressBar } from '../ui/common';
 import { FileIcon } from './fileKinds';
 import { copyText } from '../lib/clipboard';
 import { toast } from '../state';
-import { cx, formatEta, formatSpeed } from '../lib/util';
+import { cx, formatEta, formatSpeed, shortPath } from '../lib/util';
 
 export function UploadsPanel({ className }: { className?: string }) {
   const { items, clearFinished } = useUploads();
@@ -74,16 +74,10 @@ function UploadRow({ item: i }: { item: UploadItem }) {
       status = `Waiting · ${formatBytes(i.size)} → ${i.dirLabel}`;
       break;
     case 'uploading':
-      status = (
-        <span className="num">
-          {formatBytes(i.sent)} of {formatBytes(i.size)}
-          {i.speed > 0 && ` · ${formatSpeed(i.speed)}`}
-          {Number.isFinite(i.eta) && i.speed > 0 && ` · ${formatEta(i.eta)}`}
-        </span>
-      );
+      status = `Sending to ${i.dirLabel}`;
       break;
     case 'paused':
-      status = `Paused · ${formatBytes(i.offset)} of ${formatBytes(i.size)}`;
+      status = 'Paused — tap ▶ to resume';
       break;
     case 'error':
       status = <span className="text-bad">{i.error ?? 'Failed'}</span>;
@@ -92,53 +86,70 @@ function UploadRow({ item: i }: { item: UploadItem }) {
       status = 'Cancelled';
       break;
     case 'done':
-      status = <span className="selectable break-all">Saved to {i.path}</span>;
+      status = (
+        <span className="selectable" title={i.path}>
+          Saved to {shortPath(i.path ?? '', 44)}
+        </span>
+      );
       break;
   }
+  const showBar = i.state !== 'done' && i.state !== 'cancelled';
   return (
-    <div className="flex gap-3 px-4 py-3">
-      <FileIcon name={i.name} size={40} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1 truncate text-[15px] font-semibold">{i.name}</div>
-          {i.state === 'done' && <CircleCheck size={16} className="shrink-0 text-good" />}
+    <div className="px-4 py-3">
+      <div className="flex gap-3">
+        <FileIcon name={i.name} size={40} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1 truncate text-[15px] font-semibold">{i.name}</div>
+            {i.state === 'done' && <CircleCheck size={16} className="shrink-0 text-good" />}
+          </div>
+          <div className={cx('mt-0.5 text-xs text-dim', i.state !== 'done' && 'truncate')}>{status}</div>
+          {i.state === 'done' && i.sha256 && (
+            <button
+              className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-surface-2 px-2 py-1 font-mono text-[11px] text-dim active:bg-surface-3"
+              onClick={async () => ((await copyText(i.sha256!)) ? toast.success('SHA-256 copied') : toast.error("Couldn't copy", i.sha256))}
+              aria-label="Copy SHA-256"
+            >
+              SHA-256 {i.sha256.slice(0, 10)}…{i.sha256.slice(-6)} <Copy size={11} />
+            </button>
+          )}
         </div>
-        <div className={cx('mt-0.5 text-xs text-dim', i.state !== 'done' && 'truncate')}>{status}</div>
-        {i.state !== 'done' && i.state !== 'cancelled' && <ProgressBar value={frac} tone={tone} active={i.state === 'uploading'} className="mt-2" />}
-        {i.state === 'done' && i.sha256 && (
-          <button
-            className="mt-1.5 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-surface-2 px-2 py-1 font-mono text-[11px] text-dim active:bg-surface-3"
-            onClick={async () => ((await copyText(i.sha256!)) ? toast.success('SHA-256 copied') : toast.error("Couldn't copy", i.sha256))}
-            aria-label="Copy SHA-256"
-          >
-            SHA-256 {i.sha256.slice(0, 10)}…{i.sha256.slice(-6)} <Copy size={11} />
-          </button>
-        )}
+        <div className="flex shrink-0 items-start gap-1.5">
+          {i.state === 'uploading' || i.state === 'queued' ? (
+            <RowBtn label="Pause" onClick={() => u.pause(i.key)}>
+              <Pause size={16} />
+            </RowBtn>
+          ) : i.state === 'paused' ? (
+            <RowBtn label="Resume" onClick={() => u.resume(i.key)} accent>
+              <Play size={16} />
+            </RowBtn>
+          ) : i.state === 'error' ? (
+            <RowBtn label="Retry" onClick={() => u.retry(i.key)} accent>
+              <RotateCcw size={16} />
+            </RowBtn>
+          ) : null}
+          {i.state === 'done' || i.state === 'cancelled' || i.state === 'error' ? (
+            <RowBtn label="Remove from list" onClick={() => u.remove(i.key)}>
+              <X size={16} />
+            </RowBtn>
+          ) : (
+            <RowBtn label="Cancel upload" onClick={() => u.cancel(i.key)}>
+              <X size={16} />
+            </RowBtn>
+          )}
+        </div>
       </div>
-      <div className="flex shrink-0 items-start gap-1.5">
-        {i.state === 'uploading' || i.state === 'queued' ? (
-          <RowBtn label="Pause" onClick={() => u.pause(i.key)}>
-            <Pause size={16} />
-          </RowBtn>
-        ) : i.state === 'paused' ? (
-          <RowBtn label="Resume" onClick={() => u.resume(i.key)} accent>
-            <Play size={16} />
-          </RowBtn>
-        ) : i.state === 'error' ? (
-          <RowBtn label="Retry" onClick={() => u.retry(i.key)} accent>
-            <RotateCcw size={16} />
-          </RowBtn>
-        ) : null}
-        {i.state === 'done' || i.state === 'cancelled' || i.state === 'error' ? (
-          <RowBtn label="Remove from list" onClick={() => u.remove(i.key)}>
-            <X size={16} />
-          </RowBtn>
-        ) : (
-          <RowBtn label="Cancel upload" onClick={() => u.cancel(i.key)}>
-            <X size={16} />
-          </RowBtn>
-        )}
-      </div>
+      {showBar && (
+        <div className="mt-2.5 pl-[52px]">
+          <ProgressBar value={frac} tone={tone} active={i.state === 'uploading'} />
+          <div className="num mt-1.5 flex justify-between gap-3 whitespace-nowrap text-[11.5px] text-faint">
+            <span>
+              {formatBytes(i.state === 'paused' ? i.offset : i.sent)} of {formatBytes(i.size)} · {Math.floor(frac * 100)}%
+            </span>
+            {i.state === 'uploading' && <span>{i.speed > 0 ? `${formatSpeed(i.speed)}${Number.isFinite(i.eta) ? ` · ${formatEta(i.eta)}` : ''}` : 'starting…'}</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

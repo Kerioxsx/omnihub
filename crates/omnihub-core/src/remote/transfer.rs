@@ -149,7 +149,7 @@ impl Uploads {
         let meta = UploadMeta { id: id.clone(), name: name.clone(), size, dest_dir: dest_dir.to_path_buf(), device_id: device_id.into(), device_name: device_name.into(), created: crate::db::now() };
         std::fs::File::create(self.part_path(&id))?;
         crate::settings::write_atomic(&self.meta_path(&id), &serde_json::to_vec(&meta).unwrap())?;
-        self.events.emit("transfer:started", serde_json::json!({ "id": id, "direction": "upload", "name": name, "size": size, "device": device_name }));
+        self.events.emit("transfer:started", serde_json::json!({ "id": id, "direction": "upload", "name": name, "size": size, "device": device_name, "deviceId": device_id }));
         Ok(UploadStatus { id, name, size, offset: 0 })
     }
 
@@ -167,7 +167,7 @@ impl Uploads {
 
     pub fn status(&self, id: &str, device_id: &str) -> Result<UploadStatus, TransferError> {
         let meta = self.meta(id, device_id)?;
-        let offset = std::fs::metadata(self.part_path(id))?.len();
+        let offset = std::fs::metadata(self.part_path(id)).map_err(|_| TransferError::Unknown)?.len();
         Ok(UploadStatus { id: meta.id, name: meta.name, size: meta.size, offset })
     }
 
@@ -203,7 +203,7 @@ impl Uploads {
             }
         };
         if due {
-            self.events.emit("transfer:progress", serde_json::json!({ "id": id, "direction": "upload", "name": meta.name, "done": new_len, "size": meta.size, "device": meta.device_name }));
+            self.events.emit("transfer:progress", serde_json::json!({ "id": id, "direction": "upload", "name": meta.name, "done": new_len, "size": meta.size, "device": meta.device_name, "deviceId": meta.device_id }));
         }
         Ok(new_len)
     }
@@ -240,7 +240,7 @@ impl Uploads {
         self.locks.lock().remove(id);
         self.last_emit.lock().remove(id);
         let done = FinishedUpload { id: id.into(), name: dest.file_name().unwrap().to_string_lossy().to_string(), path: dest.to_string_lossy().to_string(), size: len, sha256: hex::encode(hasher.finalize()) };
-        self.events.emit("transfer:done", serde_json::json!({ "id": id, "direction": "upload", "name": done.name, "path": done.path, "size": len, "sha256": done.sha256, "device": meta.device_name }));
+        self.events.emit("transfer:done", serde_json::json!({ "id": id, "direction": "upload", "name": done.name, "path": done.path, "size": len, "sha256": done.sha256, "device": meta.device_name, "deviceId": meta.device_id }));
         Ok(done)
     }
 
@@ -248,7 +248,7 @@ impl Uploads {
         self.meta(id, device_id)?;
         let _ = std::fs::remove_file(self.part_path(id));
         let _ = std::fs::remove_file(self.meta_path(id));
-        self.events.emit("transfer:cancelled", serde_json::json!({ "id": id, "direction": "upload" }));
+        self.events.emit("transfer:cancelled", serde_json::json!({ "id": id, "direction": "upload", "deviceId": device_id }));
         Ok(())
     }
 
