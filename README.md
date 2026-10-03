@@ -40,8 +40,8 @@ The desktop app (shown with its built-in demo data) and the phone app (talking t
 On a real Windows system drive with 1.15 million files and 212,000 folders
 (GitHub's Windows runner), the MFT is read and parsed in **3.3 s** and the
 browsable tree is built in **0.25 s**; refreshing it afterwards through the
-USN change journal took **0.4 s**. A recursive folder walk of the same drive
-takes minutes. The time grows with the number of files, not with drive
+USN change journal took **0.4 s**. (A folder walk has to ask the file system
+about every directory and is typically many times slower.) The time grows with the number of files, not with drive
 size, so a 4 TB drive full of large media files scans faster than a small
 system drive. See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
 
