@@ -218,7 +218,7 @@ export function Lightbox({ shots, openId, onClose, onNavigate, onChange }: { sho
   }, [shot, prev, next, onNavigate]);
 
   return (
-    <Modal open={!!shot} onClose={onClose} bare className="!fixed inset-3 !max-w-none" labelledBy="lightbox-title">
+    <Modal open={!!shot} onClose={onClose} bare className="!fixed inset-3 !w-auto !max-w-none" labelledBy="lightbox-title">
       {shot && (
         <div className="flex h-full overflow-hidden rounded-[20px] border border-line-strong bg-[#050508]/95 shadow-2xl">
           <div className="relative flex min-w-0 flex-1 flex-col">
@@ -227,7 +227,7 @@ export function Lightbox({ shots, openId, onClose, onNavigate, onChange }: { sho
                 {idx + 1} / {shots.length}
               </span>
               <div className="flex-1" />
-              <IconButton icon={X} label="Close (Esc)" onClick={onClose} />
+              <IconButton icon={X} label="Close (Esc)" onClick={onClose} data-autofocus />
             </div>
             <div className="relative flex min-h-0 flex-1 px-14 pb-4">
               <AnimatePresence mode="wait">

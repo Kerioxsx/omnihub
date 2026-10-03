@@ -12,6 +12,12 @@ import { useAsync } from '../../lib/hooks';
 import { useStorage } from '../../state/storage';
 import { openItemMenu } from './actions';
 
+function parentOf(path: string): string {
+  const i = path.lastIndexOf('\\');
+  const dir = i > 0 ? path.slice(0, i) : path;
+  return /^[A-Za-z]:$/.test(dir) ? `${dir}\\` : dir;
+}
+
 export function LargestTab({ scanId }: { scanId: string }) {
   const nodeId = useStorage((s) => s.nodeByScan[scanId] ?? 0);
   const version = useStorage((s) => s.version);
@@ -38,7 +44,7 @@ export function LargestTab({ scanId }: { scanId: string }) {
         <FileIcon name={f.name} isDir={false} />
         <div className="min-w-0">
           <div className="truncate text-[13px] text-fg">{f.name}</div>
-          <div className="truncate font-mono text-[10.5px] text-faint">{f.path.slice(0, f.path.length - f.name.length - 1)}</div>
+          <div className="truncate font-mono text-[10.5px] text-faint">{parentOf(f.path)}</div>
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -52,7 +58,7 @@ export function LargestTab({ scanId }: { scanId: string }) {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-[460px] flex-1 flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <div className="text-[13px] text-dim">
           The 100 largest files{scope === 'here' && here.data ? <span> under <span className="font-mono text-fg">{here.data}</span></span> : ' in this scan'} — together <span className="font-semibold text-fg tabular">{formatBytes(total)}</span>.

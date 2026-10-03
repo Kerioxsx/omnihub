@@ -112,7 +112,7 @@ export function DuplicatesTab({ scanId }: { scanId: string }) {
   const frac = progress ? (progress.phase === 1 ? progress.filesDone / Math.max(1, progress.filesTotal) * 0.4 : progress.phase === 2 ? 0.4 + (progress.bytesDone / Math.max(1, progress.bytesTotal)) * 0.6 : 1) : 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-[460px] flex-1 flex-col gap-3">
       <Card className="flex flex-wrap items-center gap-4 px-5 py-4">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent">
           <Files size={19} aria-hidden />

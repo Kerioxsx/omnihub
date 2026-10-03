@@ -10,7 +10,7 @@ import { Toaster } from './components/Toaster';
 import { MenuHost } from './components/ui/Menu';
 import { overlayOpen } from './components/ui/Overlay';
 import { ErrorState } from './components/ui/States';
-import { useStoredState } from './lib/hooks';
+import { useMediaQuery, useStoredState } from './lib/hooks';
 import { PAGE_IDS, type RouteId, navigate, useRoute } from './lib/router';
 import { AppsPage } from './pages/apps/AppsPage';
 import { HomePage } from './pages/home/HomePage';
@@ -77,7 +77,12 @@ export function App() {
   const error = useSettings((s) => s.error);
   const load = useSettings((s) => s.load);
   const route = useRoute();
-  const [collapsed, setCollapsed] = useStoredState('omnihub.sidebarCollapsed', false);
+  const [storedCollapsed, setStoredCollapsed] = useStoredState('omnihub.sidebarCollapsed', false);
+  // Narrow windows collapse the sidebar automatically unless the user opens it.
+  const narrow = useMediaQuery('(max-width: 1199px)');
+  const [narrowExpanded, setNarrowExpanded] = useState(false);
+  const collapsed = narrow ? !narrowExpanded : storedCollapsed;
+  const toggleSidebar = () => (narrow ? setNarrowExpanded(!narrowExpanded) : setStoredCollapsed(!storedCollapsed));
   const [onboardingForced, setOnboardingForced] = useState(forceOnboarding);
   useGlobalShortcuts();
 
@@ -97,7 +102,7 @@ export function App() {
       <GlobalEvents />
       <div className="app-backdrop" />
       <div className="relative z-10 flex h-full">
-        <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+        <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
         <main className="relative min-w-0 flex-1">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div

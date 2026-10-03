@@ -264,7 +264,8 @@ pub async fn storage_open_cached(core: Core<'_>, root: String) -> Res<Option<Sca
 
 #[tauri::command]
 pub async fn storage_children(core: Core<'_>, scan_id: String, node: u32, sort: SortKey, descending: bool, offset: usize, limit: usize) -> Res<ChildrenPage> {
-    core.storage.children(&scan_id, node, sort, descending, offset, limit.min(5000)).map_err(err)
+    let include_hidden = core.settings.get().storage.show_hidden;
+    core.storage.children(&scan_id, node, sort, descending, offset, limit.min(5000), include_hidden).map_err(err)
 }
 
 #[tauri::command]
@@ -275,7 +276,14 @@ pub async fn storage_treemap(core: Core<'_>, scan_id: String, node: u32, depth: 
 #[tauri::command]
 pub async fn storage_top_files(core: Core<'_>, scan_id: String, node: u32, n: usize) -> Res<Vec<PathedNode>> {
     let core = core.inner().clone();
-    blocking(move || core.storage.top_files(&scan_id, node, n).map_err(err)).await
+    blocking(move || {
+        let mut files = core.storage.top_files(&scan_id, node, n).map_err(err)?;
+        if !core.settings.get().storage.show_hidden {
+            files.retain(|f| !f.node.hidden && !f.node.system);
+        }
+        Ok(files)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -285,8 +293,9 @@ pub async fn storage_extensions(core: Core<'_>, scan_id: String, node: u32) -> R
 }
 
 #[tauri::command]
-pub async fn storage_search(core: Core<'_>, scan_id: String, query: SearchQuery) -> Res<SearchResult> {
+pub async fn storage_search(core: Core<'_>, scan_id: String, mut query: SearchQuery) -> Res<SearchResult> {
     let core = core.inner().clone();
+    query.exclude_hidden |= !core.settings.get().storage.show_hidden;
     blocking(move || core.storage.search(&scan_id, &query).map_err(err)).await
 }
 

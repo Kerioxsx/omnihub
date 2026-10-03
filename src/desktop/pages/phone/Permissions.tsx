@@ -88,7 +88,7 @@ export function Permissions() {
             {r.allowPower && (
               <div className="flex items-center gap-2 text-[12.5px] text-dim">
                 Countdown
-                <Select value={String(r.powerDelaySeconds)} onChange={(e) => void update({ remote: { powerDelaySeconds: Number(e.target.value) } })} className="w-[110px]" aria-label="Power countdown">
+                <Select value={String(r.powerDelaySeconds)} onChange={(e) => void update({ remote: { powerDelaySeconds: Number(e.target.value) } })} className="w-[132px]" aria-label="Power countdown">
                   {[5, 10, 20, 30, 60, 120].map((n) => (
                     <option key={n} value={n}>
                       {n} seconds

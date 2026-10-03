@@ -87,7 +87,7 @@ function Body({ app, onClose }: { app: AppInfo; onClose: () => void }) {
               'Unknown'
             )}
           </Meta>
-          <Meta label="Installed">{app.installDate ? `${formatDate(app.installDate)} · ${formatRelative(app.installDate)}` : 'Unknown'}</Meta>
+          <Meta label="Installed">{app.installDate ? `${formatDate(app.installDate)}${Date.now() / 1000 - app.installDate < 30 * 86400 ? ` · ${formatRelative(app.installDate)}` : ''}` : 'Unknown'}</Meta>
           <Meta label="Version" mono>
             {app.version}
           </Meta>

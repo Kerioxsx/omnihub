@@ -56,7 +56,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: DependencyList): AsyncSt
 
   useEffect(() => {
     void run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, deps);
 
   const setData = useCallback((update: T | ((prev: T | undefined) => T)) => {
@@ -156,4 +156,17 @@ export function useSize<E extends Element>(): [(el: E | null) => void, { width: 
   }, []);
   useEffect(() => () => obs.current?.disconnect(), []);
   return [ref, size];
+}
+
+/** Live result of a CSS media query. */
+export function useMediaQuery(query: string): boolean {
+  const [match, setMatch] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const update = () => setMatch(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, [query]);
+  return match;
 }

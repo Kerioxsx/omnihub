@@ -64,7 +64,7 @@ export function extColor(ext: string | null | undefined, isDir = false): string 
   if (!ext) return 'var(--tm-other)';
   const groups: Record<string, string[]> = {
     video: ['mp4', 'mkv', 'mov', 'avi', 'webm', 'wmv', 'm4v', 'flv'],
-    image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'raw', 'cr2', 'nef', 'psd', 'tif', 'tiff', 'svg'],
+    image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif', 'avif', 'raw', 'cr2', 'cr3', 'nef', 'arw', 'dng', 'orf', 'rw2', 'raf', 'psd', 'tif', 'tiff', 'svg'],
     audio: ['mp3', 'flac', 'wav', 'ogg', 'm4a', 'aac', 'wma', 'opus'],
     archive: ['zip', '7z', 'rar', 'tar', 'gz', 'xz', 'bz2', 'iso', 'img', 'vhd', 'vhdx', 'wim', 'cab'],
     code: ['js', 'ts', 'tsx', 'rs', 'py', 'c', 'cpp', 'h', 'cs', 'java', 'go', 'json', 'xml', 'html', 'css'],

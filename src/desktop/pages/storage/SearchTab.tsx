@@ -130,31 +130,31 @@ export function SearchTab({ scanId }: { scanId: string }) {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-[460px] flex-1 flex-col gap-3">
       <Card className="flex flex-wrap items-center gap-2.5 px-4 py-3">
         <SearchInput value={text} onChange={setText} placeholder="File or folder name — * and ? work as wildcards" className="min-w-[280px] flex-1" autoFocus aria-label="Search names" />
-        <Select value={minSize} onChange={(e) => setMinSize(e.target.value)} aria-label="Minimum size" className="w-[120px]">
+        <Select value={minSize} onChange={(e) => setMinSize(e.target.value)} aria-label="Minimum size" className="w-[118px]">
           {MIN_OPTS.map(([v, l]) => (
             <option key={v} value={v}>
               {l}
             </option>
           ))}
         </Select>
-        <Select value={maxSize} onChange={(e) => setMaxSize(e.target.value)} aria-label="Maximum size" className="w-[120px]">
+        <Select value={maxSize} onChange={(e) => setMaxSize(e.target.value)} aria-label="Maximum size" className="w-[112px]">
           {MAX_OPTS.map(([v, l]) => (
             <option key={v} value={v}>
               {l}
             </option>
           ))}
         </Select>
-        <Select value={age} onChange={(e) => setAge(e.target.value)} aria-label="Modified" className="w-[168px]">
+        <Select value={age} onChange={(e) => setAge(e.target.value)} aria-label="Modified" className="w-[160px]">
           {AGE_OPTS.map(([v, l]) => (
             <option key={v} value={v}>
               {l}
             </option>
           ))}
         </Select>
-        <TextInput value={exts} onChange={(e) => setExts(e.target.value)} placeholder="Extensions: mp4, iso" className="w-[170px]" aria-label="Extensions" />
+        <TextInput value={exts} onChange={(e) => setExts(e.target.value)} placeholder="Types: mp4, iso" className="w-[150px]" aria-label="Extensions" />
         <Segmented
           size="sm"
           label="Kind"
@@ -166,21 +166,11 @@ export function SearchTab({ scanId }: { scanId: string }) {
             { value: 'dirs', label: 'Folders' },
           ]}
         />
-        <Segmented
-          size="sm"
-          label="Scope"
-          value={scope}
-          onChange={setScope}
-          options={[
-            { value: 'all', label: 'Whole scan' },
-            { value: 'here', label: 'Current folder', disabled: !nodeId },
-          ]}
-        />
       </Card>
 
       <Card className="flex min-h-0 flex-1 flex-col p-1.5">
         <div className="flex items-center justify-between border-b border-line px-3 pb-2 pt-1.5">
-          <div className="flex items-center gap-2 text-[12.5px] text-dim">
+          <div className="flex flex-1 items-center gap-2 text-[12.5px] text-dim">
             {busy && <Spinner size={13} />}
             {result ? (
               <span>
@@ -191,6 +181,17 @@ export function SearchTab({ scanId }: { scanId: string }) {
               <span className="text-faint">Type a name or set a filter</span>
             )}
           </div>
+          <Segmented
+            size="sm"
+            label="Scope"
+            value={scope}
+            onChange={setScope}
+            className="mr-6"
+            options={[
+              { value: 'all', label: 'Whole scan' },
+              { value: 'here', label: 'Current folder', disabled: !nodeId },
+            ]}
+          />
           <div className="grid grid-cols-[96px_96px] gap-3 text-[11px] font-semibold uppercase tracking-wider text-faint">
             <span className="text-right">Size</span>
             <span className="text-right">Modified</span>

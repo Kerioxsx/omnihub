@@ -180,7 +180,7 @@ function buildC(): FakeTree {
   const bin = b.mk(root, '$Recycle.Bin\\S-1-5-21-3623811015-3361044348-30300820-1001', HS, [1, 20]);
   b.file(bin, '$RXK2M1A.mp4', 4.2 * GB, [6, 9], HS);
   b.file(bin, '$R8QW2LZ.zip', 2.1 * GB, [12, 14], HS);
-  b.file(bin, '$RJ3K9PL.iso', 1.9 * GB, [20, 22], HS);
+  b.file(bin, '$RJ3K9PL.iso', 1.93 * GB, [20, 22], HS);
   b.spread(b.mk(bin, '$RT7Y2KD', HS, [3, 4]), 140, 1.6 * GB, (i, rr) => `${rr.pick(['render', 'frame', 'clip', 'asset', 'cache'])}_${i}.${rr.pick(['png', 'exr', 'tmp', 'mp4'])}`, [3, 4], 1.0, HS);
   b.spread(bin, 12, 6 * KB, (_, rr) => `$I${rr.hex(6).toUpperCase()}`, [1, 20], 0.2, HS);
 
@@ -465,8 +465,8 @@ function buildC(): FakeTree {
   b.spread(roll26, 300, 1.6 * GB, PHOTO(2026), [0, 270], 0.5);
   b.spread(b.mk(pics, 'Screenshots'), 320, 1.1 * GB, (i) => `Screenshot ${2025 + (i % 2)}-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')} ${String(100000 + i * 317).slice(-6)}.png`, [0, 500], 0.7);
   b.spread(b.mk(pics, 'OmniHub'), 40, 160 * MB, (i) => `2026-09-${String((i % 28) + 1).padStart(2, '0')}_${String(10 + (i % 13)).padStart(2, '0')}-${String(i * 7 % 60).padStart(2, '0')}-${String(i * 13 % 60).padStart(2, '0')}.png`, [0, 28], 0.6);
-  b.spread(b.mk(pics, 'RAW\\2025'), 640, 19.5 * GB, seq('_DSC', 'CR3', 4, 1200), [30, 300], 0.15);
-  b.spread(b.mk(pics, 'RAW\\2026'), 260, 8.1 * GB, seq('_DSC', 'CR3', 4, 4100), [0, 120], 0.15);
+  b.spread(b.mk(pics, 'RAW\\2025'), 640, 19.5 * GB, seq('_DSC', 'NEF', 4, 1200), [30, 300], 0.15);
+  b.spread(b.mk(pics, 'RAW\\2026'), 260, 8.1 * GB, seq('_DSC', 'NEF', 4, 4100), [0, 120], 0.15);
   const lr = b.mk(pics, 'Lightroom', 0, [0, 5]);
   b.file(lr, 'Lightroom Catalog-v13.lrcat', 1.2 * GB, 1);
   b.spread(b.mk(lr, 'Lightroom Catalog-v13 Previews.lrdata'), 400, 3.1 * GB, (_, rr) => `${rr.hex(4).toUpperCase()}\\${rr.hex(32)}.lrprev`.replace('\\', '_'), [0, 120]);

@@ -38,7 +38,7 @@
   --tm-audio: #fbbf24;
   --tm-archive: #f97316;
   --tm-code: #60a5fa;
-  --tm-doc: #a78bfa;
+  --tm-doc: #f0abfc; /* much lighter than --tm-code so they stay apart for red-green colour blindness */
   --tm-exe: #94a3b8;
   --tm-data: #2dd4bf;
   --tm-other: #64748b;

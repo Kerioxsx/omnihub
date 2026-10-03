@@ -5,8 +5,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
 import { Button } from '../../components/ui/Button';
+import { Drawer } from '../../components/ui/Overlay';
 import { EmptyState } from '../../components/ui/States';
-import { useDebounced, useEvent, useStoredState } from '../../lib/hooks';
+import { useDebounced, useEvent, useMediaQuery, useStoredState } from '../../lib/hooks';
 import { navigate, useRoute } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
@@ -31,6 +32,8 @@ export function NotesPage() {
   const [saving, setSaving] = useState<'idle' | 'pending' | 'saving' | 'saved'>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [panel, setPanel] = useStoredState('omnihub.notes.claudePanel', true);
+  const wide = useMediaQuery('(min-width: 1280px)');
+  const [panelDrawer, setPanelDrawer] = useState(false);
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<{ note: Note | null; draft: Draft | null }>({ note: null, draft: null });
@@ -130,7 +133,7 @@ export function NotesPage() {
         setDraft(null);
       }
     }
-  }, [loading, notes, kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loading, notes, kind]);
 
   // ?new=idea, ?id=… from the palette, Home or the phone.
   useEffect(() => {
@@ -172,7 +175,7 @@ export function NotesPage() {
   };
 
   const isIdea = kind === 'idea';
-  const showPanel = isIdea && panel;
+  const showPanel = isIdea && panel && wide;
 
   return (
     <Page
@@ -181,8 +184,8 @@ export function NotesPage() {
       scroll={false}
       actions={
         <>
-          {isIdea && !panel && (
-            <Button icon={Bot} onClick={() => setPanel(true)}>
+          {isIdea && !showPanel && (
+            <Button icon={Bot} onClick={() => (wide ? setPanel(true) : setPanelDrawer(true))}>
               Claude folder
             </Button>
           )}
@@ -195,7 +198,7 @@ export function NotesPage() {
         </>
       }
     >
-      <div className={showPanel ? 'grid min-h-0 flex-1 grid-cols-[290px_minmax(0,1fr)_300px] gap-3' : 'grid min-h-0 flex-1 grid-cols-[290px_minmax(0,1fr)] gap-3'}>
+      <div className={showPanel ? 'grid min-h-0 flex-1 grid-cols-[290px_minmax(0,1fr)_300px] gap-3' : 'grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] gap-3 xl:grid-cols-[290px_minmax(0,1fr)]'}>
         <NoteList
           kind={kind}
           onKind={(k) => {
@@ -237,6 +240,9 @@ export function NotesPage() {
         </AnimatePresence>
         {showPanel && <ClaudePanel onClose={() => setPanel(false)} />}
       </div>
+      <Drawer open={panelDrawer && !wide} onClose={() => setPanelDrawer(false)} label="Claude folder" width={380}>
+        <ClaudePanel onClose={() => setPanelDrawer(false)} className="h-full rounded-none border-0" />
+      </Drawer>
     </Page>
   );
 }

@@ -67,7 +67,6 @@ export function hashString(s: string): number {
 export const KB = 1024;
 export const MB = 1024 * KB;
 export const GB = 1024 * MB;
-export const TB = 1024 * GB;
 
 /** Unix seconds at mock start; every timestamp is relative to it. */
 export const NOW = Math.floor(Date.now() / 1000);

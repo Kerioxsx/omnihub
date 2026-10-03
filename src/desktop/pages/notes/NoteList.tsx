@@ -49,9 +49,9 @@ export function NoteList({
         />
         <SearchInput value={query} onChange={onQuery} placeholder={kind === 'idea' ? 'Search ideas' : 'Search notes'} inputSize="sm" aria-label="Search notes" />
         {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {tags.slice(0, 10).map(([t, n]) => (
-              <button key={t} type="button" onClick={() => onTag(tag === t ? null : t)} aria-pressed={tag === t} className={cx('h-6 rounded-full border px-2 text-[11.5px] transition-colors', tag === t ? 'border-accent/40 bg-accent-soft text-accent' : 'border-line text-dim hover:text-fg')}>
+          <div className="fade-x -mx-3 flex gap-1 overflow-x-auto px-3 pb-0.5 [scrollbar-width:none]">
+            {tags.slice(0, 14).map(([t, n]) => (
+              <button key={t} type="button" onClick={() => onTag(tag === t ? null : t)} aria-pressed={tag === t} className={cx('h-6 shrink-0 whitespace-nowrap rounded-full border px-2 text-[11.5px] transition-colors', tag === t ? 'border-accent/40 bg-accent-soft text-accent' : 'border-line text-dim hover:text-fg')}>
                 #{t} <span className="text-faint">{n}</span>
               </button>
             ))}

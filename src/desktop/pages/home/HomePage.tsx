@@ -59,11 +59,11 @@ function DriveCard({ v }: { v: VolumeInfo }) {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 text-[11.5px] text-faint">
+        <div className="mt-auto flex items-center gap-1.5 text-[11.5px] text-faint">
           <span className={cx('h-1.5 w-1.5 rounded-full', scanning ? 'bg-accent' : s ? 'bg-good' : 'bg-faint')} />
-          {scanning ? 'Scanning now…' : s ? `Scanned ${formatRelative(s.scannedAt)}${s.fromCache ? ' (cached)' : ''}` : 'Not scanned yet'}
+          {scanning ? 'Scanning now…' : s ? `Scanned ${formatRelative(s.scannedAt)}${s.fromCache ? ' (cached)' : ''}` : 'Scan to see what fills it'}
         </div>
-        <div className="mt-auto flex gap-2">
+        <div className="flex gap-2">
           <Button size="sm" variant="secondary" icon={v.mftCapable ? Zap : HardDrive} onClick={scan} disabled={!!job} className="flex-1">
             Scan
           </Button>
@@ -191,7 +191,7 @@ function QuickActions() {
     },
   ];
   return (
-    <motion.div variants={rise} className="grid grid-cols-5 gap-3">
+    <motion.div variants={rise} className="grid grid-cols-3 gap-3 xl:grid-cols-5">
       {actions.map((a) => (
         <motion.button
           key={a.title}
@@ -341,19 +341,19 @@ export function HomePage() {
       <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
         {power && <PowerBanner inline />}
         <div className="grid grid-cols-12 gap-3">
-          <motion.div variants={stagger} className="col-span-8 grid grid-cols-3 gap-3">
+          <motion.div variants={stagger} className="col-span-12 grid grid-cols-3 gap-3 xl:col-span-8">
             {loaded ? volumes.map((v) => <DriveCard key={v.root} v={v} />) : [0, 1, 2].map((i) => <Skeleton key={i} className="h-[140px] rounded-2xl" />)}
           </motion.div>
-          <motion.div variants={rise} className="col-span-4">
+          <motion.div variants={rise} className="col-span-12 xl:col-span-4">
             <SystemCard />
           </motion.div>
         </div>
         <QuickActions />
         <motion.div variants={rise} className="grid grid-cols-12 gap-3">
-          <div className="col-span-7">
+          <div className="col-span-12 xl:col-span-7">
             <NotesCard />
           </div>
-          <div className="col-span-5">
+          <div className="col-span-12 xl:col-span-5">
             <PhoneCard />
           </div>
         </motion.div>

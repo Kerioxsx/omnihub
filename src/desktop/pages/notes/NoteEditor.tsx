@@ -66,7 +66,7 @@ export function NoteEditor({
 
   useEffect(() => {
     if (!note.title && !note.body) titleRef.current?.focus();
-  }, [note.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [note.id]);
 
   const apply = (action: MdAction) => {
     const el = area.current;
@@ -118,7 +118,7 @@ export function NoteEditor({
   const isIdea = note.kind === 'idea';
 
   return (
-    <div className="card flex min-h-0 flex-col overflow-hidden">
+    <div className="card flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex items-center gap-2 px-5 pb-2 pt-4">
         <input
           ref={titleRef}
@@ -224,10 +224,10 @@ export function NoteEditor({
                   <>
                     <div className="flex items-center gap-1.5 text-[13px] text-fg">
                       <Check size={14} className="text-good" aria-hidden />
-                      Sent {formatRelative(note.exportedAt)} <span className="text-faint">— re-sending updates the same file</span>
+                      Sent {formatRelative(note.exportedAt)}
                     </div>
-                    <div className="mt-0.5 truncate font-mono text-[11px] text-faint" title={note.exportedPath ?? ''}>
-                      {note.exportedPath}
+                    <div className="mt-0.5 truncate text-[11.5px] text-faint" title={note.exportedPath ?? ''}>
+                      Re-sending updates the same file · <span className="font-mono">{note.exportedPath?.split('\\').pop()}</span>
                     </div>
                   </>
                 ) : (

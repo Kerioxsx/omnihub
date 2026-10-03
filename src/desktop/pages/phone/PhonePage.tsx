@@ -373,7 +373,7 @@ export function PhonePage() {
     <Page title="Phone" subtitle="Use your phone as a remote for this PC — files, power, screen and notes, all over your local network.">
       <div className="space-y-3">
         <Hero onPair={() => setPairOpen(true)} onSend={() => setSendOpen(true)} />
-        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start gap-3">
+        <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
           <div className="space-y-3">
             <Viewers />
             <Devices onPair={() => setPairOpen(true)} />

@@ -36,7 +36,7 @@ export function TypesTab({ scanId }: { scanId: string }) {
   const [hover, setHover] = useState<string | null>(null);
 
   const val = (e: ExtensionStat) => (metric === 'alloc' ? e.alloc : e.size);
-  const list = useMemo(() => [...(exts.data ?? [])].sort((a, b) => val(b) - val(a)), [exts.data, metric]); // eslint-disable-line react-hooks/exhaustive-deps
+  const list = useMemo(() => [...(exts.data ?? [])].sort((a, b) => val(b) - val(a)), [exts.data, metric]);
   const total = list.reduce((a, e) => a + val(e), 0);
   const cats = useMemo(() => {
     const m = new Map<string, { size: number; count: number }>();
@@ -48,7 +48,7 @@ export function TypesTab({ scanId }: { scanId: string }) {
       m.set(c, cur);
     }
     return CATEGORIES.map(([color, label]) => ({ color, label, ...(m.get(color) ?? { size: 0, count: 0 }) })).filter((c) => c.size > 0);
-  }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [list]);
 
   if (exts.error) return <ErrorState error={exts.error} onRetry={exts.reload} />;
   if (!exts.data)
@@ -76,7 +76,7 @@ export function TypesTab({ scanId }: { scanId: string }) {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex min-h-[520px] flex-1 flex-col gap-3">
       <Card className="px-5 py-4">
         <div className="mb-3 flex items-baseline justify-between">
           <div className="text-[13px] text-dim">

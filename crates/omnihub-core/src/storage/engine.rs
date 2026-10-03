@@ -358,7 +358,16 @@ impl StorageEngine {
                 self.mft_via_helper(job, letter)
             };
             match res {
-                Ok(tree) => return Ok(tree),
+                Ok(mut tree) => {
+                    // The MFT holds the whole drive; excluded folders are
+                    // hidden (and left out of the totals) afterwards.
+                    for path in &req.exclude {
+                        if let Some(id) = tree.find_path(path) {
+                            tree.mark_deleted(id);
+                        }
+                    }
+                    return Ok(tree);
+                }
                 Err(e) if job.cancel.load(Ordering::Relaxed) => return Err(e),
                 Err(e) if req.mode == ScanMode::Fast && e.contains("declined") => {
                     // The user said no to UAC: fall back to a normal scan.
@@ -460,13 +469,14 @@ impl StorageEngine {
         }
     }
 
-    pub fn children(&self, scan_id: &str, node: u32, sort: SortKey, descending: bool, offset: usize, limit: usize) -> Result<ChildrenPage, StorageError> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn children(&self, scan_id: &str, node: u32, sort: SortKey, descending: bool, offset: usize, limit: usize, include_hidden: bool) -> Result<ChildrenPage, StorageError> {
         let t = self.tree(scan_id)?;
         let t = t.read();
         if t.node(node).is_none() {
             return Err(StorageError::UnknownNode(node));
         }
-        let (items, total) = t.children(node, sort, descending, offset, limit);
+        let (items, total) = t.children(node, sort, descending, offset, limit, include_hidden);
         Ok(ChildrenPage {
             node: t.view(node),
             path: t.path(node),
@@ -731,7 +741,7 @@ mod tests {
         let s = engine.summary(&scan_id).unwrap();
         assert_eq!(s.size, 20_005);
         assert_eq!(s.files, 3);
-        let page = engine.children(&scan_id, 0, SortKey::Size, true, 0, 10).unwrap();
+        let page = engine.children(&scan_id, 0, SortKey::Size, true, 0, 10, true).unwrap();
         assert_eq!(page.total, 3);
         assert_eq!(page.items[0].size, 10_000);
         let found = engine.search(&scan_id, &SearchQuery { text: "*.bin".into(), ..Default::default() }).unwrap();

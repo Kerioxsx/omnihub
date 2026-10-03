@@ -88,7 +88,7 @@ export function GeneratorButton({ onUse }: { onUse: (pw: string) => void }) {
   };
   useEffect(() => {
     if (open) void gen();
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
@@ -128,7 +128,9 @@ export function GeneratorButton({ onUse }: { onUse: (pw: string) => void }) {
               <Checkbox checked={opts.uppercase} onChange={(v) => set({ uppercase: v })} label="A–Z" />
               <Checkbox checked={opts.digits} onChange={(v) => set({ digits: v })} label="0–9" />
               <Checkbox checked={opts.symbols} onChange={(v) => set({ symbols: v })} label="!@#$" />
-              <Checkbox checked={opts.avoidAmbiguous} onChange={(v) => set({ avoidAmbiguous: v })} label="Avoid look-alikes (l, 1, O, 0)" />
+              <div className="col-span-2">
+                <Checkbox checked={opts.avoidAmbiguous} onChange={(v) => set({ avoidAmbiguous: v })} label="Avoid look-alikes (l, 1, O, 0)" />
+              </div>
             </div>
             <Button
               variant="primary"

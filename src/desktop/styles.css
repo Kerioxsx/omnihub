@@ -334,3 +334,11 @@ html.overlay-route,
 html.overlay-route body {
   background: #000;
 }
+
+/* Text fields draw their own focus state (border + glow); keep the accent
+   outline from the shared tokens for buttons and other controls. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}

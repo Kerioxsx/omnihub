@@ -1,7 +1,7 @@
 import { formatBytes, formatDate, formatNumber, formatPercent } from '@shared/format';
 import type { ChildrenPage, NodeView, SortKey } from '@shared/types';
 import { ArrowDown, ArrowUp, ArrowUpLeft, ChevronRight, Cloud, EyeOff, Link2, ShieldHalf } from 'lucide-react';
-import { type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { FileIcon } from '../../components/FileIcon';
 import { IconButton } from '../../components/ui/Button';
@@ -82,7 +82,7 @@ export function ExplorerTab({ scanId }: { scanId: string }) {
   const parentSize = page ? (metric === 'alloc' ? page.node.alloc : page.node.size) : 0;
   const maxItem = useMemo(() => (page?.items.length ? Math.max(...page.items.slice(0, 50).map((i) => (metric === 'alloc' ? i.alloc : i.size))) : 0), [page, metric]);
 
-  const onKey = (e: React.KeyboardEvent) => {
+  const onKey = (e: KeyboardEvent) => {
     if (!page) return;
     if (e.key === 'Backspace' || (e.key === 'ArrowUp' && e.altKey)) {
       e.preventDefault();
@@ -112,7 +112,7 @@ export function ExplorerTab({ scanId }: { scanId: string }) {
     </button>
   );
 
-  const row = (n: NodeView, i: number, style: React.CSSProperties) => {
+  const row = (n: NodeView, i: number, style: CSSProperties) => {
     const v = metric === 'alloc' ? n.alloc : n.size;
     const frac = parentSize ? v / parentSize : 0;
     const active = hoverId === n.id || selected === n.id;
@@ -155,7 +155,7 @@ export function ExplorerTab({ scanId }: { scanId: string }) {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3" onKeyDown={onKey}>
+    <div className="flex min-h-[480px] flex-1 flex-col gap-3" onKeyDown={onKey}>
       <div className="flex items-center gap-3">
         <IconButton icon={ArrowUpLeft} label="Up one level (Backspace)" disabled={crumbs.length <= 1} onClick={goUp} variant="secondary" />
         <nav aria-label="Breadcrumbs" className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
@@ -184,8 +184,8 @@ export function ExplorerTab({ scanId }: { scanId: string }) {
         />
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.2fr)_minmax(440px,1fr)] gap-3">
-        <Card className="flex min-h-0 flex-col p-2.5">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(440px,1fr)]">
+        <Card className="flex min-h-[360px] flex-col p-2.5 xl:min-h-0">
           <div className="min-h-0 flex-1">
             <Treemap
               scanId={scanId}
@@ -215,7 +215,7 @@ export function ExplorerTab({ scanId }: { scanId: string }) {
           </div>
         </Card>
 
-        <Card className="flex min-h-0 flex-col p-1.5">
+        <Card className="flex min-h-[380px] flex-col p-1.5 xl:min-h-0">
           <div className="grid grid-cols-[minmax(0,1fr)_68px_46px_58px_84px] items-center gap-2.5 border-b border-line px-3 pb-2 pt-1.5">
             {header('name', 'Name')}
             {header('size', metric === 'alloc' ? 'On disk' : 'Size', 'justify-end')}

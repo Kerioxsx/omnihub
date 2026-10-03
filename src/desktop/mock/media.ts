@@ -251,7 +251,10 @@ export async function shotCapture(kind: CaptureKind, delaySeconds: number): Prom
 let pending: PendingRegion | null = null;
 
 export function regionBegin(): void {
-  pending = { id: `region-${Date.now().toString(36)}`, x: 0, y: 0, width: 2560, height: 1440, scale: 1, image: scene('frozen-desktop', 'desktop', 2560, 1440) };
+  // The real overlay covers the monitor, so the frozen image has the window's aspect ratio.
+  const w = 2560;
+  const h = typeof window !== 'undefined' ? Math.round((w * window.innerHeight) / Math.max(1, window.innerWidth)) : 1440;
+  pending = { id: `region-${Date.now().toString(36)}`, x: 0, y: 0, width: w, height: h, scale: 1, image: scene('frozen-desktop', 'desktop', w, h) };
   emit('region:pending', pending);
 }
 

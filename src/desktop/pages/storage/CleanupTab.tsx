@@ -89,7 +89,7 @@ function SuggestionCard({ s, onCleaned }: { s: Suggestion; onCleaned: () => void
                 </div>
               )
             ) : (
-              <Button size="sm" variant={s.risk === 'safe' ? 'primary' : 'secondary'} icon={isBin ? Recycle : Trash} loading={busy} onClick={clean} disabled={!isBin && s.paths.length === 0}>
+              <Button size="sm" variant={s.risk === 'safe' ? 'subtle' : 'secondary'} icon={isBin ? Recycle : Trash} loading={busy} onClick={clean} disabled={!isBin && s.paths.length === 0}>
                 {isBin ? 'Empty' : 'Clean'}
               </Button>
             )}
@@ -175,7 +175,7 @@ export function CleanupTab({ scanId }: { scanId: string }) {
   if (!list.length) return <EmptyState icon={CircleCheckBig} title="Nothing to clean" description="No temporary files, caches or leftovers worth removing were found in this scan." />;
 
   return (
-    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-6 pr-1">
+    <div className="min-h-[460px] flex-1 space-y-3 overflow-y-auto pb-6 pr-1">
       <Card className="relative flex items-center gap-6 overflow-hidden px-6 py-5">
         <div className="pointer-events-none absolute -left-10 -top-16 h-48 w-48 rounded-full bg-[radial-gradient(circle,color-mix(in_oklab,var(--good)_22%,transparent),transparent_70%)]" />
         <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-good/12 text-good">

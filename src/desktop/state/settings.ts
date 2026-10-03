@@ -43,9 +43,3 @@ export const useSettings = create<SettingsState>((set, get) => ({
   set: (settings) => set({ settings }),
 }));
 
-/** Selector helper: the loaded settings (components render only after load). */
-export function useLoadedSettings(): Settings {
-  const s = useSettings((st) => st.settings);
-  if (!s) throw new Error('settings not loaded');
-  return s;
-}

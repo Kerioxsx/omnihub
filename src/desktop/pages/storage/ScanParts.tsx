@@ -202,7 +202,7 @@ export function ScanProgressView({ job, volumes, onCancel }: { job: JobProgress;
               <Button icon={X} onClick={onCancel}>
                 Cancel scan
               </Button>
-              {job.errors > 0 && <span className="text-[12px] text-faint">{formatNumber(job.errors)} folders could not be read (access denied)</span>}
+              {job.errors > 0 && <span className="text-[12px] text-faint">{formatNumber(job.errors)} folder{job.errors === 1 ? '' : 's'} could not be read (access denied)</span>}
             </div>
           </div>
         </div>
@@ -220,7 +220,7 @@ export function SummaryCard({ summary, volume, onRefresh, refreshing }: { summar
   const usedOther = total != null && free != null ? Math.max(0, total - free - summary.alloc) : 0;
   const how = summary.method === 'walk' ? 'Walked the folders' : summary.method === 'mftIncremental' ? 'Updated from the change journal' : 'Read the MFT';
   return (
-    <Card className="flex items-center gap-6 px-5 py-3">
+    <Card className="flex flex-wrap items-center gap-x-6 gap-y-3 px-5 py-3">
       <div className="min-w-0">
         <div className="flex items-center gap-2 text-[12px] text-faint">
           <span className="font-mono text-dim">{summary.root}</span>

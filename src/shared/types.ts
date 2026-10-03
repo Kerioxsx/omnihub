@@ -136,6 +136,8 @@ export interface SearchQuery {
   dirsOnly?: boolean;
   limit?: number | null;
   sort?: SortKey;
+  /** Leave out hidden and system items (the desktop also applies Settings → Storage → Show hidden). */
+  excludeHidden?: boolean;
 }
 
 export interface SearchResult {

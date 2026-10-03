@@ -39,8 +39,9 @@ export function PowerBanner({ inline }: { inline?: boolean }) {
       className={cx(
         'flex items-center gap-4 rounded-2xl border px-4 py-3',
         urgent ? 'border-bad/40 bg-bad/12' : 'border-warn/35 bg-warn/10',
-        inline ? '' : 'glass pointer-events-auto w-[560px] shadow-[0_18px_60px_-16px_rgba(0,0,0,0.6)]',
+        inline ? '' : 'pointer-events-auto w-[640px] shadow-[0_18px_60px_-16px_rgba(0,0,0,0.6)]',
       )}
+      style={inline ? undefined : { background: `color-mix(in oklab, var(--bg-elev) 90%, var(${urgent ? '--bad' : '--warn'}))` }}
     >
       <div className={cx('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', urgent ? 'pulse-ring bg-bad/20 text-bad' : 'bg-warn/15 text-warn')}>
         <Power size={19} aria-hidden />

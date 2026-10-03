@@ -415,6 +415,8 @@ pub struct SearchQuery {
     pub dirs_only: bool,
     pub limit: Option<usize>,
     pub sort: SortKey,
+    /// Leave out hidden and system items.
+    pub exclude_hidden: bool,
 }
 
 impl ScanTree {
@@ -498,9 +500,13 @@ impl ScanTree {
         }
     }
 
-    /// A page of a directory's children.
-    pub fn children(&self, id: u32, sort: SortKey, descending: bool, offset: usize, limit: usize) -> (Vec<NodeView>, usize) {
+    /// A page of a directory's children (hidden and system items left out
+    /// unless `include_hidden`; they still count in the folder's size).
+    pub fn children(&self, id: u32, sort: SortKey, descending: bool, offset: usize, limit: usize, include_hidden: bool) -> (Vec<NodeView>, usize) {
         let mut ids = self.child_ids(id);
+        if !include_hidden {
+            ids.retain(|&c| self.nodes[c as usize].flags & (NODE_HIDDEN | NODE_SYSTEM) == 0);
+        }
         let total = ids.len();
         // Children are stored largest-first already; deletions may have
         // disturbed that, so always sort (cheap for real directories).
@@ -582,12 +588,44 @@ impl ScanTree {
 
     /// Size-ordered nested items for drawing a treemap. At most `max_items`
     /// rectangles in total; the long tail of each directory is folded.
+    ///
+    /// The budget is spent largest-first across the whole tree (a priority
+    /// queue), not depth-first: a 24 GB `pagefile.sys` at the root always
+    /// beats the thousandth file inside the first big folder.
     pub fn treemap(&self, id: u32, max_depth: u32, max_items: usize) -> TreemapItem {
+        use std::cmp::Reverse;
+        use std::collections::{BinaryHeap, HashSet};
+        let root = &self.nodes[id as usize];
+        // Smaller than ~0.03% of the view is invisible anyway.
+        let min = (root.size / 3000).max(1);
+        let mut included: HashSet<u32> = HashSet::new();
+        let mut heap: BinaryHeap<(u64, Reverse<u32>, u32)> = BinaryHeap::new();
+        let push_children = |heap: &mut BinaryHeap<(u64, Reverse<u32>, u32)>, node: u32, depth: u32| {
+            for c in self.child_ids(node) {
+                let size = self.nodes[c as usize].size;
+                if size >= min {
+                    heap.push((size, Reverse(c), depth));
+                }
+            }
+        };
+        if root.is_dir() && max_depth > 0 {
+            push_children(&mut heap, id, 1);
+        }
         let mut budget = max_items.max(1);
-        self.treemap_rec(id, max_depth, &mut budget)
+        while let Some((_, Reverse(c), depth)) = heap.pop() {
+            if budget == 0 {
+                break;
+            }
+            budget -= 1;
+            included.insert(c);
+            if self.nodes[c as usize].is_dir() && depth < max_depth {
+                push_children(&mut heap, c, depth + 1);
+            }
+        }
+        self.treemap_build(id, &included)
     }
 
-    fn treemap_rec(&self, id: u32, depth: u32, budget: &mut usize) -> TreemapItem {
+    fn treemap_build(&self, id: u32, included: &std::collections::HashSet<u32>) -> TreemapItem {
         let n = &self.nodes[id as usize];
         let name = self.name(id).to_string();
         let mut item = TreemapItem {
@@ -599,25 +637,23 @@ impl ScanTree {
             folded: 0,
             children: Vec::new(),
         };
-        if !n.is_dir() || depth == 0 || n.size == 0 {
+        if !n.is_dir() {
             return item;
         }
         let mut ids = self.child_ids(id);
+        if !ids.iter().any(|c| included.contains(c)) {
+            return item;
+        }
         ids.sort_by(|&a, &b| self.nodes[b as usize].size.cmp(&self.nodes[a as usize].size));
-        // Anything under 0.1% of this directory is not visible anyway.
-        let min = (n.size / 1000).max(1);
         let mut folded_size = 0u64;
         let mut folded = 0u32;
         for c in ids {
-            let cs = self.nodes[c as usize].size;
-            if *budget == 0 || cs < min {
-                folded_size += cs;
+            if included.contains(&c) {
+                item.children.push(self.treemap_build(c, included));
+            } else {
+                folded_size += self.nodes[c as usize].size;
                 folded += 1;
-                continue;
             }
-            *budget -= 1;
-            let child = self.treemap_rec(c, depth - 1, budget);
-            item.children.push(child);
         }
         if folded > 0 && folded_size > 0 {
             item.children.push(TreemapItem {
@@ -704,6 +740,9 @@ impl ScanTree {
                     return false;
                 }
                 if q.files_only && n.is_dir() || q.dirs_only && !n.is_dir() {
+                    return false;
+                }
+                if q.exclude_hidden && n.flags & (NODE_HIDDEN | NODE_SYSTEM) != 0 {
                     return false;
                 }
                 if q.min_size.is_some_and(|m| n.size < m) || q.max_size.is_some_and(|m| n.size > m) {
@@ -945,12 +984,37 @@ mod tests {
         let (res, _) = t.search(&SearchQuery { min_size: Some(60), files_only: true, ..Default::default() });
         assert_eq!(res.len(), 2);
 
-        let (page, total) = t.children(0, SortKey::Name, false, 0, 10);
+        let (page, total) = t.children(0, SortKey::Name, false, 0, 10, true);
         assert_eq!(total, 3);
+        let a = t.find_path("C:\\a").unwrap();
+        assert_eq!(t.children(a, SortKey::Size, true, 0, 10, true).1, 2);
+        assert_eq!(t.children(a, SortKey::Size, true, 0, 10, false).1, 1, "hidden y.TXT left out");
+        let (res, _) = t.search(&SearchQuery { text: "y.t".into(), exclude_hidden: true, ..Default::default() });
+        assert!(res.is_empty());
         assert_eq!(page.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(), vec!["a", "b", "top.iso"]);
         let map = t.treemap(0, 3, 100);
         assert_eq!(map.size, 225);
         assert_eq!(map.children.len(), 3);
+    }
+
+    #[test]
+    fn treemap_budget_goes_to_the_largest_items_first() {
+        // A folder with many mid-sized files, then a big file at the root.
+        let mut b = TreeBuilder::with_capacity(64);
+        let root = b.add(NO_PARENT, "C:\\", true, 0, 0, 0, 0);
+        let users = b.add(root, "Users", true, 0, 0, 0, 0);
+        for i in 0..40 {
+            b.add(users, &format!("f{i}.bin"), false, 10_000, 0, 0, 0);
+        }
+        b.add(root, "pagefile.sys", false, 150_000, 0, 0, 0);
+        let t = b.finish(root, info());
+        let map = t.treemap(0, 4, 10);
+        let names: Vec<&str> = map.children.iter().map(|c| c.name.as_str()).collect();
+        assert!(names.contains(&"pagefile.sys"), "{names:?}");
+        let users = map.children.iter().find(|c| c.name == "Users").unwrap();
+        assert_eq!(users.children.len(), 9, "8 files plus the folded rest");
+        assert_eq!(users.children.last().unwrap().folded, 32);
+        assert_eq!(users.children.iter().map(|c| c.size).sum::<u64>(), 400_000);
     }
 
     #[test]

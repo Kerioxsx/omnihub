@@ -14,7 +14,7 @@ import { renderMarkdown } from '../../lib/util';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
 
-export function ClaudePanel({ onClose }: { onClose: () => void }) {
+export function ClaudePanel({ onClose, className }: { onClose: () => void; className?: string }) {
   const folder = useSettings((s) => s.settings?.notes.claudeFolder ?? null);
   const update = useSettings((s) => s.update);
   const files = useAsync(() => (folder ? api.notes.folderFiles() : Promise.resolve([] as FolderFile[])), [folder]);
@@ -44,7 +44,7 @@ export function ClaudePanel({ onClose }: { onClose: () => void }) {
   const replies = list.filter((f) => !f.fromOmnihub).length;
 
   return (
-    <div className="card flex min-h-0 flex-col overflow-hidden">
+    <div className={cx('card flex min-h-0 flex-col overflow-hidden', className)}>
       <div className="flex items-start gap-2 border-b border-line px-4 py-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-accent-soft text-accent">
           <Bot size={16} aria-hidden />

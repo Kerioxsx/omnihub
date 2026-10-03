@@ -61,7 +61,7 @@ export function StoragePage() {
     if (wanted && (!root || rootKey(wanted) !== rootKey(root))) void select(wanted);
     else if (!root && volumes.length) void select((volumes.find((v) => v.root.toUpperCase().startsWith('C:')) ?? volumes[0]).root);
     else if (root && !summaries[rootKey(root)]) void select(root);
-  }, [loaded, volumes, route.params, root]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loaded, volumes, route.params, root]);
 
   const key = root ? rootKey(root) : null;
   const volume = key ? (volumes.find((v) => rootKey(v.root) === key) ?? null) : null;
@@ -123,7 +123,7 @@ export function StoragePage() {
           <ModeHint volume={volume} mode={mode} />
         </div>
       }
-      className="gap-3"
+      className="gap-3 overflow-y-auto"
     >
       {body}
     </Page>

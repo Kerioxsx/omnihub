@@ -42,7 +42,7 @@ export function CreateVault() {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mx-auto grid max-w-[1040px] grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-4 pb-6">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mx-auto grid max-w-[1040px] grid-cols-1 items-start gap-4 pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
       <Card className="relative overflow-hidden p-7">
         <div className="pointer-events-none absolute -left-20 -top-24 h-64 w-64 rounded-full bg-[radial-gradient(circle,var(--accent-soft),transparent_70%)]" />
         <div className="relative">
