@@ -64,7 +64,7 @@ pub struct PendingRegion {
     pub width: u32,
     pub height: u32,
     pub scale: f32,
-    /// PNG of the frozen screen as a data URL for the overlay background.
+    /// JPEG preview of the frozen screen as a data URL for the overlay background.
     pub image: String,
 }
 
@@ -357,8 +357,11 @@ impl ScreenshotLibrary {
         use base64::Engine;
         let app = foreground_app();
         let (img, x, y, scale) = grab_monitor_under_cursor()?;
-        let mut png = std::io::Cursor::new(Vec::new());
-        image::DynamicImage::ImageRgba8(img.clone()).write_to(&mut png, image::ImageFormat::Png)?;
+        // A JPEG preview keeps the hand-off to the overlay window fast even
+        // for 4K screens; the crop is taken from the lossless capture.
+        let mut preview = std::io::Cursor::new(Vec::new());
+        let rgb = image::DynamicImage::ImageRgba8(img.clone()).to_rgb8();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut preview, 88).encode_image(&rgb)?;
         let id = uuid::Uuid::new_v4().to_string();
         let pending = PendingRegion {
             id: id.clone(),
@@ -367,7 +370,7 @@ impl ScreenshotLibrary {
             width: img.width(),
             height: img.height(),
             scale,
-            image: format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png.into_inner())),
+            image: format!("data:image/jpeg;base64,{}", base64::engine::general_purpose::STANDARD.encode(preview.into_inner())),
         };
         *self.pending.lock() = Some((id, img, app));
         Ok(pending)
@@ -385,6 +388,10 @@ impl ScreenshotLibrary {
         let h = rect.height.clamp(1, img.height() - y);
         let crop = image::imageops::crop_imm(&img, x, y, w, h).to_image();
         self.store(&crop, &app, dir, format)
+    }
+
+    pub fn pending_region_id(&self) -> Option<String> {
+        self.pending.lock().as_ref().map(|p| p.0.clone())
     }
 
     pub fn cancel_region(&self) {

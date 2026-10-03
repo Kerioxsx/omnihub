@@ -883,6 +883,10 @@ async fn screen_session(core: Ctx, dev: Device, monitor: usize, preset: stream::
                 if ctl.stop.load(Ordering::Relaxed) {
                     break;
                 }
+                // A device revoked on the PC loses its stream right away.
+                if core.remote.devices.get(&dev.id).ok().flatten().is_none_or(|d| d.revoked) {
+                    break;
+                }
                 let frames = ctl.sent_frames.load(Ordering::Relaxed);
                 let bytes = ctl.sent_bytes.load(Ordering::Relaxed);
                 let p = ctl.params.lock().clone();

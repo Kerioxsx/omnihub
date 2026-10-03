@@ -149,6 +149,30 @@ pub fn relaunch_elevated(_args: &[String]) -> io::Result<()> {
     Err(io::Error::new(io::ErrorKind::Unsupported, "elevation is only implemented on Windows"))
 }
 
+/// Wait until process `pid` has exited (used when an elevated instance
+/// replaces the unelevated one). Returns false on timeout.
+#[cfg(windows)]
+pub fn wait_for_pid_exit(pid: u32, timeout: std::time::Duration) -> bool {
+    use windows::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows::Win32::System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE};
+    unsafe {
+        match OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
+            Ok(h) => {
+                let r = WaitForSingleObject(h, timeout.as_millis() as u32);
+                let _ = CloseHandle(h);
+                r == WAIT_OBJECT_0
+            }
+            // Already gone.
+            Err(_) => true,
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn wait_for_pid_exit(_pid: u32, _timeout: std::time::Duration) -> bool {
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::quote_arg;
