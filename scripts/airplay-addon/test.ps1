@@ -47,8 +47,11 @@ function Stop-Receiver($r) {
 }
 
 Write-Host '== 1. help'
-& $exe -h | Select-Object -First 3
-if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1) { throw "uxplay -h exited with $LASTEXITCODE" }
+$help = (& $exe -h 2>&1 | Out-String)
+$code = $LASTEXITCODE
+$help.Split("`n") | Select-Object -First 3 | Write-Host
+# A missing DLL shows up as a negative NTSTATUS exit code (e.g. 0xC0000135).
+if ($code -lt 0 -or $code -gt 1 -or $help -notmatch 'AirPlay') { throw "uxplay -h failed (exit code $code)" }
 
 Write-Host '== 2. real sinks'
 $r = Start-Receiver @('-n', 'OmniHubSinkTest', '-nh', '-p', '-vs', 'd3d11videosink', '-as', 'wasapi2sink') 'sinks'
