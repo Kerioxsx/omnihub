@@ -91,6 +91,9 @@ pub fn scan_ntfs_volume(
     // Journal position before reading: anything that changes during the
     // scan is picked up by the next refresh.
     let journal = usn::query(handle).ok();
+    // Baseline for the next refresh: just before the changes of the last few
+    // seconds, which may not be on disk yet.
+    let baseline = journal.map(|j| usn::settled_position(handle, &j));
     on_phase("opening");
     let vol = MftVolume::open(file)?;
     let root = format!("{}:\\", letter.to_ascii_uppercase());
@@ -105,8 +108,9 @@ pub fn scan_ntfs_volume(
                 on_phase("journal");
                 let from = snap.meta.journal.unwrap().next_usn;
                 match usn::changed_records(handle, j.id, from, j.next_usn) {
-                    Ok(changed) if (changed.len() as u64) < vol.record_count() / 5 => {
+                    Ok(changes) if (changes.records.len() as u64) < vol.record_count() / 5 => {
                         on_phase("refresh");
+                        let changed = changes.records;
                         let total = vol.record_count() as usize;
                         progress.records_total.store(changed.len() as u64, Ordering::Relaxed);
                         if snap.slots.len() < total {
@@ -123,7 +127,8 @@ pub fn scan_ntfs_volume(
                             snap.slots[rec] = vol.read_file_slot(rec as u64)?.unwrap_or_default();
                             progress.records_done.store(i as u64 + 1, Ordering::Relaxed);
                         }
-                        snap.meta.journal = Some(JournalPosition { journal_id: j.id, next_usn: j.next_usn });
+                        // Recent changes are replayed next time (see usn::SETTLE_SECS).
+                        snap.meta.journal = Some(JournalPosition { journal_id: j.id, next_usn: changes.resume_usn });
                         snap.meta.scanned_at = chrono::Utc::now().timestamp();
                         snap.meta.duration_ms = started.elapsed().as_millis() as u64;
                         snap.meta.method = ScanMethod::MftIncremental;
@@ -154,7 +159,7 @@ pub fn scan_ntfs_volume(
             record_size: vol.boot.record_size,
             volume_total,
             volume_free,
-            journal: journal.map(|j| JournalPosition { journal_id: j.id, next_usn: j.next_usn }),
+            journal: journal.zip(baseline).map(|(j, b)| JournalPosition { journal_id: j.id, next_usn: b }),
             scanned_at: chrono::Utc::now().timestamp(),
             duration_ms: started.elapsed().as_millis() as u64,
             method: ScanMethod::Mft,

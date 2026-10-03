@@ -115,6 +115,10 @@ fn incremental_refresh_through_the_usn_journal() {
     std::fs::create_dir_all(&dir).unwrap();
     let dir_s = long_path(&dir);
     let letter = dir_s.chars().next().unwrap();
+    // The scanner reads the disk, not the cache: give the lazy writer time to
+    // flush the new folders' MFT records so the baseline already has them
+    // (later changes are picked up through the journal).
+    std::thread::sleep(Duration::from_secs(8));
     let progress = MftProgress::default();
     let cancel = AtomicBool::new(false);
 

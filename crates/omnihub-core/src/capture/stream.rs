@@ -382,7 +382,7 @@ impl FrameSource for GdiSource {
         let img = self.monitor.capture_image().map_err(|e| std::io::Error::other(e.to_string()))?;
         let (w, h) = img.dimensions();
         let mut data = img.into_raw();
-        for px in data.chunks_exact_mut(4) {
+        for px in data.as_chunks_mut::<4>().0 {
             px.swap(0, 2); // RGBA -> BGRA
         }
         self.frame = Frame { width: w, height: h, stride: w as usize * 4, data, cursor: None };

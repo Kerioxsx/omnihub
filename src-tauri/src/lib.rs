@@ -97,9 +97,11 @@ pub fn run(args: Vec<String>) {
             shortcuts::register(&handle);
             core.start_background();
 
+            // Autostart passes --minimized; "Start minimized" decides whether
+            // that start stays in the tray. A normal launch always shows.
             let settings = core.settings.get();
             if let Some(w) = app.get_webview_window("main") {
-                if !(start_hidden || settings.general.start_minimized) {
+                if !(start_hidden && settings.general.start_minimized) {
                     let _ = w.show();
                 }
             }

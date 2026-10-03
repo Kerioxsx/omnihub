@@ -81,6 +81,8 @@ pub fn execute(action: PowerAction) -> std::io::Result<()> {
         match action {
             PowerAction::Lock => LockWorkStation().map_err(err),
             PowerAction::Sleep | PowerAction::Hibernate => {
+                // SetSuspendState needs the shutdown privilege too.
+                enable_shutdown_privilege()?;
                 if SetSuspendState(action == PowerAction::Hibernate, false, false) {
                     Ok(())
                 } else {

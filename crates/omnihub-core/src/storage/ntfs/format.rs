@@ -256,7 +256,7 @@ impl<'a> Attribute<'a> {
         }
         let off = u16_at(self.raw, 0x0A)? as usize;
         let bytes = self.raw.get(off..off + self.name_len as usize * 2)?;
-        Some(bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect())
+        Some(bytes.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect())
     }
 
     /// Value bytes of a resident attribute.
@@ -424,7 +424,7 @@ impl FileName {
         let len = *v.get(0x40)? as usize;
         let namespace = *v.get(0x41)?;
         let bytes = v.get(0x42..0x42 + len * 2)?;
-        let name = bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        let name = bytes.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect();
         Some(FileName { parent_ref, namespace, name })
     }
 

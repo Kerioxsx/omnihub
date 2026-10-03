@@ -44,6 +44,10 @@ cache folder with the volume serial and the USN journal position. The next
 scan reads only the change journal from that position, re-reads just the
 changed records and saves again (`volume_scan.rs`). If the journal was reset
 or more than a fifth of the MFT changed, it does a full read instead.
+Because the scanner reads the disk rather than the file system cache, a
+record changed a moment ago may not be written back yet; the saved journal
+position therefore always points before the changes of the last 15 seconds,
+so they are read again on the next refresh (re-reading is idempotent).
 
 The snapshot (or a folder walk) is turned into a **scan tree** (`tree.rs`):
 nodes in depth-first pre-order with children sorted by size, so a folder's

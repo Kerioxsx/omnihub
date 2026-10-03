@@ -61,11 +61,58 @@ pub fn query(handle: HANDLE) -> Result<JournalState, UsnError> {
     Ok(JournalState { id: data.UsnJournalID, first_usn: data.FirstUsn, next_usn: data.NextUsn })
 }
 
-/// Record numbers changed between `from_usn` and `until_usn`.
-pub fn changed_records(handle: HANDLE, journal_id: u64, from_usn: i64, until_usn: i64) -> Result<HashSet<u64>, UsnError> {
-    let mut changed = HashSet::new();
+/// Changes are only "settled" once NTFS has had time to write the MFT
+/// records back to disk (the scanner reads the volume, not the cache).
+/// Anything younger is read now *and* replayed on the next refresh.
+pub const SETTLE_SECS: u64 = 15;
+
+/// Current time as a Windows FILETIME minus `secs`.
+pub fn filetime_ago(secs: u64) -> i64 {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    ((now.as_secs().saturating_sub(secs) + 11_644_473_600) * 10_000_000) as i64
+}
+
+#[derive(Debug, Default)]
+pub struct Changes {
+    /// Record numbers of changed files and their parent folders.
+    pub records: HashSet<u64>,
+    /// Where the next refresh should start: the first change younger than
+    /// the settle cutoff, or the end of what was read.
+    pub resume_usn: i64,
+}
+
+struct Rec {
+    frn: u64,
+    parent: u64,
+    usn: i64,
+    time: i64,
+}
+
+fn parse_records(data: &[u8], out: &mut Vec<Rec>) {
+    let mut pos = 8usize;
+    while pos + 8 <= data.len() {
+        let len = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
+        if len == 0 || pos + len > data.len() {
+            break;
+        }
+        let r = &data[pos..pos + len];
+        let major = u16::from_le_bytes(r[4..6].try_into().unwrap());
+        let u64_at = |o: usize| u64::from_le_bytes(r[o..o + 8].try_into().unwrap());
+        match major {
+            2 if len >= 60 => out.push(Rec { frn: u64_at(8), parent: u64_at(16), usn: u64_at(24) as i64, time: u64_at(32) as i64 }),
+            // 128-bit ids; on NTFS the low 64 bits are the file reference.
+            3 if len >= 76 => out.push(Rec { frn: u64_at(8), parent: u64_at(24), usn: u64_at(40) as i64, time: u64_at(48) as i64 }),
+            _ => {}
+        }
+        pos += len;
+    }
+}
+
+/// Read journal records in `[from_usn, until_usn)`, calling `f` for each.
+fn read_journal(handle: HANDLE, journal_id: u64, from_usn: i64, until_usn: i64, mut f: impl FnMut(&Rec) -> bool) -> Result<i64, UsnError> {
     let mut buf = vec![0u8; 1 << 20];
     let mut start = from_usn;
+    let mut recs = Vec::new();
     while start < until_usn {
         let req = READ_USN_JOURNAL_DATA_V0 {
             StartUsn: start,
@@ -99,35 +146,58 @@ pub fn changed_records(handle: HANDLE, journal_id: u64, from_usn: i64, until_usn
             break;
         }
         let next = i64::from_le_bytes(data[0..8].try_into().unwrap());
-        let mut pos = 8usize;
-        while pos + 8 <= data.len() {
-            let len = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
-            if len == 0 || pos + len > data.len() {
-                break;
+        recs.clear();
+        parse_records(data, &mut recs);
+        for r in &recs {
+            if r.usn >= until_usn || !f(r) {
+                return Ok(r.usn);
             }
-            let major = u16::from_le_bytes(data[pos + 4..pos + 6].try_into().unwrap());
-            match major {
-                2 if len >= 24 => {
-                    let frn = u64::from_le_bytes(data[pos + 8..pos + 16].try_into().unwrap());
-                    let parent = u64::from_le_bytes(data[pos + 16..pos + 24].try_into().unwrap());
-                    changed.insert(record_number(frn));
-                    changed.insert(record_number(parent));
-                }
-                3 if len >= 40 => {
-                    // 128-bit ids; on NTFS the low 64 bits are the reference.
-                    let frn = u64::from_le_bytes(data[pos + 8..pos + 16].try_into().unwrap());
-                    let parent = u64::from_le_bytes(data[pos + 24..pos + 32].try_into().unwrap());
-                    changed.insert(record_number(frn));
-                    changed.insert(record_number(parent));
-                }
-                _ => {}
-            }
-            pos += len;
         }
         if next <= start {
             break;
         }
         start = next;
     }
-    Ok(changed)
+    Ok(start.min(until_usn).max(from_usn))
+}
+
+/// Files changed between `from_usn` and `until_usn`.
+pub fn changed_records(handle: HANDLE, journal_id: u64, from_usn: i64, until_usn: i64) -> Result<Changes, UsnError> {
+    let cutoff = filetime_ago(SETTLE_SECS);
+    let mut changes = Changes { records: HashSet::new(), resume_usn: until_usn };
+    let mut young: Option<i64> = None;
+    read_journal(handle, journal_id, from_usn, until_usn, |r| {
+        changes.records.insert(record_number(r.frn));
+        changes.records.insert(record_number(r.parent));
+        if r.time >= cutoff && young.is_none() {
+            young = Some(r.usn);
+        }
+        true
+    })?;
+    if let Some(u) = young {
+        changes.resume_usn = u;
+    }
+    Ok(changes)
+}
+
+/// The journal position of the first change in the last `SETTLE_SECS`
+/// (used as the baseline of a full scan, so changes that may not have
+/// reached the disk yet are replayed by the next refresh).
+pub fn settled_position(handle: HANDLE, j: &JournalState) -> i64 {
+    let cutoff = filetime_ago(SETTLE_SECS);
+    // USNs are byte offsets into the journal; the last 8 MiB covers far
+    // more than a few seconds of changes.
+    let from = j.first_usn.max(j.next_usn - (8 << 20));
+    let mut pos = j.next_usn;
+    let res = read_journal(handle, j.id, from, j.next_usn, |r| {
+        if r.time >= cutoff {
+            pos = r.usn;
+            return false;
+        }
+        true
+    });
+    match res {
+        Ok(_) => pos,
+        Err(_) => j.next_usn,
+    }
 }
