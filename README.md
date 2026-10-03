@@ -18,6 +18,23 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, launch apps, jot ideas, read the vault (opt-in, HTTPS only). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, which OmniHub finds, configures and launches. |
 
+## Screenshots
+
+The desktop app (shown with its built-in demo data) and the phone app (talking to a real OmniHub server):
+
+| | |
+|---|---|
+| ![Storage: treemap and folder list](docs/screenshots/desktop-storage-explorer.jpg) | ![Home](docs/screenshots/desktop-home.jpg) |
+| ![Notes and the Claude folder](docs/screenshots/desktop-notes-sent-reply.jpg) | ![Vault with a primary-account warning](docs/screenshots/desktop-vault-unlocked.jpg) |
+| ![Pairing a phone](docs/screenshots/desktop-phone-pair.jpg) | ![Screen sharing options](docs/screenshots/desktop-screen-share.jpg) |
+
+<p>
+<img src="docs/screenshots/phone-home.png" width="195" alt="Phone: home">
+<img src="docs/screenshots/phone-files-grid.png" width="195" alt="Phone: photo folder">
+<img src="docs/screenshots/phone-screen-viewer.png" width="195" alt="Phone: screen viewer with live stats">
+<img src="docs/screenshots/phone-power-countdown.png" width="195" alt="Phone: shutdown countdown">
+</p>
+
 ## How fast is the storage scan?
 
 On a 250,000-file NTFS volume the MFT is read and parsed in **0.2 s** (cold
