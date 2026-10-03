@@ -93,7 +93,7 @@ export interface ServerInfo {
   tls: boolean;
   paired: boolean;
   pairingOpen: boolean;
-  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean };
+  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean };
 }
 
 export interface FsEntry {
@@ -159,6 +159,15 @@ export const client = {
     const t = await request<{ url: string; name: string }>('POST', `/api/inbox/${item.id}/ticket`);
     triggerDownload(t.url, t.name, false);
   },
+  /** Fetch an offered file into memory so it can go to the share sheet (Save to Photos/Files). */
+  fetchForShare: async (item: InboxItem): Promise<File> => {
+    const t = await request<{ url: string; name: string }>('POST', `/api/inbox/${item.id}/ticket`);
+    const res = await fetch(t.url);
+    if (!res.ok) throw new Error(`The PC answered ${res.status}`);
+    const blob = await res.blob();
+    return new File([blob], t.name, { type: blob.type || 'application/octet-stream' });
+  },
+  sendClipboard: (text: string) => request<void>('POST', '/api/clipboard', { text }),
   dismiss: (id: string) => request<void>('DELETE', `/api/inbox/${id}`),
 
   power: () => request<{ enabled: boolean; actions: { action: PowerAction; label: string; destructive: boolean }[]; pending: PendingPower | null; delaySeconds: number }>('GET', '/api/power'),

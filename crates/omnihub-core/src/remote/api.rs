@@ -76,6 +76,7 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/inbox", get(inbox_list))
         .route("/api/inbox/{id}/ticket", post(inbox_ticket))
         .route("/api/inbox/{id}", axum::routing::delete(inbox_dismiss))
+        .route("/api/clipboard", post(clipboard_set))
         .route("/api/power", get(power_info).post(power_request))
         .route("/api/power/cancel", post(power_cancel))
         .route("/api/apps", get(apps_list))
@@ -162,6 +163,7 @@ struct Features {
     apps: bool,
     notes: bool,
     vault: bool,
+    clipboard: bool,
 }
 
 fn features(core: &AppCore, tls: bool) -> Features {
@@ -174,6 +176,7 @@ fn features(core: &AppCore, tls: bool) -> Features {
         apps: s.remote.allow_app_launch,
         notes: s.remote.allow_notes,
         vault: s.vault.allow_phone && tls && core.vault.exists(),
+        clipboard: s.remote.allow_clipboard,
     }
 }
 
@@ -510,12 +513,36 @@ async fn inbox_list(State(core): State<Ctx>, Extension(dev): Extension<Device>) 
 
 async fn inbox_ticket(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<serde_json::Value>> {
     let item = core.remote.inbox.get(&id, &dev.id).ok_or_else(|| ApiError::not_found("no longer offered"))?;
+    if item.kind == transfer::InboxKind::Text {
+        return Err(ApiError::bad("text items have nothing to download"));
+    }
     if !item.path.is_file() {
         return Err(ApiError::not_found("the file was moved or deleted on the PC"));
     }
     let t = core.remote.tickets.issue(&dev.id, TicketPurpose::Download(item.path.clone()), Duration::from_secs(15 * 60));
     core.audit.record(&actor(&dev), "files.receive", &display_path(&item.path), true);
     Ok(Json(json!({ "url": format!("/dl/{t}"), "name": item.name, "size": item.size })))
+}
+
+#[derive(Deserialize)]
+struct ClipboardText {
+    text: String,
+}
+
+/// Put text from the phone on this PC's clipboard.
+async fn clipboard_set(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(c): Json<ClipboardText>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_clipboard {
+        return Err(ApiError::forbidden("the PC does not accept clipboard text from phones"));
+    }
+    let text = c.text;
+    if text.is_empty() || text.len() > transfer::MAX_TEXT {
+        return Err(ApiError::bad("send between 1 character and 100 KB of text"));
+    }
+    let chars = text.chars().count();
+    tokio::task::spawn_blocking(move || crate::system::clipboard::copy_text(&text)).await??;
+    core.audit.record(&actor(&dev), "clipboard.from-phone", &format!("{chars} characters"), true);
+    core.events.emit("clipboard:from-phone", json!({ "device": dev.name, "chars": chars }));
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn inbox_dismiss(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<StatusCode> {
@@ -751,6 +778,9 @@ fn for_phone(ev: &crate::events::Event, device_id: &str) -> bool {
     }
     if ev.topic == "inbox:new" {
         return owner().is_none_or(|d| d == device_id);
+    }
+    if ev.topic == "inbox:removed" {
+        return true;
     }
     ["power:", "notes:"].iter().any(|p| ev.topic.starts_with(p))
 }

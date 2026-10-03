@@ -1,6 +1,6 @@
 import type { BrowseScope } from '@shared/types';
 import type { LucideIcon } from 'lucide-react';
-import { AppWindow, FolderOpen, FolderPlus, KeyRound, MousePointer2, NotebookPen, Power, RotateCcw, ScreenShare, ShieldAlert, Upload, X } from 'lucide-react';
+import { AppWindow, ClipboardPaste, FolderOpen, FolderPlus, KeyRound, MousePointer2, NotebookPen, Power, RotateCcw, ScreenShare, ShieldAlert, Upload, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { api } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -108,6 +108,7 @@ export function Permissions() {
           </Toggle>
           <Toggle icon={AppWindow} title="Launch apps" hint="Start installed apps from the phone" checked={r.allowAppLaunch} onChange={(v) => void update({ remote: { allowAppLaunch: v } })} />
           <Toggle icon={NotebookPen} title="Notes & ideas" hint="Read and write notes from the phone" checked={r.allowNotes} onChange={(v) => void update({ remote: { allowNotes: v } })} />
+          <Toggle icon={ClipboardPaste} title="Clipboard" hint="Phones can put text on this PC's clipboard" checked={r.allowClipboard} onChange={(v) => void update({ remote: { allowClipboard: v } })} />
           <Toggle icon={KeyRound} title="Vault access" hint={r.tls ? 'List and reveal entries after typing the master password on the phone' : 'Needs HTTPS — turn it on in Settings → Phone'} checked={s.vault.allowPhone && r.tls} disabled={!r.tls} tone="warn" onChange={(v) => void update({ vault: { allowPhone: v } })} />
         </div>
       </Card>

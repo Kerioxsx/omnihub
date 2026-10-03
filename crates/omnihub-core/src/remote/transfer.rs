@@ -264,6 +264,15 @@ impl Uploads {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum InboxKind {
+    #[default]
+    File,
+    /// Text or a link, shown on the phone with a Copy button.
+    Text,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct InboxItem {
@@ -273,38 +282,145 @@ pub struct InboxItem {
     pub created: i64,
     /// Only this device sees it (all paired devices when `None`).
     pub device_id: Option<String>,
+    #[serde(default)]
+    pub kind: InboxKind,
+    /// The text of a `Text` item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// Name of the folder a zip was made from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
     #[serde(skip)]
     pub path: PathBuf,
 }
 
-/// Files offered from the PC to phones.
+/// Longest text that can be sent to a phone.
+pub const MAX_TEXT: usize = 100_000;
+const MAX_ITEMS: usize = 200;
+
+/// Files and text offered from the PC to phones. Kept in the database so
+/// offers survive a restart (files that disappeared are dropped).
 #[derive(Default)]
 pub struct Inbox {
     items: Mutex<Vec<InboxItem>>,
+    db: Option<std::sync::Arc<crate::db::Db>>,
 }
 
 impl Inbox {
+    pub fn with_db(db: std::sync::Arc<crate::db::Db>) -> Self {
+        let rows = db
+            .with(|c| {
+                let mut st = c.prepare("SELECT id, kind, name, size, created, device_id, path, text, folder FROM inbox ORDER BY created, rowid")?;
+                let rows = st.query_map([], |r| {
+                    Ok(InboxItem {
+                        id: r.get(0)?,
+                        kind: if r.get::<_, String>(1)? == "text" { InboxKind::Text } else { InboxKind::File },
+                        name: r.get(2)?,
+                        size: r.get::<_, i64>(3)? as u64,
+                        created: r.get(4)?,
+                        device_id: r.get(5)?,
+                        path: PathBuf::from(r.get::<_, String>(6)?),
+                        text: r.get(7)?,
+                        folder: r.get(8)?,
+                    })
+                })?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()
+            })
+            .unwrap_or_default();
+        let (keep, gone): (Vec<_>, Vec<_>) = rows.into_iter().partition(|i| i.kind == InboxKind::Text || i.path.is_file());
+        for g in &gone {
+            let _ = db.with(|c| c.execute("DELETE FROM inbox WHERE id = ?1", [&g.id]));
+        }
+        Inbox { items: Mutex::new(keep), db: Some(db) }
+    }
+
+    fn push(&self, item: InboxItem) -> InboxItem {
+        if let Some(db) = &self.db {
+            let kind = if item.kind == InboxKind::Text { "text" } else { "file" };
+            let _ = db.with(|c| {
+                c.execute(
+                    "INSERT INTO inbox (id, kind, name, size, created, device_id, path, text, folder) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    rusqlite::params![item.id, kind, item.name, item.size as i64, item.created, item.device_id, item.path.to_string_lossy(), item.text, item.folder],
+                )
+            });
+        }
+        let mut items = self.items.lock();
+        items.push(item.clone());
+        // Keep the newest MAX_ITEMS.
+        let len = items.len();
+        if len > MAX_ITEMS {
+            for old in items.drain(..len - MAX_ITEMS) {
+                self.forget(&old);
+            }
+        }
+        item
+    }
+
+    fn forget(&self, item: &InboxItem) {
+        if let Some(db) = &self.db {
+            let _ = db.with(|c| c.execute("DELETE FROM inbox WHERE id = ?1", [&item.id]));
+        }
+        // Zips made for a folder are ours to delete.
+        if item.folder.is_some() && item.path.parent().and_then(|p| p.file_name()).is_some_and(|n| n == OUTBOX_DIR) {
+            let _ = std::fs::remove_file(&item.path);
+        }
+    }
+
     pub fn offer(&self, path: &Path, device_id: Option<String>) -> std::io::Result<InboxItem> {
         let meta = std::fs::metadata(path)?;
         if !meta.is_file() {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "only files can be sent"));
         }
-        let item = InboxItem {
+        Ok(self.push(InboxItem {
             id: uuid::Uuid::new_v4().to_string(),
             name: path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
             size: meta.len(),
             created: crate::db::now(),
             device_id,
+            kind: InboxKind::File,
+            text: None,
+            folder: None,
             path: path.to_path_buf(),
-        };
-        let mut items = self.items.lock();
-        items.push(item.clone());
-        // Keep the newest 200.
-        let len = items.len();
-        if len > 200 {
-            items.drain(..len - 200);
+        }))
+    }
+
+    /// Zip `folder` into `outbox` and offer the zip.
+    pub fn offer_folder(&self, folder: &Path, outbox: &Path, device_id: Option<String>) -> std::io::Result<InboxItem> {
+        let zip = zip_folder(folder, outbox)?;
+        let size = std::fs::metadata(&zip)?.len();
+        Ok(self.push(InboxItem {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: zip.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+            size,
+            created: crate::db::now(),
+            device_id,
+            kind: InboxKind::File,
+            text: None,
+            folder: folder.file_name().map(|n| n.to_string_lossy().to_string()),
+            path: zip,
+        }))
+    }
+
+    pub fn offer_text(&self, text: &str, device_id: Option<String>) -> std::io::Result<InboxItem> {
+        let text = text.trim();
+        if text.is_empty() {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "there is no text to send"));
         }
-        Ok(item)
+        if text.len() > MAX_TEXT {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "the text is too long (100 KB at most)"));
+        }
+        let first_line: String = text.lines().next().unwrap_or("").chars().take(80).collect();
+        Ok(self.push(InboxItem {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: first_line,
+            size: text.len() as u64,
+            created: crate::db::now(),
+            device_id,
+            kind: InboxKind::Text,
+            text: Some(text.to_string()),
+            folder: None,
+            path: PathBuf::new(),
+        }))
     }
 
     pub fn for_device(&self, device_id: &str) -> Vec<InboxItem> {
@@ -324,8 +440,62 @@ impl Inbox {
     }
 
     pub fn remove(&self, id: &str) {
-        self.items.lock().retain(|i| i.id != id);
+        let removed: Vec<InboxItem> = {
+            let mut items = self.items.lock();
+            let (gone, keep): (Vec<_>, Vec<_>) = items.drain(..).partition(|i| i.id == id);
+            *items = keep;
+            gone
+        };
+        for item in &removed {
+            self.forget(item);
+        }
     }
+}
+
+/// Folder (in the cache directory) holding zips made for sending folders.
+pub const OUTBOX_DIR: &str = "outbox";
+
+/// Zip a folder (recursively, without following links) into `outbox`.
+pub fn zip_folder(folder: &Path, outbox: &Path) -> std::io::Result<PathBuf> {
+    use zip::write::SimpleFileOptions;
+    if !folder.is_dir() {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a folder"));
+    }
+    std::fs::create_dir_all(outbox)?;
+    let base = folder.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "folder".into());
+    let base = safe_file_name(&base).unwrap_or_else(|| "folder".into());
+    let mut dest = outbox.join(format!("{base}.zip"));
+    let mut n = 2;
+    while dest.exists() {
+        dest = outbox.join(format!("{base} ({n}).zip"));
+        n += 1;
+    }
+    let tmp = dest.with_extension("zip.part");
+    let file = std::fs::File::create(&tmp)?;
+    let mut zip = zip::ZipWriter::new(std::io::BufWriter::new(file));
+    // Photos and videos are already compressed; store them as they are.
+    let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored).large_file(true);
+    let deflated = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated).compression_level(Some(3)).large_file(true);
+    for entry in walkdir::WalkDir::new(folder).follow_links(false) {
+        let entry = entry.map_err(std::io::Error::other)?;
+        let rel = entry.path().strip_prefix(folder).map_err(std::io::Error::other)?;
+        if rel.as_os_str().is_empty() {
+            continue;
+        }
+        let name = format!("{base}/{}", rel.to_string_lossy().replace('\\', "/"));
+        if entry.file_type().is_dir() {
+            zip.add_directory(&name, stored).map_err(std::io::Error::other)?;
+        } else if entry.file_type().is_file() {
+            let ext = entry.path().extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+            let already = matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "gif" | "webp" | "heic" | "mp4" | "mov" | "mkv" | "mp3" | "m4a" | "zip" | "7z" | "rar" | "gz");
+            zip.start_file(&name, if already { stored } else { deflated }).map_err(std::io::Error::other)?;
+            let mut f = std::fs::File::open(entry.path())?;
+            std::io::copy(&mut f, &mut zip)?;
+        }
+    }
+    zip.finish().map_err(std::io::Error::other)?.flush()?;
+    std::fs::rename(&tmp, &dest)?;
+    Ok(dest)
 }
 
 #[cfg(test)]
@@ -388,5 +558,57 @@ mod tests {
         inbox.remove(&all.id);
         assert_eq!(inbox.all().len(), 1);
         assert!(inbox.offer(dir.path(), None).is_err());
+        assert!(inbox.offer_text("  ", None).is_err());
+        let t = inbox.offer_text("https://example.com/a\nsecond line", None).unwrap();
+        assert_eq!(t.kind, InboxKind::Text);
+        assert_eq!(t.name, "https://example.com/a");
+    }
+
+    #[test]
+    fn inbox_survives_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = std::sync::Arc::new(crate::db::Db::in_memory().unwrap());
+        let f = dir.path().join("a.txt");
+        std::fs::write(&f, b"hello").unwrap();
+        let gone = dir.path().join("b.txt");
+        std::fs::write(&gone, b"bye").unwrap();
+        {
+            let inbox = Inbox::with_db(db.clone());
+            inbox.offer(&f, None).unwrap();
+            inbox.offer(&gone, Some("dev1".into())).unwrap();
+            inbox.offer_text("note", None).unwrap();
+        }
+        std::fs::remove_file(&gone).unwrap();
+        let again = Inbox::with_db(db.clone());
+        let names: Vec<String> = again.all().into_iter().map(|i| i.name).collect();
+        assert_eq!(names, vec!["note".to_string(), "a.txt".to_string()]);
+        let id = again.all()[0].id.clone();
+        again.remove(&id);
+        assert_eq!(Inbox::with_db(db).all().len(), 1);
+    }
+
+    #[test]
+    fn folders_are_zipped() {
+        use std::io::Read;
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("Holiday");
+        std::fs::create_dir_all(src.join("day 1")).unwrap();
+        std::fs::write(src.join("notes.txt"), "sun").unwrap();
+        std::fs::write(src.join("day 1").join("photo.jpg"), vec![7u8; 5000]).unwrap();
+        let inbox = Inbox::with_db(std::sync::Arc::new(crate::db::Db::in_memory().unwrap()));
+        let outbox = dir.path().join(OUTBOX_DIR);
+        let item = inbox.offer_folder(&src, &outbox, None).unwrap();
+        assert_eq!(item.name, "Holiday.zip");
+        assert_eq!(item.folder.as_deref(), Some("Holiday"));
+        let mut z = zip::ZipArchive::new(std::fs::File::open(&item.path).unwrap()).unwrap();
+        let mut s = String::new();
+        z.by_name("Holiday/notes.txt").unwrap().read_to_string(&mut s).unwrap();
+        assert_eq!(s, "sun");
+        assert_eq!(z.by_name("Holiday/day 1/photo.jpg").unwrap().size(), 5000);
+        // A second zip of the same folder gets a new name; removing deletes the zip.
+        let second = inbox.offer_folder(&src, &outbox, None).unwrap();
+        assert_eq!(second.name, "Holiday (2).zip");
+        inbox.remove(&item.id);
+        assert!(!item.path.exists());
     }
 }

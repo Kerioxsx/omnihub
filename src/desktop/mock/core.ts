@@ -32,6 +32,8 @@ export const settings: Settings = {
     allowNotes: true,
     incomingDir: null,
     deviceName: 'ALEX-DESKTOP',
+    allowClipboard: true,
+    sendToMenu: true,
   },
   screenshots: { dir: null, format: 'png', hotkeyRegion: 'Alt+Shift+S', hotkeyFull: 'Alt+Shift+A', hotkeyWindow: 'Alt+Shift+W', copyToClipboard: true },
   screen: { preset: 'balanced', maxFps: 60, scrcpyPath: null, sunshinePath: null },

@@ -77,3 +77,72 @@ pub fn user_folders() -> Vec<(String, std::path::PathBuf)> {
     .filter_map(|(n, p)| p.filter(|p| p.is_dir()).map(|p| (n.to_string(), p)))
     .collect()
 }
+
+/// File name of the Explorer "Send to" shortcut.
+pub const SEND_TO_LINK: &str = "OmniHub (phone).lnk";
+/// Argument the shortcut passes; Explorer appends the selected paths.
+pub const SEND_TO_ARG: &str = "--send-to-phone";
+
+/// Add or remove "Send to → OmniHub (phone)" in Explorer's context menu.
+/// Recreated at every start so it follows the installed executable.
+#[cfg(windows)]
+pub fn set_send_to_shortcut(enabled: bool) -> std::io::Result<()> {
+    let Some(dir) = dirs::config_dir().map(|d| d.join("Microsoft").join("Windows").join("SendTo")) else { return Ok(()) };
+    let link = dir.join(SEND_TO_LINK);
+    if !enabled {
+        if link.exists() {
+            std::fs::remove_file(&link)?;
+        }
+        return Ok(());
+    }
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    let exe = std::env::current_exe()?;
+    std::thread::spawn(move || create_shortcut(&link, &exe, SEND_TO_ARG, "Send to your phone with OmniHub")).join().map_err(|_| std::io::Error::other("shortcut thread panicked"))?
+}
+
+#[cfg(not(windows))]
+pub fn set_send_to_shortcut(_enabled: bool) -> std::io::Result<()> {
+    Ok(())
+}
+
+#[cfg(windows)]
+fn create_shortcut(link: &Path, target: &Path, args: &str, description: &str) -> std::io::Result<()> {
+    use windows::core::{Interface, HSTRING};
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, IPersistFile, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED};
+    use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
+    let io = |e: windows::core::Error| std::io::Error::other(e.message());
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let res = (|| {
+            let sl: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).map_err(io)?;
+            sl.SetPath(&HSTRING::from(target.as_os_str())).map_err(io)?;
+            sl.SetArguments(&HSTRING::from(args)).map_err(io)?;
+            sl.SetDescription(&HSTRING::from(description)).map_err(io)?;
+            sl.SetIconLocation(&HSTRING::from(target.as_os_str()), 0).map_err(io)?;
+            let pf: IPersistFile = sl.cast().map_err(io)?;
+            pf.Save(&HSTRING::from(link.as_os_str()), true).map_err(io)
+        })();
+        CoUninitialize();
+        res
+    }
+}
+
+/// Paths passed after `--send-to-phone` on a command line.
+pub fn send_to_paths(argv: &[String]) -> Option<Vec<String>> {
+    let pos = argv.iter().position(|a| a == SEND_TO_ARG)?;
+    Some(argv[pos + 1..].iter().filter(|a| !a.starts_with("--")).cloned().collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn send_to_arguments() {
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(send_to_paths(&a(&["omnihub.exe"])), None);
+        assert_eq!(send_to_paths(&a(&["omnihub.exe", SEND_TO_ARG, r"C:\a b.jpg", "--minimized", r"D:\x"])), Some(a(&[r"C:\a b.jpg", r"D:\x"])));
+    }
+}

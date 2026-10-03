@@ -266,7 +266,17 @@ export function send(paths: string[], deviceId: string | null): InboxItem[] {
   if (!paths.length) return [];
   const target = deviceId ? findDevice(deviceId) : null;
   const items = paths.map((p, i) => {
-    const item: InboxItem = { id: `inbox-${Date.now().toString(36)}-${i}`, name: p.split('\\').pop() ?? p, size: Math.round((p.endsWith('.mp4') ? 640 : 2.4) * MB), created: Math.floor(Date.now() / 1000), deviceId };
+    const base = p.split('\\').pop() ?? p;
+    const isFolder = !/\.[a-z0-9]{1,5}$/i.test(base);
+    const item: InboxItem = {
+      id: `inbox-${Date.now().toString(36)}-${i}`,
+      name: isFolder ? `${base}.zip` : base,
+      size: Math.round((p.endsWith('.mp4') ? 640 : isFolder ? 86 : 2.4) * MB),
+      created: Math.floor(Date.now() / 1000),
+      deviceId,
+      kind: 'file',
+      folder: isFolder ? base : undefined,
+    };
     inbox.unshift(item);
     emit('inbox:new', { item, deviceId });
     if (running) simulateDownload(item, target?.name ?? 'Pixel 8 Pro', 900 + i * 400);
@@ -274,6 +284,22 @@ export function send(paths: string[], deviceId: string | null): InboxItem[] {
   });
   audit('desktop', 'files.send', `${items.length} file(s) offered to ${target?.name ?? 'all phones'}`);
   return items;
+}
+
+export function sendText(text: string, deviceId: string | null): InboxItem {
+  const t = text.trim();
+  if (!t) throw new Error('There is no text to send.');
+  const item: InboxItem = { id: `inbox-${Date.now().toString(36)}-t`, name: t.split('\n')[0].slice(0, 80), size: t.length, created: Math.floor(Date.now() / 1000), deviceId, kind: 'text', text: t };
+  inbox.unshift(item);
+  emit('inbox:new', { item, deviceId });
+  audit('desktop', 'text.offer', `${t.length} characters`);
+  return item;
+}
+
+export function inboxRemove(id: string): void {
+  const i = inbox.findIndex((x) => x.id === id);
+  if (i >= 0) inbox.splice(i, 1);
+  emit('inbox:removed', { id });
 }
 
 export function inboxList(): InboxItem[] {

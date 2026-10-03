@@ -63,6 +63,20 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX audit_at ON audit(at DESC);
     "#,
+    // 2: files and text offered to phones survive a restart.
+    r#"
+    CREATE TABLE inbox (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL DEFAULT 'file',
+        name TEXT NOT NULL,
+        size INTEGER NOT NULL DEFAULT 0,
+        created INTEGER NOT NULL,
+        device_id TEXT,
+        path TEXT NOT NULL DEFAULT '',
+        text TEXT,
+        folder TEXT
+    );
+    "#,
 ];
 
 impl Db {

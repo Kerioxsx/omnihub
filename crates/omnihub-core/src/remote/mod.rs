@@ -120,10 +120,10 @@ impl RemoteServer {
             rt,
             running: Mutex::new(None),
             last_error: Mutex::new(None),
-            devices: Devices::new(db),
+            devices: Devices::new(db.clone()),
             pairing: Pairing::default(),
             tickets: Tickets::default(),
-            inbox: Inbox::default(),
+            inbox: Inbox::with_db(db.clone()),
             uploads: Mutex::new(None),
             pair_limiter: RateLimiter::new(10, Duration::from_secs(60)),
             vault_limiter: RateLimiter::new(5, Duration::from_secs(60)),
@@ -310,14 +310,28 @@ impl RemoteServer {
         self.pairing.close();
     }
 
-    pub fn send_to_phone(&self, paths: &[String], device_id: Option<String>) -> anyhow::Result<Vec<InboxItem>> {
+    /// Offer files (and folders, zipped into `outbox`) to one phone or all.
+    pub fn send_to_phone(&self, paths: &[String], device_id: Option<String>, outbox: &std::path::Path) -> anyhow::Result<Vec<InboxItem>> {
         let mut out = Vec::new();
         for p in paths {
-            let item = self.inbox.offer(std::path::Path::new(p), device_id.clone())?;
+            let path = std::path::Path::new(p);
+            let item = if path.is_dir() { self.inbox.offer_folder(path, outbox, device_id.clone())? } else { self.inbox.offer(path, device_id.clone())? };
             self.events.emit("inbox:new", serde_json::json!({ "item": &item, "deviceId": &item.device_id }));
             out.push(item);
         }
         Ok(out)
+    }
+
+    /// Offer text or a link to one phone or all.
+    pub fn send_text(&self, text: &str, device_id: Option<String>) -> anyhow::Result<InboxItem> {
+        let item = self.inbox.offer_text(text, device_id)?;
+        self.events.emit("inbox:new", serde_json::json!({ "item": &item, "deviceId": &item.device_id }));
+        Ok(item)
+    }
+
+    pub fn unsend(&self, id: &str) {
+        self.inbox.remove(id);
+        self.events.emit("inbox:removed", serde_json::json!({ "id": id }));
     }
 
     pub fn stop_viewer(&self, id: &str) {

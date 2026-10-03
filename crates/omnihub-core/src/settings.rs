@@ -169,6 +169,10 @@ pub struct RemoteSettings {
     /// Where files sent from phones land (default: Downloads\OmniHub).
     pub incoming_dir: Option<String>,
     pub device_name: String,
+    /// Paired phones may put text on this PC's clipboard.
+    pub allow_clipboard: bool,
+    /// "Send to → OmniHub (phone)" in Explorer's right-click menu.
+    pub send_to_menu: bool,
 }
 
 impl Default for RemoteSettings {
@@ -190,6 +194,8 @@ impl Default for RemoteSettings {
             allow_notes: true,
             incoming_dir: None,
             device_name: gethostname::gethostname().to_string_lossy().to_string(),
+            allow_clipboard: true,
+            send_to_menu: true,
         }
     }
 }

@@ -112,6 +112,30 @@ impl AppCore {
                 tracing::error!("companion server failed to start: {e}");
             }
         }
+        let send_to = s.remote.send_to_menu;
+        let core = self.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = crate::system::shell::set_send_to_shortcut(send_to) {
+                tracing::warn!("could not update the Send to shortcut: {e}");
+            }
+            core.clean_outbox();
+        });
+    }
+
+    /// Where zips of folders sent to phones are made.
+    pub fn outbox_dir(&self) -> PathBuf {
+        self.paths.cache.join(crate::remote::transfer::OUTBOX_DIR)
+    }
+
+    /// Delete zips no offer refers to any more.
+    fn clean_outbox(&self) {
+        let used: std::collections::HashSet<PathBuf> = self.remote.inbox.all().into_iter().map(|i| i.path).collect();
+        let Ok(rd) = std::fs::read_dir(self.outbox_dir()) else { return };
+        for e in rd.flatten() {
+            if !used.contains(&e.path()) {
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
     }
 
     pub fn screenshot_dir(&self) -> PathBuf {
@@ -144,6 +168,11 @@ impl AppCore {
         }
         let r0 = &before.remote;
         let r1 = &after.remote;
+        if r0.send_to_menu != r1.send_to_menu {
+            if let Err(e) = crate::system::shell::set_send_to_shortcut(r1.send_to_menu) {
+                tracing::warn!("could not update the Send to shortcut: {e}");
+            }
+        }
         let needs_restart = r0.port != r1.port || r0.bind != r1.bind || r0.tls != r1.tls || r0.enabled != r1.enabled;
         if needs_restart {
             self.remote.stop();

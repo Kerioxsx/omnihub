@@ -7,6 +7,7 @@ import { api } from '../api';
 import { useEvent } from '../lib/hooks';
 import { currentRoute, navigate } from '../lib/router';
 import { useLive } from '../state/live';
+import { useSend } from '../state/send';
 import { useSettings } from '../state/settings';
 import { useStorage } from '../state/storage';
 import { toast } from '../state/toasts';
@@ -15,7 +16,11 @@ export function GlobalEvents() {
   useEffect(() => {
     const live = useLive.getState();
     void Promise.allSettled([live.refreshRemote(), live.refreshDevices(), live.refreshVault(), live.refreshPower(), useStorage.getState().loadVolumes()]);
+    // Started from Explorer's "Send to → OmniHub (phone)".
+    void api.app.takePendingSend().then((paths) => paths.length && useSend.getState().openFiles(paths), () => undefined);
   }, []);
+  useEvent<string[]>('send:files', () => void api.app.takePendingSend().then((paths) => paths.length && useSend.getState().openFiles(paths), () => undefined));
+  useEvent<{ device: string; chars: number }>('clipboard:from-phone', (p) => toast.success(`Text from ${p.device} copied`, `${p.chars} characters are on the clipboard — paste with Ctrl+V.`));
 
   // storage
   useEvent<JobProgress>('storage:progress', (p) => useStorage.getState().onProgress(p));

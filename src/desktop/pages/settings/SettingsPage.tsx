@@ -210,6 +210,9 @@ export function SettingsPage() {
             <Row title="Close to tray" hint="The close button hides the window; quit from the tray icon.">
               <Switch checked={s.general.closeToTray} onChange={(v) => void update({ general: { closeToTray: v } })} label="Close to tray" />
             </Row>
+            <Row title="“Send to → OmniHub (phone)” in Explorer" hint="Right-click files or folders in Explorer, choose Send to, and they open here ready to send to your phone.">
+              <Switch checked={s.remote.sendToMenu} onChange={(v) => void update({ remote: { sendToMenu: v } })} label="Explorer Send to menu" />
+            </Row>
           </Section>
 
           <Section id="storage" title="Storage" description="How drives are scanned and what counts as worth cleaning.">

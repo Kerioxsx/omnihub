@@ -2,9 +2,11 @@ import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { type ComponentType, useEffect, useState } from 'react';
 import { CommandPalette } from './components/CommandPalette';
 import { ConfirmHost } from './components/ConfirmHost';
+import { DropOverlay } from './components/DropOverlay';
 import { GlobalEvents, ThemeController } from './components/GlobalEvents';
 import { Logo } from './components/Logo';
 import { PowerBanner } from './components/PowerBanner';
+import { SendDialog } from './components/SendDialog';
 import { Sidebar } from './components/Sidebar';
 import { Toaster } from './components/Toaster';
 import { MenuHost } from './components/ui/Menu';
@@ -125,6 +127,8 @@ export function App() {
       <CommandPalette />
       <ConfirmHost />
       <MenuHost />
+      <SendDialog />
+      <DropOverlay />
       <Toaster />
       <AnimatePresence>{showOnboarding && <Onboarding key="onboarding" onDone={() => setOnboardingForced(false)} />}</AnimatePresence>
     </MotionConfig>

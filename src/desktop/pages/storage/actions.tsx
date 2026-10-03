@@ -2,12 +2,13 @@
 
 import { formatBytes, formatNumber, basename } from '@shared/format';
 import type { DeleteResult } from '@shared/types';
-import { Copy, ExternalLink, FolderOpen, FolderSearch, ScanSearch, Trash, TrashOff } from 'lucide-react';
+import { Copy, ExternalLink, FolderOpen, FolderSearch, ScanSearch, Smartphone, Trash, TrashOff } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { api, errorText } from '../../api';
 import { type MenuItem, openMenu } from '../../components/ui/Menu';
 import { copyText } from '../../lib/util';
 import { confirm } from '../../state/dialogs';
+import { useSend } from '../../state/send';
 import { useStorage } from '../../state/storage';
 import { toast } from '../../state/toasts';
 
@@ -98,6 +99,7 @@ export function itemMenuItems(item: ItemRef, extra: MenuItem[] = []): MenuItem[]
           else toast.error('Could not copy');
         }),
     },
+    { label: item.isDir ? 'Send to phone (zipped)' : 'Send to phone', icon: Smartphone, onSelect: () => useSend.getState().openFiles([item.path]) },
     ...extra,
     ...(item.isDir ? ([{ kind: 'separator' }, { label: 'Scan from here', icon: ScanSearch, onSelect: () => void useStorage.getState().scan(item.path, 'standard') }] as MenuItem[]) : []),
     { kind: 'separator' },

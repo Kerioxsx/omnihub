@@ -10,7 +10,7 @@ import { useApp, useInbox, usePower, toast, TAB_ORDER, type Tab } from './state'
 import { useUploads, isActive } from './uploads';
 import { emitEvent } from './lib/events';
 import { useBackHandler } from './lib/back';
-import { cx, errorMessage, useInterval } from './lib/util';
+import { copyToClipboard, cx, errorMessage, useInterval } from './lib/util';
 import { TabBar } from './ui/TabBar';
 import { Toasts } from './ui/Toasts';
 import { Logo } from './ui/Logo';
@@ -100,9 +100,17 @@ export function App() {
           const item = (payload?.item ?? payload) as InboxItem;
           if (!item?.id) break;
           useInbox.getState().add(item);
-          toast.info('Your PC sent a file', item.name, { label: 'Download', run: () => client.receive(item).catch((e) => toast.error("Couldn't download", errorMessage(e))) });
+          if (item.kind === 'text') {
+            const text = item.text ?? '';
+            toast.info('Your PC sent text', item.name, { label: 'Copy', run: () => void copyToClipboard(text).then((ok) => (ok ? toast.success('Copied') : toast.error("Couldn't copy"))) });
+          } else {
+            toast.info(item.folder ? 'Your PC sent a folder' : 'Your PC sent a file', item.name, { label: 'Download', run: () => client.receive(item).catch((e) => toast.error("Couldn't download", errorMessage(e))) });
+          }
           break;
         }
+        case 'inbox:removed':
+          if (payload?.id) useInbox.getState().remove(payload.id);
+          break;
         case 'power:pending':
           power.setPending(payload as PendingPower);
           break;

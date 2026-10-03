@@ -509,12 +509,19 @@ export interface Device {
   revoked: boolean;
 }
 
+export type InboxKind = 'file' | 'text';
+
 export interface InboxItem {
   id: string;
   name: string;
   size: number;
   created: number;
   deviceId: string | null;
+  kind: InboxKind;
+  /** The text of a `text` item. */
+  text?: string;
+  /** Name of the folder a zip was made from. */
+  folder?: string;
 }
 
 export type PowerAction = 'shutdown' | 'restart' | 'sleep' | 'hibernate' | 'lock' | 'signOut' | 'displayOff';
@@ -650,6 +657,10 @@ export interface Settings {
     allowNotes: boolean;
     incomingDir: string | null;
     deviceName: string;
+    /** Paired phones may put text on this PC's clipboard. */
+    allowClipboard: boolean;
+    /** “Send to → OmniHub (phone)” in Explorer. */
+    sendToMenu: boolean;
   };
   screenshots: {
     dir: string | null;

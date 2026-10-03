@@ -1,7 +1,7 @@
 import { formatBytes, formatDateTime } from '@shared/format';
 import type { Screenshot } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Clipboard, ExternalLink, FolderSearch, Star, Tag, Trash, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clipboard, ExternalLink, FolderSearch, Smartphone, Star, Tag, Trash, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { type PointerEvent, type WheelEvent, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -12,6 +12,7 @@ import { cx } from '../../lib/cx';
 import { forgetThumb } from '../../lib/media';
 import { clamp } from '../../lib/util';
 import { confirm } from '../../state/dialogs';
+import { useSend } from '../../state/send';
 import { toast } from '../../state/toasts';
 
 const images = new Map<string, string>();
@@ -185,6 +186,9 @@ function Details({ shot, onChange, onDeleted }: { shot: Screenshot; onChange: (s
       <div className="grid grid-cols-2 gap-2 border-t border-line p-4">
         <Button size="sm" icon={Clipboard} onClick={act('Could not copy', () => api.shots.copy(shot.id), 'Copied to the clipboard')}>
           Copy
+        </Button>
+        <Button size="sm" icon={Smartphone} onClick={() => useSend.getState().openFiles([shot.path])}>
+          Send to phone
         </Button>
         <Button size="sm" icon={FolderSearch} onClick={act('Could not open Explorer', () => api.app.revealPath(shot.path))}>
           Show in folder

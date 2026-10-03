@@ -771,9 +771,42 @@ pub async fn remote_device_revoke(core: Core<'_>, id: String) -> Res<()> {
 
 #[tauri::command]
 pub async fn remote_send(core: Core<'_>, paths: Vec<String>, device_id: Option<String>) -> Res<Vec<InboxItem>> {
-    let items = core.remote.send_to_phone(&paths, device_id).map_err(err)?;
-    core.audit.record("desktop", "files.offer", &format!("{} file(s)", items.len()), true);
-    Ok(items)
+    let core = core.inner().clone();
+    blocking(move || {
+        // Folders are zipped first, which can take a moment.
+        let items = core.remote.send_to_phone(&paths, device_id, &core.outbox_dir()).map_err(err)?;
+        core.audit.record("desktop", "files.offer", &format!("{} item(s)", items.len()), true);
+        Ok(items)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn remote_send_text(core: Core<'_>, text: String, device_id: Option<String>) -> Res<InboxItem> {
+    let item = core.remote.send_text(&text, device_id).map_err(err)?;
+    core.audit.record("desktop", "text.offer", &format!("{} characters", text.chars().count()), true);
+    Ok(item)
+}
+
+#[tauri::command]
+pub async fn remote_inbox_remove(core: Core<'_>, id: String) -> Res<()> {
+    core.remote.unsend(&id);
+    Ok(())
+}
+
+/// Text currently on the PC clipboard (to send to a phone).
+#[tauri::command]
+pub async fn clipboard_text() -> Res<Option<String>> {
+    blocking(|| Ok(omnihub_core::system::clipboard::get_text())).await
+}
+
+/// Paths from Explorer's "Send to → OmniHub (phone)" waiting for the UI.
+#[derive(Default)]
+pub struct PendingSend(pub parking_lot::Mutex<Vec<String>>);
+
+#[tauri::command]
+pub async fn take_pending_send(pending: State<'_, PendingSend>) -> Res<Vec<String>> {
+    Ok(std::mem::take(&mut *pending.0.lock()))
 }
 
 #[tauri::command]

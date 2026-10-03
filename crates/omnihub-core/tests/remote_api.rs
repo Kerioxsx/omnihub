@@ -154,7 +154,7 @@ fn companion_server_end_to_end() {
         assert_eq!(std::fs::read(fx.incoming.join("video.mp4")).unwrap(), data);
 
         // PC -> phone inbox, announced on the event socket.
-        let offered = fx.core.remote.send_to_phone(&[fx.share.join("hello.txt").to_string_lossy().to_string()], None).unwrap();
+        let offered = fx.core.remote.send_to_phone(&[fx.share.join("hello.txt").to_string_lossy().to_string()], None, &fx.core.outbox_dir()).unwrap();
         let mut saw = std::collections::HashSet::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
         while !(saw.contains("inbox:new") && saw.contains("transfer:done")) && tokio::time::Instant::now() < deadline {
@@ -167,6 +167,24 @@ fn companion_server_end_to_end() {
         assert!(saw.contains("transfer:done"), "{saw:?}");
         let inbox: Value = c.get(format!("{base}/api/inbox")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
         assert_eq!(inbox["items"][0]["id"], offered[0].id);
+
+        // Text and links are listed with their text and have nothing to download.
+        let text = fx.core.remote.send_text("https://example.com/x", None).unwrap();
+        let inbox: Value = c.get(format!("{base}/api/inbox")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(inbox["items"][0]["kind"], "text");
+        assert_eq!(inbox["items"][0]["text"], "https://example.com/x");
+        let r = c.post(format!("{base}/api/inbox/{}/ticket", text.id)).header("authorization", &auth).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        fx.core.remote.unsend(&text.id);
+
+        // Folders are zipped before they are offered; the zip goes when the offer does.
+        let folder = fx.core.remote.send_to_phone(&[fx.share.to_string_lossy().to_string()], None, &fx.core.outbox_dir()).unwrap();
+        assert!(folder[0].name.ends_with(".zip"));
+        let t: Value = c.post(format!("{base}/api/inbox/{}/ticket", folder[0].id)).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let zip = c.get(format!("{base}{}", t["url"].as_str().unwrap())).send().await.unwrap().bytes().await.unwrap();
+        assert_eq!(&zip[..2], b"PK");
+        fx.core.remote.unsend(&folder[0].id);
+        assert!(!folder[0].path.exists());
 
         // Power: destructive actions need confirmation and get a countdown.
         let r = c.post(format!("{base}/api/power")).json(&json!({ "action": "shutdown" })).header("authorization", &auth).send().await.unwrap();

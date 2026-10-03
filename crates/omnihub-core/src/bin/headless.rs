@@ -3,6 +3,9 @@
 //!
 //!     omnihub-headless [--home DIR] [--port N] [--http] [--pair] [--dry-run-power]
 //!
+//! While it runs, type `send PATH|PATH`, `text TEXT` or `pair` to offer
+//! files, folders or text to the phones, or open a new pairing window.
+//!
 //! Useful on a PC you only control from your phone, and for testing the
 //! phone app during development.
 
@@ -73,6 +76,32 @@ fn main() -> anyhow::Result<()> {
             println!("  {u}");
         }
     }
+    // A small console for development and tests:
+    //   send PATH [PATH…]   offer files or folders to every phone
+    //   text TEXT           offer text
+    //   pair                open a new pairing window
+    let console = core.clone();
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        for line in std::io::stdin().lock().lines().map_while(Result::ok) {
+            let line = line.trim();
+            let (cmd, rest) = line.split_once(' ').unwrap_or((line, ""));
+            let res: anyhow::Result<String> = match cmd {
+                "send" => {
+                    let paths: Vec<String> = rest.split('|').map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect();
+                    console.remote.send_to_phone(&paths, None, &console.outbox_dir()).map(|v| format!("offered {}", v.iter().map(|i| i.name.as_str()).collect::<Vec<_>>().join(", ")))
+                }
+                "text" => console.remote.send_text(rest, None).map(|i| format!("offered text {}", i.id)),
+                "pair" => console.remote.begin_pairing().map(|i| format!("PIN {} {}", i.pin, i.urls.join(" "))),
+                "" => continue,
+                other => Err(anyhow::anyhow!("unknown command {other} (send, text, pair)")),
+            };
+            match res {
+                Ok(msg) => println!("ok: {msg}"),
+                Err(e) => println!("error: {e}"),
+            }
+        }
+    });
     core.remote.runtime().block_on(async {
         let _ = tokio::signal::ctrl_c().await;
     });

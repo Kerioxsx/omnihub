@@ -44,6 +44,18 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
     }
 }
 
+/// Explorer's "Send to → OmniHub (phone)": show the window with the files
+/// ready to send. Returns whether the arguments were a send request.
+fn handle_send_to(app: &tauri::AppHandle, argv: &[String]) -> bool {
+    let Some(paths) = omnihub_core::system::shell::send_to_paths(argv) else { return false };
+    if !paths.is_empty() {
+        app.state::<commands::PendingSend>().0.lock().extend(paths.iter().cloned());
+        tray::show_main(app);
+        let _ = app.emit("send:files", &paths);
+    }
+    true
+}
+
 pub fn run(args: Vec<String>) {
     // An elevated instance started by "Restart as administrator" waits for
     // the old one to exit so the single-instance lock is free.
@@ -53,19 +65,25 @@ pub fn run(args: Vec<String>) {
         }
     }
     let start_hidden = args.iter().any(|a| a == "--minimized");
+    let launch_args = args.clone();
 
     let paths = AppPaths::default_for_user().expect("cannot create the OmniHub data folder");
     init_logging(&paths);
     let core = AppCore::new(paths, CoreOptions::default()).expect("cannot open the OmniHub database");
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| tray::show_main(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if !handle_send_to(app, &argv) {
+                tray::show_main(app);
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["overlay"]).build())
         .manage(core.clone())
+        .manage(commands::PendingSend::default())
         .setup(move |app| {
             let handle = app.handle().clone();
 
@@ -105,6 +123,7 @@ pub fn run(args: Vec<String>) {
                     let _ = w.show();
                 }
             }
+            handle_send_to(&handle, &launch_args);
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -210,6 +229,10 @@ pub fn run(args: Vec<String>) {
             commands::remote_device_rename,
             commands::remote_device_revoke,
             commands::remote_send,
+            commands::remote_send_text,
+            commands::remote_inbox_remove,
+            commands::clipboard_text,
+            commands::take_pending_send,
             commands::remote_inbox,
             commands::remote_stop_viewer,
             commands::remote_stop_all_viewers,
