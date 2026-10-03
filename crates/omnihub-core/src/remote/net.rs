@@ -38,23 +38,63 @@ fn is_allowed_v4(ip: Ipv4Addr, allow_tailscale: bool) -> bool {
 pub struct LanAddress {
     pub interface: String,
     pub ip: String,
+    /// The address Windows uses for its default route: the Wi-Fi or
+    /// Ethernet connection phones on the same network can reach.
+    pub primary: bool,
+    /// Hyper-V, WSL, VirtualBox, VPN and similar adapters phones usually
+    /// cannot reach.
+    pub virtual_adapter: bool,
 }
 
-/// IPv4 addresses phones can reach, most likely first (Wi-Fi/Ethernet
-/// private ranges before virtual adapters).
+/// Adapter names (Windows friendly names, Linux interface names) of
+/// connections a phone on the Wi-Fi cannot reach.
+fn is_virtual_adapter(name: &str) -> bool {
+    let n = name.to_lowercase();
+    // Windows names Wi-Fi Direct and hotspot adapters "Local Area Connection* 2".
+    n.contains('*')
+        || [
+            "vethernet", "virtualbox", "vmware", "docker", "wsl", "hyper-v", "default switch", "vbox", "br-", "veth", "virbr", "zt", "zerotier",
+            "tailscale", "hamachi", "radmin", "vpn", "tap-", "tun", "wireguard", "wg", "npcap", "loopback", "bluetooth", "teredo", "isatap", "utun",
+        ]
+        .iter()
+        .any(|v| n.contains(v))
+}
+
+/// The local IPv4 address the OS would use to reach the internet, found by
+/// "connecting" a UDP socket (no packet is sent).
+pub fn primary_ipv4() -> Option<Ipv4Addr> {
+    let sock = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).ok()?;
+    sock.connect((Ipv4Addr::new(192, 0, 2, 1), 9)).ok()?;
+    match sock.local_addr().ok()?.ip() {
+        IpAddr::V4(v4) if !v4.is_unspecified() && !v4.is_loopback() => Some(v4),
+        _ => None,
+    }
+}
+
+/// IPv4 addresses phones can reach, most likely first: the default-route
+/// address, then other Wi-Fi/Ethernet addresses, then virtual adapters.
 pub fn lan_addresses() -> Vec<LanAddress> {
+    let primary = primary_ipv4();
     let mut out: Vec<(u8, LanAddress)> = if_addrs::get_if_addrs()
         .unwrap_or_default()
         .into_iter()
         .filter(|i| !i.is_loopback())
         .filter_map(|i| match i.ip() {
             IpAddr::V4(v4) if v4.is_private() || v4.octets()[0] == 100 => {
-                let name = i.name.to_lowercase();
-                let virtualish = ["vethernet", "virtualbox", "vmware", "docker", "wsl", "hyper-v", "vbox", "br-", "veth", "zt"]
-                    .iter()
-                    .any(|v| name.contains(v));
-                let rank = if virtualish { 3 } else if v4.octets()[0] == 192 { 0 } else if v4.octets()[0] == 10 { 1 } else { 2 };
-                Some((rank, LanAddress { interface: i.name.clone(), ip: v4.to_string() }))
+                let virtual_adapter = is_virtual_adapter(&i.name);
+                let is_primary = primary == Some(v4) && !virtual_adapter;
+                let rank = if is_primary {
+                    0
+                } else if virtual_adapter {
+                    4
+                } else if v4.octets()[0] == 192 {
+                    1
+                } else if v4.octets()[0] == 10 {
+                    2
+                } else {
+                    3
+                };
+                Some((rank, LanAddress { interface: i.name.clone(), ip: v4.to_string(), primary: is_primary, virtual_adapter }))
             }
             _ => None,
         })
@@ -182,6 +222,25 @@ mod tests {
         assert!(!ok("100.100.1.1", false));
         assert!(ok("100.100.1.1", true));
         assert!(!ok("100.128.1.1", true));
+    }
+
+    #[test]
+    fn virtual_adapters() {
+        for name in ["vEthernet (WSL)", "VirtualBox Host-Only Network", "Local Area Connection* 10", "Tailscale", "docker0", "ProtonVPN TUN", "Bluetooth Network Connection"] {
+            assert!(is_virtual_adapter(name), "{name}");
+        }
+        for name in ["Wi-Fi", "Ethernet", "Ethernet 2", "wlan0", "eth0", "enp3s0", "Local Area Connection"] {
+            assert!(!is_virtual_adapter(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn lan_addresses_put_the_primary_first() {
+        let list = lan_addresses();
+        if let Some(i) = list.iter().position(|a| a.primary) {
+            assert_eq!(i, 0);
+        }
+        assert!(list.iter().filter(|a| a.primary).count() <= 1);
     }
 
     #[test]

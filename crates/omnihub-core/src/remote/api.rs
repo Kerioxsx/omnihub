@@ -106,7 +106,12 @@ pub fn router(core: Ctx) -> Router {
 /// security headers on the way out.
 async fn guard(State(core): State<Ctx>, ConnectInfo(peer): ConnectInfo<SocketAddr>, req: Request, next: Next) -> Response {
     let s = core.settings.get().remote;
-    if !net::is_allowed_peer(peer.ip(), s.allow_tailscale) {
+    let allowed = net::is_allowed_peer(peer.ip(), s.allow_tailscale);
+    if !peer.ip().is_loopback() {
+        let ua = req.headers().get(header::USER_AGENT).and_then(|h| h.to_str().ok()).unwrap_or("");
+        core.remote.record_visit(&peer.ip().to_canonical().to_string(), ua, allowed);
+    }
+    if !allowed {
         return ApiError::forbidden("only devices on your local network can connect").into_response();
     }
     let host = req.headers().get(header::HOST).and_then(|h| h.to_str().ok()).unwrap_or("");

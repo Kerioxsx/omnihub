@@ -426,6 +426,25 @@ export interface ServerStatus {
   error: string | null;
   viewers: ViewerInfo[];
   pairingOpen: boolean;
+  /** Devices that reached the server in the last 15 minutes, newest first. */
+  visitors: Visit[];
+}
+
+export interface Visit {
+  ip: string;
+  at: number;
+  userAgent: string;
+  /** False when refused because the address is not on the local network. */
+  allowed: boolean;
+}
+
+export interface LanAddress {
+  interface: string;
+  ip: string;
+  /** The Wi-Fi/Ethernet address Windows uses for its default route. */
+  primary: boolean;
+  /** Hyper-V, WSL, VirtualBox, VPN… — usually not reachable from a phone. */
+  virtualAdapter: boolean;
 }
 
 export interface PairingInfo {
@@ -435,7 +454,49 @@ export interface PairingInfo {
   urls: string[];
   /** SVG markup */
   qrSvg: string;
+  /** One QR code per entry in `urls`. */
+  qrSvgs: string[];
+  addresses: LanAddress[];
   fingerprint: string | null;
+}
+
+export type NetworkCategory = 'public' | 'private' | 'domain';
+
+export interface NetworkInfo {
+  id: string;
+  name: string;
+  category: NetworkCategory;
+}
+
+export type FirewallVerdict = 'allowed' | 'blocked' | 'noRule' | 'off' | 'unknown';
+
+export interface FirewallRuleInfo {
+  name: string;
+  allow: boolean;
+  enabled: boolean;
+  /** Bitmask: 1 domain, 2 private, 4 public. */
+  profiles: number;
+  protocol: string;
+  ports: string;
+}
+
+export interface FirewallReport {
+  supported: boolean;
+  program: string;
+  networks: NetworkInfo[];
+  activeProfiles: number;
+  verdict: FirewallVerdict;
+  rules: FirewallRuleInfo[];
+  message: string;
+}
+
+export interface RemoteDiagnostics {
+  running: boolean;
+  port: number;
+  tls: boolean;
+  addresses: LanAddress[];
+  firewall: FirewallReport;
+  visitors: Visit[];
 }
 
 export interface Device {

@@ -1,6 +1,6 @@
 // Phone companion server, power actions and screen-sharing bridges.
 
-import type { AdbDevice, Device, InboxItem, MonitorInfo, PairingInfo, PendingPower, PowerAction, Preset, ScrcpyOptions, ScrcpyStatus, ServerStatus, SunshineStatus, ViewerInfo } from '@shared/types';
+import type { AdbDevice, Device, FirewallReport, InboxItem, LanAddress, MonitorInfo, NetworkInfo, PairingInfo, PendingPower, PowerAction, Preset, RemoteDiagnostics, ScrcpyOptions, ScrcpyStatus, ServerStatus, SunshineStatus, ViewerInfo, Visit } from '@shared/types';
 import { emit } from './bus';
 import { audit, flags, onSettingsChange, settings } from './core';
 import { fakeQr } from './art';
@@ -32,18 +32,74 @@ export const presets: Preset[] = [
   { id: 'max', label: 'Maximum · up to 4K', maxWidth: 3840, quality: 85, fps: 60 },
 ];
 
+function addresses(): LanAddress[] {
+  const out: LanAddress[] = [
+    { interface: 'Wi-Fi', ip: '192.168.1.42', primary: true, virtualAdapter: false },
+    { interface: 'vEthernet (WSL)', ip: '172.24.208.1', primary: false, virtualAdapter: true },
+  ];
+  if (settings.remote.allowTailscale) out.splice(1, 0, { interface: 'Tailscale', ip: '100.101.7.12', primary: false, virtualAdapter: true });
+  return out;
+}
+
 function urls(): string[] {
   const r = settings.remote;
   const scheme = r.tls ? 'https' : 'http';
   if (r.bind === 'localhost') return [`${scheme}://localhost:${r.port}`];
-  const out = [`${scheme}://192.168.1.42:${r.port}`];
-  if (r.allowTailscale) out.push(`${scheme}://100.101.7.12:${r.port}`);
-  return out;
+  return addresses().map((a) => `${scheme}://${a.ip}:${r.port}`);
+}
+
+// The common first-run situation: Windows put the new Wi-Fi on "Public" and
+// the firewall has no rule for OmniHub, so phones time out.
+const network: NetworkInfo = { id: '{6B2C1E54-3A9D-4F1B-9C6E-2D8A7F0B4E31}', name: 'Home Wi-Fi', category: 'public' };
+let firewallAllowed: 0 | 2 | 6 = 0;
+const visitors: Visit[] = [];
+
+function firewallReport(): FirewallReport {
+  const profile = network.category === 'public' ? 4 : 2;
+  const allowed = (firewallAllowed & profile) !== 0;
+  const verdict = allowed ? 'allowed' : 'noRule';
+  const message = allowed
+    ? 'Windows Firewall lets phones reach OmniHub.'
+    : network.category === 'public'
+      ? 'This network is marked Public, and Windows Firewall has no rule allowing OmniHub on it.'
+      : 'Windows Firewall has no rule allowing OmniHub, so it blocks phones by default.';
+  const rules = firewallAllowed ? [{ name: 'OmniHub phone companion', allow: true, enabled: true, profiles: firewallAllowed | 1, protocol: 'Any', ports: '*' }] : [];
+  return { supported: true, program: 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\omnihub.exe', networks: [{ ...network }], activeProfiles: profile, verdict, rules, message };
+}
+
+function simulateVisit() {
+  if (!running) return;
+  const reachable = (firewallAllowed & (network.category === 'public' ? 4 : 2)) !== 0;
+  if (!reachable) return;
+  setTimeout(() => {
+    const v: Visit = { ip: '192.168.1.63', at: Math.floor(Date.now() / 1000), userAgent: devices[1].userAgent, allowed: true };
+    visitors.splice(0, visitors.length, v);
+    emit('remote:visit', v);
+    pushStatus();
+  }, 2500);
+}
+
+export function diagnostics(): RemoteDiagnostics {
+  return { running, port: settings.remote.port, tls: settings.remote.tls, addresses: addresses(), firewall: firewallReport(), visitors: visitors.map((v) => ({ ...v })) };
+}
+
+export function fixFirewall(includePublic: boolean): FirewallReport {
+  firewallAllowed = includePublic ? 6 : 2;
+  audit('desktop', 'firewall.allow', includePublic ? 'domain, private, public' : 'domain, private');
+  simulateVisit();
+  return firewallReport();
+}
+
+export function makeNetworkPrivate(id: string): void {
+  if (id !== network.id) throw new Error('That network is not connected.');
+  network.category = 'private';
+  audit('desktop', 'network.private', network.name);
+  simulateVisit();
 }
 
 export function status(): ServerStatus {
-  if (!running) return { running: false, port: 0, tls: false, bind: 'lan', urls: [], fingerprint: null, error: null, viewers: [], pairingOpen: false };
-  return { running: true, port: settings.remote.port, tls: settings.remote.tls, bind: settings.remote.bind, urls: urls(), fingerprint: settings.remote.tls ? FINGERPRINT : null, error: null, viewers: viewers.map((v) => ({ ...v })), pairingOpen };
+  if (!running) return { running: false, port: 0, tls: false, bind: 'lan', urls: [], fingerprint: null, error: null, viewers: [], pairingOpen: false, visitors: [] };
+  return { running: true, port: settings.remote.port, tls: settings.remote.tls, bind: settings.remote.bind, urls: urls(), fingerprint: settings.remote.tls ? FINGERPRINT : null, error: null, viewers: viewers.map((v) => ({ ...v })), pairingOpen, visitors: visitors.map((v) => ({ ...v })) };
 }
 
 const pushStatus = () => emit('remote:status', status());
@@ -170,7 +226,8 @@ export function pairBegin(): PairingInfo {
     pushStatus();
     audit(dev.name, 'pair', `Paired from ${dev.lastIp}`);
   }, 6500);
-  return { pin, secret, expiresAt: Math.floor(Date.now() / 1000) + 300, urls: list, qrSvg: fakeQr(list[0]), fingerprint: settings.remote.tls ? FINGERPRINT : null };
+  const qrs = list.map((u) => fakeQr(u));
+  return { pin, secret, expiresAt: Math.floor(Date.now() / 1000) + 300, urls: list, qrSvg: qrs[0], qrSvgs: qrs, addresses: settings.remote.bind === 'localhost' ? [] : addresses(), fingerprint: settings.remote.tls ? FINGERPRINT : null };
 }
 
 export function pairCancel(): void {

@@ -19,6 +19,7 @@ import { confirm } from '../../state/dialogs';
 import { useLive } from '../../state/live';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
+import { ConnectionCheck } from './ConnectionCheck';
 import { PairDialog } from './PairDialog';
 import { Permissions } from './Permissions';
 
@@ -362,10 +363,16 @@ export function PhonePage() {
   const [sendOpen, setSendOpen] = useState(false);
   const remote = useLive((s) => s.remote);
 
+  const [checkFocus, setCheckFocus] = useState(false);
   useEffect(() => {
     if (route.params.get('pair') === '1') {
       setPairOpen(true);
       navigate('phone');
+    }
+    if (route.params.get('check') === '1') {
+      setCheckFocus(true);
+      navigate('phone');
+      setTimeout(() => document.getElementById('connection-check')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
     }
   }, [route.params]);
 
@@ -380,7 +387,14 @@ export function PhonePage() {
             <Transfers />
             <AuditLog />
           </div>
-          <Permissions />
+          <div className="space-y-3">
+            {remote?.running && (
+              <div id="connection-check" className="scroll-mt-4">
+                <ConnectionCheck key={String(checkFocus)} defaultOpen={checkFocus} />
+              </div>
+            )}
+            <Permissions />
+          </div>
         </div>
         {!remote && <Skeleton className="h-20" />}
       </div>

@@ -137,6 +137,9 @@ const handlers: Record<string, Handler> = {
   remote_inbox: () => remote.inboxList(),
   remote_stop_viewer: (a) => remote.stopViewer(str(a, 'id')),
   remote_stop_all_viewers: () => remote.stopAllViewers(),
+  remote_diagnostics: () => remote.diagnostics(),
+  remote_fix_firewall: (a) => remote.fixFirewall(bool(a, 'includePublic')),
+  network_make_private: (a) => remote.makeNetworkPrivate(str(a, 'id')),
 
   // power
   power_schedule: (a) => remote.powerSchedule(str(a, 'action') as PowerAction, num(a, 'delaySeconds', 10)),

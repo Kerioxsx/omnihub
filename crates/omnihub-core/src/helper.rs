@@ -2,6 +2,8 @@
 //! one privileged job and exit.
 //!
 //! `omnihub.exe --omnihub-helper scan-volume C <scan-dir>`
+//! `omnihub.exe --omnihub-helper firewall-allow <program> <rule-name> <profile-mask>`
+//! `omnihub.exe --omnihub-helper network-private <network-guid>`
 //!
 //! Exit codes: 0 success, 1 failure (message in the error file), 2 cancelled,
 //! 64 bad arguments.
@@ -17,6 +19,14 @@ pub fn run_if_helper(args: &[String]) -> Option<i32> {
     let rest = &args[pos + 1..];
     Some(match rest.first().map(String::as_str) {
         Some("scan-volume") => scan_volume(&rest[1..]),
+        Some("firewall-allow") => match (rest.get(1), rest.get(2), rest.get(3).and_then(|m| m.parse::<i32>().ok())) {
+            (Some(program), Some(name), Some(mask)) if rest.len() == 4 => crate::system::firewall::helper_allow(Path::new(program), name, mask),
+            _ => 64,
+        },
+        Some("network-private") => match rest.get(1) {
+            Some(id) if rest.len() == 2 => crate::system::firewall::helper_make_private(id),
+            _ => 64,
+        },
         _ => 64,
     })
 }
@@ -100,5 +110,8 @@ mod tests {
         assert_eq!(run_if_helper(&a(&["x", HELPER_FLAG, "format-c"])), Some(64));
         assert_eq!(run_if_helper(&a(&["x", HELPER_FLAG, "scan-volume", "CC", "/tmp"])), Some(64));
         assert_eq!(run_if_helper(&a(&["x", HELPER_FLAG, "scan-volume", "C", "/tmp/not-ours"])), Some(64));
+        assert_eq!(run_if_helper(&a(&["x", HELPER_FLAG, "firewall-allow", "/tmp/evil.exe", "rule", "2"])), Some(64));
+        assert_eq!(run_if_helper(&a(&["x", HELPER_FLAG, "firewall-allow", "/tmp/evil.exe", "rule"])), Some(64));
+        assert_eq!(run_if_helper(&a(&["x", HELPER_FLAG, "network-private", "not-a-guid"])), Some(64));
     }
 }

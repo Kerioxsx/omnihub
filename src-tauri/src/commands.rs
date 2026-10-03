@@ -16,8 +16,10 @@ use omnihub_core::capture::stream::{self, MonitorInfo, Preset};
 use omnihub_core::core::AppCore;
 use omnihub_core::notes::{FolderFile, Note, NoteFilter, NoteInput};
 use omnihub_core::remote::auth::{Device, PairingInfo};
+use omnihub_core::remote::net::LanAddress;
 use omnihub_core::remote::transfer::InboxItem;
-use omnihub_core::remote::ServerStatus;
+use omnihub_core::remote::{ServerStatus, Visit};
+use omnihub_core::system::firewall::{self, FirewallReport, Proto};
 use omnihub_core::settings::Settings;
 use omnihub_core::storage::cleanup::{DeleteResult, Suggestion};
 use omnihub_core::storage::dupes::{DupeGroup, DupeOptions};
@@ -789,6 +791,69 @@ pub async fn remote_stop_viewer(core: Core<'_>, id: String) -> Res<()> {
 pub async fn remote_stop_all_viewers(core: Core<'_>) -> Res<()> {
     core.remote.stop_all_viewers();
     Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteDiagnostics {
+    running: bool,
+    port: u16,
+    tls: bool,
+    addresses: Vec<LanAddress>,
+    firewall: FirewallReport,
+    visitors: Vec<Visit>,
+}
+
+/// Why a phone might not reach the companion: addresses, Windows Firewall
+/// and network type, and which devices did get through.
+#[tauri::command]
+pub async fn remote_diagnostics(core: Core<'_>) -> Res<RemoteDiagnostics> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let status = core.remote.status();
+        let port = if status.running { status.port } else { core.settings.get().remote.port };
+        let exe = std::env::current_exe().map_err(err)?;
+        Ok(RemoteDiagnostics {
+            running: status.running,
+            port,
+            tls: status.tls,
+            addresses: omnihub_core::remote::net::lan_addresses(),
+            firewall: firewall::check(&exe, Some(port), Proto::Tcp, "OmniHub"),
+            visitors: core.remote.visitors(),
+        })
+    })
+    .await
+}
+
+/// Allow OmniHub through Windows Firewall (asks for administrator approval).
+#[tauri::command]
+pub async fn remote_fix_firewall(core: Core<'_>, include_public: bool) -> Res<FirewallReport> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let exe = std::env::current_exe().map_err(err)?;
+        let mut mask = firewall::PROFILE_PRIVATE | firewall::PROFILE_DOMAIN;
+        if include_public {
+            mask |= firewall::PROFILE_PUBLIC;
+        }
+        let res = firewall::allow_program(&exe, "OmniHub phone companion", mask);
+        core.audit.record("desktop", "firewall.allow", &firewall::profile_names(mask).join(", "), res.is_ok());
+        res.map_err(err)?;
+        let port = core.settings.get().remote.port;
+        Ok(firewall::check(&exe, Some(port), Proto::Tcp, "OmniHub"))
+    })
+    .await
+}
+
+/// Mark a connected network as Private (asks for administrator approval).
+#[tauri::command]
+pub async fn network_make_private(core: Core<'_>, id: String) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let res = firewall::make_network_private(&id);
+        core.audit.record("desktop", "network.private", &id, res.is_ok());
+        res.map_err(err)
+    })
+    .await
 }
 
 #[tauri::command]

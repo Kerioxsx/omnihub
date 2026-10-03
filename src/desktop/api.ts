@@ -145,6 +145,9 @@ export const api = {
     inbox: () => call<T.InboxItem[]>('remote_inbox'),
     stopViewer: (id: string) => call<void>('remote_stop_viewer', { id }),
     stopAllViewers: () => call<void>('remote_stop_all_viewers'),
+    diagnostics: () => call<T.RemoteDiagnostics>('remote_diagnostics'),
+    fixFirewall: (includePublic: boolean) => call<T.FirewallReport>('remote_fix_firewall', { includePublic }),
+    makeNetworkPrivate: (id: string) => call<void>('network_make_private', { id }),
   },
 
   power: {
