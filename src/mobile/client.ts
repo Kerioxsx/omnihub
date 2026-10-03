@@ -2,7 +2,7 @@
 // (crates/omnihub-core/src/remote/api.rs). The phone app is served by that
 // server, so every URL is same-origin.
 
-import type { Note, NoteKind, PendingPower, PowerAction, InboxItem, EntrySummary, MonitorInfo, Preset } from '@shared/types';
+import type { Device, Note, NoteKind, PendingPower, PowerAction, InboxItem, EntrySummary, MonitorInfo, Preset } from '@shared/types';
 
 const TOKEN_KEY = 'omnihub.token';
 const NAME_KEY = 'omnihub.deviceName';
@@ -61,14 +61,31 @@ export async function request<T>(method: string, path: string, body?: unknown, h
   const res = await fetch(path, { method, headers: h, body: payload });
   if (res.status === 204) return undefined as T;
   const text = await res.text();
-  const data = text ? JSON.parse(text) : undefined;
+  let data: any;
+  try {
+    data = text ? JSON.parse(text) : undefined;
+  } catch {
+    data = res.ok ? text : { error: text.slice(0, 200) || res.statusText };
+  }
   if (!res.ok) {
-    if (res.status === 401 && path !== '/api/pair') {
+    const message: string = data?.error ?? res.statusText;
+    if (res.status === 401 && isDeviceAuthFailure(path, message)) {
       window.dispatchEvent(new CustomEvent('omnihub:unauthorized'));
     }
-    throw new ApiError(res.status, data?.error ?? res.statusText);
+    throw new ApiError(res.status, message);
   }
   return data as T;
+}
+
+/**
+ * The server answers 401 both for an unknown/revoked device token and for an
+ * expired *vault session* ("unlock the vault first" / "the vault locked").
+ * Only the former means this phone is no longer paired.
+ */
+export function isDeviceAuthFailure(path: string, message: string): boolean {
+  if (path === '/api/pair') return false;
+  if (path.startsWith('/api/vault/')) return /pair this phone|no longer paired/i.test(message);
+  return true;
 }
 
 export interface ServerInfo {
@@ -123,6 +140,8 @@ export const client = {
     }
   },
   status: () => request<Status>('GET', '/api/status'),
+  /** The paired device record of this phone. */
+  me: () => request<Device>('GET', '/api/me'),
 
   roots: () => request<{ roots: { name: string; path: string }[] }>('GET', '/api/fs/roots'),
   list: (path: string) => request<{ path: string; parent: string | null; entries: FsEntry[] }>('GET', `/api/fs/list?path=${encodeURIComponent(path)}`),
@@ -184,18 +203,42 @@ function wsUrl(path: string) {
   return `${proto}//${location.host}${path}`;
 }
 
-/** Live events (transfer:*, inbox:*, power:*, notes:*, screen:*). Reconnects automatically. */
-export function connectEvents(onEvent: (topic: string, payload: any) => void): () => void {
+export type SocketStatus = 'connecting' | 'open' | 'closed';
+
+/**
+ * Live events (transfer:*, inbox:*, power:*, notes:*, screen:*). Reconnects
+ * automatically (exponential backoff, immediately when the network comes
+ * back or the page becomes visible again). `onStatus` reports the state.
+ */
+export function connectEvents(onEvent: (topic: string, payload: any) => void, onStatus?: (s: SocketStatus) => void): () => void {
   let ws: WebSocket | null = null;
   let closed = false;
   let retry = 1000;
-  const open = async () => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let opening = false;
+  const status = (s: SocketStatus) => {
+    if (!closed) onStatus?.(s);
+  };
+  const schedule = (delay: number) => {
     if (closed) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(open, delay);
+  };
+  const open = async () => {
+    timer = null;
+    if (closed || opening || (ws && ws.readyState <= WebSocket.OPEN)) return;
+    opening = true;
+    status('connecting');
     try {
       const { ticket } = await client.ticket('socket');
-      ws = new WebSocket(wsUrl(`/api/ws?ticket=${encodeURIComponent(ticket)}`));
-      ws.onopen = () => (retry = 1000);
-      ws.onmessage = (m) => {
+      if (closed) return;
+      const sock = new WebSocket(wsUrl(`/api/ws?ticket=${encodeURIComponent(ticket)}`));
+      ws = sock;
+      sock.onopen = () => {
+        retry = 1000;
+        status('open');
+      };
+      sock.onmessage = (m) => {
         try {
           const e = JSON.parse(m.data);
           onEvent(e.topic, e.payload);
@@ -203,17 +246,37 @@ export function connectEvents(onEvent: (topic: string, payload: any) => void): (
           /* ignore */
         }
       };
-      ws.onclose = () => {
-        if (!closed) setTimeout(open, (retry = Math.min(retry * 2, 15000)));
+      sock.onclose = () => {
+        if (ws !== sock) return;
+        ws = null;
+        status('closed');
+        schedule((retry = Math.min(retry * 2, 15000)));
       };
     } catch {
-      if (!closed) setTimeout(open, (retry = Math.min(retry * 2, 15000)));
+      status('closed');
+      schedule((retry = Math.min(retry * 2, 15000)));
+    } finally {
+      opening = false;
     }
   };
+  const kick = () => {
+    if (closed || document.visibilityState === 'hidden') return;
+    if (!ws || ws.readyState > WebSocket.OPEN) {
+      retry = 1000;
+      schedule(0);
+    }
+  };
+  window.addEventListener('online', kick);
+  document.addEventListener('visibilitychange', kick);
   open();
   return () => {
     closed = true;
-    ws?.close();
+    if (timer) clearTimeout(timer);
+    window.removeEventListener('online', kick);
+    document.removeEventListener('visibilitychange', kick);
+    const s = ws;
+    ws = null;
+    s?.close();
   };
 }
 
@@ -243,17 +306,65 @@ export interface UploadHandle {
   size: number;
   /** Bytes confirmed by the PC. */
   offset: number;
+  /** Bytes on the wire so far, including the chunk in flight (for smooth progress). */
+  sent?: number;
   state: 'uploading' | 'paused' | 'done' | 'error' | 'cancelled';
   error?: string;
   sha256?: string;
   path?: string;
 }
 
+function isAbort(e: unknown): boolean {
+  return e instanceof DOMException && e.name === 'AbortError';
+}
+
+/**
+ * PUT one chunk with XMLHttpRequest: unlike fetch it reports upload
+ * progress, and aborting stops the transfer immediately (pause).
+ */
+function putChunk(url: string, chunk: Uint8Array, crc: number, signal: AbortSignal | undefined, onSent: (bytes: number) => void): Promise<{ offset: number }> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('paused', 'AbortError'));
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    const token = getToken();
+    if (token) xhr.setRequestHeader('authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('content-type', 'application/octet-stream');
+    xhr.setRequestHeader('x-chunk-crc32', crc.toString(16).padStart(8, '0'));
+    const onAbort = () => xhr.abort();
+    signal?.addEventListener('abort', onAbort, { once: true });
+    const done = () => signal?.removeEventListener('abort', onAbort);
+    xhr.upload.onprogress = (e) => onSent(e.loaded);
+    xhr.onload = () => {
+      done();
+      let data: any;
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : undefined;
+      } catch {
+        data = undefined;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) return resolve(data);
+      const message: string = data?.error ?? (xhr.statusText || `HTTP ${xhr.status}`);
+      if (xhr.status === 401 && isDeviceAuthFailure(url, message)) window.dispatchEvent(new CustomEvent('omnihub:unauthorized'));
+      reject(new ApiError(xhr.status, message));
+    };
+    xhr.onerror = () => {
+      done();
+      reject(new TypeError('network error'));
+    };
+    xhr.onabort = () => {
+      done();
+      reject(new DOMException('paused', 'AbortError'));
+    };
+    xhr.send(chunk as Uint8Array<ArrayBuffer>);
+  });
+}
+
 /**
  * Upload a file. Survives network drops: on failure it asks the server for
  * the confirmed offset and continues from there (up to `retries` times per
- * chunk). Call `controller.abort()` to pause; call again with `resumeId` to
- * continue a paused upload.
+ * chunk). Call `controller.abort()` to pause (the chunk in flight stops at
+ * once); call again with `resumeId` to continue a paused upload.
  */
 export async function uploadFile(
   file: File,
@@ -269,28 +380,37 @@ export async function uploadFile(
     const st = await request<{ id: string; offset: number }>('POST', '/api/upload', { name: file.name, size: file.size, dir: opts.dir ?? null });
     id = st.id;
   }
-  const h: UploadHandle = { id, name: file.name, size: file.size, offset, state: 'uploading' };
+  const h: UploadHandle = { id, name: file.name, size: file.size, offset, sent: offset, state: 'uploading' };
   onProgress({ ...h });
+  const paused = () => {
+    h.state = 'paused';
+    h.sent = h.offset;
+    onProgress({ ...h });
+    return h;
+  };
   let failures = 0;
   while (h.offset < file.size) {
-    if (opts.signal?.aborted) {
-      h.state = 'paused';
-      onProgress({ ...h });
-      return h;
-    }
+    if (opts.signal?.aborted) return paused();
     const end = Math.min(h.offset + CHUNK_SIZE, file.size);
     const chunk = new Uint8Array(await file.slice(h.offset, end).arrayBuffer());
+    const base = h.offset;
     try {
-      const r = await request<{ offset: number }>('PUT', `/api/upload/${id}/chunk?offset=${h.offset}`, chunk, {
-        'content-type': 'application/octet-stream',
-        'x-chunk-crc32': crc32(chunk).toString(16).padStart(8, '0'),
+      let last = 0;
+      const r = await putChunk(`/api/upload/${id}/chunk?offset=${base}`, chunk, crc32(chunk), opts.signal, (bytes) => {
+        const now = performance.now();
+        if (now - last < 100) return;
+        last = now;
+        h.sent = base + Math.min(bytes, chunk.length);
+        onProgress({ ...h });
       });
       h.offset = r.offset;
+      h.sent = r.offset;
       failures = 0;
       onProgress({ ...h });
     } catch (e) {
+      if (isAbort(e) || opts.signal?.aborted) return paused();
       failures++;
-      if (e instanceof ApiError && (e.status === 403 || e.status === 404 || e.status === 507)) {
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403 || e.status === 404 || e.status === 413 || e.status === 507)) {
         h.state = 'error';
         h.error = e.message;
         onProgress({ ...h });
@@ -302,7 +422,10 @@ export async function uploadFile(
         onProgress({ ...h });
         return h;
       }
+      h.sent = h.offset;
+      onProgress({ ...h });
       await new Promise((r) => setTimeout(r, 500 * 2 ** failures));
+      if (opts.signal?.aborted) return paused();
       try {
         h.offset = (await request<{ offset: number }>('GET', `/api/upload/${id}`)).offset;
       } catch {
@@ -314,6 +437,7 @@ export async function uploadFile(
   h.state = 'done';
   h.path = done.path;
   h.sha256 = done.sha256;
+  h.sent = file.size;
   onProgress({ ...h });
   return h;
 }
