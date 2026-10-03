@@ -37,12 +37,13 @@ The desktop app (shown with its built-in demo data) and the phone app (talking t
 
 ## How fast is the storage scan?
 
-On a 250,000-file NTFS volume the MFT is read and parsed in **0.2 s** (cold
-cache) and the browsable tree is built in **63 ms**, using 13 MB. That scales
-roughly linearly: a multi-terabyte drive with a few million files takes a few
-seconds on an SSD, and only seconds for incremental refreshes afterwards. See
-[`docs/BENCHMARKS.md`](docs/BENCHMARKS.md); the Windows CI job also scans the
-runner's real `C:` drive and prints the time.
+On a real Windows system drive with 1.15 million files and 212,000 folders
+(GitHub's Windows runner), the MFT is read and parsed in **3.3 s** and the
+browsable tree is built in **0.25 s**; refreshing it afterwards through the
+USN change journal took **0.4 s**. A recursive folder walk of the same drive
+takes minutes. The time grows with the number of files, not with drive
+size, so a 4 TB drive full of large media files scans faster than a small
+system drive. See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
 
 ## Decisions on the plan's open questions
 
