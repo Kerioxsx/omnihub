@@ -4,6 +4,9 @@ A Windows companion for your PC: see what fills your drives in seconds, keep
 notes and ideas for Claude, store passwords in a local encrypted vault, and
 use your phone to move files, shut the PC down or watch its screen.
 
+**[Download the latest release](https://github.com/Kerioxsx/omnihub/releases/latest)**
+(Windows 10/11, 64-bit)
+
 Built from [`docs/PLAN.md`](docs/PLAN.md). Desktop app: Tauri 2 (Rust) +
 React. Phone: a web app served by the PC itself — nothing to install from a
 store, no cloud.
@@ -67,16 +70,22 @@ and phone vault access are separate opt-ins. Details:
 
 ## Install
 
-Download the installer from the CI artifacts (`omnihub-windows-installer`)
-or build it yourself (below). It installs per user — no administrator rights
-needed. Windows 10/11; WebView2 is installed automatically if missing.
+1. Open [Releases](https://github.com/Kerioxsx/omnihub/releases/latest) and
+   download `OmniHub_<version>_x64-setup.exe` (an `.msi` is there too).
+2. Run it. It installs per user, so no administrator rights are needed.
+   Windows 10/11; WebView2 is installed automatically if missing.
+3. The installer is not code-signed yet, so SmartScreen warns: click
+   **More info → Run anyway**.
+
+Or build it yourself (below).
 
 ## Build
 
-Requirements: Rust (stable), Node.js 22, and on Windows the MSVC build tools.
+Requirements: Rust through rustup (the pinned version installs itself),
+Node.js 22, and on Windows the MSVC build tools.
 
 ```sh
-cd omnihub
+git clone https://github.com/Kerioxsx/omnihub && cd omnihub
 npm ci
 npm run build                 # desktop UI → dist/, phone app → dist-mobile/
 npx tauri build               # Windows installer (NSIS + MSI)

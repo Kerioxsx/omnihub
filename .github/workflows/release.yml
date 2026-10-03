@@ -1,0 +1,80 @@
+name: Release
+
+# Push a tag that matches the app version to publish a release:
+#   git tag v0.1.0 && git push origin v0.1.0
+# Re-running for an existing tag (Actions → Release → Run workflow) rebuilds
+# and replaces the installer files on that release.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build and publish, e.g. v0.1.0'
+        required: true
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  windows:
+    name: Build and publish the Windows installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+
+      - name: Check that the tag matches the app version
+        shell: bash
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::Tag $TAG does not match the app version $version in src-tauri/tauri.conf.json"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - run: npm ci
+      - name: Build installer
+        run: npx tauri build
+
+      - name: Collect installer files and checksums
+        shell: bash
+        run: |
+          mkdir release
+          cp target/release/bundle/nsis/*.exe target/release/bundle/msi/*.msi release/
+          (cd release && sha256sum * > SHA256SUMS.txt)
+          ls -l release
+          cat release/SHA256SUMS.txt
+          sed "s/{{VERSION}}/$VERSION/g" .github/release-notes.md > release-notes.md
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" release/* --verify-tag \
+              --title "OmniHub $VERSION" --notes-file release-notes.md
+          fi

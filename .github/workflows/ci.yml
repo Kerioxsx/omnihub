@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
+  pull_request:
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  frontend:
+    name: Frontend (typecheck + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  core-linux:
+    name: Core tests (Linux, NTFS images)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: NTFS tools
+        run: sudo apt-get update && sudo apt-get install -y ntfs-3g
+      - name: Build NTFS fixture images
+        run: |
+          sudo scripts/make-ntfs-fixtures.sh target/ntfs-fixtures
+          sudo chown -R "$(id -u):$(id -g)" target
+      - name: Clippy
+        run: cargo clippy -p omnihub-core --all-targets -- -D warnings
+      - name: Tests
+        run: OMNIHUB_NTFS_FIXTURES="$PWD/target/ntfs-fixtures" cargo test -p omnihub-core
+
+  windows:
+    name: Windows (tests, live MFT scan, installer)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - run: npm run build
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Tests (including live MFT and USN tests on the system drive)
+        env:
+          OMNIHUB_FAKE_SCREEN: '1'
+        run: cargo test -p omnihub-core -- --nocapture
+      - name: 'Benchmark: full MFT scan of drive C'
+        run: cargo run --release -p omnihub-core --example mftbench -- 'C:'
+      - name: Build installer
+        run: npx tauri build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omnihub-windows-installer
+          path: |
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/msi/*.msi
+          if-no-files-found: error

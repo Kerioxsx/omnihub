@@ -2,7 +2,8 @@
 
 ## Prerequisites
 
-- Rust stable (1.80+), Node.js 22.
+- Rust through rustup (the version is pinned in `rust-toolchain.toml` and
+  installed automatically), Node.js 22.
 - Windows: Visual Studio Build Tools (C++), WebView2 runtime (preinstalled on Windows 11).
 - Linux (core + phone server + UI with mocks only): `ntfs-3g` for the NTFS image tests.
 
@@ -53,6 +54,19 @@ every entry.
 Windows code from Linux (install `mingw-w64` for the C dependencies). The
 live tests in `crates/omnihub-core/tests/windows_live.rs` scan the real system
 drive and need an elevated terminal; CI runs them on `windows-latest`.
+
+## Releasing
+
+1. Bump the version in `package.json`, `Cargo.toml` (`[workspace.package]`)
+   and `src-tauri/tauri.conf.json`, run `cargo check` so `Cargo.lock` follows,
+   and commit.
+2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+
+The `Release` workflow builds the NSIS and MSI installers on Windows and
+publishes them with a `SHA256SUMS.txt` on the repository's Releases page,
+using `.github/release-notes.md` as the description. It refuses a tag that
+does not match the version in `tauri.conf.json`. To rebuild an existing
+release, run the workflow by hand with that tag; it replaces the files.
 
 ## Adding a command
 
