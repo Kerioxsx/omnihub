@@ -1,0 +1,25 @@
+[workspace]
+members = ["crates/omnihub-core"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Kerioxsx"]
+rust-version = "1.80"
+
+[profile.dev.package."*"]
+# Scanning millions of MFT records in an unoptimised dependency tree is
+# painfully slow; optimise dependencies even in debug builds.
+opt-level = 2
+
+[profile.dev.package.omnihub-core]
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+opt-level = 3
+strip = "debuginfo"
+panic = "unwind"

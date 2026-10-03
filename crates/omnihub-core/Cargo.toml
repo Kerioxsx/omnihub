@@ -1,0 +1,110 @@
+[package]
+name = "omnihub-core"
+description = "OmniHub core: storage engine, vault, notes, remote server, capture and system integration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+name = "omnihub_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "omnihub-headless"
+path = "src/bin/headless.rs"
+
+[dependencies]
+aes-gcm = "0.10"
+anyhow = "1.0.104"
+arboard = "3.6.1"
+argon2 = "0.5"
+axum = { version = "0.8.9", features = ["ws", "macros"] }
+axum-server = { version = "0.8.0", features = ["tls-rustls-no-provider"] }
+base64 = "0.23.1"
+blake3 = "1.8.7"
+bytes = "1.12.1"
+chrono = { version = "0.4.45", features = ["serde"] }
+crc32fast = "1.5.2"
+crossbeam-channel = "0.5.17"
+dirs = "7.0.0"
+fast_image_resize = "6.1.0"
+futures-util = "0.3.34"
+gethostname = "1.1.0"
+hex = "0.4.3"
+if-addrs = "0.15.0"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+jpeg-encoder = { version = "0.7.1", features = ["simd"] }
+lz4_flex = "0.14.0"
+mime_guess = "2.0.5"
+notify = "8"
+parking_lot = "0.12.5"
+percent-encoding = "2.3.2"
+qrcode = "0.14.1"
+rand = "0.8"
+rayon = "1.12.0"
+rcgen = "0.14.10"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+rust-embed = "8.12.0"
+rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "logging", "tls12"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+sysinfo = "0.39.6"
+thiserror = "2.0.21"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util", "net", "signal"] }
+tokio-util = { version = "0.7.19", features = ["io"] }
+tower = "0.5.3"
+tower-http = { version = "0.7.1", features = ["fs", "set-header", "limit"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+trash = "5.2.9"
+uuid = { version = "1.27.0", features = ["v4", "serde"] }
+zeroize = "1.9.0"
+
+[target.'cfg(windows)'.dependencies]
+xcap = "0.9.8"
+winreg = "0.56"
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Cryptography",
+  "Win32_Storage_FileSystem",
+  "Win32_System_IO",
+  "Win32_System_Ioctl",
+  "Win32_System_Threading",
+  "Win32_System_Power",
+  "Win32_System_Shutdown",
+  "Win32_System_RemoteDesktop",
+  "Win32_System_SystemServices",
+  "Win32_System_StationsAndDesktops",
+  "Win32_System_Com",
+  "Win32_System_Memory",
+  "Win32_System_WinRT",
+  "Win32_System_ProcessStatus",
+  "Win32_System_SystemInformation",
+  "Win32_System_Registry",
+  "Win32_System_Console",
+  "Win32_System_DataExchange",
+  "Win32_System_LibraryLoader",
+  "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_HiDpi",
+  "Win32_Graphics_Gdi",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Foundation",
+  "Security_Credentials",
+  "Security_Cryptography",
+  "Storage_Streams",
+] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream", "query", "rustls-no-provider"] }
+tokio-tungstenite = "0.29"
