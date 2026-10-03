@@ -1,21 +1,19 @@
 name: Release
 
-# Push a tag that matches the app version to publish a release:
+# Publishes the Windows installers for the version in src-tauri/tauri.conf.json.
+# Either run this workflow from the Actions tab (it builds the chosen branch
+# and creates the tag v<version> on that commit), or push the tag yourself:
 #   git tag v0.1.0 && git push origin v0.1.0
-# Re-running for an existing tag (Actions → Release → Run workflow) rebuilds
-# and replaces the installer files on that release.
+# Running it again for a version that is already released rebuilds the same
+# commit and replaces the files; a new commit needs a new version.
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Existing tag to build and publish, e.g. v0.1.0'
-        required: true
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
+  group: release
   cancel-in-progress: false
 
 permissions:
@@ -24,16 +22,15 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
-  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   windows:
     name: Build and publish the Windows installer
     runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.TAG }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -43,15 +40,23 @@ jobs:
         with:
           shared-key: release
 
-      - name: Check that the tag matches the app version
+      - name: Work out the version and tag
         shell: bash
         run: |
           version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          if [ "v$version" != "$TAG" ]; then
-            echo "::error::Tag $TAG does not match the app version $version in src-tauri/tauri.conf.json"
+          tag="v$version"
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the app version $version in src-tauri/tauri.conf.json"
+            exit 1
+          fi
+          if existing=$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha 2> /dev/null) \
+              && [ -n "$existing" ] && [ "$existing" != "$GITHUB_SHA" ]; then
+            echo "::error::$tag already points to ${existing:0:7}; bump the version to release ${GITHUB_SHA:0:7}"
             exit 1
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "Releasing $tag from ${GITHUB_SHA:0:7}"
 
       - run: npm ci
       - name: Build installer
@@ -69,12 +74,11 @@ jobs:
 
       - name: Publish release
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$TAG" > /dev/null 2>&1; then
             gh release upload "$TAG" release/* --clobber
           else
-            gh release create "$TAG" release/* --verify-tag \
+            gh release create "$TAG" release/* --target "$GITHUB_SHA" \
               --title "OmniHub $VERSION" --notes-file release-notes.md
           fi
+          gh release view "$TAG" --json url --jq .url

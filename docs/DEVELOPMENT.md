@@ -59,14 +59,17 @@ drive and need an elevated terminal; CI runs them on `windows-latest`.
 
 1. Bump the version in `package.json`, `Cargo.toml` (`[workspace.package]`)
    and `src-tauri/tauri.conf.json`, run `cargo check` so `Cargo.lock` follows,
-   and commit.
-2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+   and push to `main`.
+2. On GitHub open **Actions → Release → Run workflow** (on `main`). It tags
+   that commit `v<version>`. Pushing the tag yourself works too:
+   `git tag v0.2.0 && git push origin v0.2.0`.
 
 The `Release` workflow builds the NSIS and MSI installers on Windows and
 publishes them with a `SHA256SUMS.txt` on the repository's Releases page,
 using `.github/release-notes.md` as the description. It refuses a tag that
-does not match the version in `tauri.conf.json`. To rebuild an existing
-release, run the workflow by hand with that tag; it replaces the files.
+does not match the version in `tauri.conf.json`, and a version whose tag
+already points to another commit. Running it again for the released commit
+rebuilds and replaces the files.
 
 ## Adding a command
 
