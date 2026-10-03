@@ -227,37 +227,44 @@ export function openCached(root: string): ScanSummary | null {
 
 // ---------- queries ----------
 
+/** Node 0 is always the root of the scan (as in Rust, where every scan has its own tree). */
+function resolve(s: Scan, node: number): number {
+  return node <= 0 || node >= s.tree.nodes.length ? s.rootId : node;
+}
+
 export function children(scanId: string, node: number, sort: SortKey, descending: boolean, offset: number, limit: number): ChildrenPage {
   const s = getScan(scanId);
-  const id = node < 0 || node >= s.tree.nodes.length ? s.rootId : node;
+  const id = resolve(s, node);
   const { items, total } = s.tree.children(id, sort, descending, offset, limit);
   return { node: s.tree.view(id), path: s.tree.path(id), breadcrumbs: s.tree.breadcrumbs(id, s.rootId), items, total };
 }
 
 export function treemap(scanId: string, node: number, depth: number, maxItems: number) {
   const s = getScan(scanId);
-  return s.tree.treemap(node, depth, maxItems);
+  return s.tree.treemap(resolve(s, node), depth, maxItems);
 }
 
 export function topFiles(scanId: string, node: number, n: number): PathedNode[] {
   const s = getScan(scanId);
-  return s.tree.topFiles(node, n).map((v) => ({ ...v, path: s.tree.path(v.id) }));
+  return s.tree.topFiles(resolve(s, node), n).map((v) => ({ ...v, path: s.tree.path(v.id) }));
 }
 
 export function extensions(scanId: string, node: number) {
-  return getScan(scanId).tree.extensions(node);
+  const s = getScan(scanId);
+  return s.tree.extensions(resolve(s, node));
 }
 
 export function search(scanId: string, q: SearchQuery): SearchResult {
   const s = getScan(scanId);
   const t0 = performance.now();
-  const { items, total } = s.tree.search({ ...q, under: q.under ?? s.rootId });
+  const { items, total } = s.tree.search({ ...q, under: resolve(s, q.under ?? 0) });
   const out = items.map((v) => ({ ...v, path: s.tree.path(v.id) }));
   return { items: out, total, tookMs: Math.max(1, Math.round(performance.now() - t0)) };
 }
 
 export function nodePath(scanId: string, node: number): string {
-  return getScan(scanId).tree.path(node);
+  const s = getScan(scanId);
+  return s.tree.path(resolve(s, node));
 }
 
 // ---------- cleanup ----------
@@ -467,7 +474,7 @@ const dupeJobs = new Map<string, DupeJob>();
 export function dupesStart(scanId: string, opts: DupeOptions): string {
   const s = getScan(scanId);
   const t = s.tree;
-  const under = opts.under != null && opts.under < t.nodes.length ? opts.under : s.rootId;
+  const under = resolve(s, opts.under ?? 0);
   const min = Math.max(1, opts.minSize ?? 1024 * 1024);
   const bySize = new Map<number, number[]>();
   for (const f of t.filesUnder(under)) {
