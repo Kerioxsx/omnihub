@@ -164,7 +164,7 @@ impl AppCore {
         }
     }
 
-    /// Once a minute: due note reminders; every five minutes: drive space.
+    /// Every 20 seconds: due note reminders; every five minutes: drive space.
     fn start_watchers(self: &Arc<Self>) {
         let weak = Arc::downgrade(self);
         std::thread::Builder::new()
@@ -173,12 +173,21 @@ impl AppCore {
                 let mut tick: u64 = 0;
                 loop {
                     let Some(core) = weak.upgrade() else { return };
-                    if tick.is_multiple_of(5) {
+                    match core.notes.take_due_reminders(crate::db::now()) {
+                        Ok(due) => {
+                            for n in due {
+                                let snippet: String = n.body.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#')).unwrap_or_default().chars().take(140).collect();
+                                core.events.emit("notes:reminder", serde_json::json!({ "id": n.id, "title": n.title, "snippet": snippet, "kind": n.kind }));
+                            }
+                        }
+                        Err(e) => tracing::warn!("reminders: {e}"),
+                    }
+                    if tick.is_multiple_of(15) {
                         core.check_low_space();
                     }
                     drop(core);
                     tick += 1;
-                    std::thread::sleep(Duration::from_secs(60));
+                    std::thread::sleep(Duration::from_secs(20));
                 }
             })
             .ok();

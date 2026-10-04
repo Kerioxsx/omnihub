@@ -50,6 +50,10 @@ pub struct Note {
     pub updated: i64,
     pub exported_path: Option<String>,
     pub exported_at: Option<i64>,
+    /// When to remind (Unix seconds); None = no reminder.
+    pub remind_at: Option<i64>,
+    /// The reminder has been shown.
+    pub reminded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -127,10 +131,12 @@ fn row_to_note(r: &Row) -> rusqlite::Result<Note> {
         updated: r.get(8)?,
         exported_path: r.get(9)?,
         exported_at: r.get(10)?,
+        remind_at: r.get(11)?,
+        reminded: r.get(12)?,
     })
 }
 
-const COLUMNS: &str = "id, kind, title, body, tags, pinned, color, created, updated, exported_path, exported_at";
+const COLUMNS: &str = "id, kind, title, body, tags, pinned, color, created, updated, exported_path, exported_at, remind_at, reminded";
 
 /// File-name friendly version of a title.
 pub fn slugify(title: &str) -> String {
@@ -243,6 +249,30 @@ impl Notes {
         let note = self.get(&id)?;
         self.events.emit("notes:changed", serde_json::json!({ "id": note.id }));
         Ok(note)
+    }
+
+    /// Set or clear a note's reminder.
+    pub fn set_reminder(&self, id: &str, at: Option<i64>) -> Result<Note, NotesError> {
+        let n = self.db.with(|c| c.execute("UPDATE notes SET remind_at=?2, reminded=0 WHERE id=?1", params![id, at]))?;
+        if n == 0 {
+            return Err(NotesError::NotFound);
+        }
+        let note = self.get(id)?;
+        self.events.emit("notes:changed", serde_json::json!({ "id": id }));
+        Ok(note)
+    }
+
+    /// Reminders that are due and not yet shown; they are marked as shown.
+    pub fn take_due_reminders(&self, now: i64) -> Result<Vec<Note>, NotesError> {
+        let due = self.db.with(|c| {
+            let mut st = c.prepare(&format!("SELECT {COLUMNS} FROM notes WHERE remind_at IS NOT NULL AND remind_at <= ?1 AND reminded = 0 ORDER BY remind_at"))?;
+            let rows = st.query_map(params![now], row_to_note)?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+        })?;
+        for n in &due {
+            self.db.with(|c| c.execute("UPDATE notes SET reminded=1 WHERE id=?1", params![n.id]))?;
+        }
+        Ok(due)
     }
 
     pub fn delete(&self, id: &str) -> Result<(), NotesError> {
@@ -417,6 +447,25 @@ pub fn strip_front_matter(text: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn reminders_fire_once() {
+        let db = Arc::new(crate::db::Db::in_memory().unwrap());
+        let notes = Notes::new(db, crate::events::EventBus::new());
+        let n = notes.save(NoteInput { id: None, kind: NoteKind::Note, title: "Call the bank".into(), body: String::new(), tags: vec![], pinned: false, color: None }).unwrap();
+        assert!(n.remind_at.is_none());
+        notes.set_reminder(&n.id, Some(1000)).unwrap();
+        assert!(notes.take_due_reminders(999).unwrap().is_empty());
+        let due = notes.take_due_reminders(1000).unwrap();
+        assert_eq!(due.iter().map(|d| d.title.as_str()).collect::<Vec<_>>(), ["Call the bank"]);
+        assert!(notes.take_due_reminders(5000).unwrap().is_empty());
+        assert!(notes.get(&n.id).unwrap().reminded);
+        // Setting it again re-arms it; clearing removes it.
+        notes.set_reminder(&n.id, Some(2000)).unwrap();
+        assert_eq!(notes.take_due_reminders(2000).unwrap().len(), 1);
+        assert!(notes.set_reminder(&n.id, None).unwrap().remind_at.is_none());
+        assert!(notes.set_reminder("missing", Some(1)).is_err());
+    }
     use super::*;
 
     fn notes() -> Notes {

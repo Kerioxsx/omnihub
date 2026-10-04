@@ -290,6 +290,10 @@ export interface Note {
   updated: number;
   exportedPath: string | null;
   exportedAt: number | null;
+  /** reminder time (Unix seconds), null = none */
+  remindAt: number | null;
+  /** the reminder was shown */
+  reminded: boolean;
 }
 
 export interface NoteInput {

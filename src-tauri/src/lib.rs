@@ -39,6 +39,10 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
             let by = payload["requestedBy"].as_str().unwrap_or("");
             by.starts_with("phone:").then(|| (format!("{} requested by {}", payload["label"].as_str().unwrap_or("Power action"), by.trim_start_matches("phone:")), "Open OmniHub to cancel.".into()))
         }
+        "notes:reminder" => Some((
+            format!("Reminder: {}", payload["title"].as_str().filter(|t| !t.is_empty()).unwrap_or("Untitled note")),
+            payload["snippet"].as_str().filter(|s| !s.is_empty()).unwrap_or("Open OmniHub to see the note.").to_string(),
+        )),
         "storage:low-space" => Some((
             format!("{} is almost full", payload["root"].as_str().unwrap_or("A drive").trim_end_matches('\\')),
             format!("Only {} left. Open OmniHub to see what takes the space.", omnihub_core::storage::format_bytes(payload["free"].as_u64().unwrap_or(0))),
@@ -101,7 +105,8 @@ pub fn run(args: Vec<String>) {
                         Ok(ev) => {
                             let _ = h.emit(&ev.topic, &ev.payload);
                             let hidden = h.get_webview_window("main").and_then(|w| w.is_visible().ok()).is_none_or(|v| !v);
-                            if hidden {
+                            // Reminders are due now: always a Windows notification.
+                            if hidden || ev.topic == "notes:reminder" {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
                                     shortcuts::notify(&h, &title, &body);
                                 }
@@ -271,6 +276,7 @@ pub fn run(args: Vec<String>) {
             commands::airplay_fix_firewall,
             commands::storage_growth,
             commands::storage_export_csv,
+            commands::notes_remind,
             commands::shots_text,
             commands::shots_save_edit,
             commands::startup_list,

@@ -119,6 +119,8 @@ export const api = {
     get: (id: string) => call<T.Note>('notes_get', { id }),
     save: (input: T.NoteInput) => call<T.Note>('notes_save', { input }),
     delete: (id: string) => call<void>('notes_delete', { id }),
+    /** Set (Unix seconds) or clear (null) a reminder. */
+    remind: (id: string, at: number | null) => call<T.Note>('notes_remind', { id, at }),
     tags: () => call<[string, number][]>('notes_tags'),
     /** Write to the Claude folder from settings. */
     export: (id: string) => call<T.Note>('notes_export', { id }),

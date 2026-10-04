@@ -107,6 +107,7 @@ const handlers: Record<string, Handler> = {
   notes_get: (a) => notes.noteGet(str(a, 'id')),
   notes_save: (a) => notes.noteSave(obj<NoteInput>(a, 'input')),
   notes_delete: (a) => notes.noteDelete(str(a, 'id')),
+  notes_remind: (a) => notes.noteRemind(str(a, 'id'), a.at == null ? null : num(a, 'at')),
   notes_tags: () => notes.noteTags(),
   notes_export: (a) => notes.noteExport(str(a, 'id')),
   notes_folder_files: () => notes.folderFiles(),

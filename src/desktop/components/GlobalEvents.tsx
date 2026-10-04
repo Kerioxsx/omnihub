@@ -65,6 +65,9 @@ export function GlobalEvents() {
     if (p.reason !== 'manual') toast.info('Vault locked', p.reason === 'idle' ? 'Locked automatically after inactivity.' : p.reason === 'session' ? 'Windows was locked.' : undefined);
   });
   useEvent('vault:unlocked', () => void useLive.getState().refreshVault());
+  useEvent<{ id: string; title: string; snippet: string }>('notes:reminder', (p) =>
+    toast.info(`Reminder: ${p.title || 'Untitled note'}`, p.snippet || undefined, { action: { label: 'Open', run: () => navigate('notes', { id: p.id }) } }),
+  );
   useEvent<{ browser: string }>('browser:unlock-request', (p) => {
     navigate('vault');
     toast.info(`${p.browser} wants to fill a login`, 'Unlock the vault here, then go back to the browser.');

@@ -133,6 +133,13 @@ pub async fn system_end_process(core: Core<'_>, name: String) -> Res<usize> {
     .await
 }
 
+/// Set (Unix seconds) or clear (null) a note's reminder.
+#[tauri::command]
+pub async fn notes_remind(core: Core<'_>, id: String, at: Option<i64>) -> Res<Note> {
+    let core = core.inner().clone();
+    blocking(move || core.notes.set_reminder(&id, at).map_err(err)).await
+}
+
 #[tauri::command]
 pub async fn startup_list() -> Res<Vec<omnihub_core::startup::StartupItem>> {
     blocking(|| Ok(omnihub_core::startup::list())).await
