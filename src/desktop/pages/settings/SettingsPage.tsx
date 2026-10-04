@@ -1,7 +1,7 @@
 import type { Bind, ScanMode, Theme } from '@shared/types';
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
-import { Camera, Check, FolderOpen, HardDrive, Info, KeyRound, Laptop, Moon, NotebookPen, Palette, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Smartphone, Sun, Trash, X } from 'lucide-react';
+import { Camera, Check, Download, FolderOpen, HardDrive, Info, KeyRound, Laptop, Moon, NotebookPen, Palette, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Smartphone, Sun, Trash, Upload, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Logo } from '../../components/Logo';
@@ -494,6 +494,34 @@ export function SettingsPage() {
                   </div>
                 </Row>
               ))}
+            <Row title="Back up settings" hint="Save every setting to a file, or restore them on this or another PC. The vault and notes are not included.">
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  icon={Download}
+                  onClick={async () => {
+                    const path = await api.app.saveFile('Save OmniHub settings', 'OmniHub settings.json');
+                    if (!path) return;
+                    await api.app.exportSettings(path).then(() => toast.success('Settings saved', path), (e: unknown) => toast.error('Could not save', errorText(e)));
+                  }}
+                >
+                  Save to file
+                </Button>
+                <Button
+                  size="sm"
+                  icon={Upload}
+                  onClick={async () => {
+                    const [path] = await api.app.pickFiles('Choose an OmniHub settings file');
+                    if (!path) return;
+                    const ok = await confirm({ title: 'Restore these settings?', description: 'Your current settings are replaced by the ones in the file.', confirmLabel: 'Restore' });
+                    if (!ok) return;
+                    await api.app.importSettings(path).then(() => toast.success('Settings restored'), (e: unknown) => toast.error('Could not restore', errorText(e)));
+                  }}
+                >
+                  Restore…
+                </Button>
+              </div>
+            </Row>
             <Row title="Activity log" hint="Pairings, transfers, power actions and vault events. Kept on this PC only.">
               <div className="flex gap-2">
                 <Button size="sm" onClick={() => navigate('phone')}>

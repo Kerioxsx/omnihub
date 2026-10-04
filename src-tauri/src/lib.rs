@@ -276,6 +276,8 @@ pub fn run(args: Vec<String>) {
             commands::airplay_fix_firewall,
             commands::storage_growth,
             commands::storage_export_csv,
+            commands::settings_export,
+            commands::settings_import,
             commands::screen_share_state,
             commands::screen_windows,
             commands::screen_set_paused,

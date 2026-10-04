@@ -194,6 +194,33 @@ pub async fn settings_update(app: AppHandle, core: Core<'_>, patch: serde_json::
     Ok(after)
 }
 
+/// Save all settings as JSON (no secrets are kept in settings).
+#[tauri::command]
+pub async fn settings_export(core: Core<'_>, path: String) -> Res<()> {
+    let s = core.settings.get();
+    let json = serde_json::to_vec_pretty(&serde_json::json!({ "omnihubSettings": 1, "version": env!("CARGO_PKG_VERSION"), "settings": s })).map_err(err)?;
+    omnihub_core::settings::write_atomic(Path::new(&path), &json).map_err(err)
+}
+
+/// Restore settings saved with [`settings_export`]; unknown or missing
+/// values keep their current setting.
+#[tauri::command]
+pub async fn settings_import(app: AppHandle, core: Core<'_>, path: String) -> Res<Settings> {
+    let core = core.inner().clone();
+    let after = blocking(move || {
+        let bytes = std::fs::read(&path).map_err(err)?;
+        let v: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| "That file is not an OmniHub settings backup.".to_string())?;
+        let s = v.get("settings").filter(|_| v.get("omnihubSettings").is_some()).ok_or("That file is not an OmniHub settings backup.")?;
+        // Validate by reading it as settings, then apply as a patch (side effects run).
+        let parsed: Settings = serde_json::from_value(s.clone()).map_err(|e| format!("The backup could not be read: {e}"))?;
+        core.update_settings(&serde_json::to_value(parsed).map_err(err)?).map_err(err)
+    })
+    .await?;
+    crate::shortcuts::register(&app);
+    crate::tray::refresh(&app);
+    Ok(after)
+}
+
 #[tauri::command]
 pub async fn open_path(path: String) -> Res<()> {
     omnihub_core::system::shell::open_path(Path::new(&path)).map_err(err)
