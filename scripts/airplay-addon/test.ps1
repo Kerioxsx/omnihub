@@ -3,7 +3,8 @@
 #   1. uxplay.exe starts and prints its help (all DLLs resolve);
 #   2. the receiver runs with the real video/audio sinks without missing elements;
 #   3. it answers an AirPlay "GET /info" request on TCP 7000;
-#   4. it announces itself over mDNS (_airplay._tcp) without Apple's Bonjour.
+#   4. it announces itself over mDNS (_airplay._tcp) without Apple's Bonjour,
+#      with the address OmniHub passes in UXPLAY_MDNS_IPV4.
 param([Parameter(Mandatory = $true)][string]$Zip)
 
 $ErrorActionPreference = 'Stop'
@@ -59,7 +60,18 @@ Start-Sleep -Seconds 8
 $text = Stop-Receiver $r
 if ($text -match 'no element|could not link|erroneous pipeline|missing plugin') { throw 'GStreamer elements are missing from the add-on' }
 
+function Has-Bytes([byte[]]$Hay, [byte[]]$Needle) {
+  for ($i = 0; $i -le $Hay.Length - $Needle.Length; $i++) {
+    $ok = $true
+    for ($j = 0; $j -lt $Needle.Length; $j++) { if ($Hay[$i + $j] -ne $Needle[$j]) { $ok = $false; break } }
+    if ($ok) { return $true }
+  }
+  return $false
+}
+
 Write-Host '== 3 + 4. AirPlay server and mDNS'
+# A made-up address: the answer must carry it (OmniHub's patch), not the runner's.
+$env:UXPLAY_MDNS_IPV4 = '10.11.12.13'
 $r = Start-Receiver @('-n', 'OmniHubCI', '-nh', '-p', '-vs', 'fakesink', '-as', 'fakesink') 'server'
 Start-Sleep -Seconds 6
 try {
@@ -89,6 +101,7 @@ try {
   $udp = New-Object System.Net.Sockets.UdpClient(0)
   $udp.Client.ReceiveTimeout = 2000
   $found = $false
+  $addressOk = $false
   for ($i = 0; $i -lt 5 -and -not $found; $i++) {
     [void]$udp.Send($q.ToArray(), $q.Count, '224.0.0.251', 5353)
     $deadline = (Get-Date).AddSeconds(2)
@@ -96,13 +109,19 @@ try {
       try {
         $from = New-Object System.Net.IPEndPoint([Net.IPAddress]::Any, 0)
         $resp = $udp.Receive([ref]$from)
-        if ([Text.Encoding]::ASCII.GetString($resp).Contains('OmniHubCI')) { $found = $true }
+        if ([Text.Encoding]::ASCII.GetString($resp).Contains('OmniHubCI')) {
+          $found = $true
+          # A record: length 4, then 10.11.12.13.
+          $addressOk = Has-Bytes $resp ([byte[]](0, 4, 10, 11, 12, 13))
+        }
       } catch [System.Net.Sockets.SocketException] { break }
     }
   }
   $udp.Close()
   Write-Host "mDNS announcement found: $found"
   if (-not $found) { throw 'the receiver did not answer the _airplay._tcp mDNS query' }
+  Write-Host "announces UXPLAY_MDNS_IPV4: $addressOk"
+  if (-not $addressOk) { throw 'the receiver did not announce the address in UXPLAY_MDNS_IPV4' }
 } finally {
   $text = Stop-Receiver $r
 }

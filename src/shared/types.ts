@@ -711,6 +711,22 @@ export interface AirPlayStatus {
   log: string[];
   install: InstallProgress | null;
   downloadUrl: string;
+  /** The installed add-on predates a fix this version needs. */
+  outdated: boolean;
+  /** The Wi-Fi/Ethernet address the receiver announces to iPhones. */
+  address: string | null;
+  /** What OmniHub saw looking for the receiver the way an iPhone does. */
+  check: AirPlayCheck | null;
+}
+
+export interface AirPlayCheck {
+  ip: string;
+  /** It answered an mDNS search for AirPlay receivers on that network. */
+  announced: boolean;
+  /** The address in that answer is this one. */
+  rightAddress: boolean;
+  /** Its AirPlay port answered on that address. */
+  reachable: boolean;
 }
 
 export interface SunshineStatus {

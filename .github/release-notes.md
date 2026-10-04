@@ -1,11 +1,10 @@
 ## New in this version
 
-- **Volume & calls on your phone.** Every app's volume and mute (like Windows' volume mixer), the PC's volume, and a button that mutes your microphone in every app. When Discord, WhatsApp, Nyxen, Teams or a browser is using the microphone, Home shows the call with **Mute mic** and **Deafen**.
-- **Close any app from your phone** (More → Open apps): **Close** works like clicking ×, **Quit** ends apps that only hide in the tray.
-- **Music sideways.** Turn the iPhone and the Music screen and full-screen lyrics switch to a side-by-side layout. Full-screen lyrics now have play/pause, skip and volume too.
-- The vault's "primary account" warning only shows for the provider's own login (not for any entry with a Gmail address).
+- **iPhone → PC mirroring finds the PC.** On PCs with a VPN, a second network card or virtual adapters, the AirPlay receiver announced itself on the wrong one and iPhones never saw it. It now announces the PC's Wi-Fi/Ethernet address, and the iPhone → PC card checks that iPhones can find it (with what to check if not). OmniHub offers to update the AirPlay receiver once — click **Update receiver**.
+- **No more false "in a call".** Calls are now the calling apps (Discord, WhatsApp, Nyxen, Teams, browsers…) recording from your microphone right now. Games with voice chat show as "also using your mic" instead of a call.
+- **Watching the PC on an iPhone:** the viewer covers the whole screen (the tab bar no longer sits on top of its buttons), the full-screen button works on iPhone (it hides every control; turn the phone sideways for the biggest picture), and the stream stats appear only when you tap the Live pill.
 
-Updating from 0.2.1: OmniHub installs this by itself (or Settings → About → Install now).
+Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now).
 
 ## Install
 

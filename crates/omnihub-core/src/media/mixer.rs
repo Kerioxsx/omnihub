@@ -1,7 +1,8 @@
 //! The PC's volume mixer for the phone: each app's volume and mute (on
-//! every playback device), muting the microphone, and the apps using the
-//! microphone right now — a call in Discord, WhatsApp, Nyxen, Teams or a
-//! browser.
+//! every playback device), muting the microphone, and the apps recording
+//! from a microphone right now. A calling app (Discord, WhatsApp, Nyxen,
+//! Teams, a browser…) doing that counts as a call; anything else (a game's
+//! voice chat) is only listed as using the microphone.
 //!
 //! Muting the microphone mutes the PC's recording devices themselves, so it
 //! works in every app; "deafen" mutes the call app's own sound. Windows
@@ -52,8 +53,10 @@ pub struct Mixer {
     pub master: Option<Volume>,
     pub mic: Option<Mic>,
     pub apps: Vec<AppVolume>,
-    /// Apps using the microphone right now.
+    /// Calling apps recording from a microphone right now.
     pub calls: Vec<Call>,
+    /// Other apps recording from a microphone right now ("Skate").
+    pub mic_apps: Vec<String>,
 }
 
 /// Friendly names, and the executables one app runs under.
@@ -87,6 +90,61 @@ const KNOWN: &[(&str, &str)] = &[
     ("valorant-win64-shipping.exe", "VALORANT"),
     ("cs2.exe", "Counter-Strike 2"),
 ];
+
+/// Apps whose use of the microphone means a call.
+const CALL_APPS: &[&str] = &[
+    "discord.exe", "discordptb.exe", "discordcanary.exe", "whatsapp.exe", "nyxen.exe", "ms-teams.exe", "teams.exe", "zoom.exe", "skype.exe", "telegram.exe", "signal.exe", "slack.exe", "chrome.exe", "msedge.exe", "brave.exe", "firefox.exe", "opera.exe", "opera_gx.exe",
+];
+
+pub fn is_call_app(key: &str) -> bool {
+    CALL_APPS.contains(&key)
+}
+
+/// Helper processes that play and record for the app that started them.
+const HELPERS: &[&str] = &["msedgewebview2.exe"];
+
+/// The app a process belongs to, from a table of pid → (parent pid, exe
+/// name): WebView2 helpers count as the app that started them.
+pub fn owner_key(pid: u32, table: &std::collections::HashMap<u32, (u32, String)>) -> Option<String> {
+    let mut cur = pid;
+    let mut key = key_of(&table.get(&cur)?.1);
+    for _ in 0..4 {
+        if !HELPERS.contains(&key.as_str()) {
+            break;
+        }
+        let parent = table.get(&cur)?.0;
+        match table.get(&parent) {
+            Some((_, exe)) if parent != 0 && parent != cur => {
+                cur = parent;
+                key = key_of(exe);
+            }
+            _ => break,
+        }
+    }
+    Some(key)
+}
+
+/// Split the apps recording right now into calls and others.
+pub fn split_calls(recording: Vec<String>, since: impl Fn(&str) -> Option<i64>) -> (Vec<Call>, Vec<String>) {
+    let mut calls: Vec<Call> = Vec::new();
+    let mut others: Vec<String> = Vec::new();
+    for key in recording {
+        if key == "omnihub.exe" {
+            continue;
+        }
+        if is_call_app(&key) {
+            if !calls.iter().any(|c| c.key == key) {
+                calls.push(Call { since_ms: since(&key), name: name_of(&key), key });
+            }
+        } else {
+            let name = name_of(&key);
+            if !others.contains(&name) {
+                others.push(name);
+            }
+        }
+    }
+    (calls, others)
+}
 
 /// Executables that are the same app as another one.
 const ALIASES: &[(&str, &str)] = &[("whatsapp.root.exe", "whatsapp.exe"), ("steamwebhelper.exe", "steam.exe"), ("msteams.exe", "ms-teams.exe")];
@@ -150,7 +208,8 @@ pub fn get(fake: bool) -> Mixer {
     }
     #[cfg(windows)]
     {
-        Mixer { master: super::audio::get(), mic: win::mic().ok().flatten(), apps: win::apps().unwrap_or_default(), calls: win::calls() }
+        let (calls, mic_apps) = split_calls(win::recording().unwrap_or_default(), win::mic_since);
+        Mixer { master: super::audio::get(), mic: win::mic().ok().flatten(), apps: win::apps().unwrap_or_default(), calls, mic_apps }
     }
     #[cfg(not(windows))]
     {
@@ -238,6 +297,7 @@ fn fake_mixer() -> Mixer {
         mic: Some(Mic { muted: false, devices: 1 }),
         apps: vec![app("discord.exe", 0.8, true), app("spotify.exe", 0.55, true), app("fortniteclient-win64-shipping.exe", 0.7, true), app("brave.exe", 1.0, false), app("nyxen.exe", 0.9, false), AppVolume { key: "system".into(), name: "System sounds".into(), level: 0.5, muted: false, active: false }],
         calls: vec![Call { key: "discord.exe".into(), name: "Discord".into(), since_ms: Some(crate::media::now_ms() - 14 * 60_000) }],
+        mic_apps: vec![],
     }
 }
 
@@ -255,7 +315,9 @@ mod win {
     use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_MULTITHREADED};
     use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
 
-    use super::{AppVolume, Call, Mic};
+    use std::collections::HashMap;
+
+    use super::{AppVolume, Mic};
 
     /// COM work on a short-lived thread of its own (see audio.rs).
     fn com<T: Send>(f: impl FnOnce() -> Result<T> + Send) -> Result<T> {
@@ -286,6 +348,23 @@ mod win {
         }
     }
 
+    /// pid → (parent pid, exe name), read only when a WebView2 helper needs it.
+    fn process_table() -> HashMap<u32, (u32, String)> {
+        use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+        let mut sys = System::new();
+        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
+        sys.processes().iter().map(|(pid, p)| (pid.as_u32(), (p.parent().map_or(0, |x| x.as_u32()), p.name().to_string_lossy().into_owned()))).collect()
+    }
+
+    /// The app key of a session's process (WebView2 helpers resolved).
+    fn key_for(pid: u32, table: &mut Option<HashMap<u32, (u32, String)>>) -> Option<String> {
+        let key = super::key_of(&exe_of(pid)?);
+        if !super::HELPERS.contains(&key.as_str()) {
+            return Some(key);
+        }
+        super::owner_key(pid, table.get_or_insert_with(process_table)).or(Some(key))
+    }
+
     struct Session {
         key: String,
         display: Option<String>,
@@ -294,15 +373,22 @@ mod win {
     }
 
     unsafe fn sessions() -> Result<Vec<Session>> {
+        sessions_on(eRender, false)
+    }
+
+    /// Sessions on every active device of one direction (`only_active`: those
+    /// playing or recording right now).
+    unsafe fn sessions_on(flow: EDataFlow, only_active: bool) -> Result<Vec<Session>> {
         let me = std::process::id();
+        let mut table = None;
         let mut out = Vec::new();
-        for dev in devices(eRender)? {
+        for dev in devices(flow)? {
             let Ok(mgr) = dev.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None) else { continue };
             let en = mgr.GetSessionEnumerator()?;
             for i in 0..en.GetCount()? {
                 let Ok(ctl) = en.GetSession(i) else { continue };
                 let state = ctl.GetState().unwrap_or(AudioSessionStateExpired);
-                if state == AudioSessionStateExpired {
+                if state == AudioSessionStateExpired || (only_active && state != AudioSessionStateActive) {
                     continue;
                 }
                 let Ok(ctl2) = ctl.cast::<IAudioSessionControl2>() else { continue };
@@ -314,8 +400,8 @@ mod win {
                 let key = if system {
                     "system".to_string()
                 } else {
-                    match exe_of(pid) {
-                        Some(exe) => super::key_of(&exe),
+                    match key_for(pid, &mut table) {
+                        Some(key) => key,
                         None => continue,
                     }
                 };
@@ -383,43 +469,35 @@ mod win {
         })
     }
 
-    /// Apps Windows lists as using the microphone right now (what the
-    /// microphone icon in the taskbar shows).
-    pub fn calls() -> Vec<Call> {
+    /// Apps recording from a microphone right now: an active session on a
+    /// recording device. (Windows' consent store, behind the taskbar's
+    /// microphone icon, can stay "in use" after an app stopped or crashed.)
+    pub fn recording() -> Result<Vec<String>> {
+        com(|| unsafe { Ok(sessions_on(eCapture, true)?.into_iter().filter(|s| s.key != "system").map(|s| s.key).collect()) })
+    }
+
+    /// When an app started using the microphone, from Windows' consent store.
+    pub fn mic_since(key: &str) -> Option<i64> {
         use winreg::enums::HKEY_CURRENT_USER;
         use winreg::RegKey;
         const STORE: &str = r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone";
-        let Ok(root) = RegKey::predef(HKEY_CURRENT_USER).open_subkey(STORE) else { return Vec::new() };
-        let in_use = |k: &RegKey| -> Option<Option<i64>> {
+        let root = RegKey::predef(HKEY_CURRENT_USER).open_subkey(STORE).ok()?;
+        let started = |k: &RegKey| -> Option<i64> {
             let start: u64 = k.get_value("LastUsedTimeStart").ok()?;
             let stop: u64 = k.get_value("LastUsedTimeStop").unwrap_or(0);
             // FILETIME (100 ns since 1601) → ms since 1970.
-            (start > stop).then(|| (start / 10_000).checked_sub(11_644_473_600_000).map(|ms| ms as i64))
+            (start > stop).then(|| (start / 10_000).checked_sub(11_644_473_600_000).map(|ms| ms as i64)).flatten()
         };
-        let mut out: Vec<Call> = Vec::new();
-        let mut push = |key: String, name: String, since: Option<i64>| {
-            if key != "omnihub.exe" && !out.iter().any(|c| c.key == key) {
-                out.push(Call { key, name, since_ms: since });
-            }
-        };
-        for family in root.enum_keys().flatten() {
-            if family == "NonPackaged" {
-                continue;
-            }
-            if let Some(since) = root.open_subkey(&family).ok().as_ref().and_then(in_use) {
-                let (key, name) = super::packaged_app(&family);
-                push(key, name, since);
-            }
-        }
         if let Ok(np) = root.open_subkey("NonPackaged") {
             for path in np.enum_keys().flatten() {
-                if let Some(since) = np.open_subkey(&path).ok().as_ref().and_then(in_use) {
-                    let key = super::key_of(&path.replace('#', "\\"));
-                    push(key.clone(), super::name_of(&key), since);
+                if super::key_of(&path.replace('#', "\\")) == key {
+                    if let Some(t) = np.open_subkey(&path).ok().as_ref().and_then(started) {
+                        return Some(t);
+                    }
                 }
             }
         }
-        out
+        root.enum_keys().flatten().filter(|f| f != "NonPackaged" && super::packaged_app(f).0 == key).find_map(|f| root.open_subkey(&f).ok().as_ref().and_then(started))
     }
 }
 
@@ -437,6 +515,19 @@ mod tests {
         assert_eq!(packaged_app("5319275A.WhatsAppDesktop_cv1g1gvanyjgm"), ("whatsapp.exe".into(), "WhatsApp".into()));
         assert_eq!(packaged_app("MSTeams_8wekyb3d8bbwe"), ("ms-teams.exe".into(), "Teams".into()));
         assert_eq!(packaged_app("Contoso.Recorder_abc123").1, "Recorder");
+    }
+
+    #[test]
+    fn calls_are_calling_apps_recording_now() {
+        let (calls, others) = split_calls(vec!["discord.exe".into(), "skate.exe".into(), "discord.exe".into(), "omnihub.exe".into(), "whatsapp.exe".into()], |k| (k == "discord.exe").then_some(5));
+        assert_eq!(calls.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["Discord", "WhatsApp"]);
+        assert_eq!(calls[0].since_ms, Some(5));
+        assert_eq!(others, ["Skate"], "a game's voice chat is not a call");
+        // WebView2 helpers count as the app that started them.
+        let table: std::collections::HashMap<u32, (u32, String)> = [(10, (1, "WhatsApp.exe".to_string())), (11, (10, "msedgewebview2.exe".into())), (12, (11, "msedgewebview2.exe".into())), (20, (0, "msedgewebview2.exe".into()))].into_iter().collect();
+        assert_eq!(owner_key(12, &table).as_deref(), Some("whatsapp.exe"));
+        assert_eq!(owner_key(20, &table).as_deref(), Some("msedgewebview2.exe"));
+        assert_eq!(owner_key(99, &table), None);
     }
 
     #[test]

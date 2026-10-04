@@ -30,6 +30,11 @@ pub const ADDON_ASSET: &str = "OmniHub-AirPlay-addon-x64.zip";
 /// Folder inside the zip (and under `addons/`).
 const ADDON_DIR: &str = "airplay";
 const LOG_LINES: usize = 60;
+/// OmniHub's own UxPlay changes the add-on must carry (`omnihubPatchLevel`
+/// in its addon.json): 1 = announce the address in `UXPLAY_MDNS_IPV4`.
+pub const ADDON_PATCH_LEVEL: u64 = 1;
+/// The receiver's fixed AirPlay control port (`-p`).
+const AIRPLAY_PORT: u16 = 7000;
 
 /// Where releases are downloaded from (overridable at build time).
 pub fn releases_url() -> String {
@@ -160,6 +165,25 @@ pub struct AirPlayStatus {
     pub log: Vec<String>,
     pub install: Option<InstallProgress>,
     pub download_url: String,
+    /// The installed add-on predates a fix this version needs: offer to update it.
+    pub outdated: bool,
+    /// The Wi-Fi/Ethernet address the receiver announces to iPhones.
+    pub address: Option<String>,
+    /// What OmniHub saw when it looked for the receiver the way an iPhone does.
+    pub check: Option<AirPlayCheck>,
+}
+
+/// Can an iPhone on the same Wi-Fi find and reach the receiver?
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AirPlayCheck {
+    pub ip: String,
+    /// It answered an mDNS search for AirPlay receivers on that network.
+    pub announced: bool,
+    /// The address in that answer is this one (not a VPN or virtual adapter).
+    pub right_address: bool,
+    /// Its AirPlay port answered on that address.
+    pub reachable: bool,
 }
 
 #[derive(Default)]
@@ -170,6 +194,8 @@ struct Runtime {
     error: Option<String>,
     log: VecDeque<String>,
     mirroring: bool,
+    address: Option<String>,
+    check: Option<AirPlayCheck>,
 }
 
 pub struct AirPlay {
@@ -238,6 +264,10 @@ impl AirPlay {
         candidates.into_iter().find(|p| p.is_file()).map(|p| (p, "found"))
     }
 
+    fn addon_patch_level(&self) -> u64 {
+        std::fs::read(self.addon_root().join("addon.json")).ok().and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok()).and_then(|m| m["omnihubPatchLevel"].as_u64()).unwrap_or(0)
+    }
+
     fn addon_version(&self) -> Option<String> {
         let meta: serde_json::Value = serde_json::from_slice(&std::fs::read(self.addon_root().join("addon.json")).ok()?).ok()?;
         meta["uxplayVersion"].as_str().map(|v| format!("UxPlay {v}"))
@@ -279,6 +309,9 @@ impl AirPlay {
             log: rt.log.iter().cloned().collect(),
             install: self.install.lock().clone(),
             download_url: format!("{}/v{}/{ADDON_ASSET}", releases_url(), env!("CARGO_PKG_VERSION")),
+            outdated: found.as_ref().is_some_and(|(_, s)| *s == "addon") && self.addon_patch_level() < ADDON_PATCH_LEVEL,
+            address: if running { rt.address.clone() } else { None },
+            check: if running { rt.check.clone() } else { None },
         }
     }
 
@@ -295,6 +328,13 @@ impl AirPlay {
         let args = uxplay_args(o, pin.as_deref(), &self.data.join("airplay-devices.txt"));
         let mut cmd = Command::new(&exe);
         cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        // Announce the Wi-Fi/Ethernet address phones can reach. Left to
+        // itself, UxPlay takes the first adapter Windows lists, which can be
+        // a VPN or a second network card, and the iPhone never sees it.
+        let address = crate::remote::net::lan_addresses().into_iter().find(|a| !a.virtual_adapter).map(|a| a.ip);
+        if let Some(ip) = &address {
+            cmd.env("UXPLAY_MDNS_IPV4", ip);
+        }
         if source == "addon" {
             let root = self.addon_root();
             let bin = root.join("bin");
@@ -316,7 +356,7 @@ impl AirPlay {
         }
         {
             let mut rt = self.rt.lock();
-            *rt = Runtime { pin: pin.clone(), name: args[1].clone(), ..Default::default() };
+            *rt = Runtime { pin: pin.clone(), name: args[1].clone(), address: address.clone(), ..Default::default() };
         }
         self.keep_on_top.store(keep_on_top, Ordering::Relaxed);
         self.pip.store(pip, Ordering::Relaxed);
@@ -361,6 +401,19 @@ impl AirPlay {
         }
         *self.child.lock() = Some(child);
         self.emit();
+        if let Some(ip) = address.and_then(|a| a.parse::<std::net::Ipv4Addr>().ok()) {
+            let (rt, events, stop, name) = (self.rt.clone(), self.events.clone(), self.stop_flag.clone(), args[1].clone());
+            std::thread::spawn(move || {
+                // Give the receiver a moment to open its ports and announce itself.
+                std::thread::sleep(Duration::from_secs(3));
+                if stop.load(Ordering::Relaxed) {
+                    return;
+                }
+                let check = check_receiver(ip, &name);
+                rt.lock().check = Some(check);
+                events.emit("airplay:changed", serde_json::json!({}));
+            });
+        }
         Ok(pin)
     }
 
@@ -405,6 +458,8 @@ impl AirPlay {
     /// Download, verify and unpack the add-on. Progress is published as
     /// `airplay:install` events and in the status.
     pub fn install_addon(&self, url: &str, expected_sha256: Option<&str>) -> std::io::Result<()> {
+        // An update replaces the files of a running receiver: stop it first.
+        self.stop();
         let set = |phase: &str, done: u64, total: u64| {
             *self.install.lock() = Some(InstallProgress { phase: phase.into(), done, total });
             self.events.emit("airplay:install", InstallProgress { phase: phase.into(), done, total });
@@ -668,9 +723,112 @@ mod win {
     }
 }
 
+/// An mDNS question for AirPlay receivers, asking for a direct (unicast) answer.
+fn mdns_query() -> Vec<u8> {
+    let mut q = vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
+    for label in ["_airplay", "_tcp", "local"] {
+        q.push(label.len() as u8);
+        q.extend_from_slice(label.as_bytes());
+    }
+    q.extend_from_slice(&[0, 0, 12, 0x80, 1]);
+    q
+}
+
+/// Whether an mDNS answer is from `name`, and whether it gives `ip` as the address.
+fn answer_mentions(packet: &[u8], name: &str, ip: std::net::Ipv4Addr) -> (bool, bool) {
+    let has_name = !name.is_empty() && packet.windows(name.len()).any(|w| w.eq_ignore_ascii_case(name.as_bytes()));
+    // An A record: type 1, class IN (cache-flush bit allowed), TTL, length 4, the address.
+    let octets = ip.octets();
+    let has_ip = packet.windows(14).any(|w| w[0] == 0 && w[1] == 1 && (w[2] & 0x7f) == 0 && w[3] == 1 && w[8] == 0 && w[9] == 4 && w[10..14] == octets);
+    (has_name, has_ip)
+}
+
+/// Look for the receiver the way an iPhone on the same network does: an
+/// mDNS search sent out of `ip`'s adapter, then its AirPlay port on `ip`.
+pub fn check_receiver(ip: std::net::Ipv4Addr, name: &str) -> AirPlayCheck {
+    let (announced, right_address) = mdns_search(ip, name).unwrap_or((false, false));
+    AirPlayCheck { ip: ip.to_string(), announced, right_address, reachable: info_answers(std::net::SocketAddr::from((ip, AIRPLAY_PORT))) }
+}
+
+fn mdns_search(ip: std::net::Ipv4Addr, name: &str) -> std::io::Result<(bool, bool)> {
+    use socket2::{Domain, Protocol, Socket, Type};
+    let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+    sock.bind(&std::net::SocketAddr::from((ip, 0)).into())?;
+    sock.set_multicast_if_v4(&ip)?;
+    sock.set_multicast_loop_v4(true)?;
+    let sock: std::net::UdpSocket = sock.into();
+    sock.set_read_timeout(Some(Duration::from_millis(400)))?;
+    let group = std::net::SocketAddr::from(([224, 0, 0, 251], 5353));
+    let mut found = (false, false);
+    let mut buf = [0u8; 9000];
+    for _ in 0..4 {
+        sock.send_to(&mdns_query(), group)?;
+        let until = std::time::Instant::now() + Duration::from_millis(1200);
+        while std::time::Instant::now() < until {
+            match sock.recv_from(&mut buf) {
+                Ok((n, _)) => {
+                    let (has_name, has_ip) = answer_mentions(&buf[..n], name, ip);
+                    if has_name {
+                        found = (true, found.1 || has_ip);
+                        if found.1 {
+                            return Ok(found);
+                        }
+                    }
+                }
+                Err(e) if matches!(e.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+                Err(e) => return Err(e),
+            }
+        }
+        if found.0 {
+            break;
+        }
+    }
+    Ok(found)
+}
+
+/// Whether an AirPlay receiver answers "GET /info" at `addr`.
+fn info_answers(addr: std::net::SocketAddr) -> bool {
+    let Ok(mut s) = std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(2)) else { return false };
+    let _ = s.set_read_timeout(Some(Duration::from_secs(3)));
+    if s.write_all(b"GET /info RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: AirPlay/690.7.1\r\nX-Apple-ProtocolVersion: 1\r\n\r\n").is_err() {
+        return false;
+    }
+    let mut head = [0u8; 12];
+    s.read_exact(&mut head).is_ok() && head.starts_with(b"RTSP/1.0 200")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mdns_answer_matching() {
+        let q = mdns_query();
+        assert_eq!(&q[12..21], b"\x08_airplay");
+        assert_eq!(&q[q.len() - 4..], &[0, 12, 0x80, 1], "PTR, unicast answer wanted");
+        let ip: std::net::Ipv4Addr = "192.168.1.50".parse().unwrap();
+        let mut answer = b"\x0aGAMING-PC\x05local".to_vec();
+        answer.extend_from_slice(&[0, 0, 1, 0x80, 1, 0, 0, 0, 120, 0, 4, 192, 168, 1, 50]);
+        assert_eq!(answer_mentions(&answer, "gaming-pc", ip), (true, true));
+        assert_eq!(answer_mentions(&answer, "gaming-pc", "10.0.0.5".parse().unwrap()), (true, false));
+        assert!(!answer_mentions(&answer, "Other", ip).0);
+    }
+
+    #[test]
+    fn info_check_against_a_stand_in_receiver() {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = l.local_addr().unwrap();
+        let t = std::thread::spawn(move || {
+            let (mut c, _) = l.accept().unwrap();
+            let mut buf = [0u8; 256];
+            let _ = c.read(&mut buf);
+            c.write_all(b"RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n").unwrap();
+        });
+        assert!(info_answers(addr));
+        t.join().unwrap();
+        let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap();
+        assert!(!info_answers(closed));
+    }
 
     #[test]
     fn arguments() {

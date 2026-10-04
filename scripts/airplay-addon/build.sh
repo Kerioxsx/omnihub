@@ -17,6 +17,7 @@ UXPLAY_REPO=${UXPLAY_REPO:-https://github.com/FDH2/UxPlay}
 # Apple's Bonjour service on Windows. Bump deliberately and re-test.
 UXPLAY_COMMIT=${UXPLAY_COMMIT:-d8d99555473dc3fdfd3e23cdfd3d0ba3e7a8c209}
 
+HERE=$(cd "$(dirname "$0")" && pwd)
 OUT=$(realpath -m "${1:-dist}")
 PREFIX=/ucrt64
 WORK=$(mktemp -d)
@@ -26,6 +27,16 @@ trap 'rm -rf "$WORK"' EXIT
 echo "== UxPlay $UXPLAY_COMMIT"
 git clone --quiet --filter=blob:none "$UXPLAY_REPO" "$WORK/src"
 git -C "$WORK/src" checkout --quiet "$UXPLAY_COMMIT"
+# OmniHub's changes (patches/*.patch), published in the sources zip.
+# Bump PATCH_LEVEL with every new patch: OmniHub offers an update to
+# add-ons built with fewer (ADDON_PATCH_LEVEL in capture/airplay.rs).
+PATCH_LEVEL=0
+for p in "$HERE"/patches/*.patch; do
+  git -C "$WORK/src" apply "$p"
+  PATCH_LEVEL=$((PATCH_LEVEL + 1))
+  echo "applied $(basename "$p")"
+done
+git -C "$WORK/src" -c user.name=OmniHub -c user.email=omnihub@users.noreply.github.com commit --quiet --allow-empty -am "OmniHub patches ($PATCH_LEVEL)"
 cmake -S "$WORK/src" -B "$WORK/build" -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build "$WORK/build"
 
@@ -67,9 +78,10 @@ done
 {
   echo "OmniHub AirPlay add-on — third-party components"
   echo
-  echo "UxPlay (GPL-3.0): $UXPLAY_REPO commit $UXPLAY_COMMIT"
-  echo "  Its complete source is published next to this add-on as"
-  echo "  OmniHub-AirPlay-addon-sources.zip, and at the URL above."
+  echo "UxPlay (GPL-3.0): $UXPLAY_REPO commit $UXPLAY_COMMIT,"
+  echo "  with OmniHub's changes (scripts/airplay-addon/patches in the OmniHub"
+  echo "  repository). The complete modified source is published next to this"
+  echo "  add-on as OmniHub-AirPlay-addon-sources.zip."
   echo
   echo "The other files are unmodified MSYS2 UCRT64 packages. Build recipes:"
   echo "https://github.com/msys2/MINGW-packages — source archives:"
@@ -100,6 +112,7 @@ cat > "$STAGE/addon.json" << EOF
   "name": "OmniHub AirPlay add-on",
   "uxplayVersion": "$version",
   "uxplayCommit": "$UXPLAY_COMMIT",
+  "omnihubPatchLevel": $PATCH_LEVEL,
   "gstreamerVersion": "$gst",
   "built": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
@@ -108,7 +121,7 @@ EOF
 mkdir -p "$OUT"
 rm -f "$OUT/OmniHub-AirPlay-addon-x64.zip" "$OUT/OmniHub-AirPlay-addon-sources.zip"
 (cd "$WORK" && zip -q -r -9 "$OUT/OmniHub-AirPlay-addon-x64.zip" OmniHub-AirPlay)
-git -C "$WORK/src" archive --format=zip --prefix="UxPlay-$UXPLAY_COMMIT/" -o "$OUT/OmniHub-AirPlay-addon-sources.zip" "$UXPLAY_COMMIT"
+git -C "$WORK/src" archive --format=zip --prefix="UxPlay-$UXPLAY_COMMIT-omnihub/" -o "$OUT/OmniHub-AirPlay-addon-sources.zip" HEAD
 
 echo "== add-on contents"
 du -sh "$STAGE" "$STAGE/bin" "$STAGE/lib/gstreamer-1.0"

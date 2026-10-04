@@ -407,7 +407,7 @@ export function sunshineStatus(): SunshineStatus {
 
 const airplay: AirPlayStatus = {
   supported: true,
-  installed: query().get('airplay') === 'installed' || query().get('airplay') === 'running',
+  installed: ['installed', 'running', 'outdated', 'hidden'].includes(query().get('airplay') ?? ''),
   source: null,
   path: null,
   version: null,
@@ -419,7 +419,10 @@ const airplay: AirPlayStatus = {
   error: null,
   log: [],
   install: null,
-  downloadUrl: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.0/OmniHub-AirPlay-addon-x64.zip',
+  downloadUrl: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.3/OmniHub-AirPlay-addon-x64.zip',
+  outdated: query().get('airplay') === 'outdated',
+  address: null,
+  check: null,
 };
 function query() {
   return typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
@@ -472,8 +475,18 @@ export function airplayStart(): string | null {
   airplay.name = o.name;
   airplay.pin = o.requirePin ? String(1000 + Math.floor(Math.random() * 9000)) : null;
   airplay.log = ['UxPlay 1.74: An Open-Source AirPlay mirroring and audio-streaming server.', 'using network ports UDP 7011 6001 6000 TCP 7100 7000 7001', 'Initialized server socket(s)'];
+  airplay.address = '192.168.1.24';
+  airplay.check = null;
   emit('airplay:changed', {});
-  if (query().get('airplay') !== 'idle') {
+  demoTimers.push(
+    setTimeout(() => {
+      if (!airplay.running) return;
+      const hidden = query().get('airplay') === 'hidden';
+      airplay.check = { ip: '192.168.1.24', announced: !hidden, rightAddress: !hidden, reachable: true };
+      emit('airplay:changed', {});
+    }, 1500),
+  );
+  if (!['idle', 'hidden'].includes(query().get('airplay') ?? '')) {
     demoTimers.push(
       setTimeout(() => {
         if (!airplay.running) return;

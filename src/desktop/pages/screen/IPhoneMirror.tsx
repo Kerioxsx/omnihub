@@ -2,9 +2,9 @@
 // Center → Screen Mirroring.
 
 import { formatBytes } from '@shared/format';
-import type { AirPlayStatus, FirewallReport, InstallProgress } from '@shared/types';
+import type { AirPlayCheck, AirPlayStatus, FirewallReport, InstallProgress } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { Apple, ChevronDown, CircleCheck, Download, FolderSearch, Maximize2, PictureInPicture2, Play, ShieldCheck, Smartphone, Square, Trash } from 'lucide-react';
+import { Apple, ChevronDown, CircleCheck, Download, FolderSearch, LoaderCircle, Maximize2, PictureInPicture2, Play, RefreshCw, ShieldCheck, Smartphone, Square, Trash, Wifi, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
@@ -60,6 +60,46 @@ function FirewallRow({ report, onFix, busy }: { report: FirewallReport; onFix: (
           Allow receiver
         </Button>
       )}
+    </div>
+  );
+}
+
+/** Whether an iPhone on the same Wi-Fi can find the receiver, and what to do if not. */
+function CheckRow({ check, address, name, outdated }: { check: AirPlayCheck | null; address: string | null; name: string; outdated: boolean }) {
+  if (!check) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-line bg-surface px-3.5 py-3 text-[12.5px] text-dim">
+        <LoaderCircle size={16} className="shrink-0 animate-spin text-accent" aria-hidden />
+        Checking that iPhones on your Wi-Fi can find “{name}”{address ? ` at ${address}` : ''}…
+      </div>
+    );
+  }
+  const ok = check.announced && check.rightAddress && check.reachable;
+  const problem = !check.announced
+    ? `iPhones can't see “${name}” on the network of ${check.ip} yet.`
+    : !check.rightAddress
+      ? `“${name}” is announced with another address than ${check.ip} (a VPN or virtual adapter), so iPhones can't connect.`
+      : `The receiver doesn't answer on ${check.ip}.`;
+  return (
+    <div className={cx('flex items-start gap-3 rounded-xl border px-3.5 py-3', ok ? 'border-line bg-surface' : 'border-warn/35 bg-warn/8')}>
+      {ok ? <Wifi size={17} className="mt-0.5 shrink-0 text-good" aria-hidden /> : <WifiOff size={17} className="mt-0.5 shrink-0 text-warn" aria-hidden />}
+      <div className="min-w-0 flex-1 text-[12.5px] text-dim">
+        <div className="font-medium text-fg">{ok ? `iPhones on this Wi-Fi can find “${name}”` : 'iPhones may not find this PC'}</div>
+        {ok ? (
+          <>Announced at {check.ip}. If it still doesn't show in Screen Mirroring, check the points below.</>
+        ) : (
+          <>
+            {problem}
+            {outdated && ' Update the AirPlay receiver above first — the update fixes this on PCs with a VPN or several network adapters.'}
+          </>
+        )}
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px]">
+          <li>The iPhone is on the same Wi-Fi as this PC — not a guest network or mobile data.</li>
+          <li>VPNs are off on the iPhone and on this PC.</li>
+          <li>Windows Firewall allows the receiver (below), and this network is Private.</li>
+          <li>The router doesn't isolate Wi-Fi devices (“AP isolation” or “client isolation” off).</li>
+        </ul>
+      </div>
     </div>
   );
 }
@@ -236,6 +276,23 @@ export function IPhoneMirror() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {s.outdated && (
+            <Callout tone="warn" title="Update the AirPlay receiver">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="min-w-0 flex-1">This version fixes iPhones not finding the PC when it has a VPN, a second network card or virtual adapters. About 70 MB, checked before it installs.</span>
+                {progress ? (
+                  <span className="text-[12px] text-dim">{progress.phase === 'download' ? `Downloading… ${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%` : progress.phase === 'verify' ? 'Checking…' : 'Installing…'}</span>
+                ) : (
+                  <Button size="sm" variant="primary" icon={RefreshCw} loading={busy === 'update'} onClick={() => void run('update', () => api.screen.airplayInstall())}>
+                    Update receiver
+                  </Button>
+                )}
+              </div>
+            </Callout>
+          )}
+
+          {s.running && <CheckRow check={s.check} address={s.address} name={s.name} outdated={s.outdated} />}
 
           {s.error && (
             <Callout tone="bad" title="The receiver reported a problem">

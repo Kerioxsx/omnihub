@@ -114,8 +114,8 @@ and lets a phone do some of that. This is what protects each part.
 - **Music** control and **Games** (start a game with its boost) follow the
   "Music" and "Launch apps" permissions. **Volume & calls** follows "Music":
   each app's volume and mute, the master volume, and muting every recording
-  device. Which apps are in a call is read from the list Windows keeps for
-  its own "using your microphone" indicator; OmniHub never records or
+  device. Which apps are in a call comes from Windows' audio sessions (a
+  calling app with an active recording session); OmniHub never records or
   listens. It cannot hang up a call — no app offers that to others.
 - **Vault on the phone** is a separate opt-in, HTTPS only, needs the master
   password on the phone each time, and gives that phone its own decrypted

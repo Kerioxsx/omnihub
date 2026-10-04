@@ -233,6 +233,7 @@ export function SoundPanel({ api }: { api: MixerApi }) {
             <div className="min-w-0 flex-1">
               <div className="text-[15px] font-semibold">{m.mic.muted ? 'Microphone muted' : 'Microphone on'}</div>
               <div className="text-[12.5px] text-dim">{m.mic.muted ? 'No app hears you — tap to turn it back on' : 'Tap to mute it in every app'}</div>
+              {m.micApps.length > 0 && <div className="mt-0.5 truncate text-[12px] text-faint">Also using it now: {m.micApps.join(', ')}</div>}
             </div>
           </button>
         )}

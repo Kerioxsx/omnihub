@@ -143,6 +143,8 @@ export interface Mixer {
   mic: { muted: boolean; devices: number } | null;
   apps: AppVolume[];
   calls: Call[];
+  /** Other apps recording from a microphone right now (a game's voice chat). */
+  micApps: string[];
 }
 
 /** A program with a window open on the PC. */

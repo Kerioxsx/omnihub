@@ -3808,7 +3808,7 @@ dependencies = [
 
 [[package]]
 name = "omnihub"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "anyhow",
  "omnihub-core",
@@ -3832,7 +3832,7 @@ dependencies = [
 
 [[package]]
 name = "omnihub-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "aes-gcm",
  "anyhow",
