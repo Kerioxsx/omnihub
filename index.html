@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>OmniHub — your PC, in one hub and in your pocket</title>
+  <meta name="description" content="OmniHub is a free Windows companion: see what fills your drives in seconds, boost your games, keep passwords in an encrypted vault, and run your PC from your phone — local-first, no account." />
+  <meta name="theme-color" content="#07060d" />
+  <meta property="og:title" content="OmniHub — your PC, in one hub and in your pocket" />
+  <meta property="og:description" content="Storage in seconds, game boost, encrypted vault, synced lyrics and your PC on your phone. Free for Windows 10/11." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://kerioxsx.github.io/omnihub/assets/og.jpg" />
+  <meta property="og:url" content="https://kerioxsx.github.io/omnihub/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+  <link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="styles.css" />
+  <script>document.documentElement.classList.add('js')</script>
+</head>
+<body>
+  <canvas id="bg" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="progress" aria-hidden="true"><span></span></div>
+
+  <header class="nav" id="top">
+    <a class="brand" href="#top" aria-label="OmniHub home">
+      <img src="assets/logo.svg" alt="" width="34" height="34" />
+      <span>OmniHub</span>
+    </a>
+    <nav class="links" aria-label="Sections">
+      <a href="#features">Features</a>
+      <a href="#phone">Phone</a>
+      <a href="#lyrics">Music</a>
+      <a href="#games">Games</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="icon-link" href="https://github.com/Kerioxsx/omnihub" aria-label="OmniHub on GitHub" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17 4.7 18 5 18 5c.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/></svg>
+      </a>
+      <a class="btn btn-sm btn-primary magnetic" data-download href="https://github.com/Kerioxsx/omnihub/releases/latest">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
+        Download
+      </a>
+      <button class="menu" aria-label="Menu" aria-expanded="false"><span></span><span></span></button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-copy">
+        <a class="pill reveal" href="#install" data-version-pill>
+          <span class="dot"></span><span data-version-text>Free for Windows 10 &amp; 11</span>
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="m9 6 6 6-6 6"/></svg>
+        </a>
+        <h1 class="reveal">Your PC, all in one place.<br /><span class="gradient-text">And in your pocket.</span></h1>
+        <p class="lead reveal">See what fills your drives in seconds, boost your games, keep passwords in an encrypted vault, and run your PC from your phone — music with synced lyrics included. Local-first. No account. No cloud.</p>
+        <div class="cta reveal">
+          <a class="btn btn-primary btn-lg magnetic" data-download href="https://github.com/Kerioxsx/omnihub/releases/latest">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.5v7H3v-6Zm0 13 7.5 1v-7H3v6Zm8.5 1.2L21 21v-8.5h-9.5v7.2Zm0-15.4v7.2H21V3l-9.5 1.3Z"/></svg>
+            <span><b>Download for Windows</b><small data-download-meta>Free · installs in seconds</small></span>
+          </a>
+          <a class="btn btn-ghost btn-lg" href="#features">
+            See what it does
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M12 5v14m0 0 6-6m-6 6-6-6"/></svg>
+          </a>
+        </div>
+        <ul class="trust reveal">
+          <li>No admin needed to install</li>
+          <li>Updates itself</li>
+          <li>Open source</li>
+        </ul>
+      </div>
+      <div class="hero-visual" data-tilt-scene>
+        <div class="hero-glow" aria-hidden="true"></div>
+        <figure class="window hero-window" data-depth="0.6">
+          <div class="window-bar"><i></i><i></i><i></i><span>OmniHub</span></div>
+          <img src="assets/shots/desktop-home.webp" alt="OmniHub's home page: drives, now playing, top apps and quick actions" width="2880" height="1800" fetchpriority="high" />
+        </figure>
+        <figure class="phone hero-phone" data-depth="1.4">
+          <img src="assets/shots/phone-music.webp" alt="The phone's Music tab: cover art, controls and lyrics from the PC" width="900" height="1948" />
+        </figure>
+        <div class="chip chip-a" data-depth="2"><span class="chip-icon ok">✓</span> Fortnite boosted</div>
+        <div class="chip chip-b" data-depth="1.8"><span class="chip-icon">♪</span> Lyrics in sync</div>
+        <div class="chip chip-c" data-depth="2.4"><span class="chip-icon">⚡</span> 1.15M files · 3.3 s</div>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="stats" aria-label="OmniHub in numbers">
+      <div class="stat reveal"><b data-count="3.3" data-decimals="1" data-suffix=" s">0 s</b><span>to read 1.15 million files</span></div>
+      <div class="stat reveal"><b data-count="256" data-suffix="-bit">0</b><span>AES vault encryption</span></div>
+      <div class="stat reveal"><b data-count="0">0</b><span>accounts or cloud servers</span></div>
+      <div class="stat reveal"><b data-count="10" data-suffix="+">0</b><span>game boost profiles</span></div>
+    </section>
+
+    <!-- Feature tour -->
+    <section class="section" id="features">
+      <div class="section-head reveal">
+        <span class="eyebrow">Take the tour</span>
+        <h2>One app instead of ten</h2>
+        <p>Every part of OmniHub, as it really looks. Pick a tab — or just watch.</p>
+      </div>
+      <div class="tour reveal">
+        <div class="tour-tabs" role="tablist" aria-label="Features">
+          <!-- filled by app.js -->
+        </div>
+        <div class="tour-stage">
+          <figure class="window tour-window">
+            <div class="window-bar"><i></i><i></i><i></i><span data-tour-title>OmniHub</span></div>
+            <div class="tour-images"></div>
+          </figure>
+          <div class="tour-caption">
+            <h3 data-tour-heading></h3>
+            <p data-tour-text></p>
+            <ul class="tags" data-tour-tags></ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Everything grid -->
+    <section class="section" id="all">
+      <div class="section-head reveal">
+        <span class="eyebrow">Everything included</span>
+        <h2>Small things that add up</h2>
+      </div>
+      <div class="grid" data-features></div>
+    </section>
+
+    <!-- Phone -->
+    <section class="section split" id="phone">
+      <div class="split-copy reveal">
+        <span class="eyebrow">Your phone, as a remote</span>
+        <h2>Scan a QR code.<br />That's the whole setup.</h2>
+        <p>The PC serves the phone app itself — nothing to install from a store, nothing in the cloud. Pair once with a QR code or PIN, over your own Wi-Fi, encrypted.</p>
+        <ul class="checks">
+          <li><b>Files both ways</b> — browse, download with resume, send photos to the PC, get files from it.</li>
+          <li><b>Music</b> — cover art, controls, volume and bass, lyrics in time.</li>
+          <li><b>Games</b> — start a game on the PC with its boost, from the couch.</li>
+          <li><b>Power</b> — lock, sleep or shut down, with a countdown you can cancel.</li>
+          <li><b>Screen</b> — watch the PC live; mirror an iPhone or Android to the PC.</li>
+        </ul>
+      </div>
+      <div class="phones reveal" data-carousel>
+        <button class="arrow prev" aria-label="Previous screen">‹</button>
+        <div class="phones-track"></div>
+        <button class="arrow next" aria-label="Next screen">›</button>
+        <p class="phones-caption" aria-live="polite"></p>
+        <div class="dots" role="tablist" aria-label="Phone screens"></div>
+      </div>
+    </section>
+
+    <!-- Lyrics demo -->
+    <section class="section" id="lyrics">
+      <div class="section-head reveal">
+        <span class="eyebrow">Music from the PC</span>
+        <h2>Lyrics that land on the beat</h2>
+        <p>Spotify, Apple Music, YouTube in a browser — whatever plays on the PC shows up on your phone with time-synced lyrics, lined up to the PC's own clock. Try it: tap a line.</p>
+      </div>
+      <div class="player reveal" data-player>
+        <div class="player-art" aria-hidden="true"><div class="art-blob"></div><span>♪</span></div>
+        <div class="player-main">
+          <div class="player-meta">
+            <div><b>Neon Afterglow</b><span>Midnight Atlas · a made-up song for this demo</span></div>
+            <span class="badge">Playing on GAMING-PC</span>
+          </div>
+          <div class="lyrics" data-lyrics></div>
+          <div class="player-bar">
+            <button class="play" data-play aria-label="Pause">❚❚</button>
+            <span data-time>0:00</span>
+            <div class="track" data-track><div class="fill"></div><div class="knob"></div></div>
+            <span data-dur>0:48</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Games -->
+    <section class="section" id="games">
+      <div class="section-head reveal">
+        <span class="eyebrow">Game boost</span>
+        <h2>Press Play. OmniHub gets out of the way.</h2>
+        <p>A profile per game — Fortnite, Roblox, VALORANT, CS2 and more. It tunes Windows for the game, starts it, and puts everything back when you quit.</p>
+      </div>
+      <div class="games">
+        <div class="card boost reveal">
+          <div class="card-head">
+            <div class="game-tile">FN</div>
+            <div><b>Fortnite</b><span data-boost-status>Ready</span></div>
+            <button class="btn btn-primary btn-sm" data-boost>Play with boost</button>
+          </div>
+          <ol class="steps" data-steps>
+            <li>Ultimate Performance power plan</li>
+            <li>Close the apps you picked (and reopen them later)</li>
+            <li>Pause notification pop-ups</li>
+            <li>High-performance GPU for this game</li>
+            <li>Wi-Fi low-latency mode</li>
+            <li>Game priority: High</li>
+            <li>Start Fortnite</li>
+          </ol>
+        </div>
+        <div class="card ping reveal">
+          <div class="card-head">
+            <div><b>Ping helper</b><span>Fortnite's matchmaking regions</span></div>
+            <button class="btn btn-ghost btn-sm" data-ping>Test ping</button>
+          </div>
+          <div class="ping-rows" data-ping-rows></div>
+          <p class="note">No app can shorten the distance to a server. OmniHub removes what adds lag on your side — background scans, downloads, a busy Wi-Fi.</p>
+        </div>
+        <div class="card flags reveal">
+          <div class="card-head">
+            <div><b>Roblox Fast Flags</b><span>Only flags Roblox still honours</span></div>
+          </div>
+          <div class="seg" role="tablist" aria-label="Preset" data-presets>
+            <button role="tab" aria-selected="true" data-preset="maxFps">Max FPS</button>
+            <button role="tab" aria-selected="false" data-preset="balanced">Balanced</button>
+            <button role="tab" aria-selected="false" data-preset="quality">Quality</button>
+          </div>
+          <pre class="code" data-flags></pre>
+        </div>
+      </div>
+      <figure class="window games-window reveal">
+        <div class="window-bar"><i></i><i></i><i></i><span>Games</span></div>
+        <img src="assets/shots/desktop-games.webp" alt="The Games page with a Fortnite boost running and every step listed" loading="lazy" width="2880" height="1800" />
+      </figure>
+    </section>
+
+    <!-- Privacy -->
+    <section class="section" id="privacy">
+      <div class="section-head reveal">
+        <span class="eyebrow">Private by design</span>
+        <h2>Your PC stays yours</h2>
+      </div>
+      <div class="grid grid-3">
+        <article class="feature reveal"><div class="f-icon">⌂</div><h3>Local-first</h3><p>No account and no cloud. Your files, notes and passwords never leave your PC unless you send them to your own phone.</p></article>
+        <article class="feature reveal"><div class="f-icon">🔒</div><h3>A real vault</h3><p>Argon2id + AES-256-GCM, bound to your Windows account with DPAPI, Windows Hello unlock, clipboard that clears itself.</p></article>
+        <article class="feature reveal"><div class="f-icon">📶</div><h3>Phone on your Wi-Fi only</h3><p>Off until you turn it on. Local network only, HTTPS, pairing with the PC in front of you, every action in an audit log.</p></article>
+        <article class="feature reveal"><div class="f-icon">🛡</div><h3>Admin only when needed</h3><p>Runs as a normal user. Windows asks only for fast drive scans and a few one-time settings — or approve scans once.</p></article>
+        <article class="feature reveal"><div class="f-icon">✓</div><h3>Checked updates</h3><p>Updates come from this project's GitHub releases and must match their published SHA-256 before they install.</p></article>
+        <article class="feature reveal"><div class="f-icon">{ }</div><h3>Open source</h3><p>Rust and React, all on GitHub. Read the code, build it yourself, see exactly what it does.</p></article>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section class="section install" id="install">
+      <div class="install-card reveal">
+        <div class="install-copy">
+          <span class="eyebrow">Get OmniHub</span>
+          <h2>Three steps. About a minute.</h2>
+          <ol class="install-steps">
+            <li><b>Download</b> the installer — <span data-asset-name>OmniHub setup .exe</span>.</li>
+            <li><b>Run it.</b> No admin rights needed. Windows SmartScreen doesn't know new apps yet: choose <i>More info → Run anyway</i>.</li>
+            <li><b>Pair your phone</b> in <i>Phone → Pair a phone</i> and scan the QR code.</li>
+          </ol>
+          <p class="small">Windows 10 or 11, 64-bit. From 0.2.1 on, OmniHub updates itself.</p>
+        </div>
+        <div class="install-cta">
+          <a class="btn btn-primary btn-xl magnetic" data-download href="https://github.com/Kerioxsx/omnihub/releases/latest">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
+            <span><b>Download OmniHub</b><small data-download-meta>Windows 10 &amp; 11</small></span>
+          </a>
+          <a class="small-link" href="https://github.com/Kerioxsx/omnihub/releases" target="_blank" rel="noopener">All versions, MSI and checksums →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="section" id="faq">
+      <div class="section-head reveal">
+        <span class="eyebrow">Questions</span>
+        <h2>Good to know</h2>
+      </div>
+      <div class="faq">
+        <details class="reveal"><summary>Is OmniHub free?</summary><p>Yes — free and open source, with no ads, no account and no paid tier.</p></details>
+        <details class="reveal"><summary>Does it send my data anywhere?</summary><p>No. There is no OmniHub server. The only internet requests are optional: song lyrics from LRCLIB, the password breach check (only the first 5 characters of a hash), update checks on GitHub, and pings you start yourself.</p></details>
+        <details class="reveal"><summary>Why does Windows warn when I install it?</summary><p>The installer isn't code-signed yet, so SmartScreen hasn't seen it before. Choose <i>More info → Run anyway</i>. Updates after that install from inside the app.</p></details>
+        <details class="reveal"><summary>Does the phone part work with iPhone and Android?</summary><p>Both. The phone app runs in the browser (Safari, Chrome…) and can be added to the home screen. iPhones can also mirror their screen to the PC with AirPlay.</p></details>
+        <details class="reveal"><summary>Is the game boost safe with anti-cheat?</summary><p>It only changes Windows settings — power plan, notifications, priority, GPU choice, Wi-Fi — and never touches a game's memory or files. Roblox flags go in Roblox's own settings file.</p></details>
+        <details class="reveal"><summary>My phone says "site can't be reached".</summary><p>Update to 0.2.1 or later — it fixes a Windows bug that refused phones on Wi-Fi. Then open <i>Phone → Connection check</i>: it tests the address from the PC and fixes the firewall in one click.</p></details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="foot-brand"><img src="assets/logo.svg" alt="" width="28" height="28" /><span>OmniHub</span></div>
+    <nav aria-label="Links">
+      <a href="https://github.com/Kerioxsx/omnihub" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/Kerioxsx/omnihub/releases" target="_blank" rel="noopener">Releases</a>
+      <a href="https://github.com/Kerioxsx/omnihub/blob/main/docs/SECURITY.md" target="_blank" rel="noopener">Security</a>
+      <a href="https://github.com/Kerioxsx/omnihub/issues" target="_blank" rel="noopener">Report a problem</a>
+    </nav>
+    <p>Built with Rust, Tauri and React. Screenshots show the app with demo data.</p>
+  </footer>
+
+  <div class="lightbox" role="dialog" aria-modal="true" aria-label="Screenshot" hidden>
+    <button class="lb-close" aria-label="Close">×</button>
+    <img alt="" />
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
