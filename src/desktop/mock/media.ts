@@ -177,6 +177,7 @@ for (let i = 0; i < 46; i++) {
     note: r.chance(0.2) ? r.pick(NOTES) : '',
     favorite: r.chance(0.14),
     exists: true,
+    hasText: false,
   });
 }
 shots.sort((a, b) => b.created - a.created);
@@ -187,7 +188,7 @@ export function shotsList(f: ShotFilter): Screenshot[] {
     if (f.favorites && !s.favorite) return false;
     if (f.tag && !s.tags.includes(f.tag)) return false;
     if (f.app && s.appExe !== f.app) return false;
-    if (q && !`${s.appTitle ?? ''} ${s.appExe ?? ''} ${s.note} ${s.tags.join(' ')} ${s.path}`.toLowerCase().includes(q)) return false;
+    if (q && !`${s.appTitle ?? ''} ${s.appExe ?? ''} ${s.note} ${s.tags.join(' ')} ${s.path} ${texts.get(s.id) ?? ''}`.toLowerCase().includes(q)) return false;
     return true;
   });
   if (f.limit) out = out.slice(0, f.limit);
@@ -207,11 +208,16 @@ function find(id: string): Screenshot {
 
 export async function shotThumb(id: string): Promise<string> {
   await sleep(20 + Math.random() * 180);
+  if (edited.has(id)) return edited.get(id) as string;
   const s = find(id);
   return scene(id, kinds.get(id) ?? 'desktop', 320, Math.round((320 * s.height) / s.width));
 }
 
+const edited = new Map<string, string>();
+const texts = new Map<string, string>();
+
 export function shotImage(id: string): string {
+  if (edited.has(id)) return edited.get(id) as string;
   const s = find(id);
   return scene(id, kinds.get(id) ?? 'desktop', 1600, Math.round((1600 * s.height) / s.width), true);
 }
@@ -235,6 +241,7 @@ function addShot(kind: SceneKind, width: number, height: number, exe: string | n
     note: '',
     favorite: false,
     exists: true,
+    hasText: false,
   };
   shots.unshift(shot);
   emit('screenshots:new', shot);
@@ -290,4 +297,28 @@ export function shotDelete(id: string): void {
 export function shotsSync(): number {
   emit('screenshots:synced', { added: 0 });
   return 0;
+}
+
+const SAMPLE_TEXT: Record<string, string> = {
+  code: 'export function TreemapView({ scanId }: Props) {\n  const [focus, setFocus] = useState<number | null>(null);\n  const items = useTreemap(scanId, focus);\n  return <Canvas items={items} onPick={setFocus} />;\n}',
+  desktop: 'Recycle Bin\nThis PC\nOmniHub\nSteam\nDiscord\n12:41\n04/10/2026',
+};
+
+export async function shotText(id: string): Promise<string> {
+  await sleep(600);
+  const s = find(id);
+  const text = texts.get(id) ?? SAMPLE_TEXT[kinds.get(id) ?? 'desktop'] ?? `${s.appTitle ?? 'Screenshot'}\nNothing else readable.`;
+  texts.set(id, text);
+  s.hasText = true;
+  return text;
+}
+
+export function shotSaveEdit(id: string, png: string): Screenshot {
+  const orig = find(id);
+  const shot = addShot(kinds.get(id) ?? 'desktop', orig.width, orig.height, orig.appExe, orig.appTitle);
+  edited.set(shot.id, png);
+  shot.tags = [...orig.tags];
+  shot.note = orig.note ? `${orig.note} (edited copy)` : 'Edited copy';
+  audit('desktop', 'screenshot.edit', shot.path);
+  return { ...shot };
 }

@@ -242,6 +242,8 @@ export interface Screenshot {
   note: string;
   favorite: boolean;
   exists: boolean;
+  /** text was read from it (Copy text); it is then searchable */
+  hasText: boolean;
 }
 
 export type CaptureKind = 'screen' | 'allScreens' | 'window';

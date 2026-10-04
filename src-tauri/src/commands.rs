@@ -556,6 +556,25 @@ pub async fn shots_copy(core: Core<'_>, id: String) -> Res<()> {
     blocking(move || core.screenshots.copy_to_clipboard(&id).map_err(err)).await
 }
 
+/// The text in a screenshot (Windows OCR; kept for search).
+#[tauri::command]
+pub async fn shots_text(core: Core<'_>, id: String) -> Res<String> {
+    let core = core.inner().clone();
+    blocking(move || core.screenshots.text(&id).map_err(err)).await
+}
+
+/// Save the markup editor's result (a PNG data URL) as a new screenshot.
+#[tauri::command]
+pub async fn shots_save_edit(core: Core<'_>, id: String, png: String) -> Res<Screenshot> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let shot = core.screenshots.store_edited_data_url(&id, &png, &core.screenshot_dir()).map_err(err)?;
+        core.audit.record("desktop", "screenshot.edit", &shot.path, true);
+        Ok(shot)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn shots_sync(core: Core<'_>) -> Res<usize> {
     let core = core.inner().clone();

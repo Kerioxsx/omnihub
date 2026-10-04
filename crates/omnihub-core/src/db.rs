@@ -88,6 +88,12 @@ const MIGRATIONS: &[&str] = &[
         revoked INTEGER NOT NULL DEFAULT 0
     );
     "#,
+    // 4: text read from screenshots (searchable); reminders on notes.
+    r#"
+    ALTER TABLE screenshots ADD COLUMN ocr_text TEXT;
+    ALTER TABLE notes ADD COLUMN remind_at INTEGER;
+    ALTER TABLE notes ADD COLUMN reminded INTEGER NOT NULL DEFAULT 0;
+    "#,
 ];
 
 impl Db {

@@ -255,6 +255,10 @@ export function ScreenshotsPage() {
         }}
         onNavigate={setOpenId}
         onChange={(s) => shots.setData((prev) => (prev ?? []).map((x) => (x.id === s.id ? s : x)))}
+        onCreated={(s) => {
+          shots.setData((prev) => [s, ...(prev ?? []).filter((x) => x.id !== s.id)]);
+          setOpenId(s.id);
+        }}
       />
     </Page>
   );

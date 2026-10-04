@@ -107,6 +107,10 @@ export const api = {
       call<T.Screenshot>('shots_update', { id, tags: patch.tags ?? null, note: patch.note ?? null, favorite: patch.favorite ?? null }),
     delete: (id: string, trash = true) => call<void>('shots_delete', { id, trash }),
     copy: (id: string) => call<void>('shots_copy', { id }),
+    /** Text in the image (Windows OCR). */
+    text: (id: string) => call<string>('shots_text', { id }),
+    /** Save an edited version (PNG data URL) as a new screenshot. */
+    saveEdit: (id: string, png: string) => call<T.Screenshot>('shots_save_edit', { id, png }),
     sync: () => call<number>('shots_sync'),
   },
 

@@ -98,6 +98,8 @@ const handlers: Record<string, Handler> = {
   shots_update: (a) => media.shotUpdate(str(a, 'id'), { tags: Array.isArray(a.tags) ? strList(a, 'tags') : null, note: optStr(a, 'note'), favorite: typeof a.favorite === 'boolean' ? a.favorite : null }),
   shots_delete: (a) => media.shotDelete(str(a, 'id')),
   shots_copy: (a) => void str(a, 'id'),
+  shots_text: (a) => media.shotText(str(a, 'id')),
+  shots_save_edit: (a) => media.shotSaveEdit(str(a, 'id'), str(a, 'png')),
   shots_sync: () => media.shotsSync(),
 
   // notes
