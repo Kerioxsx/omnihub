@@ -5,6 +5,7 @@
 
 pub mod crypto;
 pub mod generator;
+pub mod health;
 pub mod hello;
 pub mod totp;
 
@@ -445,6 +446,29 @@ impl Vault {
             v.sort_by(|a, b| b.favorite.cmp(&a.favorite).then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase())));
             Ok(v)
         })
+    }
+
+    /// Weak, reused, old passwords and accounts without 2FA codes.
+    pub fn health(&self) -> Result<health::HealthReport, VaultError> {
+        self.with_open(|o| Ok(health::report(&o.entries, crate::db::now())))
+    }
+
+    /// Entries whose password appears in known breaches (with how often),
+    /// using `fetch` for the range API (see [`health`]); the vault is not
+    /// held locked while the network is asked.
+    pub fn breach_check(&self, fetch: &dyn Fn(&str) -> Result<String, String>) -> Result<Vec<health::HealthItem>, VaultError> {
+        let hashed: Vec<(health::HealthItem, String)> = self.with_open(|o| Ok(o.entries.iter().filter(|e| !e.password.is_empty()).map(|e| (health::item(e, 0), health::sha1_hex(&e.password))).collect()))?;
+        let hashes: Vec<String> = hashed.iter().map(|(_, h)| h.clone()).collect();
+        let counts = health::breach_counts(&hashes, fetch).map_err(VaultError::Invalid)?;
+        let mut found: Vec<health::HealthItem> = hashed
+            .into_iter()
+            .filter_map(|(mut i, h)| {
+                i.detail = *counts.get(&h)?;
+                Some(i)
+            })
+            .collect();
+        found.sort_by_key(|i| std::cmp::Reverse(i.detail));
+        Ok(found)
     }
 
     pub fn get(&self, id: &str) -> Result<Entry, VaultError> {

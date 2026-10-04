@@ -140,6 +140,9 @@ export const api = {
     delete: (id: string) => call<void>('vault_delete', { id }),
     copy: (id: string, field: 'password' | 'username' | 'email' | 'url' | 'notes' | 'totp') => call<void>('vault_copy', { id, field }),
     totp: (id: string) => call<T.TotpCode>('vault_totp', { id }),
+    health: () => call<T.HealthReport>('vault_health'),
+    /** Have I Been Pwned range check (only hash prefixes leave the PC). */
+    breachCheck: () => call<T.HealthItem[]>('vault_breach_check'),
     generate: (options: T.GeneratorOptions) => call<string>('vault_generate', { options }),
     strength: (password: string) => call<T.Strength>('vault_strength', { password }),
     changePassword: (oldPassword: string, newPassword: string) => call<void>('vault_change_password', { oldPassword, newPassword }),

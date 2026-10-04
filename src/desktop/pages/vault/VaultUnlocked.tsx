@@ -18,6 +18,7 @@ import { toast } from '../../state/toasts';
 import { EntryForm } from './EntryForm';
 import { KINDS, StrengthMeter, kindIcon, useStrength } from './shared';
 import { BrowserAutofill } from './BrowserAutofill';
+import { VaultHealth } from './VaultHealth';
 import { VaultSettings } from './VaultSettings';
 
 type Field = 'password' | 'username' | 'email' | 'url' | 'notes' | 'totp';
@@ -267,6 +268,7 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
   const [form, setForm] = useState<{ open: boolean; entry: Entry | null }>({ open: false, entry: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
   const [locksAt, setLocksAt] = useState(() => (status.locksIn != null ? Date.now() + status.locksIn * 1000 : null));
   const now = useNow(1000);
   const lastTouch = useRef(0);
@@ -323,11 +325,10 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
         <button type="button" onClick={() => setFavs(!favs)} aria-pressed={favs} className={cx('inline-flex h-9 items-center gap-1.5 rounded-[10px] border px-3 text-[13px] transition-colors', favs ? 'border-warn/40 bg-warn/12 text-warn' : 'border-line bg-surface text-dim hover:text-fg')}>
           <Star size={14} fill={favs ? 'currentColor' : 'none'} aria-hidden /> Favourites
         </button>
-        {weak > 0 && (
-          <Badge tone="bad" icon={ShieldAlert} title="Entries with a weak or reused-looking password">
-            {weak} weak password{weak > 1 ? 's' : ''}
-          </Badge>
-        )}
+        <button type="button" onClick={() => setHealthOpen(true)} className={cx('inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-3 text-[13px] transition-colors', weak > 0 ? 'border-bad/40 bg-bad/10 text-bad hover:bg-bad/15' : 'border-line bg-surface text-dim hover:text-fg')} title="Weak, reused and old passwords, and breach check">
+          {weak > 0 ? <ShieldAlert size={14} aria-hidden /> : <ShieldCheck size={14} aria-hidden />}
+          {weak > 0 ? `${weak} weak` : 'Health'}
+        </button>
         <div className="flex-1" />
         {secs != null && (
           <span className={cx('flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-[12px] tabular', secs < 60 ? 'border-warn/40 bg-warn/10 text-warn' : 'border-line bg-surface text-dim')} title="The vault locks itself after inactivity">
@@ -417,6 +418,7 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
       />
       <VaultSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} status={status} />
       <BrowserAutofill open={browserOpen} onClose={() => setBrowserOpen(false)} />
+      <VaultHealth open={healthOpen} onClose={() => setHealthOpen(false)} onOpenEntry={(id) => setSelected(id)} />
     </div>
   );
 }

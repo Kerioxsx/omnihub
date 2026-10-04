@@ -133,6 +133,25 @@ pub async fn system_end_process(core: Core<'_>, name: String) -> Res<usize> {
     .await
 }
 
+#[tauri::command]
+pub async fn vault_health(core: Core<'_>) -> Res<omnihub_core::vault::health::HealthReport> {
+    let core = core.inner().clone();
+    blocking(move || core.vault.health().map_err(err)).await
+}
+
+/// Check the vault's passwords against Have I Been Pwned (k-anonymity:
+/// only 5 characters of each SHA-1 hash are sent).
+#[tauri::command]
+pub async fn vault_breach_check(core: Core<'_>) -> Res<Vec<omnihub_core::vault::health::HealthItem>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.vault.breach_check(&omnihub_core::vault::health::fetch_range);
+        core.audit.record("desktop", "vault.breach-check", &r.as_ref().map(|v| format!("{} found", v.len())).unwrap_or_default(), r.is_ok());
+        r.map_err(err)
+    })
+    .await
+}
+
 /// Set (Unix seconds) or clear (null) a note's reminder.
 #[tauri::command]
 pub async fn notes_remind(core: Core<'_>, id: String, at: Option<i64>) -> Res<Note> {

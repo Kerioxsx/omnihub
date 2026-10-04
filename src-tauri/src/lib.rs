@@ -276,6 +276,8 @@ pub fn run(args: Vec<String>) {
             commands::airplay_fix_firewall,
             commands::storage_growth,
             commands::storage_export_csv,
+            commands::vault_health,
+            commands::vault_breach_check,
             commands::notes_remind,
             commands::shots_text,
             commands::shots_save_edit,

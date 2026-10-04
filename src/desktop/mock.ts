@@ -133,6 +133,8 @@ const handlers: Record<string, Handler> = {
   vault_export: (a) => void str(a, 'path'),
   vault_import: (a) => vault.importBackup(str(a, 'password')),
   vault_totp: (a) => vault.totp(str(a, 'id')),
+  vault_health: () => vault.health(),
+  vault_breach_check: () => vault.breachCheck(),
 
   // browser autofill
   browser_status: () => vault.browserStatus(),

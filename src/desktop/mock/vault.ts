@@ -1,7 +1,7 @@
 // Password vault for the mock backend. No real crypto — the point is the
 // state machine (none → unlocked ⇄ locked), throttling and auto-lock.
 
-import type { BrowserClient, BrowserPairRequest, BrowserStatus, Entry, EntryInput, EntrySummary, GeneratorOptions, Strength, VaultStatus } from '@shared/types';
+import type { BrowserClient, BrowserPairRequest, BrowserStatus, Entry, HealthItem, HealthReport, EntryInput, EntrySummary, GeneratorOptions, Strength, VaultStatus } from '@shared/types';
 import { emit } from './bus';
 import { audit, onSettingsChange, settings } from './core';
 import { DAY, NOW } from './rng';
@@ -338,3 +338,31 @@ export function browserRevoke(id: string): boolean {
 
 // ?browserPair=1 shows a pairing request a moment after the app loads.
 if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('browserPair')) setTimeout(() => simulatePairRequest(), 1200);
+
+// ---------- health ----------
+
+function hItem(e: Entry, detail = 0): HealthItem {
+  return { id: e.id, title: e.title, username: e.username || e.email, url: e.url, detail };
+}
+
+export function health(): HealthReport {
+  requireOpen();
+  const now = Math.floor(Date.now() / 1000);
+  const withPw = entries.filter((e) => e.password && e.kind !== 'note' && e.kind !== 'card');
+  const weak = withPw.filter((e) => strength(e.password).score <= 1).map((e) => hItem(e, strength(e.password).score));
+  const groups = new Map<string, Entry[]>();
+  for (const e of withPw) groups.set(e.password, [...(groups.get(e.password) ?? []), e]);
+  const reused = [...groups.values()].filter((g) => g.length > 1).map((g) => g.map((e) => hItem(e)));
+  const old = withPw.filter((e) => now - e.passwordChanged > 365 * 86400).map((e) => hItem(e, Math.floor((now - e.passwordChanged) / 86400)));
+  const twoFactor = /(google|gmail|microsoft|live|outlook|github|discord|amazon|apple|steampowered|epicgames|paypal)\./;
+  const missingTwoFactor = withPw.filter((e) => !e.totp && twoFactor.test(e.url)).map((e) => hItem(e));
+  const flagged = new Set([...weak, ...reused.flat()].map((i) => i.id));
+  return { checked: withPw.length, score: withPw.length ? Math.round((100 * (withPw.length - flagged.size)) / withPw.length) : 100, weak, reused, old, missingTwoFactor };
+}
+
+export async function breachCheck(): Promise<HealthItem[]> {
+  requireOpen();
+  await new Promise((r) => setTimeout(r, 1200));
+  const known: Record<string, number> = { netflix123: 2417, steamPass2021: 38 };
+  return entries.filter((e) => e.password && known[e.password.replace(/!$/, '')]).map((e) => hItem(e, known[e.password.replace(/!$/, '')]));
+}

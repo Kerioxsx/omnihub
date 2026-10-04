@@ -391,6 +391,25 @@ export interface EntryInput {
   totp?: string | null;
 }
 
+export interface HealthItem {
+  id: string;
+  title: string;
+  username: string;
+  url: string;
+  /** strength 0–4 (weak), days since changed (old), or times seen in breaches */
+  detail: number;
+}
+
+export interface HealthReport {
+  checked: number;
+  /** 0–100 */
+  score: number;
+  weak: HealthItem[];
+  reused: HealthItem[][];
+  old: HealthItem[];
+  missingTwoFactor: HealthItem[];
+}
+
 export interface TotpCode {
   code: string;
   /** seconds until the code changes */
