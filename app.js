@@ -47,6 +47,10 @@
     update: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
     command: '<path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>',
     send: '<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
+    volume: '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
+    mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1M12 18v4M8 22h8"/>',
+    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+    close: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="m15 9-6 6M9 9l6 6"/>',
   };
 
   /* ---------------- Download links from the latest release ---------------- */
@@ -282,7 +286,7 @@
     if (e.key === 'Escape' && !lb.hidden) closeLightbox();
   });
   document.addEventListener('click', (e) => {
-    const img = e.target.closest('.window img, .phone:not(.side) img');
+    const img = e.target.closest('.window img, .phone:not(.side) img, .landscape-phone img');
     if (img && !img.closest('.lightbox')) openLightbox(img);
   });
 
@@ -419,7 +423,10 @@
     ['apps', 'Apps with real sizes', 'Every desktop and Store app with its size. Uninstall, launch, and turn off startup apps.'],
     ['tasks', 'GPU per program', 'CPU, memory, GPU, video memory and disk for every program — End task and priority included.'],
     ['game', 'Game boost', 'Power plan, background apps, notifications, GPU, Wi-Fi and priority — tuned for the game, then put back.'],
-    ['music', 'Music with lyrics', 'Spotify, Apple Music or a browser — controls, cover art, volume, bass and synced lyrics on your phone.'],
+    ['music', 'Music with lyrics', 'Spotify, Apple Music or a browser — controls, cover art, volume, bass and synced lyrics on your phone, upright or sideways.'],
+    ['volume', 'Volume mixer', 'Every app’s volume and mute from your phone — turn the game down, Spotify up.'],
+    ['mic', 'Call controls', 'In a Discord, WhatsApp or Nyxen call? Mute your mic or deafen from the couch.'],
+    ['close', 'Close any app', 'Close a program like clicking ×, or quit the ones that hide in the tray.'],
     ['screen', 'Screen share', 'PC to phone in any browser, iPhone to PC over AirPlay, Android with scrcpy, 4K60 with Sunshine.'],
     ['send', 'Files both ways', 'Big uploads that resume, downloads with resume, and "Send to phone" from anywhere on the PC.'],
     ['power', 'Power from the couch', 'Lock, sleep, restart or shut down from your phone — with a countdown anyone can cancel.'],
@@ -428,6 +435,7 @@
     ['camera', 'Screenshots + text', 'Capture with hotkeys, mark up, and copy the text out of any screenshot.'],
     ['idea', 'Ideas for Claude', 'Write ideas into a folder Claude reads; its replies appear right next to your note.'],
     ['command', 'Jump anywhere', 'Ctrl K opens a command bar for every page, drive, app and action.'],
+    ['shield', 'Approve scans once', 'One Windows prompt for fast drive scans — not one every time.'],
     ['update', 'Updates itself', 'New versions install from inside the app — checked against their published SHA-256 first.'],
   ];
   const grid = $('[data-features]');
@@ -443,6 +451,8 @@
     ['phone-home', 'Home', 'CPU, memory, drives and what’s playing, live.'],
     ['phone-music', 'Music', 'Cover art and controls for whatever plays on the PC.'],
     ['phone-lyrics', 'Lyrics', 'Full-screen lyrics in time — tap a line to jump there.'],
+    ['phone-sound', 'Volume & calls', 'Every app’s volume, mute your mic, Mute mic and Deafen for a Discord call.'],
+    ['phone-open-apps', 'Open apps', 'Close any program on the PC — or quit it.'],
     ['phone-files', 'Files', 'Browse folders and photos, download or send to the PC.'],
     ['phone-games', 'Games', 'Start a game on the PC with its boost, or test your ping.'],
     ['phone-power', 'Power', 'Lock, sleep or shut down, with a countdown you can cancel.'],
