@@ -60,6 +60,7 @@ pub struct AppCore {
     pub browser: crate::browser::BrowserBridge,
     pub procs: Arc<crate::system::procs::ProcessMonitor>,
     pub games: Arc<crate::games::GameHub>,
+    pub updater: Arc<crate::update::Updater>,
     pub media: Arc<crate::media::MediaHub>,
     browser_integration: bool,
     /// Drives already warned about (root → when), so each warns once a day.
@@ -93,6 +94,7 @@ impl AppCore {
             browser: crate::browser::BrowserBridge::new(db.clone(), events.clone()),
             browser_integration: opts.browser_integration,
             games: crate::games::GameHub::new(&paths.data, events.clone(), procs.clone()),
+            updater: Arc::new(crate::update::Updater::new(&paths.cache, events.clone())),
             procs,
             media: crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media),
             low_space_warned: Default::default(),
@@ -146,6 +148,7 @@ impl AppCore {
         self.start_watchers();
         let games = self.games.clone();
         std::thread::spawn(move || games.recover());
+        self.start_update_checks();
         let weak = Arc::downgrade(self);
         self.media.start(move || weak.upgrade().is_some_and(|c| c.settings.get().media.lyrics_online));
         let send_to = s.remote.send_to_menu;
@@ -173,6 +176,42 @@ impl AppCore {
         if let Err(e) = self.browser.set_listening(self, on) {
             tracing::warn!("browser autofill pipe: {e}");
         }
+    }
+
+    /// Half a minute after start, then every six hours: look for a new
+    /// version, and install it when that's allowed and nothing is going on.
+    fn start_update_checks(self: &Arc<Self>) {
+        self.updater.clean();
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("updates".into())
+            .spawn(move || {
+                std::thread::sleep(Duration::from_secs(30));
+                loop {
+                    let Some(core) = weak.upgrade() else { return };
+                    let s = core.settings.get().updates;
+                    if s.check {
+                        if let crate::update::UpdateState::Available { release } = core.updater.check() {
+                            if s.auto_install && core.idle_for_update() {
+                                tracing::info!("installing OmniHub {}", release.version);
+                                core.audit.record("app", "update.install", &release.version, true);
+                                let _ = core.updater.install(&release);
+                            }
+                        }
+                    }
+                    drop(core);
+                    std::thread::sleep(Duration::from_secs(6 * 3600));
+                }
+            })
+            .ok();
+    }
+
+    /// Nothing an automatic update would interrupt: no game boost, nobody
+    /// watching the screen, no phone transfer.
+    pub fn idle_for_update(&self) -> bool {
+        let boosting = self.games.session().is_some_and(|s| s.active());
+        let watching = !self.remote.status().viewers.is_empty();
+        !boosting && !watching && !self.remote.transfers_active()
     }
 
     /// Every 20 seconds: due note reminders; every five minutes: drive space.

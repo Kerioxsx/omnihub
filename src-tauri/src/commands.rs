@@ -998,6 +998,8 @@ pub struct RemoteDiagnostics {
     addresses: Vec<LanAddress>,
     firewall: FirewallReport,
     visitors: Vec<Visit>,
+    /// This PC connecting to itself on each address (empty when off).
+    self_test: Vec<omnihub_core::remote::net::SelfTest>,
 }
 
 /// Why a phone might not reach the companion: addresses, Windows Firewall
@@ -1009,13 +1011,16 @@ pub async fn remote_diagnostics(core: Core<'_>) -> Res<RemoteDiagnostics> {
         let status = core.remote.status();
         let port = if status.running { status.port } else { core.settings.get().remote.port };
         let exe = std::env::current_exe().map_err(err)?;
+        let addresses = omnihub_core::remote::net::lan_addresses();
+        let self_test = if status.running && status.bind == omnihub_core::settings::Bind::Lan { omnihub_core::remote::net::self_test(&addresses, port) } else { Vec::new() };
         Ok(RemoteDiagnostics {
             running: status.running,
             port,
             tls: status.tls,
-            addresses: omnihub_core::remote::net::lan_addresses(),
+            addresses,
             firewall: firewall::check(&exe, Some(port), Proto::Tcp, "OmniHub"),
             visitors: core.remote.visitors(),
+            self_test,
         })
     })
     .await
@@ -1175,6 +1180,66 @@ pub async fn media_audio() -> Res<serde_json::Value> {
 #[tauri::command]
 pub async fn media_set_volume(level: Option<f32>, muted: Option<bool>) -> Res<omnihub_core::media::audio::Volume> {
     blocking(move || omnihub_core::media::audio::set(level, muted)).await
+}
+
+// ---------- fast scans without a prompt ----------
+
+#[tauri::command]
+pub async fn storage_scan_task_status() -> Res<bool> {
+    blocking(|| Ok(omnihub_core::storage::scan_task::enabled())).await
+}
+
+/// Create (or remove) the scheduled task that runs fast scans with
+/// administrator rights, after one UAC approval.
+#[tauri::command]
+pub async fn storage_scan_task_set(core: Core<'_>, on: bool) -> Res<bool> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = omnihub_core::storage::scan_task::set_enabled(on, &core.paths.scans());
+        core.audit.record("desktop", if on { "scan-task.on" } else { "scan-task.off" }, "", r.is_ok());
+        r?;
+        Ok(omnihub_core::storage::scan_task::enabled())
+    })
+    .await
+}
+
+// ---------- updates ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInfo {
+    current: String,
+    state: omnihub_core::update::UpdateState,
+}
+
+#[tauri::command]
+pub async fn update_state(core: Core<'_>) -> Res<UpdateInfo> {
+    Ok(UpdateInfo { current: core.updater.current_version().to_string(), state: core.updater.state() })
+}
+
+#[tauri::command]
+pub async fn update_check(core: Core<'_>) -> Res<UpdateInfo> {
+    let core = core.inner().clone();
+    blocking(move || Ok(UpdateInfo { current: core.updater.current_version().to_string(), state: core.updater.check() })).await
+}
+
+/// Download, verify and run the installer for the available version; the
+/// app closes and the installer reopens the new one.
+#[tauri::command]
+pub async fn update_install(core: Core<'_>) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let release = match core.updater.state() {
+            omnihub_core::update::UpdateState::Available { release } => release,
+            _ => match core.updater.check() {
+                omnihub_core::update::UpdateState::Available { release } => release,
+                _ => return Err("OmniHub is up to date.".to_string()),
+            },
+        };
+        core.audit.record("desktop", "update.install", &release.version, true);
+        core.updater.install(&release)
+    })
+    .await
 }
 
 // ---------- games ----------

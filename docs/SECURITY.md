@@ -21,6 +21,16 @@ and lets a phone do some of that. This is what protects each part.
   `network-private`), all-users startup entries (`startup-set`), the
   Equalizer APO include file (`eq-write`, two numbers and a flag), and a
   game's network and start priority (`game-admin`, see Games below).
+- **Approve fast scans once** (off by default): one UAC prompt creates a
+  Windows scheduled task, "OmniHub Fast Scan", that runs
+  `OmniHub.exe --omnihub-helper scan-queue <scan cache>` with the user's
+  highest privileges. To scan, the app drops a request (an id and a drive
+  letter) into the cache's `queue` folder and starts the task; the task
+  runs only the same validated scan job as the UAC helper and writes the
+  result back. Any program running as you could also queue a scan, which
+  would put file names from the whole drive (other users' folders too)
+  into your scan cache — so it is meant for PCs only you use. Turning it
+  off deletes the task (one more prompt).
 - "Restart as administrator" exists for people who prefer one prompt per
   session; drag-and-drop from Explorer does not work into an elevated app.
 
@@ -157,6 +167,13 @@ internet only for:
   repository's releases and checked against a SHA-256 built into the app.
 - **Ping helper** (only when you run it): ICMP echo requests to the game's
   regions or the host you entered.
+- **Updates** (on by default, can be turned off): GitHub's "latest release"
+  API for this repository, and then the installer and `SHA256SUMS.txt` from
+  that release. The installer must come from this repository's releases and
+  match its listed SHA-256 before it runs. The checksum guards against
+  broken or swapped downloads, not against someone who controls the
+  repository itself; code signing is not set up yet. Automatic installs
+  wait while a game boost, screen sharing or a phone upload is running.
 
 ## Not in v1
 

@@ -22,4 +22,5 @@ pub mod startup;
 pub mod storage;
 pub mod system;
 pub mod thumbs;
+pub mod update;
 pub mod vault;

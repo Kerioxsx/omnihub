@@ -59,6 +59,8 @@ export const api = {
   },
 
   storage: {
+    scanTaskStatus: () => call<boolean>('storage_scan_task_status'),
+    scanTaskSet: (on: boolean) => call<boolean>('storage_scan_task_set', { on }),
     volumes: () => call<T.VolumeInfo[]>('storage_volumes'),
     scan: (request: T.ScanRequest) => call<string>('storage_scan', { request }),
     progress: (jobId: string) => call<T.JobProgress | null>('storage_progress', { jobId }),
@@ -157,6 +159,12 @@ export const api = {
     importBackup: (path: string, password: string) => call<number>('vault_import', { path, password }),
   },
 
+  update: {
+    state: () => call<T.UpdateInfo>('update_state'),
+    check: () => call<T.UpdateInfo>('update_check'),
+    install: () => call<void>('update_install'),
+  },
+
   games: {
     list: () => call<{ profiles: T.GameProfile[]; session: T.GameSession | null }>('games_list'),
     create: (kind: T.GameKind) => call<T.GameProfile>('games_create', { kind }),
@@ -192,6 +200,10 @@ export const api = {
     status: () => call<T.ServerStatus>('remote_status'),
     start: () => call<T.ServerStatus>('remote_start'),
     stop: () => call<void>('remote_stop'),
+    restart: async () => {
+      await call<void>('remote_stop');
+      return call<T.ServerStatus>('remote_start');
+    },
     pairBegin: () => call<T.PairingInfo>('remote_pair_begin'),
     pairCancel: () => call<void>('remote_pair_cancel'),
     devices: () => call<T.Device[]>('remote_devices'),

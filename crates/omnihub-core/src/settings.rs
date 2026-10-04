@@ -24,6 +24,22 @@ pub struct Settings {
     pub screen: ScreenShareSettings,
     pub apps: AppsSettings,
     pub media: MediaSettings,
+    pub updates: UpdateSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UpdateSettings {
+    /// Look for a new version at start and every few hours.
+    pub check: bool,
+    /// Install it without asking (when nothing important is going on).
+    pub auto_install: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        UpdateSettings { check: true, auto_install: true }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

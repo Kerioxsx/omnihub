@@ -7,6 +7,7 @@ pub mod firewall;
 pub mod gpu;
 pub mod power;
 pub mod procs;
+pub mod schedtask;
 pub mod shell;
 
 /// The signed-in user's first name for greetings ("Sam" from "Sam Rivera"),

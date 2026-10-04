@@ -168,6 +168,11 @@ impl RemoteServer {
         self.visits.lock().iter().filter(|x| now - x.at < VISIT_TTL_SECS).cloned().collect()
     }
 
+    /// A phone is sending files right now.
+    pub fn transfers_active(&self) -> bool {
+        self.uploads.lock().as_ref().is_some_and(|u| u.recently_active(Duration::from_secs(60)))
+    }
+
     pub fn is_running(&self) -> bool {
         self.running.lock().is_some()
     }
@@ -180,20 +185,10 @@ impl RemoteServer {
             Bind::Lan => net::unspecified(),
             Bind::Localhost => net::localhost(),
         };
-        let addr = SocketAddr::new(ip, s.port);
         // Bind synchronously so "port in use" is reported to the caller. A
         // server stopped a moment ago may still hold the port while its
         // graceful shutdown finishes, so retry briefly.
-        let bind = || {
-            std::net::TcpListener::bind(addr).or_else(|e| {
-                // Dual-stack [::] may be unavailable; fall back to IPv4.
-                if s.bind == Bind::Lan && e.kind() != std::io::ErrorKind::AddrInUse {
-                    std::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], s.port)))
-                } else {
-                    Err(e)
-                }
-            })
-        };
+        let bind = || net::listen(ip, s.port);
         let mut attempt = bind();
         for _ in 0..30 {
             match &attempt {

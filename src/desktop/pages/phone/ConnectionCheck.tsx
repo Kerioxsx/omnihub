@@ -83,7 +83,9 @@ export function ConnectionCheck({ defaultOpen }: { defaultOpen?: boolean }) {
   const scheme = d?.tls ? 'https' : 'http';
   const url = primary && d ? `${scheme}://${primary.ip}:${d.port}` : null;
   const blocked = !!d && d.firewall.supported && (d.firewall.verdict === 'blocked' || d.firewall.verdict === 'noRule');
-  const problems = !!d && ((isPublic && blocked) || blocked || !primary);
+  const selfPrimary = d?.selfTest.find((t) => t.ip === primary?.ip);
+  const selfFailed = !!selfPrimary && !selfPrimary.ok;
+  const problems = !!d && ((isPublic && blocked) || blocked || !primary || selfFailed);
 
   return (
     <Card className={cx('p-5', problems && 'border-warn/40')}>
@@ -150,6 +152,25 @@ export function ConnectionCheck({ defaultOpen }: { defaultOpen?: boolean }) {
               )}
             </Row>
 
+            {selfPrimary && (
+              <Row
+                tone={selfPrimary.ok ? 'good' : 'bad'}
+                icon={Stethoscope}
+                title={selfPrimary.ok ? 'OmniHub answers on this address' : 'OmniHub does not answer on this address'}
+                action={
+                  !selfPrimary.ok ? (
+                    <Button size="sm" variant="primary" icon={RefreshCw} loading={busy === 'restart'} onClick={() => void run('restart', () => api.remote.restart(), 'Phone companion restarted')}>
+                      Restart companion
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {selfPrimary.ok
+                  ? `This PC reached ${url} itself, so the companion is listening correctly.`
+                  : `Even this PC could not open ${url} (${selfPrimary.error ?? 'no answer'}). Restart the companion; if it stays red, a security program (Norton, McAfee, Avast, Bitdefender, Kaspersky…) may be blocking OmniHub — allow it there.`}
+              </Row>
+            )}
+
             <Row tone={!d.running ? 'neutral' : visit ? (visit.allowed ? 'good' : 'bad') : 'neutral'} icon={Smartphone} title={!d.running ? 'Companion is off' : visit ? (visit.allowed ? 'A phone reached this PC' : 'A device was turned away') : 'No phone has reached this PC yet'}>
               {!d.running
                 ? 'Turn the companion on, then open the address on your phone.'
@@ -175,6 +196,9 @@ export function ConnectionCheck({ defaultOpen }: { defaultOpen?: boolean }) {
               <b className="text-fg">Chrome, Edge or Firefox on iPhone</b> need permission to reach local devices: iPhone Settings → the browser → turn on <b className="text-fg">Local Network</b>. Safari does not need it.
             </li>
             <li>Turn off any VPN on the phone while connecting.</li>
+            <li>
+              Antivirus suites with their own firewall (Norton, McAfee, Avast, AVG, Bitdefender, Kaspersky, ESET) ignore the Windows Firewall rule. Allow <b className="text-fg">OmniHub</b> in that program, or try once with its firewall paused.
+            </li>
             <li>
               The certificate warning is expected (the certificate is made on this PC). Safari: <b className="text-fg">Show Details → visit this website</b>. Chrome: <b className="text-fg">Advanced → Proceed</b>.
             </li>

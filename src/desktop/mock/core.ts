@@ -40,6 +40,7 @@ export const settings: Settings = {
   screen: { preset: 'balanced', maxFps: 60, scrcpyPath: null, sunshinePath: null, airplay: { name: 'GAMING-PC (OmniHub)', quality: '1080p', fps: 60, audio: true, requirePin: true, lowLatency: true, fullscreen: false }, airplayKeepOnTop: false, airplayPip: false, airplayAutoStart: false, uxplayPath: null },
   apps: { favorites: ['spotify-music', 'visual-studio-code'] },
   media: { allowPhone: true, lyricsOnline: true, eqEnabled: false, bassDb: 0, trebleDb: 0 },
+  updates: { check: true, autoInstall: true },
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -105,7 +106,7 @@ export function audit(actor: string, action: string, detail: string, ok = true):
 // ---------- app info & stats ----------
 
 export const appInfo: AppInfoDetails = {
-  version: '0.2.0',
+  version: '0.2.1',
   elevated: false,
   platform: 'windows',
   hostname: 'GAMING-PC',

@@ -10,6 +10,7 @@ import { useSettings } from '../state/settings';
 import { jobFraction, useStorage } from '../state/storage';
 import { Logo } from './Logo';
 import { NAV, type NavItem } from './nav';
+import { UpdateCard } from './UpdateCard';
 import { Dot, Kbd } from './ui/Card';
 import { ProgressRing } from './ui/Progress';
 
@@ -135,6 +136,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       </div>
 
       <div className="border-t border-line p-3">
+        <UpdateCard collapsed={collapsed} />
         {!collapsed && (
           <button type="button" onClick={() => navigate('phone')} className="mb-2 flex w-full items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-line-strong">
             <Dot tone={remote?.running ? (phones ? 'good' : 'accent') : 'neutral'} pulse={!!remote?.running && phones > 0} />

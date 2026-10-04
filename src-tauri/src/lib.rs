@@ -126,6 +126,9 @@ pub fn run(args: Vec<String>) {
 
             tray::create(&handle)?;
             shortcuts::register(&handle);
+            // The installer closes and reopens OmniHub; leave cleanly first.
+            let exit_handle = handle.clone();
+            core.updater.set_exit(move || exit_handle.exit(0));
             core.start_background();
 
             // Autostart passes --minimized; "Start minimized" decides whether
@@ -299,6 +302,11 @@ pub fn run(args: Vec<String>) {
             commands::system_end_process,
             commands::system_usage,
             commands::system_set_priority,
+            commands::storage_scan_task_status,
+            commands::storage_scan_task_set,
+            commands::update_state,
+            commands::update_check,
+            commands::update_install,
             commands::games_list,
             commands::games_create,
             commands::games_save,

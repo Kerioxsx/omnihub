@@ -80,7 +80,7 @@ function simulateVisit() {
 }
 
 export function diagnostics(): RemoteDiagnostics {
-  return { running, port: settings.remote.port, tls: settings.remote.tls, addresses: addresses(), firewall: firewallReport(), visitors: visitors.map((v) => ({ ...v })) };
+  return { running, port: settings.remote.port, tls: settings.remote.tls, addresses: addresses(), firewall: firewallReport(), visitors: visitors.map((v) => ({ ...v })), selfTest: running ? addresses().filter((a) => !a.virtualAdapter).map((a) => ({ ip: a.ip, ok: true, error: null })) : [] };
 }
 
 export function fixFirewall(includePublic: boolean): FirewallReport {

@@ -568,6 +568,8 @@ export interface RemoteDiagnostics {
   addresses: LanAddress[];
   firewall: FirewallReport;
   visitors: Visit[];
+  /** This PC connecting to itself on each address (empty when off). */
+  selfTest: { ip: string; ok: boolean; error: string | null }[];
 }
 
 export interface Device {
@@ -818,6 +820,10 @@ export interface Settings {
     eqEnabled: boolean;
     bassDb: number;
     trebleDb: number;
+  };
+  updates: {
+    check: boolean;
+    autoInstall: boolean;
   };
 }
 
@@ -1104,4 +1110,36 @@ export interface RobloxInstall {
   versionDirs: string[];
   bootstrapper: string | null;
   running: boolean;
+}
+
+// ---------- updates ----------
+
+export interface ReleaseAsset {
+  name: string;
+  url: string;
+  size: number;
+}
+
+export interface Release {
+  version: string;
+  notes: string;
+  pageUrl: string;
+  publishedAt: string | null;
+  setup: ReleaseAsset | null;
+  msi: ReleaseAsset | null;
+  sumsUrl: string | null;
+}
+
+export type UpdateState =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'upToDate'; checkedAt: number }
+  | { state: 'available'; release: Release }
+  | { state: 'downloading'; version: string; done: number; total: number }
+  | { state: 'installing'; version: string }
+  | { state: 'failed'; message: string };
+
+export interface UpdateInfo {
+  current: string;
+  state: UpdateState;
 }

@@ -26,6 +26,12 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.2.1
+
+- Phones on Wi-Fi could not reach the PC on Windows ("site can't be reached"): fixed, plus a self-test in Phone → Connection check.
+- **Updates install from inside the app** (Settings → About), automatically by default.
+- **Approve fast scans once** instead of a Windows prompt every time (Settings → Storage).
+
 ## New in 0.2.0
 
 - **Games** page: boost profiles, Play/Boost from the PC or the phone, ping helper, Roblox Fast Flags.

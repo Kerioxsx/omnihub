@@ -117,6 +117,11 @@ impl Uploads {
         Uploads { staging: incoming.join(PARTIAL_DIR), events, last_emit: Mutex::new(HashMap::new()), locks: Mutex::new(HashMap::new()) }
     }
 
+    /// Whether any upload made progress in the last `within`.
+    pub fn recently_active(&self, within: std::time::Duration) -> bool {
+        self.last_emit.lock().values().any(|t| t.elapsed() < within)
+    }
+
     fn meta_path(&self, id: &str) -> PathBuf {
         self.staging.join(format!("{id}.json"))
     }

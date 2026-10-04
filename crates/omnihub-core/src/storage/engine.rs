@@ -153,11 +153,22 @@ pub trait ElevatedRunner: Send + Sync {
     fn run(&self, args: &[String]) -> std::io::Result<i32>;
 }
 
-/// Runs `current_exe --omnihub-helper ...` through UAC.
+/// Runs `current_exe --omnihub-helper ...` through UAC — or, for fast
+/// scans the user approved once for good, through the scheduled task.
 pub struct SelfElevated;
 
 impl ElevatedRunner for SelfElevated {
     fn run(&self, args: &[String]) -> std::io::Result<i32> {
+        if let [_, job, letter, dir] = args {
+            if job == "scan-volume" && super::scan_task::enabled() {
+                if let Some(l) = letter.chars().next() {
+                    match super::scan_task::run_via_task(l, Path::new(dir)) {
+                        Ok(code) => return Ok(code),
+                        Err(e) => tracing::warn!("scan task: {e}; asking through UAC instead"),
+                    }
+                }
+            }
+        }
         let exe = std::env::current_exe()?;
         crate::system::elevation::run_elevated_and_wait(&exe, args, false)
     }

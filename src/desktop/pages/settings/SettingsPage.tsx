@@ -5,6 +5,7 @@ import { Camera, Check, Download, ExternalLink, FolderOpen, HardDrive, Info, Key
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Logo } from '../../components/Logo';
+import { updateText, useUpdate } from '../../components/UpdateCard';
 import { Page } from '../../components/Page';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Badge, Kbd } from '../../components/ui/Card';
@@ -229,7 +230,8 @@ export function SettingsPage() {
           </Section>
 
           <Section id="storage" title="Storage" description="How drives are scanned and what counts as worth cleaning.">
-            <Row title="Default scan mode" hint="Fast reads the NTFS Master File Table and asks for admin approval each time; Standard walks folders.">
+            <ScanApprovalRow />
+            <Row title="Default scan mode" hint="Fast reads the NTFS Master File Table (it needs administrator rights); Standard walks folders.">
               <Segmented<ScanMode>
                 size="sm"
                 label="Default scan mode"
@@ -560,10 +562,72 @@ export function SettingsPage() {
                 Show the welcome tour
               </Button>
             </div>
+            <UpdateRows />
           </Section>
         </div>
       </div>
     </Page>
+  );
+}
+
+/** "Don't ask again" for the administrator prompt of fast scans. */
+function ScanApprovalRow() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void api.storage.scanTaskStatus().then(setOn, () => setOn(false));
+  }, []);
+  const toggle = async (v: boolean) => {
+    setBusy(true);
+    try {
+      setOn(await api.storage.scanTaskSet(v));
+      toast.success(v ? 'Fast scans won’t ask again' : 'Fast scans will ask each time');
+    } catch (e) {
+      const msg = errorText(e);
+      toast.error(/declined/i.test(msg) ? 'Administrator approval was declined' : 'That did not work', msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Row
+      title="Approve fast scans once"
+      hint="Windows asks for administrator approval before every fast scan. Approve once and OmniHub keeps a Windows scheduled task that only runs its drive scan, so later scans start straight away. Best on a PC only you use."
+    >
+      <Switch checked={!!on} disabled={on === null || busy} onChange={(v) => void toggle(v)} label="Approve fast scans once" />
+    </Row>
+  );
+}
+
+/** Updates: status, check now, automatic checks and installs. */
+function UpdateRows() {
+  const s = useSettings((x) => x.settings);
+  const update = useSettings((x) => x.update);
+  const { info, check, install } = useUpdate();
+  if (!s) return null;
+  const st = info?.state;
+  const busy = st?.state === 'checking' || st?.state === 'downloading' || st?.state === 'installing';
+  return (
+    <>
+      <Row title="Updates" hint={st ? updateText(st) : 'Checking…'}>
+        <div className="flex gap-2">
+          {st?.state === 'available' && (
+            <Button size="sm" variant="primary" icon={Download} onClick={() => void install()}>
+              Update to {st.release.version}
+            </Button>
+          )}
+          <Button size="sm" variant="secondary" icon={RotateCcw} loading={busy} onClick={() => void check()}>
+            Check now
+          </Button>
+        </div>
+      </Row>
+      <Row title="Check for updates automatically" hint="When OmniHub starts and every six hours, from OmniHub's GitHub releases.">
+        <Switch checked={s.updates.check} onChange={(v) => void update({ updates: { check: v } })} label="Check for updates automatically" />
+      </Row>
+      <Row title="Install updates automatically" hint="Downloads the new version, checks it against its published checksum and installs it — but never during a game boost, screen sharing or a phone transfer. Settings and data stay.">
+        <Switch checked={s.updates.autoInstall} disabled={!s.updates.check} onChange={(v) => void update({ updates: { autoInstall: v } })} label="Install updates automatically" />
+      </Row>
+    </>
   );
 }
 

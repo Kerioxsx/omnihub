@@ -8,6 +8,9 @@ import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from '.
 import { scene } from './mock/art';
 import * as core from './mock/core';
 import * as games from './mock/games';
+import * as updates from './mock/update';
+
+const mockScanTask = { on: false };
 import { volumes } from './mock/drives';
 import * as media from './mock/media';
 import * as music from './mock/music';
@@ -29,6 +32,11 @@ const handlers: Record<string, Handler> = {
   // app
   app_info: () => core.appInfo,
   system_stats: () => core.systemStats(),
+  storage_scan_task_status: () => mockScanTask.on,
+  storage_scan_task_set: (a) => ((mockScanTask.on = bool(a, 'on')), mockScanTask.on),
+  update_state: () => updates.info(),
+  update_check: () => updates.check(),
+  update_install: () => updates.install(),
   games_list: () => games.list(),
   games_create: (a) => games.create(str(a, 'kind') as GameKind),
   games_save: (a) => games.save(obj<GameProfile>(a, 'profile')),

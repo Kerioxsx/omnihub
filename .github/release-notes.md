@@ -1,10 +1,8 @@
 ## New in this version
 
-- **Games**: a boost profile per game (Fortnite, Roblox, VALORANT, CS2 and more) — power plan, background apps, notifications, GPU, priority, Wi-Fi low-latency mode and network priority, all put back when the game closes. Ping helper and Roblox Fast Flag presets. Start a game from your phone.
-- **Tasks**: CPU, memory, GPU, video memory and disk of every program, with priority and End task — on the PC and the phone.
-- **Music** on your phone: what the PC plays, with synced lyrics, cover art, controls, volume and bass.
-- **Browser autofill** for the vault in Brave, Chrome and Edge (Vault → Browser autofill), two-factor codes and a password health check.
-- **iPhone → PC mirroring** (AirPlay), screen-share privacy, sending files to the phone, and much more.
+- **Phones connect again on Windows.** The phone companion only listened for IPv6 on Windows, so phones opening `192.168.x.x` saw "site can't be reached". It now takes IPv4 and IPv6, and Phone → Connection check tests the address from the PC itself.
+- **Updates from inside the app.** OmniHub checks for new versions and installs them for you (Settings → About). Your settings, pairings and data stay. This is the last time you need to download an installer yourself.
+- **Approve fast scans once.** Settings → Storage → "Approve fast scans once" stops the administrator prompt before every fast scan.
 
 ## Install
 

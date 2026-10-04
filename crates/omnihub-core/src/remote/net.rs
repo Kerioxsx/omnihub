@@ -104,6 +104,27 @@ pub fn lan_addresses() -> Vec<LanAddress> {
     out.into_iter().map(|(_, a)| a).collect()
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SelfTest {
+    pub ip: String,
+    pub ok: bool,
+    pub error: Option<String>,
+}
+
+/// Connect from this PC to the companion on each LAN address. If even this
+/// fails, phones cannot get in either, whatever the Wi-Fi or firewall does.
+pub fn self_test(addresses: &[LanAddress], port: u16) -> Vec<SelfTest> {
+    addresses
+        .iter()
+        .filter(|a| !a.virtual_adapter)
+        .map(|a| {
+            let r = a.ip.parse::<IpAddr>().map_err(|e| e.to_string()).and_then(|ip| std::net::TcpStream::connect_timeout(&std::net::SocketAddr::new(ip, port), std::time::Duration::from_secs(2)).map_err(|e| e.to_string()));
+            SelfTest { ip: a.ip.clone(), ok: r.is_ok(), error: r.err() }
+        })
+        .collect()
+}
+
 /// Host header check against DNS rebinding: only IP literals and this
 /// machine's own names are accepted.
 pub fn host_allowed(host: &str, hostname: &str, allow_tailscale: bool) -> bool {
@@ -194,6 +215,32 @@ pub fn qr_svg(text: &str) -> String {
     }
 }
 
+/// Listen on `ip:port`. For the unspecified IPv6 address the socket is made
+/// dual-stack explicitly: Windows makes IPv6 sockets IPv6-only by default,
+/// which would leave phones connecting to 192.168.x.x with "site can't be
+/// reached". Falls back to IPv4 only when IPv6 is unavailable.
+pub fn listen(ip: IpAddr, port: u16) -> std::io::Result<std::net::TcpListener> {
+    use socket2::{Domain, Protocol, Socket, Type};
+    let open = |ip: IpAddr| -> std::io::Result<std::net::TcpListener> {
+        let addr = std::net::SocketAddr::new(ip, port);
+        let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
+        if ip.is_ipv6() {
+            socket.set_only_v6(false)?;
+        }
+        // Like std: lets a restart reuse the port at once. (On Windows the
+        // option means something else — letting others take the port.)
+        #[cfg(not(windows))]
+        socket.set_reuse_address(true)?;
+        socket.bind(&addr.into())?;
+        socket.listen(1024)?;
+        Ok(socket.into())
+    };
+    match open(ip) {
+        Err(e) if ip == unspecified() && e.kind() != std::io::ErrorKind::AddrInUse => open(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+        r => r,
+    }
+}
+
 pub fn localhost() -> IpAddr {
     IpAddr::V4(Ipv4Addr::LOCALHOST)
 }
@@ -222,6 +269,17 @@ mod tests {
         assert!(!ok("100.100.1.1", false));
         assert!(ok("100.100.1.1", true));
         assert!(!ok("100.128.1.1", true));
+    }
+
+    #[test]
+    fn lan_listener_takes_ipv4_and_ipv6() {
+        let l = listen(unspecified(), 0).unwrap();
+        let port = l.local_addr().unwrap().port();
+        // IPv4 must work everywhere — that is how phones connect.
+        std::net::TcpStream::connect(("127.0.0.1", port)).expect("IPv4 connection to the LAN listener");
+        if std::net::TcpListener::bind("[::1]:0").is_ok() && l.local_addr().unwrap().is_ipv6() {
+            std::net::TcpStream::connect(("::1", port)).expect("IPv6 connection to the LAN listener");
+        }
     }
 
     #[test]

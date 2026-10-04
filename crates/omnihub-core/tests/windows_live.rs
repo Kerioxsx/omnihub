@@ -183,3 +183,29 @@ fn installed_apps_and_volumes() {
         println!("icon for {}: {}", a.name, icon.as_ref().map_or("none".into(), |i| format!("{} bytes", i.len())));
     }
 }
+
+/// The no-prompt scan task: Task Scheduler accepts OmniHub's definition,
+/// finds it, runs it, and deletes it. (CI runs as an administrator.)
+#[test]
+fn scheduled_task_round_trip() {
+    use omnihub_core::system::schedtask;
+    if !is_elevated() {
+        eprintln!("skipped: needs an elevated shell");
+        return;
+    }
+    let name = format!("OmniHub test task {}", std::process::id());
+    let dir = tempfile::tempdir().unwrap();
+    let marker = dir.path().join("ran.txt");
+    let xml = schedtask::task_xml(Path::new(r"C:\Windows\System32\cmd.exe"), &format!("/c echo ok> \"{}\"", marker.display()), "OmniHub test");
+    schedtask::install(&name, &xml).expect("task created");
+    assert!(schedtask::installed(&name));
+    schedtask::run(&name).expect("task started");
+    let t = Instant::now();
+    while !marker.exists() && t.elapsed() < Duration::from_secs(15) {
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    // Interactive-token tasks need a signed-in user; CI may not have one.
+    eprintln!("task ran: {}", marker.exists());
+    schedtask::remove(&name).expect("task deleted");
+    assert!(!schedtask::installed(&name));
+}

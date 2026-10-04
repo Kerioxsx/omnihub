@@ -96,6 +96,15 @@ does not match the version in `tauri.conf.json`, and a version whose tag
 already points to another commit. Running it again for the released commit
 rebuilds and replaces the files.
 
+### Updates
+
+`update.rs` asks `OMNIHUB_UPDATE_URL` (default: GitHub's latest-release API
+for this repository), and installs with the NSIS installer's `/P /R /UPDATE`
+(passive, reopen the app, update mode) or `msiexec /i … /passive` for
+Program Files installs. A release therefore has to keep the asset names
+the Release workflow produces (`OmniHub_<version>_x64-setup.exe`,
+`SHA256SUMS.txt`). Its tests run against a local HTTP server.
+
 ## Adding a command
 
 1. Implement it in `omnihub-core` (with a test).
