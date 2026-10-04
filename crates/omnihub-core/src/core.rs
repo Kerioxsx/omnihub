@@ -193,7 +193,9 @@ impl AppCore {
                     let mut pending = None;
                     if s.check {
                         if let crate::update::UpdateState::Available { release } = core.updater.check() {
-                            if s.auto_install {
+                            // No surprise Windows prompt from the tray: an
+                            // install that needs approval waits for a click.
+                            if s.auto_install && !core.updater.needs_approval() {
                                 pending = Some(release);
                             }
                         }

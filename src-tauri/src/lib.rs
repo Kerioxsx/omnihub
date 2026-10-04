@@ -153,6 +153,12 @@ pub fn run(args: Vec<String>) {
             // Autostart passes --minimized; "Start minimized" decides whether
             // that start stays in the tray. A normal launch always shows.
             let settings = core.settings.get();
+            // "Launch at login" starts this copy, also after OmniHub moved
+            // folders (say from Program Files to the user's own).
+            if settings.general.launch_at_login {
+                use tauri_plugin_autostart::ManagerExt;
+                let _ = app.autolaunch().enable();
+            }
             if let Some(w) = app.get_webview_window("main") {
                 if !(start_hidden && settings.general.start_minimized) {
                     let _ = w.show();

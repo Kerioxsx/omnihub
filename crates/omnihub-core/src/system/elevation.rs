@@ -117,6 +117,47 @@ pub fn run_elevated_and_wait(exe: &std::path::Path, args: &[String], visible: bo
     }
 }
 
+/// Start `exe` through UAC with `params` exactly as given (no quoting) and
+/// return without waiting. `PermissionDenied` when the prompt is declined.
+#[cfg(windows)]
+pub fn start_elevated(exe: &std::path::Path, params: &str) -> io::Result<()> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{CloseHandle, ERROR_CANCELLED};
+    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+    let verb = wide("runas");
+    let file = wide(&exe.to_string_lossy());
+    let params = wide(params);
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOCLOSEPROCESS,
+        lpVerb: PCWSTR(verb.as_ptr()),
+        lpFile: PCWSTR(file.as_ptr()),
+        lpParameters: PCWSTR(params.as_ptr()),
+        nShow: SW_SHOWNORMAL.0,
+        ..Default::default()
+    };
+    unsafe {
+        if let Err(e) = ShellExecuteExW(&mut info) {
+            if e.code() == ERROR_CANCELLED.to_hresult() {
+                return Err(io::Error::new(io::ErrorKind::PermissionDenied, "administrator approval was declined"));
+            }
+            return Err(io::Error::other(e.message()));
+        }
+        if !info.hProcess.is_invalid() {
+            let _ = CloseHandle(info.hProcess);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn start_elevated(_exe: &std::path::Path, _params: &str) -> io::Result<()> {
+    Err(io::Error::new(io::ErrorKind::Unsupported, "elevation is only implemented on Windows"))
+}
+
 #[cfg(not(windows))]
 pub fn run_elevated_and_wait(_exe: &std::path::Path, _args: &[String], _visible: bool) -> io::Result<i32> {
     Err(io::Error::new(io::ErrorKind::Unsupported, "elevation is only implemented on Windows"))

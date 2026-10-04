@@ -110,13 +110,75 @@ pub fn is_newer(latest: &str, current: &str) -> bool {
     }
 }
 
-/// Where an install lives decides the installer: per-user installs (under
-/// %LOCALAPPDATA%) use the setup .exe, Program Files installs the MSI.
+/// Whether OmniHub runs from under %LOCALAPPDATA% (the setup's default).
 pub fn per_user_install(exe: &Path) -> bool {
     match dirs::data_local_dir() {
         Some(local) => exe.starts_with(local),
         None => true,
     }
+}
+
+/// How this copy of OmniHub gets updated.
+#[derive(Debug, Clone, PartialEq)]
+pub enum InstallKind {
+    /// The setup .exe as the user: OmniHub sits in a folder the user can
+    /// write (the default, %LOCALAPPDATA%\OmniHub).
+    Setup,
+    /// The MSI through msiexec, which asks for approval: it was installed
+    /// with the MSI.
+    Msi,
+    /// The setup .exe with administrator approval, into this folder: it was
+    /// installed with the setup .exe into Program Files or another folder
+    /// only administrators can write. (Run as the user, the setup fails with
+    /// "Error writing to file".)
+    ElevatedSetup(PathBuf),
+}
+
+/// Decide from where OmniHub runs and how it was installed.
+pub fn install_kind(exe: &Path) -> InstallKind {
+    let Some(dir) = exe.parent() else { return InstallKind::Setup };
+    if per_user_install(exe) || dir_writable(dir) {
+        InstallKind::Setup
+    } else if msi_registered() {
+        InstallKind::Msi
+    } else {
+        InstallKind::ElevatedSetup(dir.to_path_buf())
+    }
+}
+
+/// Whether this user can create files in `dir`.
+pub fn dir_writable(dir: &Path) -> bool {
+    let probe = dir.join(format!(".omnihub-write-test-{}", std::process::id()));
+    match std::fs::File::create(&probe) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+/// Whether Windows lists an MSI installation of OmniHub (the same test the
+/// setup .exe uses before it replaces one).
+#[cfg(windows)]
+fn msi_registered() -> bool {
+    use winreg::enums::{HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY};
+    use winreg::RegKey;
+    const UNINSTALL: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
+    [KEY_WOW64_64KEY, KEY_WOW64_32KEY].iter().any(|&view| {
+        let Ok(root) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey_with_flags(UNINSTALL, KEY_READ | view) else { return false };
+        root.enum_keys().flatten().any(|k| {
+            let Ok(app) = root.open_subkey_with_flags(&k, KEY_READ | view) else { return false };
+            let name: String = app.get_value("DisplayName").unwrap_or_default();
+            let uninstall: String = app.get_value("UninstallString").unwrap_or_default();
+            name == "OmniHub" && uninstall.to_ascii_lowercase().contains("msiexec")
+        })
+    })
+}
+
+#[cfg(not(windows))]
+fn msi_registered() -> bool {
+    false
 }
 
 type Exit = Box<dyn Fn() + Send + Sync>;
@@ -184,6 +246,12 @@ impl Updater {
         self.in_use.lock().as_ref().is_some_and(|f| f())
     }
 
+    /// Installing asks Windows for administrator approval (OmniHub is in
+    /// Program Files or a similar folder), so it should not start unasked.
+    pub fn needs_approval(&self) -> bool {
+        std::env::current_exe().map(|exe| install_kind(&exe) != InstallKind::Setup).unwrap_or(false)
+    }
+
     pub fn set_exit(&self, f: impl Fn() + Send + Sync + 'static) {
         *self.on_exit.lock() = Some(Box::new(f));
     }
@@ -215,13 +283,18 @@ impl Updater {
     }
 
     /// Download and verify the installer for `release`. Returns its path and
-    /// whether it is an MSI.
-    pub fn download(&self, release: &Release) -> Result<(PathBuf, bool), String> {
+    /// how to run it.
+    pub fn download(&self, release: &Release) -> Result<(PathBuf, InstallKind), String> {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let (asset, msi) = match (per_user_install(&exe), &release.setup, &release.msi) {
-            (true, Some(a), _) => (a, false),
-            (false, _, Some(a)) => (a, true),
-            (_, Some(a), _) => (a, false),
+        let mut kind = install_kind(&exe);
+        let asset = match (&kind, &release.setup, &release.msi) {
+            (InstallKind::Msi, _, Some(a)) => a,
+            (InstallKind::Msi, Some(a), None) => {
+                // No MSI in this release: the setup .exe with approval.
+                kind = InstallKind::ElevatedSetup(exe.parent().map(Path::to_path_buf).unwrap_or_default());
+                a
+            }
+            (_, Some(a), _) => a,
             _ => return Err("This release has no Windows installer.".into()),
         };
         // Only files from this project's own releases.
@@ -241,7 +314,7 @@ impl Updater {
             let _ = std::fs::remove_file(&dest);
             return Err("The downloaded installer did not match its published checksum, so it was deleted.".into());
         }
-        Ok((dest, msi))
+        Ok((dest, kind))
     }
 
     /// Download, verify and run the installer, then close OmniHub.
@@ -249,9 +322,9 @@ impl Updater {
         if self.busy.swap(true, Ordering::SeqCst) {
             return Err("An update is already being installed.".into());
         }
-        let r = self.download(release).and_then(|(path, msi)| {
+        let r = self.download(release).and_then(|(path, kind)| {
             self.set(UpdateState::Installing { version: release.version.clone() });
-            run_installer(&path, msi)
+            run_installer(&path, &kind)
         });
         match r {
             Ok(()) => {
@@ -297,25 +370,28 @@ fn fetch(url: &str) -> Result<Vec<u8>, String> {
 }
 
 #[cfg(windows)]
-fn run_installer(path: &Path, msi: bool) -> Result<(), String> {
-    let mut c = if msi {
-        // Program Files installs need administrator approval (msiexec asks).
-        let mut c = std::process::Command::new("msiexec");
-        c.arg("/i").arg(path).arg("/passive");
-        c
-    } else {
+fn run_installer(path: &Path, kind: &InstallKind) -> Result<(), String> {
+    match kind {
+        // Program Files installs made with the MSI: msiexec asks for approval.
+        InstallKind::Msi => std::process::Command::new("msiexec").arg("/i").arg(path).arg("/passive").spawn().map(|_| ()).map_err(|e| format!("Could not start the installer: {e}")),
         // Passive (a progress bar, no questions), close the running app,
         // and start the new version when done.
-        let mut c = std::process::Command::new(path);
-        c.args(["/P", "/R", "/UPDATE"]);
-        c
-    };
-    c.spawn().map(|_| ()).map_err(|e| format!("Could not start the installer: {e}"))
+        InstallKind::Setup => std::process::Command::new(path).args(["/P", "/R", "/UPDATE"]).spawn().map(|_| ()).map_err(|e| format!("Could not start the installer: {e}")),
+        // The same with administrator approval, into the folder OmniHub is
+        // in now (NSIS wants /D= last and unquoted, spaces and all).
+        InstallKind::ElevatedSetup(dir) => crate::system::elevation::start_elevated(path, &format!("/P /R /UPDATE /OHELEVATED /D={}", dir.display())).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::PermissionDenied {
+                "OmniHub is installed in a folder that needs administrator rights, and the Windows prompt was declined.".to_string()
+            } else {
+                format!("Could not start the installer: {e}")
+            }
+        }),
+    }
 }
 
 #[cfg(not(windows))]
-fn run_installer(_path: &Path, _msi: bool) -> Result<(), String> {
-    Err("Updates install on Windows only.".into())
+fn run_installer(_path: &Path, _kind: &InstallKind) -> Result<(), String> {
+    Err("Installing updates is a Windows feature.".into())
 }
 
 #[cfg(test)]
@@ -370,6 +446,29 @@ mod tests {
         assert!(!is_newer("garbage", "0.2.0"));
     }
 
+    #[test]
+    fn picks_the_installer_from_where_omnihub_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(dir_writable(dir.path()));
+        assert!(std::fs::read_dir(dir.path()).unwrap().next().is_none(), "the probe file is removed");
+        assert_eq!(install_kind(&dir.path().join("omnihub.exe")), InstallKind::Setup);
+        assert!(!dir_writable(&dir.path().join("missing")));
+
+        // A folder this user cannot change, like Program Files without
+        // approval: the setup with approval, into that folder.
+        let locked = dir.path().join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        }
+        // (An administrator or root can write anywhere.)
+        if !dir_writable(&locked) {
+            assert_eq!(install_kind(&locked.join("omnihub.exe")), InstallKind::ElevatedSetup(locked.clone()));
+        }
+    }
+
     /// A one-shot HTTP server for the "GitHub" answers.
     fn serve(responses: Vec<(&'static str, Vec<u8>)>) -> String {
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -413,8 +512,8 @@ mod tests {
         let u = Updater::with_source(dir.path(), EventBus::new(), &format!("{api}/latest"), "0.2.0");
         let UpdateState::Available { release: rel } = u.check() else { panic!("{:?}", u.state()) };
         assert_eq!(rel.version, "0.3.0");
-        let (path, msi) = u.download(&rel).unwrap();
-        assert!(!msi);
+        let (path, kind) = u.download(&rel).unwrap();
+        assert_eq!(kind, InstallKind::Setup, "the tests run from a folder they can write");
         assert_eq!(std::fs::read(&path).unwrap(), installer);
 
         // A checksum that doesn't match: refused and deleted.

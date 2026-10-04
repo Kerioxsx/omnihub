@@ -1,17 +1,15 @@
 ## New in this version
 
-- **The AirPlay receiver starts the way it was tested.** It now uses the video and sound outputs the add-on is tested with on Windows, instead of whatever GStreamer picks on your PC. OmniHub's check that iPhones can find the PC no longer connects to the receiver itself. If the receiver still closes, the iPhone → PC card says how it ended and offers **Start in safe mode** (software video, which avoids graphics-driver crashes).
-- **Updates don't close OmniHub on you.** Automatic updates now wait until OmniHub is in the tray and nothing is running (AirPlay included). After an update, OmniHub says "Updated to …" so a restart isn't mistaken for a crash.
-- **If OmniHub closes unexpectedly**, the next start says so and offers **Copy details**: the end of OmniHub's log and Windows' own crash summaries. Nothing is sent anywhere.
-- A page that hits an error now shows a message with **Try again** instead of a blank window.
+- **Fixed "Error writing to file … omnihub.exe" when installing.** If your OmniHub is in *Program Files* (or another folder only an administrator can change), the setup now explains that and asks for administrator approval once, instead of stopping with an error. **Install now** in OmniHub does the same; automatic updates leave those installs to your click, so no Windows prompt pops up unasked.
+- Moving to a folder that never needs approval: uninstall OmniHub in Windows Settings → Apps (your notes, vault and settings are kept), then run the setup and keep the folder it suggests.
 
-Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now).
+Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 
 ## Install
 
 1. Download **`OmniHub_{{VERSION}}_x64-setup.exe`** below.
 2. Run it. It installs for your Windows user only, so no administrator rights
-   are needed. Windows 10 or 11; WebView2 is installed automatically if it is
+   are needed (unless an older OmniHub is in Program Files: then it asks once). Windows 10 or 11; WebView2 is installed automatically if it is
    missing.
 3. The installer is not code-signed yet, so Windows SmartScreen will warn
    you: click **More info → Run anyway**.

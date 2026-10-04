@@ -100,14 +100,29 @@ rebuilds and replaces the files.
 
 `update.rs` asks `OMNIHUB_UPDATE_URL` (default: GitHub's latest-release API
 for this repository), and installs with the NSIS installer's `/P /R /UPDATE`
-(passive, reopen the app, update mode) or `msiexec /i … /passive` for
-Program Files installs. A release therefore has to keep the asset names
+(passive, reopen the app, update mode). Where OmniHub runs decides how
+(`install_kind`): a folder the user can write gets the setup as is; one
+only administrators can write gets `msiexec /i … /passive` when Windows
+lists an MSI install, otherwise the setup through UAC with
+`/OHELEVATED /D=<folder>`. A release therefore has to keep the asset names
 the Release workflow produces (`OmniHub_<version>_x64-setup.exe`,
 `SHA256SUMS.txt`). Its tests run against a local HTTP server.
+
+The setup installs per user without administrator rights, so on its own it
+cannot replace a copy in Program Files ("Error writing to file").
+`src-tauri/installer-hooks.nsh` (`NSIS_HOOK_PREINSTALL`) checks that the
+install folder is writable and otherwise runs the same setup again through
+UAC, passive or silent like the first run, with `/OHELEVATED` so an
+elevated run that still cannot write stops instead of asking again. Check
+it compiles with `makensis` (NSIS 3) and a small script that includes
+`LogicLib.nsh`, `FileFunc.nsh`, declares `UpdateMode` and `NoShortcutMode`
+and inserts the macro in a section.
 
 Automatic installs wait until the window is hidden (tray) and nothing is
 running (game boost, screen viewers, AirPlay receiver, phone transfers); the
 shell tells the updater whether the window is open (`Updater::set_in_use`).
+Installs that need administrator approval (`Updater::needs_approval`) never
+start on their own; the sidebar offers them.
 `data/last-version.txt` lets the first start after an update say so.
 
 ### Crash reports
