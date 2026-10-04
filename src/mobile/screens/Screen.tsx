@@ -836,6 +836,13 @@ function Viewer({
         </AnimatePresence>
       </div>
 
+      {/* The PC paused sharing: cover the last frame. */}
+      {conn === 'live' && stats?.paused && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black px-8 text-center">
+          <div className="text-[17px] font-semibold text-white">Sharing paused on the PC</div>
+          <div className="text-[13px] text-white/60">The picture comes back when it is resumed. Control is off meanwhile.</div>
+        </div>
+      )}
       {/* Connection overlays */}
       {conn !== 'live' && (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center p-6">

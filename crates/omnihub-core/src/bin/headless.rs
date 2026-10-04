@@ -6,8 +6,8 @@
 //! While it runs, type `send PATH|PATH`, `text TEXT` or `pair` to offer
 //! files, folders or text to the phones, or open a new pairing window;
 //! `vault-create PW`, `vault-unlock PW`, `vault-add {json}`, `vault-list`, `vault-lock`,
-//! `browser on|off` and `browser-allow` / `browser-deny` drive the vault and
-//! browser autofill (for testing the extension).
+//! `browser on|off`, `browser-allow` / `browser-deny` and `screen-pause on|off` drive the vault,
+//! browser autofill and screen sharing (for testing).
 //!
 //! Useful on a PC you only control from your phone, and for testing the
 //! phone app during development.
@@ -112,6 +112,10 @@ fn main() -> anyhow::Result<()> {
                 "vault-list" => console.vault.list().map(|l| l.iter().map(|e| format!("{} <{}> {}", e.title, if e.username.is_empty() { &e.email } else { &e.username }, e.url)).collect::<Vec<_>>().join(" | ")).map_err(Into::into),
                 "vault-add" => serde_json::from_str::<omnihub_core::vault::EntryInput>(rest).map_err(anyhow::Error::from).and_then(|input| console.vault.save(input).map(|s| format!("saved {}", s.id)).map_err(Into::into)),
                 "browser" => console.update_settings(&serde_json::json!({ "vault": { "browserAutofill": rest == "on" } })).map(|_| format!("browser autofill {} ({})", if rest == "on" { "on" } else { "off" }, omnihub_core::browser::ipc::endpoint())),
+                "screen-pause" => {
+                    omnihub_core::capture::stream::set_paused(rest == "on");
+                    Ok(format!("screen sharing {}", if rest == "on" { "paused" } else { "resumed" }))
+                }
                 "browser-allow" | "browser-deny" => match console.browser.pending() {
                     Some(p) => {
                         console.browser.respond(&p.id, cmd == "browser-allow");

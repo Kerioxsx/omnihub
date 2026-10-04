@@ -1,6 +1,6 @@
 // Settings, audit log, app info and system stats for the mock backend.
 
-import type { AppInfoDetails, AuditEntry, DeepPartial, ProcessGroup, ProcessSort, Settings, StartupItem, StartupLocation, SystemStats } from '@shared/types';
+import type { AppInfoDetails, AuditEntry, DeepPartial, ProcessGroup, ProcessSort, Settings, ShareState, StartupItem, StartupLocation, SystemStats, WindowInfo } from '@shared/types';
 import { emit } from './bus';
 import { DAY, GB, NOW } from './rng';
 
@@ -207,4 +207,36 @@ export function startupSet(id: string, enabled: boolean): StartupItem[] {
   item.enabled = enabled;
   audit('desktop', enabled ? 'startup.enable' : 'startup.disable', item.displayName);
   return startupList();
+}
+
+// ---------- screen share privacy ----------
+
+const WINDOWS: WindowInfo[] = [
+  { id: 101, title: 'Baldur’s Gate 3', app: 'bg3_dx11.exe', width: 2560, height: 1440 },
+  { id: 102, title: 'App.tsx — omnihub — Visual Studio Code', app: 'Code.exe', width: 1920, height: 1080 },
+  { id: 103, title: 'YouTube — Brave', app: 'brave.exe', width: 1600, height: 1000 },
+  { id: 104, title: 'Spotify Premium', app: 'Spotify.exe', width: 1280, height: 800 },
+];
+const share: ShareState = { paused: false, windowId: null, window: null };
+
+export function shareState(): ShareState {
+  return { ...share };
+}
+
+export function shareWindows(): WindowInfo[] {
+  return WINDOWS.map((w) => ({ ...w }));
+}
+
+export function setSharePaused(on: boolean): ShareState {
+  share.paused = on;
+  audit('desktop', on ? 'screen.pause' : 'screen.resume', '');
+  emit('screen:share-state', shareState());
+  return shareState();
+}
+
+export function setShareWindow(id: number | null): ShareState {
+  share.windowId = id;
+  share.window = WINDOWS.find((w) => w.id === id) ?? null;
+  emit('screen:share-state', shareState());
+  return shareState();
 }

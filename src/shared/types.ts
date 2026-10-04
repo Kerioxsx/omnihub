@@ -849,6 +849,21 @@ export interface GrowthReport {
   shrank: GrowthItem[];
 }
 
+export interface WindowInfo {
+  id: number;
+  title: string;
+  app: string;
+  width: number;
+  height: number;
+}
+
+export interface ShareState {
+  paused: boolean;
+  windowId: number | null;
+  /** the shared window, if it still exists */
+  window: WindowInfo | null;
+}
+
 export type StartupLocation = 'runUser' | 'runMachine' | 'runMachine32' | 'folderUser' | 'folderCommon';
 
 export interface StartupItem {

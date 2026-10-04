@@ -27,6 +27,10 @@ const handlers: Record<string, Handler> = {
   // app
   app_info: () => core.appInfo,
   system_stats: () => core.systemStats(),
+  screen_share_state: () => core.shareState(),
+  screen_windows: () => core.shareWindows(),
+  screen_set_paused: (a) => core.setSharePaused(bool(a, 'on')),
+  screen_set_window: (a) => core.setShareWindow(a.id == null ? null : num(a, 'id')),
   startup_list: () => core.startupList(),
   startup_set: (a) => core.startupSet(str(a, 'id'), bool(a, 'enabled')),
   system_processes: (a) => core.processes((optStr(a, 'sort') ?? 'cpu') as ProcessSort, num(a, 'limit') || 8),

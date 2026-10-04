@@ -889,7 +889,7 @@ async fn screen_session(core: Ctx, dev: Device, monitor: usize, preset: stream::
                         *ctl.params.lock() = (&p).into();
                     }
                     other => {
-                        if !core.settings.get().remote.allow_control {
+                        if !core.settings.get().remote.allow_control || stream::paused() {
                             continue;
                         }
                         if !controlled {
@@ -940,6 +940,8 @@ async fn screen_session(core: Ctx, dev: Device, monitor: usize, preset: stream::
                     "maxWidth": p.max_width,
                     "monitor": monitor,
                     "control": core.settings.get().remote.allow_control,
+                    "paused": stream::paused(),
+                    "window": stream::shared_window().is_some(),
                 });
                 last_frames = frames;
                 last_bytes = bytes;

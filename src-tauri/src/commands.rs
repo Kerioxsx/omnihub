@@ -1098,6 +1098,53 @@ pub async fn sunshine_status(core: Core<'_>) -> Res<SunshineStatus> {
     .await
 }
 
+// ---------- screen sharing privacy ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShareState {
+    paused: bool,
+    window_id: Option<u32>,
+    /// The shared window, if it still exists.
+    window: Option<stream::WindowInfo>,
+}
+
+fn share_state() -> ShareState {
+    let window_id = stream::shared_window();
+    let window = window_id.and_then(|id| stream::windows().into_iter().find(|w| w.id == id));
+    ShareState { paused: stream::paused(), window_id, window }
+}
+
+#[tauri::command]
+pub async fn screen_share_state() -> Res<ShareState> {
+    blocking(|| Ok(share_state())).await
+}
+
+#[tauri::command]
+pub async fn screen_windows() -> Res<Vec<stream::WindowInfo>> {
+    blocking(|| Ok(stream::windows())).await
+}
+
+/// Pause (or resume) every screen share: nothing is captured while paused.
+#[tauri::command]
+pub async fn screen_set_paused(core: Core<'_>, on: bool) -> Res<ShareState> {
+    stream::set_paused(on);
+    core.audit.record("desktop", if on { "screen.pause" } else { "screen.resume" }, "", true);
+    let st = blocking(|| Ok(share_state())).await?;
+    core.events.emit("screen:share-state", &st);
+    Ok(st)
+}
+
+/// Share only one window (null = the whole display the viewer picks).
+#[tauri::command]
+pub async fn screen_set_window(core: Core<'_>, id: Option<u32>) -> Res<ShareState> {
+    stream::set_shared_window(id);
+    let st = blocking(|| Ok(share_state())).await?;
+    core.audit.record("desktop", "screen.window", st.window.as_ref().map_or("whole display", |w| w.title.as_str()), true);
+    core.events.emit("screen:share-state", &st);
+    Ok(st)
+}
+
 // ---------- iPhone mirroring (AirPlay) ----------
 
 #[tauri::command]

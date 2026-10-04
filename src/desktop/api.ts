@@ -188,6 +188,11 @@ export const api = {
 
   screen: {
     monitors: () => call<T.MonitorInfo[]>('screen_monitors'),
+    shareState: () => call<T.ShareState>('screen_share_state'),
+    windows: () => call<T.WindowInfo[]>('screen_windows'),
+    setPaused: (on: boolean) => call<T.ShareState>('screen_set_paused', { on }),
+    /** null = the whole display the viewer picks */
+    setWindow: (id: number | null) => call<T.ShareState>('screen_set_window', { id }),
     presets: () => call<T.Preset[]>('screen_presets'),
     scrcpyStatus: () => call<T.ScrcpyStatus>('scrcpy_status'),
     scrcpyLaunch: (options: T.ScrcpyOptions) => call<void>('scrcpy_launch', { options }),

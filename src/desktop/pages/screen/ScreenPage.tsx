@@ -1,6 +1,6 @@
-import type { AdbDevice, ScrcpyOptions } from '@shared/types';
+import type { AdbDevice, ScrcpyOptions, ShareState, WindowInfo } from '@shared/types';
 import { motion } from 'motion/react';
-import { Cable, Copy, ExternalLink, Gamepad2, Gauge, Link2, Monitor, MonitorSmartphone, MousePointer2, Play, RefreshCw, ScreenShare, Smartphone, Square, Wifi, Zap } from 'lucide-react';
+import { AppWindow, Cable, Copy, ExternalLink, Eye, EyeOff, Gamepad2, Gauge, Link2, Monitor, MonitorSmartphone, MousePointer2, Pause, Play, RefreshCw, ScreenShare, Smartphone, Square, Wifi, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -9,7 +9,7 @@ import { Badge, Card, CardHeader, Dot, Skeleton } from '../../components/ui/Card
 import { Checkbox, Field, Segmented, Select, Switch, TextInput } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
-import { useAsync, useStoredState } from '../../lib/hooks';
+import { useAsync, useEvent, useStoredState } from '../../lib/hooks';
 import { navigate } from '../../lib/router';
 import { copyText } from '../../lib/util';
 import { useLive } from '../../state/live';
@@ -45,6 +45,7 @@ function PcToPhone() {
           Set up the phone companion
         </Button>
       )}
+      <SharePrivacy />
       <div className="mt-4 divide-y divide-line rounded-xl border border-line bg-surface">
         <div className="flex items-center gap-3 px-4 py-3">
           <Monitor size={16} className="text-dim" />
@@ -385,5 +386,50 @@ export function ScreenPage() {
         <Scrcpy />
       </div>
     </Page>
+  );
+}
+
+/** Pause every share, or show viewers a single window instead of the display. */
+function SharePrivacy() {
+  const [st, setSt] = useState<ShareState | null>(null);
+  const [wins, setWins] = useState<WindowInfo[]>([]);
+  const viewers = useLive((s) => s.viewers);
+  const loadWindows = () => void api.screen.windows().then(setWins, () => undefined);
+  useEffect(() => {
+    void api.screen.shareState().then(setSt, () => undefined);
+    loadWindows();
+  }, []);
+  useEvent<ShareState>('screen:share-state', setSt);
+  if (!st) return null;
+  const run = (p: Promise<ShareState>) => void p.then(setSt, (e: unknown) => toast.error('Could not change sharing', errorText(e)));
+  const gone = st.windowId != null && !st.window;
+  return (
+    <div className={cx('mt-4 rounded-xl border px-4 py-3', st.paused ? 'border-warn/40 bg-warn/8' : 'border-line bg-surface')}>
+      <div className="flex items-center gap-3">
+        {st.paused ? <EyeOff size={16} className="text-warn" /> : <Eye size={16} className="text-dim" />}
+        <div className="flex-1">
+          <div className="text-[13.5px] font-medium text-fg">{st.paused ? 'Sharing is paused' : 'Pause sharing'}</div>
+          <div className="text-[12px] text-faint">{st.paused ? 'Nothing is captured; viewers see a “paused” notice and cannot control the PC.' : `Hide the screen for a moment (a password, a message)${viewers.length ? ` — ${viewers.length} watching now` : ''}.`}</div>
+        </div>
+        <Button size="sm" variant={st.paused ? 'primary' : 'secondary'} icon={st.paused ? Play : Pause} onClick={() => run(api.screen.setPaused(!st.paused))}>
+          {st.paused ? 'Resume' : 'Pause'}
+        </Button>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <AppWindow size={16} className="shrink-0 text-dim" />
+        <span className="shrink-0 text-[12.5px] text-dim">Viewers see</span>
+        <Select value={st.windowId == null ? '' : String(st.windowId)} onChange={(e) => run(api.screen.setWindow(e.target.value ? Number(e.target.value) : null))} onFocus={loadWindows} className="min-w-0 flex-1" aria-label="What viewers see">
+          <option value="">The whole display they pick</option>
+          {gone && <option value={String(st.windowId)}>(closed window)</option>}
+          {wins.map((w) => (
+            <option key={w.id} value={String(w.id)}>
+              Only: {w.title.length > 60 ? `${w.title.slice(0, 57)}…` : w.title}
+            </option>
+          ))}
+        </Select>
+        <IconButton icon={RefreshCw} label="Refresh the window list" size="sm" onClick={loadWindows} />
+      </div>
+      {gone && <div className="mt-2 text-[12px] text-warn">The shared window was closed — viewers can't connect until you pick another one or the whole display.</div>}
+    </div>
   );
 }

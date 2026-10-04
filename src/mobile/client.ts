@@ -494,6 +494,10 @@ export interface ScreenStats {
   maxWidth: number;
   control: boolean;
   monitor: MonitorInfo | null;
+  /** the PC paused sharing (nothing is captured) */
+  paused?: boolean;
+  /** the PC shares a single window instead of the display */
+  window?: boolean;
 }
 
 /** Messages the viewer sends (see capture/stream.rs `ViewerMessage`). */
