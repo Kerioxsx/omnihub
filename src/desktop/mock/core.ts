@@ -14,7 +14,7 @@ export const settings: Settings = {
   general: { theme: 'dark', accent: 'violet', reducedMotion: false, launchAtLogin: false, startMinimized: false, closeToTray: true, onboarded: !flags.onboarding },
   storage: { defaultMode: 'fast', exclude: [], cleanup: { largeFileMin: 1 << 30, largeFileAgeDays: 180, installerAgeDays: 30 }, showHidden: true, sizeMetric: 'size', explorerView: query.get('view') === 'grid' ? 'grid' : query.get('view') === 'sunburst' ? 'sunburst' : query.get('view') === 'list' ? 'list' : query.get('view') === 'treemap' ? 'treemap' : 'split', gridSize: 'md', gridPreviews: true },
   notes: { claudeFolder: 'C:\\Users\\Alex\\Documents\\Claude Ideas', sidecarJson: false, autoExportIdeas: false, indexFile: true },
-  vault: { autoLockMinutes: 5, clipboardClearSeconds: 20, lockOnSessionLock: true, allowPhone: false, helloEnabled: false },
+  vault: { autoLockMinutes: 5, clipboardClearSeconds: 20, lockOnSessionLock: true, allowPhone: false, helloEnabled: false, browserAutofill: false, browserOfferSave: true },
   remote: {
     enabled: false,
     port: 47800,

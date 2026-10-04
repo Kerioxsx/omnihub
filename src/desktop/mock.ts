@@ -123,6 +123,13 @@ const handlers: Record<string, Handler> = {
   vault_hello_unlock: () => vault.helloUnlock(),
   vault_export: (a) => void str(a, 'path'),
   vault_import: (a) => vault.importBackup(str(a, 'password')),
+  vault_totp: (a) => vault.totp(str(a, 'id')),
+
+  // browser autofill
+  browser_status: () => vault.browserStatus(),
+  browser_repair: () => vault.browserStatus().browsers,
+  browser_pair_respond: (a) => vault.browserRespond(str(a, 'id'), bool(a, 'allow')),
+  browser_revoke: (a) => vault.browserRevoke(str(a, 'id')),
 
   // phone companion
   remote_status: () => remote.status(),

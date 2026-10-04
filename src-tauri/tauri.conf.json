@@ -49,6 +49,7 @@
     "shortDescription": "Storage analysis, notes, vault and phone companion for your PC",
     "longDescription": "OmniHub scans whole drives in seconds through the NTFS Master File Table, keeps notes and ideas for Claude, stores passwords in a local encrypted vault, and pairs with your phone for file transfer, power control and screen sharing.",
     "copyright": "OmniHub contributors",
+    "resources": { "../browser-extension": "browser-extension" },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

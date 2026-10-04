@@ -105,6 +105,10 @@ pub fn run(args: Vec<String>) {
                             if matches!(ev.topic.as_str(), "vault:locked" | "vault:unlocked" | "remote:status") {
                                 tray::refresh(&h);
                             }
+                            // The browser extension waits on the user: bring the window up.
+                            if matches!(ev.topic.as_str(), "browser:pair-request" | "browser:unlock-request") {
+                                tray::show_main(&h);
+                            }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                         Err(_) => break,
@@ -261,6 +265,11 @@ pub fn run(args: Vec<String>) {
             commands::airplay_place,
             commands::airplay_firewall,
             commands::airplay_fix_firewall,
+            commands::browser_status,
+            commands::browser_repair,
+            commands::browser_pair_respond,
+            commands::browser_revoke,
+            commands::vault_totp,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OmniHub");

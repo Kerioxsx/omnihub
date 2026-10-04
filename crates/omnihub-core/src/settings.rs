@@ -143,11 +143,15 @@ pub struct VaultSettings {
     /// Let paired phones list and reveal entries (needs HTTPS and the master password).
     pub allow_phone: bool,
     pub hello_enabled: bool,
+    /// Let the OmniHub browser extension (Brave, Chrome, Edge) fill logins.
+    pub browser_autofill: bool,
+    /// The extension offers to save logins typed on websites.
+    pub browser_offer_save: bool,
 }
 
 impl Default for VaultSettings {
     fn default() -> Self {
-        VaultSettings { auto_lock_minutes: 5, clipboard_clear_seconds: 20, lock_on_session_lock: true, allow_phone: false, hello_enabled: false }
+        VaultSettings { auto_lock_minutes: 5, clipboard_clear_seconds: 20, lock_on_session_lock: true, allow_phone: false, hello_enabled: false, browser_autofill: false, browser_offer_save: true }
     }
 }
 

@@ -347,6 +347,8 @@ export interface EntrySummary {
   hasNotes: boolean;
   primaryAccount: boolean;
   passwordScore: number;
+  /** A 2FA (TOTP) secret is stored. */
+  hasTotp: boolean;
 }
 
 export interface Entry {
@@ -363,6 +365,8 @@ export interface Entry {
   created: number;
   updated: number;
   passwordChanged: number;
+  /** 2FA secret (otpauth:// link or base32 key), empty when none. */
+  totp: string;
 }
 
 export interface EntryInput {
@@ -377,6 +381,46 @@ export interface EntryInput {
   notes?: string | null;
   tags: string[];
   favorite: boolean;
+  /** null/undefined keeps the current 2FA secret; "" removes it */
+  totp?: string | null;
+}
+
+export interface TotpCode {
+  code: string;
+  /** seconds until the code changes */
+  remaining: number;
+}
+
+// ---------- browser autofill ----------
+
+export interface BrowserClient {
+  id: string;
+  name: string;
+  created: number;
+  lastSeen: number;
+}
+
+export interface BrowserPairRequest {
+  id: string;
+  name: string;
+  code: string;
+  created: number;
+}
+
+export interface BrowserRegistration {
+  browser: string;
+  registered: boolean;
+}
+
+export interface BrowserStatus {
+  enabled: boolean;
+  listening: boolean;
+  host: string | null;
+  browsers: BrowserRegistration[];
+  clients: BrowserClient[];
+  pending: BrowserPairRequest | null;
+  extensionDir: string | null;
+  extensionId: string;
 }
 
 export interface GeneratorOptions {
@@ -686,6 +730,10 @@ export interface Settings {
     lockOnSessionLock: boolean;
     allowPhone: boolean;
     helloEnabled: boolean;
+    /** Brave/Chrome/Edge extension may fill logins. */
+    browserAutofill: boolean;
+    /** Offer to save logins typed in the browser. */
+    browserOfferSave: boolean;
   };
   remote: {
     enabled: boolean;

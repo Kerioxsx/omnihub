@@ -14,6 +14,10 @@ path = "src/lib.rs"
 name = "omnihub-headless"
 path = "src/bin/headless.rs"
 
+[[bin]]
+name = "omnihub-browser-host"
+path = "src/bin/browser_host.rs"
+
 [dependencies]
 aes-gcm = "0.10"
 anyhow = "1.0.104"
@@ -32,6 +36,7 @@ fast_image_resize = "6.1.0"
 futures-util = "0.3.34"
 gethostname = "1.1.0"
 hex = "0.4.3"
+hmac = "0.13.0"
 if-addrs = "0.15.0"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
 jpeg-encoder = { version = "0.7.1", features = ["simd"] }
@@ -49,10 +54,12 @@ rust-embed = "8.12.0"
 rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "logging", "tls12"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+sha1 = "0.11.0"
 sha2 = "0.11.0"
+psl = "2.1.239"
 sysinfo = "0.39.6"
 thiserror = "2.0.21"
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util", "net", "signal"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "sync", "time", "fs", "io-util", "io-std", "net", "signal"] }
 tokio-util = { version = "0.7.19", features = ["io"] }
 tower = "0.5.3"
 tower-http = { version = "0.7.1", features = ["fs", "set-header", "limit"] }
@@ -72,6 +79,8 @@ windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Security",
   "Win32_Security_Cryptography",
+  "Win32_Security_Authorization",
+  "Win32_System_Pipes",
   "Win32_Storage_FileSystem",
   "Win32_System_IO",
   "Win32_System_Ioctl",

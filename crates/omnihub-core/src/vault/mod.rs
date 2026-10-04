@@ -6,6 +6,7 @@
 pub mod crypto;
 pub mod generator;
 pub mod hello;
+pub mod totp;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -62,6 +63,9 @@ pub struct Entry {
     pub updated: i64,
     #[serde(default)]
     pub password_changed: i64,
+    /// Two-factor secret: an `otpauth://totp/…` link or a base32 secret.
+    #[serde(default)]
+    pub totp: String,
 }
 
 impl std::fmt::Debug for Entry {
@@ -74,6 +78,7 @@ impl Drop for Entry {
     fn drop(&mut self) {
         self.password.zeroize();
         self.notes.zeroize();
+        self.totp.zeroize();
         self.username.zeroize();
         self.email.zeroize();
     }
@@ -98,6 +103,8 @@ pub struct EntrySummary {
     /// Apple...). The UI warns and suggests passkeys or app passwords.
     pub primary_account: bool,
     pub password_score: u8,
+    /// A two-factor secret is saved (the code itself is never listed).
+    pub has_totp: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -114,6 +121,8 @@ pub struct EntryInput {
     pub notes: Option<String>,
     pub tags: Vec<String>,
     pub favorite: bool,
+    /// `None` keeps the current two-factor secret; `Some("")` removes it.
+    pub totp: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -150,6 +159,8 @@ pub enum VaultError {
     Crypto(#[from] CryptoError),
     #[error("{0}")]
     Hello(String),
+    #[error("{0}")]
+    Invalid(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
@@ -424,6 +435,7 @@ impl Vault {
             has_notes: !e.notes.is_empty(),
             primary_account: is_primary_account(&e.url, &e.username, &e.email),
             password_score: if e.password.is_empty() { 0 } else { generator::strength(&e.password).score },
+            has_totp: !e.totp.is_empty(),
         }
     }
 
@@ -469,6 +481,13 @@ impl Vault {
             if let Some(n) = input.notes {
                 e.notes = n;
             }
+            if let Some(t) = input.totp {
+                let t = t.trim().to_string();
+                if !t.is_empty() {
+                    totp::parse(&t).map_err(|e| VaultError::Invalid(e.to_string()))?;
+                }
+                e.totp = t;
+            }
             e.updated = now;
             let summary = Self::summary(e);
             self.write_file(o)?;
@@ -496,11 +515,18 @@ impl Vault {
             "email" => entry.email.clone(),
             "url" => entry.url.clone(),
             "notes" => entry.notes.clone(),
+            "totp" => totp::code_now(&entry.totp).map_err(|e| VaultError::Invalid(e.to_string()))?,
             _ => return Err(VaultError::NotFound),
         };
         let value = Zeroizing::new(value);
         crate::system::clipboard::copy_secret(&value, clear_after)?;
         Ok(())
+    }
+
+    /// The current two-factor code of an entry and seconds until it changes.
+    pub fn totp_code(&self, id: &str) -> Result<(String, u64), VaultError> {
+        let entry = self.get(id)?;
+        totp::current(&entry.totp).map_err(|e| VaultError::Invalid(e.to_string()))
     }
 
     /// Encrypted, password-protected backup (without the DPAPI layer, so it

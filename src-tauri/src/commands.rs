@@ -10,6 +10,8 @@ use std::time::Duration;
 
 use omnihub_core::apps::AppInfo;
 use omnihub_core::audit::AuditEntry;
+use omnihub_core::browser::register::Registration;
+use omnihub_core::browser::{BrowserClient, PairRequest};
 use omnihub_core::capture::airplay::AirPlayStatus;
 use omnihub_core::capture::bridges::{ScrcpyOptions, ScrcpyStatus, SunshineStatus};
 use omnihub_core::capture::screenshots::{CaptureKind, PendingRegion, Rect, Screenshot, ShotFilter};
@@ -1085,4 +1087,89 @@ pub async fn airplay_fix_firewall(core: Core<'_>, include_public: bool) -> Res<F
         Ok(firewall::check(&exe, None, Proto::Any, "the AirPlay receiver"))
     })
     .await
+}
+
+// ---------- browser autofill ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowserStatus {
+    enabled: bool,
+    listening: bool,
+    /// What the browsers start (this executable or the stand-alone host).
+    host: Option<String>,
+    browsers: Vec<Registration>,
+    clients: Vec<BrowserClient>,
+    pending: Option<PairRequest>,
+    /// Folder to "Load unpacked" in brave://extensions.
+    extension_dir: Option<String>,
+    extension_id: String,
+}
+
+/// The extension folder shipped with the app (the source folder in development).
+fn extension_dir(app: &AppHandle) -> Option<PathBuf> {
+    let bundled = app.path().resource_dir().ok().map(|d| d.join("browser-extension"));
+    let dev = cfg!(debug_assertions).then(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../browser-extension"));
+    [bundled, dev].into_iter().flatten().find(|d| d.join("manifest.json").is_file()).map(|d| dunce_path(&d))
+}
+
+/// Explorer and Brave both choke on `\\?\` paths; show the plain form.
+fn dunce_path(p: &Path) -> PathBuf {
+    let p = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let s = p.to_string_lossy();
+    PathBuf::from(s.strip_prefix(r"\\?\").unwrap_or(&s))
+}
+
+#[tauri::command]
+pub async fn browser_status(app: AppHandle, core: Core<'_>) -> Res<BrowserStatus> {
+    let core = core.inner().clone();
+    let dir = extension_dir(&app);
+    blocking(move || {
+        Ok(BrowserStatus {
+            enabled: core.settings.get().vault.browser_autofill,
+            listening: core.browser.is_listening(),
+            host: omnihub_core::browser::register::host_path().map(|p| p.to_string_lossy().into_owned()),
+            browsers: omnihub_core::browser::register::status(),
+            clients: core.browser.clients(),
+            pending: core.browser.pending(),
+            extension_dir: dir.map(|d| d.to_string_lossy().into_owned()),
+            extension_id: omnihub_core::browser::EXTENSION_ID.to_string(),
+        })
+    })
+    .await
+}
+
+/// Register the host with the browsers again (after moving OmniHub, or if
+/// a browser was installed after autofill was turned on).
+#[tauri::command]
+pub async fn browser_repair(core: Core<'_>) -> Res<Vec<Registration>> {
+    let core = core.inner().clone();
+    blocking(move || omnihub_core::browser::register::register(&core.paths.data).map_err(err)).await
+}
+
+#[tauri::command]
+pub async fn browser_pair_respond(core: Core<'_>, id: String, allow: bool) -> Res<bool> {
+    Ok(core.browser.respond(&id, allow))
+}
+
+#[tauri::command]
+pub async fn browser_revoke(core: Core<'_>, id: String) -> Res<bool> {
+    let name = core.browser.clients().into_iter().find(|c| c.id == id).map(|c| c.name).unwrap_or_default();
+    let done = core.browser.revoke(&id);
+    core.audit.record("desktop", "browser.revoke", &name, done);
+    Ok(done)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TotpCode {
+    code: String,
+    /// Seconds until the code changes.
+    remaining: u64,
+}
+
+#[tauri::command]
+pub async fn vault_totp(core: Core<'_>, id: String) -> Res<TotpCode> {
+    let (code, remaining) = core.vault.totp_code(&id).map_err(err)?;
+    Ok(TotpCode { code, remaining })
 }

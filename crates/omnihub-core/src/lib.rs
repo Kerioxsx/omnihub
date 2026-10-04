@@ -6,6 +6,7 @@
 
 pub mod apps;
 pub mod audit;
+pub mod browser;
 pub mod capture;
 pub mod core;
 pub mod db;

@@ -124,7 +124,8 @@ export const api = {
     get: (id: string) => call<T.Entry>('vault_get', { id }),
     save: (input: T.EntryInput) => call<T.EntrySummary>('vault_save', { input }),
     delete: (id: string) => call<void>('vault_delete', { id }),
-    copy: (id: string, field: 'password' | 'username' | 'email' | 'url' | 'notes') => call<void>('vault_copy', { id, field }),
+    copy: (id: string, field: 'password' | 'username' | 'email' | 'url' | 'notes' | 'totp') => call<void>('vault_copy', { id, field }),
+    totp: (id: string) => call<T.TotpCode>('vault_totp', { id }),
     generate: (options: T.GeneratorOptions) => call<string>('vault_generate', { options }),
     strength: (password: string) => call<T.Strength>('vault_strength', { password }),
     changePassword: (oldPassword: string, newPassword: string) => call<void>('vault_change_password', { oldPassword, newPassword }),
@@ -133,6 +134,13 @@ export const api = {
     helloUnlock: () => call<void>('vault_hello_unlock'),
     exportBackup: (path: string) => call<void>('vault_export', { path }),
     importBackup: (path: string, password: string) => call<number>('vault_import', { path, password }),
+  },
+
+  browser: {
+    status: () => call<T.BrowserStatus>('browser_status'),
+    repair: () => call<T.BrowserRegistration[]>('browser_repair'),
+    respond: (id: string, allow: boolean) => call<boolean>('browser_pair_respond', { id, allow }),
+    revoke: (id: string) => call<boolean>('browser_revoke', { id }),
   },
 
   remote: {

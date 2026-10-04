@@ -28,11 +28,14 @@ pub struct CoreOptions {
     pub vault_kdf: Option<KdfParams>,
     /// Override DPAPI use for the vault (tests on Windows).
     pub vault_dpapi: Option<bool>,
+    /// Register with the browsers and listen for the extension when browser
+    /// autofill is on (tests turn this off: no real browser config is touched).
+    pub browser_integration: bool,
 }
 
 impl Default for CoreOptions {
     fn default() -> Self {
-        CoreOptions { dry_run_power: false, runner: Arc::new(SelfElevated), vault_kdf: None, vault_dpapi: None }
+        CoreOptions { dry_run_power: false, runner: Arc::new(SelfElevated), vault_kdf: None, vault_dpapi: None, browser_integration: true }
     }
 }
 
@@ -52,6 +55,8 @@ pub struct AppCore {
     pub remote: RemoteServer,
     pub thumbs: crate::thumbs::Thumbs,
     pub airplay: crate::capture::airplay::AirPlay,
+    pub browser: crate::browser::BrowserBridge,
+    browser_integration: bool,
 }
 
 impl AppCore {
@@ -77,6 +82,8 @@ impl AppCore {
             bridges: Bridges::new(),
             remote: RemoteServer::new(db.clone(), events.clone()),
             thumbs: crate::thumbs::Thumbs::default(),
+            browser: crate::browser::BrowserBridge::new(db.clone(), events.clone()),
+            browser_integration: opts.browser_integration,
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
             paths,
             settings,
@@ -121,6 +128,9 @@ impl AppCore {
                 tracing::warn!("AirPlay receiver failed to start: {e}");
             }
         }
+        if s.vault.browser_autofill {
+            self.enable_browser_autofill(true);
+        }
         let send_to = s.remote.send_to_menu;
         let core = self.clone();
         std::thread::spawn(move || {
@@ -129,6 +139,23 @@ impl AppCore {
             }
             core.clean_outbox();
         });
+    }
+
+    /// Register the native-messaging host and listen for the extension (or stop).
+    pub fn enable_browser_autofill(self: &Arc<Self>, on: bool) {
+        if !self.browser_integration {
+            return;
+        }
+        if on {
+            if let Err(e) = crate::browser::register::register(&self.paths.data) {
+                tracing::warn!("could not register the browser host: {e}");
+            }
+        } else {
+            crate::browser::register::unregister();
+        }
+        if let Err(e) = self.browser.set_listening(self, on) {
+            tracing::warn!("browser autofill pipe: {e}");
+        }
     }
 
     /// Where zips of folders sent to phones are made.
@@ -180,6 +207,9 @@ impl AppCore {
             if let Err(e) = self.airplay.start(sc.uxplay_path.as_deref(), &sc.airplay, sc.airplay_keep_on_top, sc.airplay_pip) {
                 tracing::warn!("could not restart the AirPlay receiver: {e}");
             }
+        }
+        if before.vault.browser_autofill != after.vault.browser_autofill {
+            self.enable_browser_autofill(after.vault.browser_autofill);
         }
         let r0 = &before.remote;
         let r1 = &after.remote;

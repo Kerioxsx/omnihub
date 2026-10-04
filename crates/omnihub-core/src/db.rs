@@ -77,6 +77,17 @@ const MIGRATIONS: &[&str] = &[
         folder TEXT
     );
     "#,
+    // 3: browsers allowed to fill passwords from the vault.
+    r#"
+    CREATE TABLE browser_clients (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created INTEGER NOT NULL,
+        last_seen INTEGER NOT NULL,
+        revoked INTEGER NOT NULL DEFAULT 0
+    );
+    "#,
 ];
 
 impl Db {

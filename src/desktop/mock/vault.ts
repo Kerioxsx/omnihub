@@ -1,7 +1,7 @@
 // Password vault for the mock backend. No real crypto — the point is the
 // state machine (none → unlocked ⇄ locked), throttling and auto-lock.
 
-import type { Entry, EntryInput, EntrySummary, GeneratorOptions, Strength, VaultStatus } from '@shared/types';
+import type { BrowserClient, BrowserPairRequest, BrowserStatus, Entry, EntryInput, EntrySummary, GeneratorOptions, Strength, VaultStatus } from '@shared/types';
 import { emit } from './bus';
 import { audit, onSettingsChange, settings } from './core';
 import { DAY, NOW } from './rng';
@@ -32,6 +32,7 @@ function seedEntries(): Entry[] {
     created: Math.floor(NOW - (ageDays + 30) * DAY),
     updated: Math.floor(NOW - ageDays * DAY),
     passwordChanged: Math.floor(NOW - ageDays * DAY),
+    totp: id === 'v-gmail' || id === 'v-github' ? 'JBSWY3DPEHPK3PXP' : '',
   });
   return [
     e('v-gmail', 'email', 'Gmail (personal)', 'alex.morgan', 'alex.morgan@gmail.com', 'Tr0ub4dor&3-sunrise', 'https://accounts.google.com', 'Recovery phone ends in 42. 2-Step Verification is on.', ['personal'], true, 40),
@@ -67,6 +68,7 @@ function summary(e: Entry): EntrySummary {
     hasNotes: e.notes.length > 0,
     primaryAccount: isPrimary(e),
     passwordScore: e.password ? strength(e.password).score : 0,
+    hasTotp: e.totp.length > 0,
   };
 }
 
@@ -169,13 +171,14 @@ export function save(input: EntryInput): EntrySummary {
     const pwChanged = input.password != null && input.password !== e.password;
     Object.assign(e, { kind: input.kind, title: input.title, username: input.username, email: input.email, url: input.url, tags: [...input.tags], favorite: input.favorite, updated: now });
     if (input.notes != null) e.notes = input.notes;
+    if (input.totp != null) e.totp = input.totp.trim();
     if (pwChanged) {
       e.password = input.password ?? '';
       e.passwordChanged = now;
     }
     return summary(e);
   }
-  const e: Entry = { id: `v-${Date.now().toString(36)}`, kind: input.kind, title: input.title, username: input.username, email: input.email, password: input.password ?? '', url: input.url, notes: input.notes ?? '', tags: [...input.tags], favorite: input.favorite, created: now, updated: now, passwordChanged: now };
+  const e: Entry = { id: `v-${Date.now().toString(36)}`, kind: input.kind, title: input.title, username: input.username, email: input.email, password: input.password ?? '', url: input.url, notes: input.notes ?? '', tags: [...input.tags], favorite: input.favorite, created: now, updated: now, passwordChanged: now, totp: input.totp?.trim() ?? '' };
   entries.push(e);
   return summary(e);
 }
@@ -187,7 +190,7 @@ export function remove(id: string): void {
 
 export function copy(id: string, field: string): void {
   const e = get(id);
-  const value = field === 'password' ? e.password : field === 'username' ? e.username : field === 'email' ? e.email : field === 'url' ? e.url : e.notes;
+  const value = field === 'password' ? e.password : field === 'username' ? e.username : field === 'email' ? e.email : field === 'url' ? e.url : field === 'totp' ? e.totp : e.notes;
   if (!value) throw new Error(`This entry has no ${field}.`);
   if (field === 'password') audit('desktop', 'vault.copy', `Copied the password of “${e.title}”`);
 }
@@ -275,3 +278,63 @@ export function strength(pw: string): Strength {
   const score = (bits < 28 ? 0 : bits < 36 ? 1 : bits < 60 ? 2 : bits < 80 ? 3 : 4) as Strength['score'];
   return { score, bits: Math.round(bits), label: ['Very weak', 'Weak', 'Fair', 'Strong', 'Very strong'][score], feedback };
 }
+
+/** A stand-in 2FA code (not real TOTP) that changes every 30 seconds. */
+export function totp(id: string): { code: string; remaining: number } {
+  const e = get(id);
+  if (!e.totp) throw new Error('This entry has no 2FA secret.');
+  const t = Math.floor(Date.now() / 1000);
+  const step = Math.floor(t / 30);
+  let h = 2166136261;
+  for (const c of `${e.totp}:${step}`) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return { code: String(Math.abs(h) % 1_000_000).padStart(6, '0'), remaining: 30 - (t % 30) };
+}
+
+// ---------- browser autofill ----------
+
+const browserClients: BrowserClient[] = [{ id: 'b-1', name: 'Brave on Windows', created: Math.floor(NOW - 9 * DAY), lastSeen: Math.floor(NOW - 3600) }];
+let pendingPair: BrowserPairRequest | null = null;
+
+export function browserStatus(): BrowserStatus {
+  const on = settings.vault.browserAutofill;
+  return {
+    enabled: on,
+    listening: on,
+    host: 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\OmniHub.exe',
+    browsers: ['Brave', 'Chrome', 'Edge', 'Chromium'].map((browser) => ({ browser, registered: on && browser !== 'Chromium' })),
+    clients: browserClients.map((c) => ({ ...c })),
+    pending: pendingPair,
+    extensionDir: 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\browser-extension',
+    extensionId: 'hfkbdbcemgoondnmkeeoclpcmcjjbdeg',
+  };
+}
+
+/** Pretend a browser asked to pair (the mock's stand-in for the extension). */
+export function simulatePairRequest(name = 'Brave on Windows'): void {
+  pendingPair = { id: `p-${Date.now().toString(36)}`, name, code: String(Math.floor(1000 + Math.random() * 9000)), created: Math.floor(Date.now() / 1000) };
+  emit('browser:pair-request', pendingPair);
+}
+
+export function browserRespond(id: string, allow: boolean): boolean {
+  if (!pendingPair || pendingPair.id !== id) return false;
+  if (allow) {
+    browserClients.push({ id: `b-${Date.now().toString(36)}`, name: pendingPair.name, created: Math.floor(Date.now() / 1000), lastSeen: Math.floor(Date.now() / 1000) });
+    audit('desktop', 'browser.pair', `Paired ${pendingPair.name}`);
+  }
+  emit('browser:pair-done', { id, allowed: allow });
+  pendingPair = null;
+  emit('browser:clients', browserClients);
+  return true;
+}
+
+export function browserRevoke(id: string): boolean {
+  const i = browserClients.findIndex((c) => c.id === id);
+  if (i < 0) return false;
+  audit('desktop', 'browser.revoke', `Removed ${browserClients[i].name}`);
+  browserClients.splice(i, 1);
+  emit('browser:clients', browserClients);
+  return true;
+}
+
+// ?browserPair=1 shows a pairing request a moment after the app loads.
+if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('browserPair')) setTimeout(() => simulatePairRequest(), 1200);

@@ -4,7 +4,10 @@
 //!     omnihub-headless [--home DIR] [--port N] [--http] [--pair] [--dry-run-power]
 //!
 //! While it runs, type `send PATH|PATH`, `text TEXT` or `pair` to offer
-//! files, folders or text to the phones, or open a new pairing window.
+//! files, folders or text to the phones, or open a new pairing window;
+//! `vault-create PW`, `vault-unlock PW`, `vault-add {json}`, `vault-list`, `vault-lock`,
+//! `browser on|off` and `browser-allow` / `browser-deny` drive the vault and
+//! browser autofill (for testing the extension).
 //!
 //! Useful on a PC you only control from your phone, and for testing the
 //! phone app during development.
@@ -19,6 +22,10 @@ fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if let Some(code) = omnihub_core::helper::run_if_helper(&args) {
         std::process::exit(code);
+    }
+    if let Some(origin) = omnihub_core::browser::host::invoked_as_host(&args) {
+        omnihub_core::browser::host::run(origin);
+        return Ok(());
     }
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into())).init();
 
@@ -80,6 +87,9 @@ fn main() -> anyhow::Result<()> {
     //   send PATH [PATH…]   offer files or folders to every phone
     //   text TEXT           offer text
     //   pair                open a new pairing window
+    //   vault-create PW, vault-unlock PW, vault-lock, vault-add {EntryInput json}
+    //   browser on|off      browser autofill (registers the host with the browsers)
+    //   browser-allow, browser-deny   answer a pending browser pairing
     let console = core.clone();
     std::thread::spawn(move || {
         use std::io::BufRead;
@@ -93,8 +103,24 @@ fn main() -> anyhow::Result<()> {
                 }
                 "text" => console.remote.send_text(rest, None).map(|i| format!("offered text {}", i.id)),
                 "pair" => console.remote.begin_pairing().map(|i| format!("PIN {} {}", i.pin, i.urls.join(" "))),
+                "vault-create" => console.vault.create(rest).map(|_| "vault created".into()).map_err(Into::into),
+                "vault-unlock" => console.vault.unlock(rest).map(|_| "vault unlocked".into()).map_err(Into::into),
+                "vault-lock" => {
+                    console.vault.lock();
+                    Ok("vault locked".into())
+                }
+                "vault-list" => console.vault.list().map(|l| l.iter().map(|e| format!("{} <{}> {}", e.title, if e.username.is_empty() { &e.email } else { &e.username }, e.url)).collect::<Vec<_>>().join(" | ")).map_err(Into::into),
+                "vault-add" => serde_json::from_str::<omnihub_core::vault::EntryInput>(rest).map_err(anyhow::Error::from).and_then(|input| console.vault.save(input).map(|s| format!("saved {}", s.id)).map_err(Into::into)),
+                "browser" => console.update_settings(&serde_json::json!({ "vault": { "browserAutofill": rest == "on" } })).map(|_| format!("browser autofill {} ({})", if rest == "on" { "on" } else { "off" }, omnihub_core::browser::ipc::endpoint())),
+                "browser-allow" | "browser-deny" => match console.browser.pending() {
+                    Some(p) => {
+                        console.browser.respond(&p.id, cmd == "browser-allow");
+                        Ok(format!("{} {} (code {})", if cmd == "browser-allow" { "allowed" } else { "denied" }, p.name, p.code))
+                    }
+                    None => Err(anyhow::anyhow!("no browser is waiting")),
+                },
                 "" => continue,
-                other => Err(anyhow::anyhow!("unknown command {other} (send, text, pair)")),
+                other => Err(anyhow::anyhow!("unknown command {other} (send, text, pair, vault-*, browser*)")),
             };
             match res {
                 Ok(msg) => println!("ok: {msg}"),
