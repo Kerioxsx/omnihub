@@ -1,3 +1,4 @@
+import { primaryProvider } from '@shared/accounts';
 import { formatDate, formatRelative } from '@shared/format';
 import type { Entry, EntryKind, EntrySummary, VaultStatus } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
@@ -24,11 +25,13 @@ import { VaultSettings } from './VaultSettings';
 type Field = 'password' | 'username' | 'email' | 'url' | 'notes' | 'totp';
 
 const SCORE_TONE = ['bg-bad', 'bg-bad', 'bg-warn', 'bg-good', 'bg-good'];
-const PROVIDER_HELP: [RegExp, string, string][] = [
-  [/google|gmail/i, 'Google', 'https://myaccount.google.com/signinoptions/passkeys'],
-  [/microsoft|outlook|live\.com|hotmail/i, 'Microsoft', 'https://account.live.com/proofs/manage/additional'],
-  [/apple|icloud/i, 'Apple', 'https://support.apple.com/en-us/102195'],
-];
+const PASSKEY_HELP: Record<string, string> = {
+  Google: 'https://myaccount.google.com/signinoptions/passkeys',
+  Microsoft: 'https://account.live.com/proofs/manage/additional',
+  Apple: 'https://support.apple.com/en-us/102195',
+  Yahoo: 'https://login.yahoo.com/account/security',
+  Proton: 'https://account.proton.me/u/0/mail/account-password',
+};
 
 function FieldRow({ label, children, onCopy, copied, mono }: { label: string; children: ReactNode; onCopy?: () => void; copied?: number | null; mono?: boolean }) {
   return (
@@ -132,7 +135,8 @@ function Detail({ id, onEdit, onDeleted, onChanged }: { id: string; onEdit: (e: 
     );
 
   const Icon = kindIcon(entry.kind);
-  const primary = PROVIDER_HELP.find(([re]) => re.test(`${entry.url} ${entry.email} ${entry.username}`));
+  const provider = primaryProvider(entry);
+  const primary = provider ? ([null, provider, PASSKEY_HELP[provider]] as const) : null;
   const toggleFav = async () => {
     try {
       await api.vault.save({ id: entry.id, kind: entry.kind, title: entry.title, username: entry.username, email: entry.email, password: null, url: entry.url, notes: null, tags: entry.tags, favorite: !entry.favorite });

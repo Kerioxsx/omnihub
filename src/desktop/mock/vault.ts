@@ -1,3 +1,4 @@
+import { primaryProvider } from '@shared/accounts';
 // Password vault for the mock backend. No real crypto — the point is the
 // state machine (none → unlocked ⇄ locked), throttling and auto-lock.
 
@@ -7,7 +8,6 @@ import { audit, onSettingsChange, settings } from './core';
 import { DAY, NOW } from './rng';
 
 const DEMO_PASSWORD = 'correct horse battery';
-const PRIMARY = ['google.com', 'gmail.com', 'googlemail.com', 'accounts.google', 'microsoft.com', 'live.com', 'outlook.com', 'hotmail.com', 'msn.com', 'apple.com', 'icloud.com', 'me.com', 'appleid', 'yahoo.com', 'proton.me', 'protonmail.com'];
 
 let exists = false;
 let unlocked = false;
@@ -49,8 +49,7 @@ function seedEntries(): Entry[] {
 }
 
 function isPrimary(e: Pick<Entry, 'url' | 'username' | 'email'>): boolean {
-  const hay = `${e.url} ${e.username} ${e.email}`.toLowerCase();
-  return PRIMARY.some((d) => hay.includes(d));
+  return primaryProvider(e) !== null;
 }
 
 function summary(e: Entry): EntrySummary {

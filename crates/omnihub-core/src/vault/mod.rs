@@ -194,14 +194,37 @@ pub struct Vault {
     events: EventBus,
 }
 
+/// Identity providers whose account unlocks many others.
 const PRIMARY_DOMAINS: &[&str] = &[
-    "google.com", "gmail.com", "googlemail.com", "accounts.google", "microsoft.com", "live.com", "outlook.com", "hotmail.com",
-    "msn.com", "apple.com", "icloud.com", "me.com", "appleid", "yahoo.com", "proton.me", "protonmail.com",
+    "google.com", "gmail.com", "googlemail.com", "microsoft.com", "microsoftonline.com", "live.com", "outlook.com", "hotmail.com", "msn.com", "apple.com", "icloud.com", "me.com", "yahoo.com", "proton.me", "protonmail.com",
 ];
 
+fn url_host(url: &str) -> Option<String> {
+    let u = url.trim();
+    if u.is_empty() {
+        return None;
+    }
+    let rest = u.split_once("://").map_or(u, |(_, r)| r);
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host = host.split(':').next()?.trim_end_matches('.').to_lowercase();
+    (!host.is_empty()).then_some(host)
+}
+
+fn is_provider(domain: &str) -> bool {
+    let d = domain.to_lowercase();
+    PRIMARY_DOMAINS.iter().any(|p| d == *p || d.ends_with(&format!(".{p}")))
+}
+
+/// The account at a big identity provider itself (Google, Microsoft, Apple,
+/// Yahoo, Proton) — not every site where one of their addresses is the
+/// login: a GitHub login with a Gmail address is not a Google account.
 pub fn is_primary_account(url: &str, username: &str, email: &str) -> bool {
-    let hay = format!("{} {} {}", url, username, email).to_lowercase();
-    PRIMARY_DOMAINS.iter().any(|d| hay.contains(d))
+    match url_host(url) {
+        Some(host) => is_provider(&host),
+        // No website: an entry that is just the address itself.
+        None => [email, username].iter().any(|id| id.rsplit_once('@').is_some_and(|(_, d)| is_provider(d))),
+    }
 }
 
 const HELLO_AAD: &[u8] = b"omnihub-hello-v1";
@@ -746,5 +769,11 @@ mod tests {
         assert!(is_primary_account("https://accounts.google.com", "", ""));
         assert!(is_primary_account("", "someone@outlook.com", ""));
         assert!(!is_primary_account("https://github.com", "octocat", ""));
+        // A Gmail address as the login elsewhere is not the Google account.
+        assert!(!is_primary_account("https://github.com/login", "octocat", "someone@gmail.com"));
+        assert!(!is_primary_account("https://google.com.evil.example", "", ""));
+        assert!(is_primary_account("https://appleid.apple.com", "", "someone@gmail.com"));
+        assert!(is_primary_account("login.live.com", "", ""));
+        assert!(is_primary_account("", "", "someone@icloud.com"));
     }
 }

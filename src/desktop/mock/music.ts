@@ -4,9 +4,25 @@
 import type { LyricsStatus, MediaAction, MediaState } from '@shared/types';
 import { emit } from './bus';
 
+// Made-up songs with original lyrics, for the demo only.
+const LYRICS = [
+  'City lights are fading into blue',
+  'I keep the engine running just for you',
+  'Every mile a little closer to the sun',
+  'We were never made to be the only one',
+  'Turn it up, the night is ours to keep',
+  "Echoes on the highway, we don't sleep",
+  'Hold the moment, let the chorus fall',
+  "Daylight's coming, but we've got it all",
+  'Paper planes above the parking lot',
+  'Every promise that we never bought',
+  'Radio is singing what we mean',
+  'Somewhere in the static, in between',
+];
+
 const TRACKS = [
-  { title: 'Daylight Drive', artist: 'The Test Signals', album: 'Synthetic Summer', durationMs: 200_000, hue: ['#ff7a3c', '#2a1440'] },
-  { title: 'Night Loop', artist: 'The Test Signals', album: 'Synthetic Summer', durationMs: 180_000, hue: ['#465aff', '#140a28'] },
+  { title: 'Neon Afterglow', artist: 'Midnight Atlas', album: 'Open Roads', durationMs: 200_000, hue: ['#ff7a3c', '#2a1440'] },
+  { title: 'Night Loop', artist: 'Midnight Atlas', album: 'Open Roads', durationMs: 180_000, hue: ['#465aff', '#140a28'] },
 ];
 let index = 0;
 let base = 0;
@@ -75,7 +91,7 @@ export function mediaControl(action: MediaAction, positionMs: number): void {
 
 export function mediaLyrics(): { key: string; lyrics: LyricsStatus } {
   const s = state();
-  const lines = Array.from({ length: 40 }, (_, i) => ({ ms: i * 4000 + 2000, text: `${s.title} — line ${i + 1}` }));
+  const lines = Array.from({ length: 40 }, (_, i) => ({ ms: i * 4000 + 2000, text: LYRICS[i % LYRICS.length] }));
   return { key: s.key, lyrics: { status: 'ready', lyrics: { lines, plain: null, instrumental: false, source: 'mock' } } };
 }
 
