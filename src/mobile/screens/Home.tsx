@@ -14,7 +14,7 @@ import { PendingPowerCard } from './Power';
 import { copyToClipboard, cx, errorMessage, formatUptime, greeting, linkOf, useInterval, usePageVisible } from '../lib/util';
 import { FileIcon } from './fileKinds';
 
-export function HomeScreen({ active, openMore }: { active: boolean; openMore: (page: 'notes') => void }) {
+export function HomeScreen({ active, openMore }: { active: boolean; openMore: (page: 'notes' | 'tasks') => void }) {
   const { info, socket, online, setTab } = useApp();
   const visible = usePageVisible();
   const [status, setStatus] = useState<Status | null>(null);
@@ -94,6 +94,11 @@ export function HomeScreen({ active, openMore }: { active: boolean; openMore: (p
                   sub={`${formatBytes(status.memory.used)} of ${formatBytes(status.memory.total, 0)}`}
                 />
               </div>
+              {f?.tasks && (
+                <button onClick={() => openMore('tasks')} className="press mt-3 flex w-full items-center justify-center gap-1 rounded-xl bg-surface-2 py-2.5 text-[13.5px] font-semibold text-accent">
+                  What's using it — every program <ChevronRight size={15} />
+                </button>
+              )}
               {status.disks.length > 0 && (
                 <div className="mt-4 space-y-3 border-t border-line pt-4">
                   {status.disks.slice(0, 4).map((d) => {

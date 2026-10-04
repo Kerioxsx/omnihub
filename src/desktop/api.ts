@@ -35,6 +35,8 @@ export const api = {
     stats: () => call<T.SystemStats>('system_stats'),
     processes: (sort: T.ProcessSort, limit = 8) => call<T.ProcessGroup[]>('system_processes', { sort, limit }),
     endProcess: (name: string) => call<number>('system_end_process', { name }),
+    usage: (sort: T.ProcessSort, limit = 200) => call<T.Usage>('system_usage', { sort, limit }),
+    setPriority: (name: string, priority: T.Priority) => call<number>('system_set_priority', { name, priority }),
     settings: () => call<T.Settings>('settings_get'),
     updateSettings: (patch: T.DeepPartial<T.Settings>) => call<T.Settings>('settings_update', { patch }),
     exportSettings: (path: string) => call<void>('settings_export', { path }),

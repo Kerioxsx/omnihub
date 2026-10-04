@@ -352,6 +352,9 @@ function TopAppsCard() {
           );
         })}
       </div>
+      <button type="button" onClick={() => navigate('tasks')} className="mt-2 flex items-center gap-1 self-start rounded-md px-2 py-1 text-[12.5px] font-medium text-accent hover:bg-accent-soft">
+        All tasks, with GPU and disk <ArrowRight size={13} />
+      </button>
       {top && sort === 'cpu' && top.cpu > 50 && (
         <div className="mt-2 flex items-center gap-2 rounded-lg bg-warn/10 px-2.5 py-1.5 text-[12px] text-warn">
           <Sparkles size={13} /> {top.name.replace(/\.exe$/i, '')} is using {Math.round(top.cpu)}% of the CPU.

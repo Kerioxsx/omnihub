@@ -82,6 +82,9 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/media/control", post(media_control))
         .route("/api/media/lyrics", get(media_lyrics))
         .route("/api/media/audio", post(media_audio))
+        .route("/api/tasks", get(tasks_list))
+        .route("/api/tasks/end", post(tasks_end))
+        .route("/api/tasks/priority", post(tasks_priority))
         .route("/api/power", get(power_info).post(power_request))
         .route("/api/power/cancel", post(power_cancel))
         .route("/api/apps", get(apps_list))
@@ -170,6 +173,7 @@ struct Features {
     vault: bool,
     clipboard: bool,
     media: bool,
+    tasks: bool,
 }
 
 fn features(core: &AppCore, tls: bool) -> Features {
@@ -183,6 +187,7 @@ fn features(core: &AppCore, tls: bool) -> Features {
         notes: s.remote.allow_notes,
         vault: s.vault.allow_phone && tls && core.vault.exists(),
         clipboard: s.remote.allow_clipboard,
+        tasks: s.remote.allow_tasks,
         media: s.media.allow_phone,
     }
 }
@@ -678,6 +683,56 @@ async fn power_request(State(core): State<Ctx>, Extension(dev): Extension<Device
 
 async fn power_cancel(State(core): State<Ctx>, Extension(dev): Extension<Device>) -> Json<serde_json::Value> {
     Json(json!({ "cancelled": core.power.cancel(&actor(&dev)) }))
+}
+
+// ---------- tasks: what's using the PC ----------
+
+fn tasks_allowed(core: &AppCore) -> ApiResult<()> {
+    if core.settings.get().remote.allow_tasks {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("tasks from the phone are turned off on the PC"))
+    }
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct TasksQuery {
+    sort: crate::system::procs::ProcessSort,
+    limit: Option<usize>,
+}
+
+async fn tasks_list(State(core): State<Ctx>, Query(q): Query<TasksQuery>) -> ApiResult<Json<crate::system::procs::Usage>> {
+    tasks_allowed(&core)?;
+    let c = core.clone();
+    Ok(Json(tokio::task::spawn_blocking(move || c.procs.usage(q.sort, q.limit.unwrap_or(60).clamp(1, 500), true)).await?))
+}
+
+#[derive(Deserialize)]
+struct TaskReq {
+    name: String,
+    priority: Option<crate::system::procs::Priority>,
+}
+
+async fn tasks_end(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<TaskReq>) -> ApiResult<Json<serde_json::Value>> {
+    tasks_allowed(&core)?;
+    let c = core.clone();
+    let name = req.name.clone();
+    let r = tokio::task::spawn_blocking(move || c.procs.end(&name)).await?;
+    core.audit.record(&actor(&dev), "process.end", &req.name, r.is_ok());
+    let ended = r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "ended": ended })))
+}
+
+async fn tasks_priority(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<TaskReq>) -> ApiResult<Json<serde_json::Value>> {
+    tasks_allowed(&core)?;
+    let priority = req.priority.ok_or_else(|| ApiError::bad("missing priority"))?;
+    let c = core.clone();
+    let name = req.name.clone();
+    let r = tokio::task::spawn_blocking(move || c.procs.set_priority(&name, priority)).await?;
+    core.audit.record(&actor(&dev), "process.priority", &format!("{} → {priority:?}", req.name), r.is_ok());
+    let changed = r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "changed": changed })))
 }
 
 // ---------- apps ----------

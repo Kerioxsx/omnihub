@@ -1,8 +1,8 @@
-// More: menu of secondary pages (Notes, Apps, Vault, Settings) with a
+// More: menu of secondary pages (Tasks, Notes, Apps, Vault, Settings) with a
 // slide-in sub-page stack.
 
 import { AnimatePresence, motion } from 'motion/react';
-import { NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { Activity, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useApp } from '../state';
 import { Logo } from '../ui/Logo';
@@ -13,8 +13,9 @@ import { NotesPage } from './Notes';
 import { AppsPage } from './Apps';
 import { VaultPage } from './Vault';
 import { SettingsPage } from './Settings';
+import { TasksPage } from './Tasks';
 
-export type MorePage = 'notes' | 'apps' | 'vault' | 'settings';
+export type MorePage = 'tasks' | 'notes' | 'apps' | 'vault' | 'settings';
 
 export function MoreScreen({ active, page, setPage, onUnpaired }: { active: boolean; page: MorePage | null; setPage: (p: MorePage | null) => void; onUnpaired: () => void }) {
   const info = useApp((s) => s.info);
@@ -22,12 +23,13 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
   useBackHandler(active && page !== null, () => setPage(null));
 
   const items: { id: MorePage; title: string; sub: string; icon: ReactNode; tone: string; show: boolean }[] = [
+    { id: 'tasks', title: 'Tasks', sub: 'CPU, memory and GPU of every program', icon: <Activity size={21} />, tone: 'bg-emerald-500/15 text-emerald-400', show: !!f?.tasks },
     { id: 'notes', title: 'Notes & ideas', sub: 'Read, search and capture ideas for Claude', icon: <NotebookPen size={21} />, tone: 'bg-violet-500/15 text-violet-400', show: !!f?.notes },
     { id: 'apps', title: 'Apps', sub: 'Launch programs on the PC', icon: <AppWindow size={21} />, tone: 'bg-cyan-500/15 text-cyan-400', show: !!f?.apps },
     { id: 'vault', title: 'Vault', sub: 'Look up a password (secure connection)', icon: <KeyRound size={21} />, tone: 'bg-amber-500/15 text-amber-400', show: !!f?.vault },
     { id: 'settings', title: 'Settings', sub: 'Theme, PC info, unpair', icon: <SettingsIcon size={21} />, tone: 'bg-slate-400/15 text-slate-400', show: true },
   ];
-  const off = [!f?.notes && 'Notes', !f?.apps && 'Apps', !f?.vault && 'Vault'].filter(Boolean) as string[];
+  const off = [!f?.tasks && 'Tasks', !f?.notes && 'Notes', !f?.apps && 'Apps', !f?.vault && 'Vault'].filter(Boolean) as string[];
 
   return (
     <div className="relative h-full overflow-hidden">
@@ -76,6 +78,7 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 34, stiffness: 340 }}
           >
+            {page === 'tasks' && <TasksPage active={active} onBack={() => setPage(null)} />}
             {page === 'notes' && <NotesPage active={active} onBack={() => setPage(null)} />}
             {page === 'apps' && <AppsPage onBack={() => setPage(null)} />}
             {page === 'vault' && <VaultPage active={active} onBack={() => setPage(null)} />}

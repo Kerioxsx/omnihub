@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Camera, HardDrive, House, LayoutGrid, LockKeyhole, NotebookPen, ScreenShare, Settings, Smartphone } from 'lucide-react';
+import { Activity, Camera, HardDrive, House, LayoutGrid, LockKeyhole, NotebookPen, ScreenShare, Settings, Smartphone } from 'lucide-react';
 import type { RouteId } from '../lib/router';
 
 export interface NavItem {
@@ -7,7 +7,7 @@ export interface NavItem {
   label: string;
   icon: LucideIcon;
   description: string;
-  group: 'workspace' | 'security' | 'devices' | 'app';
+  group: 'workspace' | 'performance' | 'security' | 'devices' | 'app';
 }
 
 export const NAV: NavItem[] = [
@@ -16,6 +16,7 @@ export const NAV: NavItem[] = [
   { id: 'apps', label: 'Apps', icon: LayoutGrid, description: 'Installed programs and Store apps', group: 'workspace' },
   { id: 'screenshots', label: 'Screenshots', icon: Camera, description: 'Capture, tag and find screenshots', group: 'workspace' },
   { id: 'notes', label: 'Notes', icon: NotebookPen, description: 'Notes and ideas for Claude', group: 'workspace' },
+  { id: 'tasks', label: 'Tasks', icon: Activity, description: 'CPU, memory, GPU and disk use of every program', group: 'performance' },
   { id: 'vault', label: 'Vault', icon: LockKeyhole, description: 'Encrypted passwords and secrets', group: 'security' },
   { id: 'phone', label: 'Phone', icon: Smartphone, description: 'Companion server, pairing and transfers', group: 'devices' },
   { id: 'screen', label: 'Screen share', icon: ScreenShare, description: 'Stream your PC or mirror an Android phone', group: 'devices' },

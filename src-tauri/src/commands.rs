@@ -121,6 +121,24 @@ pub async fn system_processes(core: Core<'_>, sort: omnihub_core::system::procs:
     blocking(move || Ok(core.procs.top(sort, limit.unwrap_or(8)))).await
 }
 
+/// The whole PC (CPU, memory, GPUs) and its busiest programs.
+#[tauri::command]
+pub async fn system_usage(core: Core<'_>, sort: omnihub_core::system::procs::ProcessSort, limit: Option<usize>) -> Res<omnihub_core::system::procs::Usage> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.procs.usage(sort, limit.unwrap_or(200), true))).await
+}
+
+#[tauri::command]
+pub async fn system_set_priority(core: Core<'_>, name: String, priority: omnihub_core::system::procs::Priority) -> Res<usize> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.procs.set_priority(&name, priority);
+        core.audit.record("desktop", "process.priority", &format!("{name} → {priority:?}"), r.is_ok());
+        r
+    })
+    .await
+}
+
 /// End every process with this name ("End task").
 #[tauri::command]
 pub async fn system_end_process(core: Core<'_>, name: String) -> Res<usize> {

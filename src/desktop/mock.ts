@@ -3,7 +3,7 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { CaptureKind, DeepPartial, MediaAction, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
+import type { CaptureKind, DeepPartial, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
@@ -42,6 +42,8 @@ const handlers: Record<string, Handler> = {
   startup_set: (a) => core.startupSet(str(a, 'id'), bool(a, 'enabled')),
   system_processes: (a) => core.processes((optStr(a, 'sort') ?? 'cpu') as ProcessSort, num(a, 'limit') || 8),
   system_end_process: (a) => core.endProcess(str(a, 'name')),
+  system_usage: (a) => core.usage((optStr(a, 'sort') ?? 'cpu') as ProcessSort, num(a, 'limit') || 200),
+  system_set_priority: (a) => core.setPriority(str(a, 'name'), str(a, 'priority') as Priority),
   settings_get: () => core.settings,
   settings_update: (a) => core.updateSettings(obj<DeepPartial<Settings>>(a, 'patch')),
   settings_export: (a) => void str(a, 'path'),

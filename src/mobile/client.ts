@@ -93,7 +93,7 @@ export interface ServerInfo {
   tls: boolean;
   paired: boolean;
   pairingOpen: boolean;
-  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean };
+  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean };
 }
 
 export interface FsEntry {
@@ -119,8 +119,8 @@ export interface Status {
 
 // ---------- music ----------
 
-export type { AudioInfo, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState } from '@shared/types';
-import type { AudioInfo, LyricsStatus, MediaAction, MediaState } from '@shared/types';
+export type { AudioInfo, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
+import type { AudioInfo, LyricsStatus, MediaAction, MediaState, Priority, ProcessSort, Usage } from '@shared/types';
 
 
 export const client = {
@@ -182,6 +182,9 @@ export const client = {
 
   apps: () => request<{ apps: { id: string; name: string; publisher: string; source: string }[] }>('GET', '/api/apps'),
   appIcon: (id: string) => request<{ icon: string | null }>('GET', `/api/apps/${id}/icon`),
+  tasks: (sort: ProcessSort = 'cpu', limit = 80) => request<Usage>('GET', `/api/tasks?sort=${sort}&limit=${limit}`),
+  endTask: (name: string) => request<{ ended: number }>('POST', '/api/tasks/end', { name }),
+  setTaskPriority: (name: string, priority: Priority) => request<{ changed: number }>('POST', '/api/tasks/priority', { name, priority }),
   media: () => request<{ state: MediaState | null; nowMs: number; audio: AudioInfo }>('GET', '/api/media'),
   mediaControl: (action: MediaAction, positionMs = 0) => request<{ ok: boolean }>('POST', '/api/media/control', { action, positionMs: Math.max(0, Math.round(positionMs)) }),
   mediaLyrics: () => request<{ key: string | null; lyrics: LyricsStatus }>('GET', '/api/media/lyrics'),

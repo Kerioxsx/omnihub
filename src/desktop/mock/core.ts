@@ -1,8 +1,8 @@
 // Settings, audit log, app info and system stats for the mock backend.
 
-import type { AppInfoDetails, AuditEntry, DeepPartial, ProcessGroup, ProcessSort, Settings, ShareState, StartupItem, StartupLocation, SystemStats, WindowInfo } from '@shared/types';
+import type { AppInfoDetails, AuditEntry, DeepPartial, Priority, ProcessGroup, ProcessSort, Settings, ShareState, StartupItem, StartupLocation, SystemStats, Usage, WindowInfo } from '@shared/types';
 import { emit } from './bus';
-import { DAY, GB, NOW } from './rng';
+import { DAY, GB, MB, NOW } from './rng';
 
 const query = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
 export const flags = {
@@ -33,6 +33,7 @@ export const settings: Settings = {
     incomingDir: null,
     deviceName: 'ALEX-DESKTOP',
     allowClipboard: true,
+    allowTasks: true,
     sendToMenu: true,
   },
   screenshots: { dir: null, format: 'png', hotkeyRegion: 'Alt+Shift+S', hotkeyFull: 'Alt+Shift+A', hotkeyWindow: 'Alt+Shift+W', copyToClipboard: true },
@@ -141,32 +142,84 @@ export function pickFiles(): string[] {
 
 // ---------- processes ----------
 
-const PROCS: { name: string; count: number; cpu: number; mem: number; exe: string }[] = [
-  { name: 'brave.exe', count: 18, cpu: 7.5, mem: 2.4 * GB, exe: 'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe' },
-  { name: 'Discord.exe', count: 6, cpu: 1.2, mem: 0.62 * GB, exe: 'C:\\Users\\Alex\\AppData\\Local\\Discord\\app-1.0.9187\\Discord.exe' },
-  { name: 'Code.exe', count: 11, cpu: 3.1, mem: 1.3 * GB, exe: 'C:\\Users\\Alex\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe' },
-  { name: 'steamwebhelper.exe', count: 7, cpu: 0.8, mem: 0.51 * GB, exe: 'C:\\Program Files (x86)\\Steam\\bin\\cef\\cef.win7x64\\steamwebhelper.exe' },
-  { name: 'Spotify.exe', count: 5, cpu: 0.6, mem: 0.38 * GB, exe: 'C:\\Users\\Alex\\AppData\\Roaming\\Spotify\\Spotify.exe' },
-  { name: 'explorer.exe', count: 1, cpu: 0.4, mem: 0.21 * GB, exe: 'C:\\Windows\\explorer.exe' },
-  { name: 'MsMpEng.exe', count: 1, cpu: 1.9, mem: 0.29 * GB, exe: 'C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\MsMpEng.exe' },
-  { name: 'omnihub.exe', count: 1, cpu: 0.9, mem: 0.16 * GB, exe: 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\OmniHub.exe' },
-  { name: 'dwm.exe', count: 1, cpu: 1.4, mem: 0.12 * GB, exe: 'C:\\Windows\\System32\\dwm.exe' },
-  { name: 'OBS64.exe', count: 1, cpu: 4.2, mem: 0.44 * GB, exe: 'C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe' },
+const PROCS: { name: string; count: number; cpu: number; mem: number; gpu: number; vram: number; disk: number; exe: string; priority?: Priority }[] = [
+  { name: 'FortniteClient-Win64-Shipping.exe', count: 1, cpu: 18.4, mem: 5.1 * GB, gpu: 87, vram: 6.2 * GB, disk: 4.2 * MB, exe: 'C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe', priority: 'high' },
+  { name: 'brave.exe', count: 18, cpu: 7.5, mem: 2.4 * GB, gpu: 4, vram: 0.31 * GB, disk: 0.4 * MB, exe: 'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe' },
+  { name: 'Discord.exe', count: 6, cpu: 1.2, mem: 0.62 * GB, gpu: 1.5, vram: 0.12 * GB, disk: 0.05 * MB, exe: 'C:\\Users\\You\\AppData\\Local\\Discord\\app-1.0.9187\\Discord.exe' },
+  { name: 'Code.exe', count: 11, cpu: 3.1, mem: 1.3 * GB, gpu: 0.6, vram: 0.08 * GB, disk: 0.2 * MB, exe: 'C:\\Users\\You\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe' },
+  { name: 'steamwebhelper.exe', count: 7, cpu: 0.8, mem: 0.51 * GB, gpu: 0.3, vram: 0.05 * GB, disk: 0, exe: 'C:\\Program Files (x86)\\Steam\\bin\\cef\\cef.win7x64\\steamwebhelper.exe' },
+  { name: 'Spotify.exe', count: 5, cpu: 0.6, mem: 0.38 * GB, gpu: 0.4, vram: 0.04 * GB, disk: 0.02 * MB, exe: 'C:\\Users\\You\\AppData\\Roaming\\Spotify\\Spotify.exe' },
+  { name: 'explorer.exe', count: 1, cpu: 0.4, mem: 0.21 * GB, gpu: 0.2, vram: 0.03 * GB, disk: 0.01 * MB, exe: 'C:\\Windows\\explorer.exe' },
+  { name: 'MsMpEng.exe', count: 1, cpu: 1.9, mem: 0.29 * GB, gpu: 0, vram: 0, disk: 1.1 * MB, exe: 'C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\MsMpEng.exe' },
+  { name: 'omnihub.exe', count: 1, cpu: 0.9, mem: 0.16 * GB, gpu: 0.8, vram: 0.06 * GB, disk: 0.01 * MB, exe: 'C:\\Users\\You\\AppData\\Local\\OmniHub\\OmniHub.exe' },
+  { name: 'dwm.exe', count: 1, cpu: 1.4, mem: 0.12 * GB, gpu: 6.5, vram: 0.42 * GB, disk: 0, exe: 'C:\\Windows\\System32\\dwm.exe', priority: 'high' },
+  { name: 'OBS64.exe', count: 1, cpu: 4.2, mem: 0.44 * GB, gpu: 9.1, vram: 0.35 * GB, disk: 2.8 * MB, exe: 'C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe', priority: 'aboveNormal' },
+  { name: 'svchost.exe', count: 74, cpu: 1.1, mem: 1.05 * GB, gpu: 0, vram: 0, disk: 0.3 * MB, exe: 'C:\\Windows\\System32\\svchost.exe' },
+  { name: 'EpicGamesLauncher.exe', count: 1, cpu: 0.7, mem: 0.33 * GB, gpu: 0.5, vram: 0.07 * GB, disk: 0.1 * MB, exe: 'C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe' },
 ];
-const PROTECTED = new Set(['msmpeng.exe', 'dwm.exe', 'omnihub.exe']);
+const PROTECTED = new Set(['msmpeng.exe', 'dwm.exe', 'omnihub.exe', 'svchost.exe']);
 
-export function processes(sort: ProcessSort, limit: number): ProcessGroup[] {
-  const list = PROCS.map((p, i) => ({
+const jitter = (v: number, f = 0.3) => Math.max(0, v + (Math.random() - 0.5) * v * f);
+
+function groups(): ProcessGroup[] {
+  return PROCS.map((p, i) => ({
     name: p.name,
     count: p.count,
-    cpu: Math.round(Math.max(0, p.cpu + (Math.random() - 0.5) * p.cpu * 0.6) * 10) / 10,
+    cpu: Math.round(jitter(p.cpu, 0.6) * 10) / 10,
     memory: Math.round(p.mem * (0.97 + Math.random() * 0.06)),
+    gpu: Math.round(Math.min(100, jitter(p.gpu, 0.25)) * 10) / 10,
+    gpuMemory: Math.round(p.vram),
+    disk: Math.round(jitter(p.disk, 0.8)),
     exe: p.exe,
     pids: Array.from({ length: p.count }, (_, k) => 1000 + i * 100 + k * 4),
     canEnd: !PROTECTED.has(p.name.toLowerCase()),
+    priority: p.priority ?? 'normal',
   }));
-  list.sort((a, b) => (sort === 'cpu' ? b.cpu - a.cpu : b.memory - a.memory));
-  return list.slice(0, limit);
+}
+
+function sortGroups(list: ProcessGroup[], sort: ProcessSort) {
+  const by: Record<ProcessSort, (a: ProcessGroup, b: ProcessGroup) => number> = {
+    cpu: (a, b) => b.cpu - a.cpu,
+    memory: (a, b) => b.memory - a.memory,
+    gpu: (a, b) => b.gpu - a.gpu,
+    disk: (a, b) => b.disk - a.disk,
+    name: (a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+  };
+  return list.sort(by[sort]);
+}
+
+export function processes(sort: ProcessSort, limit: number): ProcessGroup[] {
+  return sortGroups(groups(), sort).slice(0, limit);
+}
+
+export function usage(sort: ProcessSort, limit: number): Usage {
+  const list = groups();
+  const cpu = Math.min(100, list.reduce((s, g) => s + g.cpu, 0) + 4);
+  const gpu = Math.min(100, Math.max(...list.map((g) => g.gpu)) + 3);
+  return {
+    cpu: Math.round(cpu * 10) / 10,
+    cpuName: 'AMD Ryzen 7 7800X3D 8-Core Processor',
+    cores: 16,
+    memoryUsed: Math.round(list.reduce((s, g) => s + g.memory, 0) + 3.2 * GB),
+    memoryTotal: 32 * GB,
+    gpuSupported: true,
+    gpus: [
+      { name: 'NVIDIA GeForce RTX 4070 SUPER', percent: Math.round(gpu * 10) / 10, memoryUsed: Math.round(list.reduce((s, g) => s + g.gpuMemory, 0) + 0.4 * GB), memoryTotal: 12 * GB },
+      { name: 'AMD Radeon(TM) Graphics', percent: 2.1, memoryUsed: 0.2 * GB, memoryTotal: 0.5 * GB },
+    ],
+    disk: list.reduce((s, g) => s + g.disk, 0),
+    processCount: 286,
+    processes: sortGroups(list, sort).slice(0, limit),
+  };
+}
+
+export function setPriority(name: string, priority: Priority): number {
+  const p = PROCS.find((x) => x.name.toLowerCase() === name.toLowerCase());
+  if (!p) throw new Error(`${name} is not running`);
+  if (PROTECTED.has(name.toLowerCase())) throw new Error(`${name} is part of Windows; its priority stays as Windows set it`);
+  p.priority = priority;
+  audit('desktop', 'process.priority', `${p.name} → ${priority}`);
+  return p.count;
 }
 
 export function endProcess(name: string): number {

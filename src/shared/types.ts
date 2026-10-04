@@ -785,6 +785,7 @@ export interface Settings {
     deviceName: string;
     /** Paired phones may put text on this PC's clipboard. */
     allowClipboard: boolean;
+    allowTasks: boolean;
     /** “Send to → OmniHub (phone)” in Explorer. */
     sendToMenu: boolean;
   };
@@ -885,7 +886,8 @@ export interface StartupItem {
   needsAdmin: boolean;
 }
 
-export type ProcessSort = 'cpu' | 'memory';
+export type ProcessSort = 'cpu' | 'memory' | 'gpu' | 'disk' | 'name';
+export type Priority = 'low' | 'belowNormal' | 'normal' | 'aboveNormal' | 'high';
 
 export interface ProcessGroup {
   name: string;
@@ -893,9 +895,36 @@ export interface ProcessGroup {
   /** share of the whole CPU, 0–100 */
   cpu: number;
   memory: number;
+  /** busiest GPU engine, 0–100 */
+  gpu: number;
+  gpuMemory: number;
+  /** disk reads + writes, bytes/s */
+  disk: number;
   exe: string | null;
   pids: number[];
   canEnd: boolean;
+  priority: Priority | null;
+}
+
+export interface GpuAdapter {
+  name: string;
+  percent: number;
+  memoryUsed: number;
+  memoryTotal: number;
+}
+
+/** The whole PC and the programs using it. */
+export interface Usage {
+  cpu: number;
+  cpuName: string;
+  cores: number;
+  memoryUsed: number;
+  memoryTotal: number;
+  gpuSupported: boolean;
+  gpus: GpuAdapter[];
+  disk: number;
+  processCount: number;
+  processes: ProcessGroup[];
 }
 
 export interface SystemStats {

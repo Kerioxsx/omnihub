@@ -51,7 +51,7 @@ function useCommands(): Cmd[] {
   const settings = useSettings((s) => s.settings);
   const remote = useLive((s) => s.remote);
   return useMemo(() => {
-    const pages: Cmd[] = NAV.map((n, i) => ({ id: `page-${n.id}`, label: n.label, hint: n.description, icon: n.icon, group: 'Pages', shortcut: `${MOD_LABEL} ${i + 1}`, run: () => navigate(n.id) }));
+    const pages: Cmd[] = NAV.map((n, i) => ({ id: `page-${n.id}`, label: n.label, hint: n.description, icon: n.icon, group: 'Pages', shortcut: i < 9 ? `${MOD_LABEL} ${i + 1}` : undefined, run: () => navigate(n.id) }));
     const light = settings?.general.theme === 'light';
     const actions: Cmd[] = [
       { id: 'shot-region', label: 'Capture a region', hint: 'Freeze the screen and drag a rectangle', icon: Crop, group: 'Actions', keywords: 'screenshot snip', run: () => attempt('Could not start the capture', () => api.shots.regionBegin()) },

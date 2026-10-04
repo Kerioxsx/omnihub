@@ -240,6 +240,8 @@ pub struct RemoteSettings {
     pub device_name: String,
     /// Paired phones may put text on this PC's clipboard.
     pub allow_clipboard: bool,
+    /// Paired phones may see what's running and end tasks.
+    pub allow_tasks: bool,
     /// "Send to → OmniHub (phone)" in Explorer's right-click menu.
     pub send_to_menu: bool,
 }
@@ -264,6 +266,7 @@ impl Default for RemoteSettings {
             incoming_dir: None,
             device_name: gethostname::gethostname().to_string_lossy().to_string(),
             allow_clipboard: true,
+            allow_tasks: true,
             send_to_menu: true,
         }
     }

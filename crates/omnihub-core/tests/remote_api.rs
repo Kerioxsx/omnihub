@@ -370,3 +370,58 @@ fn music_from_the_phone() {
     });
     core.remote.stop();
 }
+
+/// Tasks from the phone: CPU/memory of the whole PC and per program,
+/// priority and "End task" on a program started for the test.
+#[test]
+fn tasks_from_the_phone() {
+    let f = setup(false);
+    // A harmless program with a name nothing else uses.
+    let (src, args): (std::path::PathBuf, Vec<&str>) = if cfg!(windows) { (r"C:\Windows\System32\PING.EXE".into(), vec!["-n", "120", "127.0.0.1"]) } else { (std::path::PathBuf::from("/bin/sleep"), vec!["120"]) };
+    let exe = f._dir.path().join(if cfg!(windows) { "omnihub-sleeper.exe" } else { "omnihub-sleeper" });
+    std::fs::copy(&src, &exe).unwrap();
+    let mut child = std::process::Command::new(&exe).args(&args).stdout(std::process::Stdio::null()).spawn().unwrap();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let base = &f.base;
+        let pairing = f.core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        let info: Value = c.get(format!("{base}/api/info")).send().await.unwrap().json().await.unwrap();
+        assert_eq!(info["features"]["tasks"], true);
+
+        let u: Value = c.get(format!("{base}/api/tasks?sort=memory&limit=5")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let list = u["processes"].as_array().unwrap();
+        assert!(!list.is_empty() && list.len() <= 5);
+        assert!(list.windows(2).all(|w| w[0]["memory"].as_u64() >= w[1]["memory"].as_u64()));
+        assert!(u["memoryTotal"].as_u64().unwrap() > 0 && u["cores"].as_u64().unwrap() > 0);
+        assert!(u["gpuSupported"].is_boolean() && u["gpus"].is_array());
+        for k in ["cpu", "gpu", "gpuMemory", "disk", "count", "canEnd"] {
+            assert!(!list[0][k].is_null(), "{k} missing");
+        }
+
+        let u: Value = c.get(format!("{base}/api/tasks?sort=name&limit=500")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let sleeper = u["processes"].as_array().unwrap().iter().find(|g| g["name"].as_str().unwrap().starts_with("omnihub-sleeper")).expect("test program listed").clone();
+        assert_eq!(sleeper["canEnd"], true);
+        let name = sleeper["name"].as_str().unwrap();
+
+        let r = c.post(format!("{base}/api/tasks/priority")).header("authorization", &auth).json(&json!({ "name": name, "priority": "belowNormal" })).send().await.unwrap();
+        assert_eq!(r.status(), if cfg!(windows) { StatusCode::OK } else { StatusCode::BAD_REQUEST });
+        // Windows' own processes are never touched.
+        let r = c.post(format!("{base}/api/tasks/end")).header("authorization", &auth).json(&json!({ "name": "csrss.exe" })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+
+        let r: Value = c.post(format!("{base}/api/tasks/end")).header("authorization", &auth).json(&json!({ "name": name })).send().await.unwrap().json().await.unwrap();
+        assert_eq!(r["ended"], 1);
+
+        f.core.update_settings(&json!({ "remote": { "allowTasks": false } })).unwrap();
+        assert_eq!(c.get(format!("{base}/api/tasks")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+    });
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while child.try_wait().unwrap().is_none() {
+        assert!(std::time::Instant::now() < deadline, "the program was not ended");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    f.core.remote.stop();
+}

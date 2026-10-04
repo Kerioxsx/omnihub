@@ -24,6 +24,7 @@ import { ScreenPage } from './pages/screen/ScreenPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { ScreenshotsPage } from './pages/shots/ScreenshotsPage';
 import { StoragePage } from './pages/storage/StoragePage';
+import { TasksPage } from './pages/tasks/TasksPage';
 import { VaultPage } from './pages/vault/VaultPage';
 import { usePalette } from './state/dialogs';
 import { useSettings } from './state/settings';
@@ -34,6 +35,7 @@ const PAGES: Record<Exclude<RouteId, 'overlay'>, ComponentType> = {
   apps: AppsPage,
   screenshots: ScreenshotsPage,
   notes: NotesPage,
+  tasks: TasksPage,
   vault: VaultPage,
   phone: PhonePage,
   screen: ScreenPage,

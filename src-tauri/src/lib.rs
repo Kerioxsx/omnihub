@@ -297,6 +297,8 @@ pub fn run(args: Vec<String>) {
             commands::startup_set,
             commands::system_processes,
             commands::system_end_process,
+            commands::system_usage,
+            commands::system_set_priority,
             commands::browser_status,
             commands::browser_repair,
             commands::browser_pair_respond,
