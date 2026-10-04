@@ -86,13 +86,19 @@ pub async fn serve<S: AsyncRead + AsyncWrite + Send + 'static>(core: Arc<AppCore
                     let _ = tx.send(json!({ "ok": false, "code": "bad-json", "error": "not JSON" }));
                     continue;
                 };
+                // Requests are handled in order (host-hello must precede the
+                // rest). Only waiting for the user — pairing approval, Windows
+                // Hello — runs alongside, so fills keep working meanwhile.
+                let slow = matches!(req.get("type").and_then(|t| t.as_str()), Some("pair-wait" | "unlock"));
                 let (core, session, tx) = (core.clone(), session.clone(), tx.clone());
-                // Pairing waits for the user and Hello for a fingerprint: off the reactor.
-                tokio::task::spawn_blocking(move || {
+                let task = tokio::task::spawn_blocking(move || {
                     if let Some(resp) = handle(&core, &session, &req) {
                         let _ = tx.send(resp);
                     }
                 });
+                if !slow {
+                    let _ = task.await;
+                }
             }
             ev = events.recv() => {
                 let Ok(ev) = ev else { continue };
