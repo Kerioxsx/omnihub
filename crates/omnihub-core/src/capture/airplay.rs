@@ -33,8 +33,6 @@ const LOG_LINES: usize = 60;
 /// OmniHub's own UxPlay changes the add-on must carry (`omnihubPatchLevel`
 /// in its addon.json): 1 = announce the address in `UXPLAY_MDNS_IPV4`.
 pub const ADDON_PATCH_LEVEL: u64 = 1;
-/// The receiver's fixed AirPlay control port (`-p`).
-const AIRPLAY_PORT: u16 = 7000;
 
 /// Where releases are downloaded from (overridable at build time).
 pub fn releases_url() -> String {
@@ -60,11 +58,14 @@ pub struct AirPlayOptions {
     /// Do not hold video back to keep audio in sync: lower delay.
     pub low_latency: bool,
     pub fullscreen: bool,
+    /// Decode the iPhone's video in software: slower, but sidesteps graphics
+    /// driver problems that make the receiver crash.
+    pub safe_mode: bool,
 }
 
 impl Default for AirPlayOptions {
     fn default() -> Self {
-        AirPlayOptions { name: "OmniHub".into(), quality: "1080p".into(), fps: 60, audio: true, require_pin: true, low_latency: true, fullscreen: false }
+        AirPlayOptions { name: "OmniHub".into(), quality: "1080p".into(), fps: 60, audio: true, require_pin: true, low_latency: true, fullscreen: false, safe_mode: false }
     }
 }
 
@@ -93,6 +94,9 @@ pub fn uxplay_args(o: &AirPlayOptions, pin: Option<&str>, register: &Path) -> Ve
     }
     if o.fullscreen {
         a.push("-fs".into());
+    }
+    if o.safe_mode {
+        a.push("-avdec".into());
     }
     if let Some(pin) = pin {
         a.extend(["-pin".into(), pin.to_string(), "-reg".into(), register.to_string_lossy().into_owned()]);
@@ -182,8 +186,6 @@ pub struct AirPlayCheck {
     pub announced: bool,
     /// The address in that answer is this one (not a VPN or virtual adapter).
     pub right_address: bool,
-    /// Its AirPlay port answered on that address.
-    pub reachable: bool,
 }
 
 #[derive(Default)]
@@ -202,7 +204,7 @@ pub struct AirPlay {
     addons: PathBuf,
     data: PathBuf,
     events: EventBus,
-    child: Mutex<Option<Child>>,
+    child: Arc<Mutex<Option<Child>>>,
     rt: Arc<Mutex<Runtime>>,
     install: Arc<Mutex<Option<InstallProgress>>>,
     keep_on_top: Arc<AtomicBool>,
@@ -228,7 +230,7 @@ impl AirPlay {
             addons: addons.to_path_buf(),
             data: data.to_path_buf(),
             events,
-            child: Mutex::new(None),
+            child: Arc::new(Mutex::new(None)),
             rt: Arc::new(Mutex::new(Runtime::default())),
             install: Arc::new(Mutex::new(None)),
             keep_on_top: Arc::new(AtomicBool::new(false)),
@@ -274,17 +276,7 @@ impl AirPlay {
     }
 
     pub fn is_running(&self) -> bool {
-        let mut g = self.child.lock();
-        match g.as_mut() {
-            Some(c) => match c.try_wait() {
-                Ok(None) => true,
-                _ => {
-                    *g = None;
-                    false
-                }
-            },
-            None => false,
-        }
+        reap(&self.child, &self.rt, &self.events, &self.stop_flag)
     }
 
     pub fn status(&self, configured: Option<&str>) -> AirPlayStatus {
@@ -325,7 +317,15 @@ impl AirPlay {
         let (exe, source) = self.find(configured).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "the AirPlay receiver is not installed"))?;
         let pin = o.require_pin.then(|| format!("{:04}", rand::random::<u16>() % 10_000));
         std::fs::create_dir_all(&self.data)?;
-        let args = uxplay_args(o, pin.as_deref(), &self.data.join("airplay-devices.txt"));
+        let mut args = uxplay_args(o, pin.as_deref(), &self.data.join("airplay-devices.txt"));
+        if source == "addon" && cfg!(windows) {
+            // The video and sound outputs the add-on's CI smoke test runs,
+            // instead of whatever GStreamer ranks first on this PC.
+            args.extend(["-vs".into(), "d3d11videosink".into()]);
+            if o.audio {
+                args.extend(["-as".into(), "wasapi2sink".into()]);
+            }
+        }
         let mut cmd = Command::new(&exe);
         cmd.args(&args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         // Announce the Wi-Fi/Ethernet address phones can reach. Left to
@@ -369,6 +369,7 @@ impl AirPlay {
                     if line.trim().is_empty() {
                         continue;
                     }
+                    tracing::info!(target: "uxplay", "{line}");
                     let ev = parse_log_line(&line);
                     let mut g = rt.lock();
                     g.log.push_back(line);
@@ -394,13 +395,26 @@ impl AirPlay {
             });
         }
         #[cfg(windows)]
-        {
-            let pid = child.id();
-            let (rt, events, top, pip, stop) = (self.rt.clone(), self.events.clone(), self.keep_on_top.clone(), self.pip.clone(), self.stop_flag.clone());
-            std::thread::spawn(move || win::watch_window(pid, rt, events, top, pip, stop));
-        }
+        let pid = child.id();
         *self.child.lock() = Some(child);
+        #[cfg(windows)]
+        {
+            let (rt, events, top, pip, stop, current) = (self.rt.clone(), self.events.clone(), self.keep_on_top.clone(), self.pip.clone(), self.stop_flag.clone(), self.child.clone());
+            // Watch this receiver's window while it is the one running.
+            let alive = move || current.lock().as_ref().is_some_and(|c| c.id() == pid);
+            std::thread::spawn(move || win::watch_window(pid, rt, events, top, pip, stop, alive));
+        }
         self.emit();
+        // Notice when the receiver closes on its own (a crash, a missing
+        // file) and say so, with how it ended; its last lines stay in the log.
+        {
+            let (child, rt, events, stop) = (self.child.clone(), self.rt.clone(), self.events.clone(), self.stop_flag.clone());
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) && reap(&child, &rt, &events, &stop) {
+                    std::thread::sleep(Duration::from_millis(500));
+                }
+            });
+        }
         if let Some(ip) = address.and_then(|a| a.parse::<std::net::Ipv4Addr>().ok()) {
             let (rt, events, stop, name) = (self.rt.clone(), self.events.clone(), self.stop_flag.clone(), args[1].clone());
             std::thread::spawn(move || {
@@ -692,10 +706,10 @@ mod win {
 
     /// Follow the receiver's video window: it opens when an iPhone starts
     /// mirroring and closes when it stops.
-    pub fn watch_window(pid: u32, rt: Arc<Mutex<Runtime>>, events: EventBus, top: Arc<AtomicBool>, pip: Arc<AtomicBool>, stop: Arc<AtomicBool>) {
+    pub fn watch_window(pid: u32, rt: Arc<Mutex<Runtime>>, events: EventBus, top: Arc<AtomicBool>, pip: Arc<AtomicBool>, stop: Arc<AtomicBool>, alive: impl Fn() -> bool) {
         let mut seen: Vec<isize> = Vec::new();
         let mut was = false;
-        while !stop.load(Ordering::Relaxed) {
+        while !stop.load(Ordering::Relaxed) && alive() {
             let wins = windows_of(pid);
             let now = !wins.is_empty();
             for h in &wins {
@@ -745,9 +759,56 @@ fn answer_mentions(packet: &[u8], name: &str, ip: std::net::Ipv4Addr) -> (bool, 
 
 /// Look for the receiver the way an iPhone on the same network does: an
 /// mDNS search sent out of `ip`'s adapter, then its AirPlay port on `ip`.
+///
+/// It only asks over mDNS: connecting to the receiver's AirPlay port would
+/// look like an iPhone arriving and leaving, which the receiver should not
+/// have to deal with for a check.
 pub fn check_receiver(ip: std::net::Ipv4Addr, name: &str) -> AirPlayCheck {
     let (announced, right_address) = mdns_search(ip, name).unwrap_or((false, false));
-    AirPlayCheck { ip: ip.to_string(), announced, right_address, reachable: info_answers(std::net::SocketAddr::from((ip, AIRPLAY_PORT))) }
+    AirPlayCheck { ip: ip.to_string(), announced, right_address }
+}
+
+/// Whether the receiver is still running. When it has ended without being
+/// stopped, record why (once) and tell the UI.
+fn reap(child: &Mutex<Option<Child>>, rt: &Mutex<Runtime>, events: &EventBus, stop: &AtomicBool) -> bool {
+    let mut g = child.lock();
+    let Some(c) = g.as_mut() else { return false };
+    let status = match c.try_wait() {
+        Ok(None) => return true,
+        Ok(Some(status)) => Some(status),
+        Err(_) => None,
+    };
+    *g = None;
+    drop(g);
+    if !stop.load(Ordering::Relaxed) {
+        let why = exit_reason(status.and_then(|s| s.code()));
+        tracing::warn!("AirPlay receiver exited: {why}");
+        let mut r = rt.lock();
+        r.client = None;
+        r.mirroring = false;
+        r.error = Some(why);
+        drop(r);
+        events.emit("airplay:changed", serde_json::json!({}));
+    }
+    false
+}
+
+/// Why the receiver ended, from its exit code (Windows NTSTATUS codes show
+/// up as negative numbers).
+pub fn exit_reason(code: Option<i32>) -> String {
+    match code {
+        None => "The AirPlay receiver was closed by Windows or another program.".into(),
+        Some(0) => "The AirPlay receiver closed by itself.".into(),
+        Some(c) => {
+            let hex = format!("0x{:08X}", c as u32);
+            match c as u32 {
+                0xC000_0005 | 0xC000_0409 | 0xC000_001D | 0xC000_0374 => format!("The AirPlay receiver crashed ({hex}). Try a lower quality or turn off \"Lowest delay\", and update the graphics driver."),
+                0xC000_0135 | 0xC000_007B | 0xC000_0139 => format!("The AirPlay receiver is missing a file it needs ({hex}). Remove the add-on in Details and install it again."),
+                0xC000_013A => "The AirPlay receiver was stopped (Ctrl+C).".into(),
+                _ => format!("The AirPlay receiver stopped with an error ({}).", if c < 0 { hex } else { c.to_string() }),
+            }
+        }
+    }
 }
 
 fn mdns_search(ip: std::net::Ipv4Addr, name: &str) -> std::io::Result<(bool, bool)> {
@@ -786,17 +847,6 @@ fn mdns_search(ip: std::net::Ipv4Addr, name: &str) -> std::io::Result<(bool, boo
     Ok(found)
 }
 
-/// Whether an AirPlay receiver answers "GET /info" at `addr`.
-fn info_answers(addr: std::net::SocketAddr) -> bool {
-    let Ok(mut s) = std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(2)) else { return false };
-    let _ = s.set_read_timeout(Some(Duration::from_secs(3)));
-    if s.write_all(b"GET /info RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: AirPlay/690.7.1\r\nX-Apple-ProtocolVersion: 1\r\n\r\n").is_err() {
-        return false;
-    }
-    let mut head = [0u8; 12];
-    s.read_exact(&mut head).is_ok() && head.starts_with(b"RTSP/1.0 200")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -815,19 +865,11 @@ mod tests {
     }
 
     #[test]
-    fn info_check_against_a_stand_in_receiver() {
-        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let addr = l.local_addr().unwrap();
-        let t = std::thread::spawn(move || {
-            let (mut c, _) = l.accept().unwrap();
-            let mut buf = [0u8; 256];
-            let _ = c.read(&mut buf);
-            c.write_all(b"RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n").unwrap();
-        });
-        assert!(info_answers(addr));
-        t.join().unwrap();
-        let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap();
-        assert!(!info_answers(closed));
+    fn exit_reasons() {
+        assert!(exit_reason(Some(0xC000_0005u32 as i32)).contains("crashed (0xC0000005)"));
+        assert!(exit_reason(Some(0xC000_0135u32 as i32)).contains("missing a file"));
+        assert!(exit_reason(Some(1)).contains("error (1)"));
+        assert!(exit_reason(None).contains("closed by Windows"));
     }
 
     #[test]
@@ -841,11 +883,11 @@ mod tests {
         assert!(s.contains("-vsync no"));
         assert!(s.contains("-pin 0427 -reg /data/airplay-devices.txt"));
         assert!(!s.contains("-as 0"));
-        let o = AirPlayOptions { quality: "4k".into(), fps: 120, audio: false, require_pin: false, low_latency: false, fullscreen: true, name: "  ".into() };
+        let o = AirPlayOptions { quality: "4k".into(), fps: 120, audio: false, require_pin: false, low_latency: false, fullscreen: true, name: "  ".into(), safe_mode: true };
         let s = uxplay_args(&o, None, reg).join(" ");
         assert!(s.contains("-n OmniHub"), "{s}");
         assert!(s.contains("-h265 -s 3840x2160@60 -fps 60"), "{s}");
-        assert!(s.contains("-as 0") && s.contains("-fs") && !s.contains("-pin") && !s.contains("-vsync"), "{s}");
+        assert!(s.contains("-as 0") && s.contains("-fs") && s.contains("-avdec") && !s.contains("-pin") && !s.contains("-vsync"), "{s}");
     }
 
     #[test]

@@ -94,7 +94,7 @@ impl AppCore {
             browser: crate::browser::BrowserBridge::new(db.clone(), events.clone()),
             browser_integration: opts.browser_integration,
             games: crate::games::GameHub::new(&paths.data, events.clone(), procs.clone()),
-            updater: Arc::new(crate::update::Updater::new(&paths.cache, events.clone())),
+            updater: Arc::new(crate::update::Updater::new(&paths.cache, &paths.data, events.clone())),
             procs,
             media: crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media),
             low_space_warned: Default::default(),
@@ -190,28 +190,46 @@ impl AppCore {
                 loop {
                     let Some(core) = weak.upgrade() else { return };
                     let s = core.settings.get().updates;
+                    let mut pending = None;
                     if s.check {
                         if let crate::update::UpdateState::Available { release } = core.updater.check() {
-                            if s.auto_install && core.idle_for_update() {
-                                tracing::info!("installing OmniHub {}", release.version);
-                                core.audit.record("app", "update.install", &release.version, true);
-                                let _ = core.updater.install(&release);
+                            if s.auto_install {
+                                pending = Some(release);
                             }
                         }
                     }
                     drop(core);
-                    std::thread::sleep(Duration::from_secs(6 * 3600));
+                    // An automatic update closes and reopens the app, so it
+                    // waits until OmniHub is in the tray and nothing would be
+                    // interrupted. Meanwhile the sidebar offers it in one click.
+                    let next_check = std::time::Instant::now() + Duration::from_secs(6 * 3600);
+                    while std::time::Instant::now() < next_check {
+                        if let Some(release) = &pending {
+                            let Some(core) = weak.upgrade() else { return };
+                            let still = matches!(core.updater.state(), crate::update::UpdateState::Available { .. });
+                            if !still {
+                                pending = None;
+                            } else if core.idle_for_update() {
+                                tracing::info!("installing OmniHub {}", release.version);
+                                core.audit.record("app", "update.install", &release.version, true);
+                                let _ = core.updater.install(release);
+                                pending = None;
+                            }
+                        }
+                        std::thread::sleep(Duration::from_secs(if pending.is_some() { 60 } else { 600 }));
+                    }
                 }
             })
             .ok();
     }
 
-    /// Nothing an automatic update would interrupt: no game boost, nobody
-    /// watching the screen, no phone transfer.
+    /// Nothing an automatic update would interrupt: the window is not open
+    /// in front of someone, no game boost, nobody watching the screen, no
+    /// iPhone mirroring receiver, no phone transfer.
     pub fn idle_for_update(&self) -> bool {
         let boosting = self.games.session().is_some_and(|s| s.active());
         let watching = !self.remote.status().viewers.is_empty();
-        !boosting && !watching && !self.remote.transfers_active()
+        !self.updater.app_in_use() && !boosting && !watching && !self.airplay.is_running() && !self.remote.transfers_active()
     }
 
     /// Every 20 seconds: due note reminders; every five minutes: drive space.

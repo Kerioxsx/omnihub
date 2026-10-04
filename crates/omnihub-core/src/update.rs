@@ -130,24 +130,37 @@ pub struct Updater {
     busy: AtomicBool,
     /// Closes the app once the installer is running (set by the desktop shell).
     on_exit: Mutex<Option<Exit>>,
+    /// Whether someone is using the app right now (its window is open), set by
+    /// the desktop shell. Automatic updates wait until it is not.
+    in_use: Mutex<Option<Box<dyn Fn() -> bool + Send + Sync>>>,
+    /// The version that ran before this one, when this start follows an update.
+    updated_from: Option<String>,
 }
 
 impl Updater {
-    pub fn new(cache_dir: &Path, events: EventBus) -> Self {
+    /// `data_dir` keeps the last version that ran, to tell an update from a crash.
+    pub fn new(cache_dir: &Path, data_dir: &Path, events: EventBus) -> Self {
+        let current = env!("CARGO_PKG_VERSION").to_string();
+        let marker = data_dir.join("last-version.txt");
+        let before = std::fs::read_to_string(&marker).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        let updated_from = before.filter(|b| *b != current);
+        let _ = std::fs::write(&marker, &current);
         Updater {
             events,
             dir: cache_dir.join("updates"),
-            current: env!("CARGO_PKG_VERSION").to_string(),
+            current,
             api_url: Mutex::new(std::env::var("OMNIHUB_UPDATE_URL").unwrap_or_else(|_| LATEST_RELEASE_API.to_string())),
             state: Mutex::new(UpdateState::Idle),
             busy: AtomicBool::new(false),
             on_exit: Mutex::new(None),
+            in_use: Mutex::new(None),
+            updated_from,
         }
     }
 
     /// For tests: a local server instead of GitHub, and another "current" version.
     pub fn with_source(cache_dir: &Path, events: EventBus, api_url: &str, current: &str) -> Self {
-        let mut u = Self::new(cache_dir, events);
+        let mut u = Self::new(cache_dir, cache_dir, events);
         *u.api_url.get_mut() = api_url.to_string();
         u.current = current.to_string();
         u
@@ -155,6 +168,20 @@ impl Updater {
 
     pub fn current_version(&self) -> &str {
         &self.current
+    }
+
+    /// The version that ran before this start, when OmniHub was just updated.
+    pub fn updated_from(&self) -> Option<&str> {
+        self.updated_from.as_deref()
+    }
+
+    pub fn set_in_use(&self, f: impl Fn() -> bool + Send + Sync + 'static) {
+        *self.in_use.lock() = Some(Box::new(f));
+    }
+
+    /// Someone has the app open: an automatic update would close it on them.
+    pub fn app_in_use(&self) -> bool {
+        self.in_use.lock().as_ref().is_some_and(|f| f())
     }
 
     pub fn set_exit(&self, f: impl Fn() + Send + Sync + 'static) {
@@ -294,6 +321,20 @@ fn run_installer(_path: &Path, _msi: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notices_an_update_since_the_last_start() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(Updater::new(dir.path(), dir.path(), EventBus::new()).updated_from(), None, "first start");
+        assert_eq!(Updater::new(dir.path(), dir.path(), EventBus::new()).updated_from(), None, "same version again");
+        std::fs::write(dir.path().join("last-version.txt"), "0.0.1").unwrap();
+        assert_eq!(Updater::new(dir.path(), dir.path(), EventBus::new()).updated_from(), Some("0.0.1"));
+        let u = Updater::new(dir.path(), dir.path(), EventBus::new());
+        assert_eq!(u.updated_from(), None, "only the first start after the update");
+        assert!(!u.app_in_use(), "no window known: not in use");
+        u.set_in_use(|| true);
+        assert!(u.app_in_use());
+    }
 
     const SAMPLE: &str = r#"{
         "tag_name": "v0.3.0", "html_url": "https://github.com/Kerioxsx/omnihub/releases/tag/v0.3.0",

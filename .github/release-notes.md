@@ -1,8 +1,9 @@
 ## New in this version
 
-- **iPhone → PC mirroring finds the PC.** On PCs with a VPN, a second network card or virtual adapters, the AirPlay receiver announced itself on the wrong one and iPhones never saw it. It now announces the PC's Wi-Fi/Ethernet address, and the iPhone → PC card checks that iPhones can find it (with what to check if not). OmniHub offers to update the AirPlay receiver once — click **Update receiver**.
-- **No more false "in a call".** Calls are now the calling apps (Discord, WhatsApp, Nyxen, Teams, browsers…) recording from your microphone right now. Games with voice chat show as "also using your mic" instead of a call.
-- **Watching the PC on an iPhone:** the viewer covers the whole screen (the tab bar no longer sits on top of its buttons), the full-screen button works on iPhone (it hides every control; turn the phone sideways for the biggest picture), and the stream stats appear only when you tap the Live pill.
+- **The AirPlay receiver starts the way it was tested.** It now uses the video and sound outputs the add-on is tested with on Windows, instead of whatever GStreamer picks on your PC. OmniHub's check that iPhones can find the PC no longer connects to the receiver itself. If the receiver still closes, the iPhone → PC card says how it ended and offers **Start in safe mode** (software video, which avoids graphics-driver crashes).
+- **Updates don't close OmniHub on you.** Automatic updates now wait until OmniHub is in the tray and nothing is running (AirPlay included). After an update, OmniHub says "Updated to …" so a restart isn't mistaken for a crash.
+- **If OmniHub closes unexpectedly**, the next start says so and offers **Copy details**: the end of OmniHub's log and Windows' own crash summaries. Nothing is sent anywhere.
+- A page that hits an error now shows a message with **Try again** instead of a blank window.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now).
 

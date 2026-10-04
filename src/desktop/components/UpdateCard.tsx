@@ -9,10 +9,19 @@ import { api, errorText } from '../api';
 import { useEvent } from '../lib/hooks';
 import { toast } from '../state/toasts';
 
+let announced = false;
+
 export function useUpdate() {
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   useEffect(() => {
-    void api.update.state().then(setInfo, () => undefined);
+    void api.update.state().then((i) => {
+      setInfo(i);
+      // An automatic update closes and reopens OmniHub: say so, so it doesn't look like a crash.
+      if (i.updatedFrom && !announced) {
+        announced = true;
+        toast.success(`Updated to OmniHub ${i.current}`, 'OmniHub restarted to finish the update. Your settings and data are kept.');
+      }
+    }, () => undefined);
   }, []);
   useEvent<UpdateState>('update:state', (state) => setInfo((i) => (i ? { ...i, state } : i)));
   const check = async () => {

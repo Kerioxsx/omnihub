@@ -967,6 +967,21 @@ pub async fn clipboard_text() -> Res<Option<String>> {
 #[derive(Default)]
 pub struct PendingSend(pub parking_lot::Mutex<Vec<String>>);
 
+/// The report about the previous run, when it did not end normally (shown once).
+pub struct LastCrash(pub parking_lot::Mutex<Option<String>>);
+
+#[tauri::command]
+pub fn app_last_crash(state: tauri::State<'_, LastCrash>) -> Option<String> {
+    state.0.lock().take()
+}
+
+/// Errors the window could not recover from, for the log file.
+#[tauri::command]
+pub fn app_log_error(message: String) {
+    let m: String = message.chars().take(4000).collect();
+    tracing::error!("window: {m}");
+}
+
 #[tauri::command]
 pub async fn take_pending_send(pending: State<'_, PendingSend>) -> Res<Vec<String>> {
     Ok(std::mem::take(&mut *pending.0.lock()))
@@ -1210,17 +1225,19 @@ pub async fn storage_scan_task_set(core: Core<'_>, on: bool) -> Res<bool> {
 pub struct UpdateInfo {
     current: String,
     state: omnihub_core::update::UpdateState,
+    /// The version that ran before, on the first start after an update.
+    updated_from: Option<String>,
 }
 
 #[tauri::command]
 pub async fn update_state(core: Core<'_>) -> Res<UpdateInfo> {
-    Ok(UpdateInfo { current: core.updater.current_version().to_string(), state: core.updater.state() })
+    Ok(UpdateInfo { current: core.updater.current_version().to_string(), state: core.updater.state(), updated_from: core.updater.updated_from().map(str::to_string) })
 }
 
 #[tauri::command]
 pub async fn update_check(core: Core<'_>) -> Res<UpdateInfo> {
     let core = core.inner().clone();
-    blocking(move || Ok(UpdateInfo { current: core.updater.current_version().to_string(), state: core.updater.check() })).await
+    blocking(move || Ok(UpdateInfo { current: core.updater.current_version().to_string(), state: core.updater.check(), updated_from: core.updater.updated_from().map(str::to_string) })).await
 }
 
 /// Download, verify and run the installer for the available version; the

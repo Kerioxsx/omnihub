@@ -13,6 +13,15 @@ use omnihub_core::core::{AppCore, CoreOptions};
 use omnihub_core::paths::AppPaths;
 use tauri::{Emitter, Manager, WindowEvent};
 
+/// Panics go to the log file (there is no console), with where they happened.
+fn log_panics() {
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!("panic: {info}\n{}", std::backtrace::Backtrace::force_capture());
+        default(info);
+    }));
+}
+
 fn init_logging(paths: &AppPaths) {
     use tracing_subscriber::prelude::*;
     let file = std::fs::OpenOptions::new().create(true).append(true).open(paths.logs.join("omnihub.log")).ok();
@@ -77,6 +86,12 @@ pub fn run(args: Vec<String>) {
 
     let paths = AppPaths::default_for_user().expect("cannot create the OmniHub data folder");
     init_logging(&paths);
+    log_panics();
+    let logs_dir = paths.logs.clone();
+    let last_crash = omnihub_core::crashlog::begin_session(&logs_dir);
+    if last_crash.is_some() {
+        tracing::warn!("the previous run did not end normally; details in logs/last-crash.txt");
+    }
     let core = AppCore::new(paths, CoreOptions::default()).expect("cannot open the OmniHub database");
 
     tauri::Builder::default()
@@ -92,6 +107,7 @@ pub fn run(args: Vec<String>) {
         .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["overlay"]).build())
         .manage(core.clone())
         .manage(commands::PendingSend::default())
+        .manage(commands::LastCrash(parking_lot::Mutex::new(last_crash)))
         .setup(move |app| {
             let handle = app.handle().clone();
 
@@ -129,6 +145,9 @@ pub fn run(args: Vec<String>) {
             // The installer closes and reopens OmniHub; leave cleanly first.
             let exit_handle = handle.clone();
             core.updater.set_exit(move || exit_handle.exit(0));
+            // Automatic updates wait while the window is open (it would close on you).
+            let window_handle = handle.clone();
+            core.updater.set_in_use(move || window_handle.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false)));
             core.start_background();
 
             // Autostart passes --minimized; "Start minimized" decides whether
@@ -324,7 +343,15 @@ pub fn run(args: Vec<String>) {
             commands::browser_pair_respond,
             commands::browser_revoke,
             commands::vault_totp,
+            commands::app_last_crash,
+            commands::app_log_error,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running OmniHub");
+        .build(tauri::generate_context!())
+        .expect("error while starting OmniHub")
+        .run(move |_app, event| {
+            // A normal exit (tray Quit, an update): next start is not a crash.
+            if let tauri::RunEvent::Exit = event {
+                omnihub_core::crashlog::end_session(&logs_dir);
+            }
+        });
 }

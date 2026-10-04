@@ -1,18 +1,18 @@
-// Updates for the mock backend: a pretend 0.2.4 that downloads and
+// Updates for the mock backend: a pretend 0.2.5 that downloads and
 // "installs" (the page just reloads at the end).
 
 import type { Release, UpdateInfo, UpdateState } from '@shared/types';
 import { emit } from './bus';
 
-const CURRENT = '0.2.3';
+const CURRENT = '0.2.4';
 const RELEASE: Release = {
-  version: '0.2.4',
+  version: '0.2.5',
   notes: '- Phones connect on every Windows PC (the companion now listens on IPv4 and IPv6)\n- Updates install from inside the app\n- Fast scans can stop asking for administrator approval',
-  pageUrl: 'https://github.com/Kerioxsx/omnihub/releases/tag/v0.2.4',
+  pageUrl: 'https://github.com/Kerioxsx/omnihub/releases/tag/v0.2.5',
   publishedAt: new Date().toISOString(),
-  setup: { name: 'OmniHub_0.2.4_x64-setup.exe', url: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.4/OmniHub_0.2.4_x64-setup.exe', size: 9_300_000 },
+  setup: { name: 'OmniHub_0.2.5_x64-setup.exe', url: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.5/OmniHub_0.2.5_x64-setup.exe', size: 9_300_000 },
   msi: null,
-  sumsUrl: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.4/SHA256SUMS.txt',
+  sumsUrl: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.5/SHA256SUMS.txt',
 };
 
 const available = new URLSearchParams(window.location.search).get('update') !== 'none';
@@ -24,7 +24,8 @@ function set(s: UpdateState) {
 }
 
 export function info(): UpdateInfo {
-  return { current: CURRENT, state };
+  const from = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('updated') : null;
+  return { current: CURRENT, state, updatedFrom: from };
 }
 
 export async function check(): Promise<UpdateInfo> {

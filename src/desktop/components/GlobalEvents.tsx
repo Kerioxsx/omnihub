@@ -18,6 +18,15 @@ export function GlobalEvents() {
     void Promise.allSettled([live.refreshRemote(), live.refreshDevices(), live.refreshVault(), live.refreshPower(), useStorage.getState().loadVolumes()]);
     // Started from Explorer's "Send to → OmniHub (phone)".
     void api.app.takePendingSend().then((paths) => paths.length && useSend.getState().openFiles(paths), () => undefined);
+    // The previous run ended without a normal exit: offer what is known.
+    void api.app.lastCrash().then((report) => {
+      if (!report) return;
+      toast.warn('OmniHub closed unexpectedly last time', 'Copy the details and send them along with what you were doing, so it can be fixed.', {
+        key: 'last-crash',
+        duration: 60_000,
+        action: { label: 'Copy details', run: () => void navigator.clipboard?.writeText(report).then(() => toast.success('Details copied')) },
+      });
+    }, () => undefined);
   }, []);
   useEvent<string[]>('send:files', () => void api.app.takePendingSend().then((paths) => paths.length && useSend.getState().openFiles(paths), () => undefined));
   useEvent<{ device: string; chars: number }>('clipboard:from-phone', (p) => toast.success(`Text from ${p.device} copied`, `${p.chars} characters are on the clipboard — paste with Ctrl+V.`));

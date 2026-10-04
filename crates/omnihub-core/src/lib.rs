@@ -9,6 +9,7 @@ pub mod audit;
 pub mod browser;
 pub mod capture;
 pub mod core;
+pub mod crashlog;
 pub mod db;
 pub mod events;
 pub mod games;

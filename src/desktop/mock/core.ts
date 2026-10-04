@@ -37,7 +37,7 @@ export const settings: Settings = {
     sendToMenu: true,
   },
   screenshots: { dir: null, format: 'png', hotkeyRegion: 'Alt+Shift+S', hotkeyFull: 'Alt+Shift+A', hotkeyWindow: 'Alt+Shift+W', copyToClipboard: true },
-  screen: { preset: 'balanced', maxFps: 60, scrcpyPath: null, sunshinePath: null, airplay: { name: 'GAMING-PC (OmniHub)', quality: '1080p', fps: 60, audio: true, requirePin: true, lowLatency: true, fullscreen: false }, airplayKeepOnTop: false, airplayPip: false, airplayAutoStart: false, uxplayPath: null },
+  screen: { preset: 'balanced', maxFps: 60, scrcpyPath: null, sunshinePath: null, airplay: { name: 'GAMING-PC (OmniHub)', quality: '1080p', fps: 60, audio: true, requirePin: true, lowLatency: true, fullscreen: false, safeMode: false }, airplayKeepOnTop: false, airplayPip: false, airplayAutoStart: false, uxplayPath: null },
   apps: { favorites: ['spotify-music', 'visual-studio-code'] },
   media: { allowPhone: true, lyricsOnline: true, eqEnabled: false, bassDb: 0, trebleDb: 0 },
   updates: { check: true, autoInstall: true },
@@ -106,7 +106,7 @@ export function audit(actor: string, action: string, detail: string, ok = true):
 // ---------- app info & stats ----------
 
 export const appInfo: AppInfoDetails = {
-  version: '0.2.3',
+  version: '0.2.4',
   elevated: false,
   platform: 'windows',
   hostname: 'GAMING-PC',

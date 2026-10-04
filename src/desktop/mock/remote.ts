@@ -482,7 +482,7 @@ export function airplayStart(): string | null {
     setTimeout(() => {
       if (!airplay.running) return;
       const hidden = query().get('airplay') === 'hidden';
-      airplay.check = { ip: '192.168.1.24', announced: !hidden, rightAddress: !hidden, reachable: true };
+      airplay.check = { ip: '192.168.1.24', announced: !hidden, rightAddress: !hidden };
       emit('airplay:changed', {});
     }, 1500),
   );

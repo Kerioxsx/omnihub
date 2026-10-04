@@ -32,6 +32,9 @@ export async function on<P = unknown>(topic: string, handler: (payload: P) => vo
 export const api = {
   app: {
     info: () => call<T.AppInfoDetails>('app_info'),
+    /** What is known about the previous run, when it did not end normally (once). */
+    lastCrash: () => call<string | null>('app_last_crash'),
+    logError: (message: string) => call<void>('app_log_error', { message }),
     stats: () => call<T.SystemStats>('system_stats'),
     processes: (sort: T.ProcessSort, limit = 8) => call<T.ProcessGroup[]>('system_processes', { sort, limit }),
     endProcess: (name: string) => call<number>('system_end_process', { name }),

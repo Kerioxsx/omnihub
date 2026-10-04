@@ -4,6 +4,7 @@ import { CommandPalette } from './components/CommandPalette';
 import { ConfirmHost } from './components/ConfirmHost';
 import { BrowserPairDialog } from './components/BrowserPairDialog';
 import { DropOverlay } from './components/DropOverlay';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalEvents, ThemeController } from './components/GlobalEvents';
 import { Logo } from './components/Logo';
 import { PowerBanner } from './components/PowerBanner';
@@ -119,7 +120,9 @@ export function App() {
               animate={{ opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }}
               exit={{ opacity: 0, y: -6, transition: { duration: 0.1 } }}
             >
-              <PageComp />
+              <ErrorBoundary name={pageId}>
+                <PageComp />
+              </ErrorBoundary>
             </motion.div>
           </AnimatePresence>
           {pageId !== 'home' && (

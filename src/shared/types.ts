@@ -681,6 +681,8 @@ export interface AirPlayOptions {
   requirePin: boolean;
   lowLatency: boolean;
   fullscreen: boolean;
+  /** Software video decoding: slower, avoids graphics-driver crashes. */
+  safeMode?: boolean;
 }
 
 export interface AirPlayClient {
@@ -725,8 +727,6 @@ export interface AirPlayCheck {
   announced: boolean;
   /** The address in that answer is this one. */
   rightAddress: boolean;
-  /** Its AirPlay port answered on that address. */
-  reachable: boolean;
 }
 
 export interface SunshineStatus {
@@ -1158,4 +1158,6 @@ export type UpdateState =
 export interface UpdateInfo {
   current: string;
   state: UpdateState;
+  /** The version that ran before, on the first start after an update. */
+  updatedFrom?: string | null;
 }

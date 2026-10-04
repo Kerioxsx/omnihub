@@ -105,6 +105,20 @@ Program Files installs. A release therefore has to keep the asset names
 the Release workflow produces (`OmniHub_<version>_x64-setup.exe`,
 `SHA256SUMS.txt`). Its tests run against a local HTTP server.
 
+Automatic installs wait until the window is hidden (tray) and nothing is
+running (game boost, screen viewers, AirPlay receiver, phone transfers); the
+shell tells the updater whether the window is open (`Updater::set_in_use`).
+`data/last-version.txt` lets the first start after an update say so.
+
+### Crash reports
+
+`crashlog.rs` keeps `logs/running.marker` while the app runs and removes it
+on a normal exit (`RunEvent::Exit`). If the next start finds it, it writes
+`logs/last-crash.txt` (end of `omnihub.log` plus Windows Error Reporting
+summaries for OmniHub, WebView2 and uxplay) and the window offers to copy
+it. Panics are written to the log, and UxPlay's output is logged with the
+`uxplay` target.
+
 ## Website
 
 `site/` is the project website: plain HTML, CSS and JavaScript with no

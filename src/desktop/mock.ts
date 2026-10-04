@@ -31,6 +31,8 @@ const sortKey = (args: Args): SortKey => {
 const handlers: Record<string, Handler> = {
   // app
   app_info: () => core.appInfo,
+  app_last_crash: () => (new URLSearchParams(window.location.search).get('crash') ? 'OmniHub 0.2.3 did not close normally last time.\n\nWindows crash reports (newest first):\n- uxplay.exe crashed in libgstd3d12.dll (exception c0000005)\n' : null),
+  app_log_error: (args) => console.error(args.message),
   system_stats: () => core.systemStats(),
   storage_scan_task_status: () => mockScanTask.on,
   storage_scan_task_set: (a) => ((mockScanTask.on = bool(a, 'on')), mockScanTask.on),

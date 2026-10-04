@@ -74,12 +74,8 @@ function CheckRow({ check, address, name, outdated }: { check: AirPlayCheck | nu
       </div>
     );
   }
-  const ok = check.announced && check.rightAddress && check.reachable;
-  const problem = !check.announced
-    ? `iPhones can't see “${name}” on the network of ${check.ip} yet.`
-    : !check.rightAddress
-      ? `“${name}” is announced with another address than ${check.ip} (a VPN or virtual adapter), so iPhones can't connect.`
-      : `The receiver doesn't answer on ${check.ip}.`;
+  const ok = check.announced && check.rightAddress;
+  const problem = !check.announced ? `iPhones can't see “${name}” on the network of ${check.ip} yet.` : `“${name}” is announced with another address than ${check.ip} (a VPN or virtual adapter), so iPhones can't connect.`;
   return (
     <div className={cx('flex items-start gap-3 rounded-xl border px-3.5 py-3', ok ? 'border-line bg-surface' : 'border-warn/35 bg-warn/8')}>
       {ok ? <Wifi size={17} className="mt-0.5 shrink-0 text-good" aria-hidden /> : <WifiOff size={17} className="mt-0.5 shrink-0 text-warn" aria-hidden />}
@@ -272,6 +268,7 @@ export function IPhoneMirror() {
                   <Checkbox checked={o.audio} onChange={(v) => setOpt({ audio: v })} label="Play the iPhone's sound here" />
                   <Checkbox checked={o.requirePin} onChange={(v) => setOpt({ requirePin: v })} label="Ask for a code (recommended)" />
                   <Checkbox checked={o.lowLatency} onChange={(v) => setOpt({ lowLatency: v })} label="Lowest delay" />
+                  <Checkbox checked={!!o.safeMode} onChange={(v) => setOpt({ safeMode: v })} label="Safe mode (software video — if the receiver crashes)" />
                 </div>
               </motion.div>
             )}
@@ -295,8 +292,30 @@ export function IPhoneMirror() {
           {s.running && <CheckRow check={s.check} address={s.address} name={s.name} outdated={s.outdated} />}
 
           {s.error && (
-            <Callout tone="bad" title="The receiver reported a problem">
-              <span className="font-mono text-[12px]">{s.error}</span>
+            <Callout tone="bad" title={s.running ? 'The receiver reported a problem' : 'The receiver stopped'}>
+              <span className={s.running ? 'font-mono text-[12px]' : 'text-[12.5px]'}>{s.error}</span>
+              {!s.running && s.log.length > 0 && (
+                <button type="button" onClick={() => setMore(true)} className="ml-1 text-[12px] font-semibold text-accent hover:underline">
+                  Show its last messages
+                </button>
+              )}
+              {!s.running && !o.safeMode && /crashed/.test(s.error) && (
+                <div className="mt-2">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    loading={busy === 'safe'}
+                    onClick={() =>
+                      void run('safe', async () => {
+                        await update({ screen: { airplay: { ...o, safeMode: true } } }, { silent: true });
+                        await api.screen.airplayStart();
+                      })
+                    }
+                  >
+                    Start in safe mode
+                  </Button>
+                </div>
+              )}
             </Callout>
           )}
 
