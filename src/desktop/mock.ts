@@ -3,10 +3,11 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { CaptureKind, DeepPartial, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
+import type { CaptureKind, DeepPartial, GameKind, GameProfile, RobloxFlags, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
+import * as games from './mock/games';
 import { volumes } from './mock/drives';
 import * as media from './mock/media';
 import * as music from './mock/music';
@@ -28,6 +29,18 @@ const handlers: Record<string, Handler> = {
   // app
   app_info: () => core.appInfo,
   system_stats: () => core.systemStats(),
+  games_list: () => games.list(),
+  games_create: (a) => games.create(str(a, 'kind') as GameKind),
+  games_save: (a) => games.save(obj<GameProfile>(a, 'profile')),
+  games_delete: (a) => games.remove(str(a, 'id')),
+  games_state: (a) => games.state(str(a, 'id')),
+  games_play: (a) => games.play(str(a, 'id'), bool(a, 'launch')),
+  games_stop: () => games.stop(),
+  games_ping: (a) => games.ping(optStr(a, 'id'), optStr(a, 'host')),
+  games_ping_targets: (a) => games.pingTargets(optStr(a, 'id')),
+  games_roblox_status: () => games.robloxStatus(),
+  games_roblox_write: (a) => games.robloxWrite(obj<RobloxFlags>(a, 'flags')),
+  games_roblox_preview: (a) => games.preview(obj<RobloxFlags>(a, 'flags')),
   media_state: () => music.mediaState(),
   media_control: (a) => music.mediaControl(str(a, 'action') as MediaAction, num(a, 'positionMs', 0)),
   media_lyrics: () => music.mediaLyrics(),

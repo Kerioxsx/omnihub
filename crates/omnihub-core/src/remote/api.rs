@@ -82,6 +82,10 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/media/control", post(media_control))
         .route("/api/media/lyrics", get(media_lyrics))
         .route("/api/media/audio", post(media_audio))
+        .route("/api/games", get(games_list))
+        .route("/api/games/stop", post(games_stop))
+        .route("/api/games/ping", post(games_ping))
+        .route("/api/games/{id}/play", post(games_play))
         .route("/api/tasks", get(tasks_list))
         .route("/api/tasks/end", post(tasks_end))
         .route("/api/tasks/priority", post(tasks_priority))
@@ -174,6 +178,7 @@ struct Features {
     clipboard: bool,
     media: bool,
     tasks: bool,
+    games: bool,
 }
 
 fn features(core: &AppCore, tls: bool) -> Features {
@@ -188,6 +193,7 @@ fn features(core: &AppCore, tls: bool) -> Features {
         vault: s.vault.allow_phone && tls && core.vault.exists(),
         clipboard: s.remote.allow_clipboard,
         tasks: s.remote.allow_tasks,
+        games: s.remote.allow_app_launch,
         media: s.media.allow_phone,
     }
 }
@@ -735,6 +741,61 @@ async fn tasks_priority(State(core): State<Ctx>, Extension(dev): Extension<Devic
     Ok(Json(json!({ "changed": changed })))
 }
 
+// ---------- games: boost and launch from the phone ----------
+
+fn games_allowed(core: &AppCore) -> ApiResult<()> {
+    if core.settings.get().remote.allow_app_launch {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("launching apps from the phone is turned off"))
+    }
+}
+
+async fn games_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    games_allowed(&core)?;
+    let profiles: Vec<_> = core
+        .games
+        .profiles()
+        .into_iter()
+        .map(|p| json!({ "id": p.id, "name": p.name, "kind": p.kind, "lastPlayed": p.last_played, "canLaunch": !matches!(p.launch, crate::games::Launch::None), "process": p.process }))
+        .collect();
+    Ok(Json(json!({ "profiles": profiles, "session": core.games.session() })))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct PlayReq {
+    /// false: boost only.
+    launch: Option<bool>,
+}
+
+async fn games_play(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, body: Option<Json<PlayReq>>) -> ApiResult<Json<serde_json::Value>> {
+    games_allowed(&core)?;
+    let launch = body.and_then(|b| b.0.launch).unwrap_or(true);
+    let r = core.games.play(&id, launch);
+    core.audit.record(&actor(&dev), if launch { "game.play" } else { "game.boost" }, &id, r.is_ok());
+    let session = r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "session": session })))
+}
+
+async fn games_stop(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    games_allowed(&core)?;
+    Ok(Json(json!({ "stopped": core.games.stop() })))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct PingReq {
+    id: Option<String>,
+}
+
+async fn games_ping(State(core): State<Ctx>, Json(req): Json<PingReq>) -> ApiResult<Json<serde_json::Value>> {
+    games_allowed(&core)?;
+    let c = core.clone();
+    let results = tokio::task::spawn_blocking(move || c.games.ping(req.id.as_deref(), None)).await?;
+    Ok(Json(json!({ "results": results })))
+}
+
 // ---------- apps ----------
 
 async fn apps_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
@@ -933,7 +994,7 @@ fn for_phone(ev: &crate::events::Event, device_id: &str) -> bool {
     if ev.topic == "inbox:removed" {
         return true;
     }
-    ["power:", "notes:", "media:"].iter().any(|p| ev.topic.starts_with(p))
+    ["power:", "notes:", "media:", "games:"].iter().any(|p| ev.topic.starts_with(p))
 }
 
 async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws: WebSocketUpgrade) -> ApiResult<Response> {

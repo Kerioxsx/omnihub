@@ -58,7 +58,8 @@ pub struct AppCore {
     pub thumbs: crate::thumbs::Thumbs,
     pub airplay: crate::capture::airplay::AirPlay,
     pub browser: crate::browser::BrowserBridge,
-    pub procs: crate::system::procs::ProcessMonitor,
+    pub procs: Arc<crate::system::procs::ProcessMonitor>,
+    pub games: Arc<crate::games::GameHub>,
     pub media: Arc<crate::media::MediaHub>,
     browser_integration: bool,
     /// Drives already warned about (root → when), so each warns once a day.
@@ -80,6 +81,7 @@ impl AppCore {
         );
         let s = settings.get();
         vault.set_auto_lock(s.vault.auto_lock_minutes);
+        let procs = Arc::new(crate::system::procs::ProcessMonitor::new());
         let core = Arc::new(AppCore {
             notes: Notes::new(db.clone(), events.clone()),
             screenshots: ScreenshotLibrary::new(db.clone(), events.clone(), &paths.cache),
@@ -90,7 +92,8 @@ impl AppCore {
             thumbs: crate::thumbs::Thumbs::default(),
             browser: crate::browser::BrowserBridge::new(db.clone(), events.clone()),
             browser_integration: opts.browser_integration,
-            procs: crate::system::procs::ProcessMonitor::new(),
+            games: crate::games::GameHub::new(&paths.data, events.clone(), procs.clone()),
+            procs,
             media: crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media),
             low_space_warned: Default::default(),
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
@@ -141,6 +144,8 @@ impl AppCore {
             self.enable_browser_autofill(true);
         }
         self.start_watchers();
+        let games = self.games.clone();
+        std::thread::spawn(move || games.recover());
         let weak = Arc::downgrade(self);
         self.media.start(move || weak.upgrade().is_some_and(|c| c.settings.get().media.lyrics_online));
         let send_to = s.remote.send_to_menu;

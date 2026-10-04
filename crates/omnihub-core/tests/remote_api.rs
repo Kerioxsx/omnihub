@@ -425,3 +425,59 @@ fn tasks_from_the_phone() {
     }
     f.core.remote.stop();
 }
+
+/// Games from the phone: list profiles, boost (without launching), stop,
+/// and a ping test against the profile's own host.
+#[test]
+fn games_from_the_phone() {
+    let f = setup(false);
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let ping_port = l.local_addr().unwrap().port();
+    std::thread::spawn(move || for _ in l.incoming() {});
+    let mut p = f.core.games.create(omnihub_core::games::GameKind::Custom);
+    p.name = "Phone game".into();
+    p.ping_host = Some(format!("127.0.0.1:{ping_port}"));
+    // Leave the machine running the tests alone.
+    p.boost = omnihub_core::games::Boost { power_plan: omnihub_core::games::tweaks::PowerPlan::Keep, silence_notifications: false, game_mode: false, gpu_high_performance: false, wifi_low_latency: false, ..Default::default() };
+    let p = f.core.games.save(p).unwrap().profile;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let base = &f.base;
+        let pairing = f.core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        let info: Value = c.get(format!("{base}/api/info")).send().await.unwrap().json().await.unwrap();
+        assert_eq!(info["features"]["games"], true);
+
+        let g: Value = c.get(format!("{base}/api/games")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(g["profiles"][0]["name"], "Phone game");
+        assert_eq!(g["profiles"][0]["canLaunch"], false);
+        assert!(g["session"].is_null());
+
+        let r: Value = c.post(format!("{base}/api/games/{}/play", p.id)).header("authorization", &auth).json(&json!({ "launch": false })).send().await.unwrap().json().await.unwrap();
+        assert_eq!(r["session"]["name"], "Phone game");
+        let mut phase = Value::Null;
+        for _ in 0..50 {
+            let g: Value = c.get(format!("{base}/api/games")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+            phase = g["session"]["phase"].clone();
+            if phase == "boosted" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert_eq!(phase, "boosted");
+        // A second boost is refused while one runs.
+        assert_eq!(c.post(format!("{base}/api/games/{}/play", p.id)).header("authorization", &auth).send().await.unwrap().status(), StatusCode::BAD_REQUEST);
+        let r: Value = c.post(format!("{base}/api/games/stop")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(r["stopped"], true);
+
+        let r: Value = c.post(format!("{base}/api/games/ping")).header("authorization", &auth).json(&json!({ "id": p.id })).send().await.unwrap().json().await.unwrap();
+        assert_eq!(r["results"][0]["received"], 10, "{r}");
+        assert!(r["results"][0]["avgMs"].as_f64().is_some());
+
+        f.core.update_settings(&json!({ "remote": { "allowAppLaunch": false } })).unwrap();
+        assert_eq!(c.get(format!("{base}/api/games")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+    });
+    f.core.remote.stop();
+}

@@ -1177,6 +1177,90 @@ pub async fn media_set_volume(level: Option<f32>, muted: Option<bool>) -> Res<om
     blocking(move || omnihub_core::media::audio::set(level, muted)).await
 }
 
+// ---------- games ----------
+
+use omnihub_core::games::{self, GameKind, GameProfile};
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GamesOverview {
+    profiles: Vec<GameProfile>,
+    session: Option<games::Session>,
+}
+
+#[tauri::command]
+pub async fn games_list(core: Core<'_>) -> Res<GamesOverview> {
+    Ok(GamesOverview { profiles: core.games.profiles(), session: core.games.session() })
+}
+
+#[tauri::command]
+pub async fn games_create(core: Core<'_>, kind: GameKind) -> Res<GameProfile> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.create(kind))).await
+}
+
+#[tauri::command]
+pub async fn games_save(core: Core<'_>, profile: GameProfile) -> Res<games::SaveResult> {
+    let core = core.inner().clone();
+    blocking(move || core.games.save(profile)).await
+}
+
+#[tauri::command]
+pub async fn games_delete(core: Core<'_>, id: String) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || core.games.delete(&id)).await
+}
+
+#[tauri::command]
+pub async fn games_state(core: Core<'_>, id: String) -> Res<Option<games::GameState>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.state(&id))).await
+}
+
+#[tauri::command]
+pub async fn games_play(core: Core<'_>, id: String, launch: bool) -> Res<games::Session> {
+    let core = core.inner().clone();
+    let r = core.games.play(&id, launch);
+    core.audit.record("desktop", if launch { "game.play" } else { "game.boost" }, &id, r.is_ok());
+    r
+}
+
+#[tauri::command]
+pub async fn games_stop(core: Core<'_>) -> Res<bool> {
+    Ok(core.games.stop())
+}
+
+#[tauri::command]
+pub async fn games_ping(core: Core<'_>, id: Option<String>, host: Option<String>) -> Res<Vec<games::ping::PingResult>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.ping(id.as_deref(), host.as_deref()))).await
+}
+
+#[tauri::command]
+pub async fn games_ping_targets(core: Core<'_>, id: Option<String>) -> Res<Vec<games::ping::PingTarget>> {
+    Ok(core.games.ping_targets(id.as_deref()))
+}
+
+#[tauri::command]
+pub async fn games_roblox_status(core: Core<'_>) -> Res<games::roblox::RobloxInstall> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.roblox_status())).await
+}
+
+#[tauri::command]
+pub async fn games_roblox_write(core: Core<'_>, flags: games::roblox::RobloxFlags) -> Res<Vec<String>> {
+    let core = core.inner().clone();
+    blocking(move || core.games.write_roblox(&flags)).await
+}
+
+/// Flags in a list Roblox ignores (outside its allowlist).
+#[tauri::command]
+pub async fn games_roblox_preview(flags: games::roblox::RobloxFlags) -> Res<serde_json::Value> {
+    let map = flags.to_flags();
+    let ignored = games::roblox::ignored(&map);
+    Ok(serde_json::json!({ "flags": map, "ignored": ignored }))
+}
+
 // ---------- screen sharing privacy ----------
 
 #[derive(Serialize)]

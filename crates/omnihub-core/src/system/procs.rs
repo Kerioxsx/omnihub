@@ -147,7 +147,7 @@ impl ProcessMonitor {
             .processes()
             .iter()
             // Threads show up as processes on Linux; count each program once.
-            .filter(|(pid, p)| pid.as_u32() > 4 && p.thread_kind().is_none())
+            .filter(|(pid, p)| pid.as_u32() > 4 && p.thread_kind().is_none() && p.status() != sysinfo::ProcessStatus::Zombie)
             .filter_map(|(pid, p)| {
                 let name = p.name().to_string_lossy().into_owned();
                 if name.is_empty() {
@@ -254,6 +254,13 @@ impl ProcessMonitor {
         inner.rows.iter().filter(|r| r.name.eq_ignore_ascii_case(name)).map(|r| r.pid).collect()
     }
 
+    /// Where a running program called `name` lives.
+    pub fn exe_of(&self, name: &str) -> Option<String> {
+        let mut inner = self.inner.lock();
+        Self::refresh(&mut inner);
+        inner.rows.iter().find(|r| r.name.eq_ignore_ascii_case(name)).and_then(|r| r.exe.clone())
+    }
+
     /// End every process called `name`; returns how many were ended.
     pub fn end(&self, name: &str) -> Result<usize, String> {
         if is_protected(name) {
@@ -287,6 +294,9 @@ impl ProcessMonitor {
     pub fn set_priority(&self, name: &str, priority: Priority) -> Result<usize, String> {
         if is_protected(name) {
             return Err(format!("{name} is part of Windows; its priority stays as Windows set it"));
+        }
+        if !cfg!(windows) {
+            return Err("Process priority is a Windows feature.".into());
         }
         let pids = self.pids_named(name);
         if pids.is_empty() {

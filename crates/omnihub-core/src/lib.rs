@@ -11,6 +11,7 @@ pub mod capture;
 pub mod core;
 pub mod db;
 pub mod events;
+pub mod games;
 pub mod helper;
 pub mod media;
 pub mod notes;

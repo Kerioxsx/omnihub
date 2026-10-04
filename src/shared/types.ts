@@ -986,3 +986,122 @@ export interface EqStatus {
   hooked: boolean;
   configDir: string | null;
 }
+
+// ---------- games ----------
+
+export type GameKind = 'fortnite' | 'roblox' | 'valorant' | 'cs2' | 'apex' | 'rocketLeague' | 'gta5' | 'callOfDuty' | 'league' | 'custom';
+
+export type GameLaunch =
+  | { type: 'none' }
+  | { type: 'exe'; path: string; args: string }
+  | { type: 'url'; url: string }
+  | { type: 'steam'; appId: number }
+  | { type: 'epic'; app: string }
+  | { type: 'riot'; product: string }
+  | { type: 'roblox'; placeId: number | null };
+
+export type PowerPlanChoice = 'keep' | 'high' | 'ultimate';
+
+export interface GameBoost {
+  powerPlan: PowerPlanChoice;
+  priority: Priority | null;
+  closeApps: string[];
+  reopenApps: boolean;
+  silenceNotifications: boolean;
+  gameMode: boolean;
+  gpuHighPerformance: boolean;
+  fullscreenOptimizationsOff: boolean;
+  wifiLowLatency: boolean;
+  networkPriority: boolean;
+  startHighPriority: boolean;
+}
+
+export type RobloxPreset = 'maxFps' | 'balanced' | 'quality' | 'custom';
+export type RobloxRenderer = 'auto' | 'd3d11' | 'vulkan' | 'openGl';
+
+export interface RobloxFlags {
+  enabled: boolean;
+  preset: RobloxPreset;
+  renderer: RobloxRenderer;
+  msaa: number | null;
+  textureQuality: number | null;
+  noGrass: boolean;
+  graySky: boolean;
+  lowDetailDistance: boolean;
+  qualityLevel: number | null;
+  exclusiveFullscreen: boolean;
+  ignoreDisplayScaling: boolean;
+  custom: Record<string, string | number | boolean>;
+}
+
+export interface GameProfile {
+  id: string;
+  name: string;
+  kind: GameKind;
+  launch: GameLaunch;
+  process: string;
+  exePath: string | null;
+  boost: GameBoost;
+  pingHost: string | null;
+  roblox: RobloxFlags;
+  lastPlayed: number | null;
+}
+
+export type GamePhase = 'starting' | 'waiting' | 'playing' | 'boosted' | 'restoring' | 'ended';
+
+export interface GameStep {
+  id: string;
+  label: string;
+  status: 'done' | 'skipped' | 'failed';
+  detail: string;
+}
+
+export interface GameSession {
+  profileId: string;
+  name: string;
+  phase: GamePhase;
+  startedAt: number;
+  endedAt: number | null;
+  launched: boolean;
+  steps: GameStep[];
+  restored: GameStep[];
+  message: string | null;
+}
+
+export interface GameState {
+  networkPriority: boolean;
+  startHighPriority: boolean;
+  onWifi: boolean | null;
+  running: boolean;
+}
+
+export interface PingTarget {
+  id: string;
+  label: string;
+  host: string;
+}
+
+export interface PingResult {
+  id: string;
+  label: string;
+  host: string;
+  address: string | null;
+  sent: number;
+  received: number;
+  avgMs: number | null;
+  minMs: number | null;
+  maxMs: number | null;
+  jitterMs: number | null;
+  loss: number;
+  samples: (number | null)[];
+  error: string | null;
+}
+
+export interface RobloxInstall {
+  found: boolean;
+  player: string | null;
+  version: string | null;
+  versionDirs: string[];
+  bootstrapper: string | null;
+  running: boolean;
+}

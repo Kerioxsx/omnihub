@@ -16,6 +16,7 @@ import { ErrorState } from './components/ui/States';
 import { useMediaQuery, useStoredState } from './lib/hooks';
 import { PAGE_IDS, type RouteId, navigate, useRoute } from './lib/router';
 import { AppsPage } from './pages/apps/AppsPage';
+import { GamesPage } from './pages/games/GamesPage';
 import { HomePage } from './pages/home/HomePage';
 import { NotesPage } from './pages/notes/NotesPage';
 import { Onboarding } from './pages/onboarding/Onboarding';
@@ -36,6 +37,7 @@ const PAGES: Record<Exclude<RouteId, 'overlay'>, ComponentType> = {
   screenshots: ScreenshotsPage,
   notes: NotesPage,
   tasks: TasksPage,
+  games: GamesPage,
   vault: VaultPage,
   phone: PhonePage,
   screen: ScreenPage,

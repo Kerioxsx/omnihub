@@ -93,7 +93,7 @@ export interface ServerInfo {
   tls: boolean;
   paired: boolean;
   pairingOpen: boolean;
-  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean };
+  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean; games?: boolean };
 }
 
 export interface FsEntry {
@@ -119,8 +119,17 @@ export interface Status {
 
 // ---------- music ----------
 
-export type { AudioInfo, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
-import type { AudioInfo, LyricsStatus, MediaAction, MediaState, Priority, ProcessSort, Usage } from '@shared/types';
+export type { AudioInfo, GameKind, GameSession, GameStep, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, PingResult, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
+import type { AudioInfo, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
+
+export interface PhoneGame {
+  id: string;
+  name: string;
+  kind: GameKind;
+  lastPlayed: number | null;
+  canLaunch: boolean;
+  process: string;
+}
 
 
 export const client = {
@@ -182,6 +191,10 @@ export const client = {
 
   apps: () => request<{ apps: { id: string; name: string; publisher: string; source: string }[] }>('GET', '/api/apps'),
   appIcon: (id: string) => request<{ icon: string | null }>('GET', `/api/apps/${id}/icon`),
+  games: () => request<{ profiles: PhoneGame[]; session: GameSession | null }>('GET', '/api/games'),
+  playGame: (id: string, launch: boolean) => request<{ session: GameSession }>('POST', `/api/games/${encodeURIComponent(id)}/play`, { launch }),
+  stopGame: () => request<{ stopped: boolean }>('POST', '/api/games/stop'),
+  pingGame: (id: string) => request<{ results: PingResult[] }>('POST', '/api/games/ping', { id }),
   tasks: (sort: ProcessSort = 'cpu', limit = 80) => request<Usage>('GET', `/api/tasks?sort=${sort}&limit=${limit}`),
   endTask: (name: string) => request<{ ended: number }>('POST', '/api/tasks/end', { name }),
   setTaskPriority: (name: string, priority: Priority) => request<{ changed: number }>('POST', '/api/tasks/priority', { name, priority }),

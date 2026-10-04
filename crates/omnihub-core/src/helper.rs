@@ -6,6 +6,7 @@
 //! `omnihub.exe --omnihub-helper network-private <network-guid>`
 //! `omnihub.exe --omnihub-helper startup-set <location> <name> <0|1>`
 //! `omnihub.exe --omnihub-helper eq-write <bass-db> <treble-db> <0|1>`
+//! `omnihub.exe --omnihub-helper game-admin qos+:Game.exe ifeo+:Game.exe …`
 //!
 //! Exit codes: 0 success, 1 failure (message in the error file), 2 cancelled,
 //! 64 bad arguments.
@@ -33,6 +34,7 @@ pub fn run_if_helper(args: &[String]) -> Option<i32> {
             (Some(b), Some(t), Some(on)) if rest.len() == 4 => crate::media::eq::helper_write(b, t, on),
             _ => 64,
         },
+        Some("game-admin") => crate::games::tweaks::helper_admin(&rest[1..]),
         Some("startup-set") => match (rest.get(1), rest.get(2), rest.get(3)) {
             (Some(loc), Some(name), Some(on)) if rest.len() == 4 => crate::startup::helper_set(loc, name, on),
             _ => 64,

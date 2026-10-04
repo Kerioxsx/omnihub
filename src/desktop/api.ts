@@ -157,6 +157,21 @@ export const api = {
     importBackup: (path: string, password: string) => call<number>('vault_import', { path, password }),
   },
 
+  games: {
+    list: () => call<{ profiles: T.GameProfile[]; session: T.GameSession | null }>('games_list'),
+    create: (kind: T.GameKind) => call<T.GameProfile>('games_create', { kind }),
+    save: (profile: T.GameProfile) => call<{ profile: T.GameProfile; warnings: string[] }>('games_save', { profile }),
+    remove: (id: string) => call<void>('games_delete', { id }),
+    state: (id: string) => call<T.GameState | null>('games_state', { id }),
+    play: (id: string, launch: boolean) => call<T.GameSession>('games_play', { id, launch }),
+    stop: () => call<boolean>('games_stop'),
+    ping: (id: string | null, host?: string) => call<T.PingResult[]>('games_ping', { id, host: host ?? null }),
+    pingTargets: (id: string | null) => call<T.PingTarget[]>('games_ping_targets', { id }),
+    robloxStatus: () => call<T.RobloxInstall>('games_roblox_status'),
+    robloxWrite: (flags: T.RobloxFlags) => call<string[]>('games_roblox_write', { flags }),
+    robloxPreview: (flags: T.RobloxFlags) => call<{ flags: Record<string, unknown>; ignored: string[] }>('games_roblox_preview', { flags }),
+  },
+
   media: {
     state: () => call<{ state: T.MediaState | null; nowMs: number }>('media_state'),
     control: (action: T.MediaAction, positionMs = 0) => call<void>('media_control', { action, positionMs: Math.max(0, Math.round(positionMs)) }),

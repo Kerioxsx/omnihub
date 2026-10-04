@@ -2,9 +2,9 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type RouteId = 'home' | 'storage' | 'apps' | 'screenshots' | 'notes' | 'tasks' | 'vault' | 'phone' | 'screen' | 'settings' | 'overlay';
+export type RouteId = 'home' | 'storage' | 'apps' | 'screenshots' | 'notes' | 'tasks' | 'games' | 'vault' | 'phone' | 'screen' | 'settings' | 'overlay';
 
-export const PAGE_IDS: readonly RouteId[] = ['home', 'storage', 'apps', 'screenshots', 'notes', 'tasks', 'vault', 'phone', 'screen', 'settings'];
+export const PAGE_IDS: readonly RouteId[] = ['home', 'storage', 'apps', 'screenshots', 'notes', 'tasks', 'games', 'vault', 'phone', 'screen', 'settings'];
 
 export interface Route {
   id: RouteId;

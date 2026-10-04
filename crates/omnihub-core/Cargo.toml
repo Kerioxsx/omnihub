@@ -96,6 +96,8 @@ windows = { version = "0.62", features = [
   "Win32_System_Variant",
   "Win32_NetworkManagement_WindowsFirewall",
   "Win32_Networking_NetworkListManager",
+  "Win32_NetworkManagement_IpHelper",
+  "Win32_NetworkManagement_WiFi",
   "Win32_System_Memory",
   "Win32_System_JobObjects",
   "Win32_System_WinRT",
