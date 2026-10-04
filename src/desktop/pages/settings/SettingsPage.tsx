@@ -1,7 +1,7 @@
-import type { Bind, ScanMode, Theme } from '@shared/types';
+import type { Bind, EqStatus, ScanMode, Theme } from '@shared/types';
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
-import { Camera, Check, Download, FolderOpen, HardDrive, Info, KeyRound, Laptop, Moon, NotebookPen, Palette, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Smartphone, Sun, Trash, Upload, X } from 'lucide-react';
+import { Camera, Check, Download, ExternalLink, FolderOpen, HardDrive, Info, KeyRound, Laptop, Moon, Music2, NotebookPen, Palette, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Smartphone, Sun, Trash, Upload, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Logo } from '../../components/Logo';
@@ -23,6 +23,7 @@ const SECTIONS: { id: string; label: string; icon: LucideIcon }[] = [
   { id: 'notes', label: 'Notes', icon: NotebookPen },
   { id: 'vault', label: 'Vault', icon: KeyRound },
   { id: 'phone', label: 'Phone', icon: Smartphone },
+  { id: 'music', label: 'Music', icon: Music2 },
   { id: 'screenshots', label: 'Screenshots', icon: Camera },
   { id: 'privacy', label: 'Privacy & security', icon: ShieldCheck },
   { id: 'about', label: 'About', icon: Info },
@@ -425,6 +426,8 @@ export function SettingsPage() {
             <PathRow title="Incoming folder" hint="Files sent from phones are saved here." value={s.remote.incomingDir} fallback={info?.incomingDir} pickTitle="Choose the incoming folder" onPick={(p) => void update({ remote: { incomingDir: p } })} onClear={() => void update({ remote: { incomingDir: null } })} />
           </Section>
 
+          <MusicSection />
+
           <Section id="screenshots" title="Screenshots">
             <PathRow title="Save to" value={s.screenshots.dir} fallback={info?.screenshotDir} pickTitle="Choose the screenshot folder" onPick={(p) => void update({ screenshots: { dir: p } })} onClear={() => void update({ screenshots: { dir: null } })} />
             <Row title="Format">
@@ -561,5 +564,47 @@ export function SettingsPage() {
         </div>
       </div>
     </Page>
+  );
+}
+
+/** Music: phone control, online lyrics, volume, bass and treble. */
+function MusicSection() {
+  const s = useSettings((x) => x.settings);
+  const update = useSettings((x) => x.update);
+  const [eq, setEq] = useState<EqStatus | null>(null);
+  useEffect(() => {
+    void api.media.audio().then((a) => setEq(a.eq), () => undefined);
+  }, []);
+  if (!s) return null;
+  const m = s.media;
+  return (
+    <Section id="music" title="Music" description="What the PC plays, on your phone: cover, controls and time-synced lyrics.">
+      <Row title="Let phones control music" hint="Play, pause, skip, seek and volume from the phone's Music tab. Works with Spotify, Apple Music, browsers and any app in Windows' media controls.">
+        <Switch checked={m.allowPhone} onChange={(v) => void update({ media: { allowPhone: v } })} label="Phone music control" />
+      </Row>
+      <Row title="Find lyrics online" hint="Looks the song up in LRCLIB, a free lyrics database (only the title, artist and album are sent). Found lyrics are kept on this PC.">
+        <Switch checked={m.lyricsOnline} onChange={(v) => void update({ media: { lyricsOnline: v } })} label="Online lyrics" />
+      </Row>
+      <Row title="Bass and treble" hint={eq?.available ? `Through Equalizer APO${eq.hooked ? '' : ' (OmniHub adds one line to its config the first time)'}. Also adjustable from the phone.` : 'Needs the free Equalizer APO — Windows has no system-wide bass control of its own.'} stack>
+        {eq?.available ? (
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-2 text-[13px] text-dim">
+              <Switch checked={m.eqEnabled} onChange={(v) => void update({ media: { eqEnabled: v } })} label="Equaliser on" /> Equaliser on
+            </label>
+            {(['bassDb', 'trebleDb'] as const).map((k) => (
+              <div key={k} className="flex items-center gap-3">
+                <span className="w-14 text-[13px] text-dim">{k === 'bassDb' ? 'Bass' : 'Treble'}</span>
+                <input type="range" min={-12} max={12} step={0.5} value={m[k]} onChange={(e) => void update({ media: { [k]: Number(e.target.value), eqEnabled: true } }, { silent: true })} className="flex-1 accent-[var(--accent)]" aria-label={k === 'bassDb' ? 'Bass' : 'Treble'} />
+                <span className="w-16 text-right font-mono text-[12px] tabular text-fg">{m[k] > 0 ? '+' : ''}{m[k].toFixed(1)} dB</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Button size="sm" icon={ExternalLink} onClick={() => void api.app.openUrl('https://sourceforge.net/projects/equalizerapo/')}>
+            Get Equalizer APO
+          </Button>
+        )}
+      </Row>
+    </Section>
   );
 }

@@ -296,3 +296,77 @@ fn https_and_phone_vault() {
     drop(rt);
     fx.core.remote.stop();
 }
+
+/// Music from the phone: what's playing (the pretend player), artwork,
+/// controls, synced lyrics and the live `media:state` event.
+#[test]
+fn music_from_the_phone() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = AppCore::new(AppPaths::at(&dir.path().join("home")).unwrap(), CoreOptions { fake_media: true, vault_dpapi: Some(false), ..Default::default() }).unwrap();
+    let port = free_port();
+    core.update_settings(&json!({ "remote": { "enabled": true, "port": port, "tls": false, "bind": "localhost" } })).unwrap();
+    core.media.start(|| false);
+    let base = format!("http://127.0.0.1:{port}");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let pairing = core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        let info: Value = c.get(format!("{base}/api/info")).send().await.unwrap().json().await.unwrap();
+        assert_eq!(info["features"]["media"], true);
+
+        tokio::time::sleep(Duration::from_millis(700)).await;
+        let m: Value = c.get(format!("{base}/api/media")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let st = &m["state"];
+        assert_eq!((st["title"].as_str(), st["artist"].as_str(), st["playing"].as_bool()), (Some("Daylight Drive"), Some("The Test Signals"), Some(true)));
+        assert_eq!(st["positionSource"], "player");
+        assert!(m["nowMs"].as_i64().unwrap() > 0);
+        assert!(m["audio"]["eq"]["status"]["available"].is_boolean());
+
+        // Artwork by id.
+        let art = c.get(format!("{base}/api/media/art")).query(&[("id", st["art"].as_str().unwrap())]).header("authorization", &auth).send().await.unwrap();
+        assert_eq!(art.status(), StatusCode::OK);
+        assert_eq!(art.headers()["content-type"], "image/png");
+        assert!(art.bytes().await.unwrap().starts_with(b"\x89PNG"));
+        assert_eq!(c.get(format!("{base}/api/media/art?id=nope")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::NOT_FOUND);
+
+        // Lyrics, timed.
+        let l: Value = c.get(format!("{base}/api/media/lyrics")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(l["lyrics"]["status"], "ready");
+        assert_eq!(l["lyrics"]["lyrics"]["lines"][0]["ms"], 2000);
+
+        // Pausing reaches the phone as an event.
+        let t: Value = c.post(format!("{base}/api/ticket")).header("authorization", &auth).json(&json!({ "purpose": "socket" })).send().await.unwrap().json().await.unwrap();
+        let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/api/ws?ticket={}", t["ticket"].as_str().unwrap())).await.unwrap();
+        let r = c.post(format!("{base}/api/media/control")).header("authorization", &auth).json(&json!({ "action": "pause" })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::OK);
+        let paused = tokio::time::timeout(Duration::from_secs(5), async {
+            while let Some(Ok(msg)) = ws.next().await {
+                if let Message::Text(t) = msg {
+                    let v: Value = serde_json::from_str(&t).unwrap();
+                    if v["topic"] == "media:state" && v["payload"]["state"]["playing"] == false {
+                        return v;
+                    }
+                }
+            }
+            panic!("socket closed");
+        })
+        .await
+        .expect("a media:state event");
+        assert!(paused["payload"]["nowMs"].as_i64().is_some());
+        // Seek, next track.
+        c.post(format!("{base}/api/media/control")).header("authorization", &auth).json(&json!({ "action": "seek", "positionMs": 60000 })).send().await.unwrap();
+        c.post(format!("{base}/api/media/control")).header("authorization", &auth).json(&json!({ "action": "next" })).send().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let m: Value = c.get(format!("{base}/api/media")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(m["state"]["title"], "Night Loop");
+        assert_eq!(c.post(format!("{base}/api/media/control")).header("authorization", &auth).json(&json!({ "action": "explode" })).send().await.unwrap().status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+        // Turned off on the PC: refused.
+        core.update_settings(&json!({ "media": { "allowPhone": false } })).unwrap();
+        assert_eq!(c.get(format!("{base}/api/media")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+        let _ = ws.close(None).await;
+    });
+    core.remote.stop();
+}

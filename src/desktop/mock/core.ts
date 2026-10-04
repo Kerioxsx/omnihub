@@ -38,6 +38,7 @@ export const settings: Settings = {
   screenshots: { dir: null, format: 'png', hotkeyRegion: 'Alt+Shift+S', hotkeyFull: 'Alt+Shift+A', hotkeyWindow: 'Alt+Shift+W', copyToClipboard: true },
   screen: { preset: 'balanced', maxFps: 60, scrcpyPath: null, sunshinePath: null, airplay: { name: 'ALEX-DESKTOP (OmniHub)', quality: '1080p', fps: 60, audio: true, requirePin: true, lowLatency: true, fullscreen: false }, airplayKeepOnTop: false, airplayPip: false, airplayAutoStart: false, uxplayPath: null },
   apps: { favorites: ['spotify-music', 'visual-studio-code'] },
+  media: { allowPhone: true, lyricsOnline: true, eqEnabled: false, bassDb: 0, trebleDb: 0 },
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {

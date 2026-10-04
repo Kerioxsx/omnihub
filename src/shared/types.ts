@@ -811,6 +811,13 @@ export interface Settings {
     /** IDs of apps pinned as favourites */
     favorites: string[];
   };
+  media: {
+    allowPhone: boolean;
+    lyricsOnline: boolean;
+    eqEnabled: boolean;
+    bassDb: number;
+    trebleDb: number;
+  };
 }
 
 /** Deep partial used for settings patches (JSON merge patch). */
@@ -896,4 +903,57 @@ export interface SystemStats {
   memory: { used: number; total: number };
   uptime: number;
   os: string;
+}
+
+// ---------- music ----------
+
+export interface MediaState {
+  key: string;
+  app: string;
+  appName: string;
+  title: string;
+  artist: string;
+  album: string;
+  durationMs: number;
+  /** track position at `positionAt` (PC clock, Unix ms) */
+  positionMs: number;
+  positionAt: number;
+  playing: boolean;
+  rate: number;
+  positionSource: 'player' | 'estimated';
+  canPlayPause: boolean;
+  canNext: boolean;
+  canPrevious: boolean;
+  canSeek: boolean;
+  art: string | null;
+}
+
+export interface LyricWord {
+  ms: number;
+  text: string;
+}
+
+export interface LyricLine {
+  ms: number;
+  text: string;
+  words?: LyricWord[];
+}
+
+export type LyricsStatus =
+  | { status: 'ready'; lyrics: { lines: LyricLine[]; plain: string | null; instrumental: boolean; source: string } }
+  | { status: 'searching' | 'none' | 'off' | 'nothingPlaying' };
+
+export interface AudioInfo {
+  volume: { level: number; muted: boolean } | null;
+  eq: { status: { available: boolean; hooked: boolean; configDir: string | null }; enabled: boolean; bass: number; treble: number; maxDb: number };
+}
+
+export type MediaAction = 'play' | 'pause' | 'toggle' | 'next' | 'previous' | 'seek';
+
+export interface EqStatus {
+  /** Equalizer APO is installed */
+  available: boolean;
+  /** OmniHub's include line is in its config */
+  hooked: boolean;
+  configDir: string | null;
 }

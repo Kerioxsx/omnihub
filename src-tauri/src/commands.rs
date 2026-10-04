@@ -1125,6 +1125,40 @@ pub async fn sunshine_status(core: Core<'_>) -> Res<SunshineStatus> {
     .await
 }
 
+// ---------- music ----------
+
+#[tauri::command]
+pub async fn media_state(core: Core<'_>) -> Res<serde_json::Value> {
+    Ok(serde_json::json!({ "state": core.media.state(), "nowMs": omnihub_core::media::now_ms() }))
+}
+
+#[tauri::command]
+pub async fn media_control(core: Core<'_>, action: omnihub_core::media::Action, position_ms: Option<u64>) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || core.media.control(action, position_ms.unwrap_or(0))).await
+}
+
+#[tauri::command]
+pub async fn media_lyrics(core: Core<'_>) -> Res<serde_json::Value> {
+    Ok(serde_json::json!({ "key": core.media.state().map(|s| s.key), "lyrics": core.media.lyrics() }))
+}
+
+/// Cover art as a data URL.
+#[tauri::command]
+pub async fn media_art(core: Core<'_>, id: String) -> Res<Option<String>> {
+    Ok(core.media.art_data_url(&id))
+}
+
+#[tauri::command]
+pub async fn media_audio() -> Res<serde_json::Value> {
+    blocking(|| Ok(serde_json::json!({ "volume": omnihub_core::media::audio::get(), "eq": omnihub_core::media::eq::status() }))).await
+}
+
+#[tauri::command]
+pub async fn media_set_volume(level: Option<f32>, muted: Option<bool>) -> Res<omnihub_core::media::audio::Volume> {
+    blocking(move || omnihub_core::media::audio::set(level, muted)).await
+}
+
 // ---------- screen sharing privacy ----------
 
 #[derive(Serialize)]

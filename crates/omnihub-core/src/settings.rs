@@ -23,6 +23,26 @@ pub struct Settings {
     pub screenshots: ScreenshotSettings,
     pub screen: ScreenShareSettings,
     pub apps: AppsSettings,
+    pub media: MediaSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MediaSettings {
+    /// Paired phones may see what is playing and control it.
+    pub allow_phone: bool,
+    /// Look lyrics up online (LRCLIB).
+    pub lyrics_online: bool,
+    /// Bass and treble through Equalizer APO.
+    pub eq_enabled: bool,
+    pub bass_db: f32,
+    pub treble_db: f32,
+}
+
+impl Default for MediaSettings {
+    fn default() -> Self {
+        MediaSettings { allow_phone: true, lyrics_online: true, eq_enabled: false, bass_db: 0.0, treble_db: 0.0 }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]

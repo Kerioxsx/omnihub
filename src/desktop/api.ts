@@ -155,6 +155,15 @@ export const api = {
     importBackup: (path: string, password: string) => call<number>('vault_import', { path, password }),
   },
 
+  media: {
+    state: () => call<{ state: T.MediaState | null; nowMs: number }>('media_state'),
+    control: (action: T.MediaAction, positionMs = 0) => call<void>('media_control', { action, positionMs: Math.max(0, Math.round(positionMs)) }),
+    lyrics: () => call<{ key: string | null; lyrics: T.LyricsStatus }>('media_lyrics'),
+    art: (id: string) => call<string | null>('media_art', { id }),
+    audio: () => call<{ volume: { level: number; muted: boolean } | null; eq: T.EqStatus }>('media_audio'),
+    setVolume: (level: number | null, muted: boolean | null = null) => call<{ level: number; muted: boolean }>('media_set_volume', { level, muted }),
+  },
+
   browser: {
     status: () => call<T.BrowserStatus>('browser_status'),
     repair: () => call<T.BrowserRegistration[]>('browser_repair'),

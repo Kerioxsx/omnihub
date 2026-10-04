@@ -12,6 +12,7 @@ pub mod core;
 pub mod db;
 pub mod events;
 pub mod helper;
+pub mod media;
 pub mod notes;
 pub mod paths;
 pub mod remote;

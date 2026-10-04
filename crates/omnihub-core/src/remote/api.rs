@@ -77,6 +77,11 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/inbox/{id}/ticket", post(inbox_ticket))
         .route("/api/inbox/{id}", axum::routing::delete(inbox_dismiss))
         .route("/api/clipboard", post(clipboard_set))
+        .route("/api/media", get(media_get))
+        .route("/api/media/art", get(media_art))
+        .route("/api/media/control", post(media_control))
+        .route("/api/media/lyrics", get(media_lyrics))
+        .route("/api/media/audio", post(media_audio))
         .route("/api/power", get(power_info).post(power_request))
         .route("/api/power/cancel", post(power_cancel))
         .route("/api/apps", get(apps_list))
@@ -164,6 +169,7 @@ struct Features {
     notes: bool,
     vault: bool,
     clipboard: bool,
+    media: bool,
 }
 
 fn features(core: &AppCore, tls: bool) -> Features {
@@ -177,6 +183,7 @@ fn features(core: &AppCore, tls: bool) -> Features {
         notes: s.remote.allow_notes,
         vault: s.vault.allow_phone && tls && core.vault.exists(),
         clipboard: s.remote.allow_clipboard,
+        media: s.media.allow_phone,
     }
 }
 
@@ -523,6 +530,101 @@ struct ClipboardText {
     text: String,
 }
 
+// ---------- music: what's playing, lyrics, volume, bass ----------
+
+fn media_allowed(core: &AppCore) -> ApiResult<()> {
+    if core.settings.get().media.allow_phone {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("music control from the phone is turned off on the PC"))
+    }
+}
+
+/// Volume and equaliser state (blocking: Core Audio and the registry).
+fn audio_json(core: &AppCore) -> serde_json::Value {
+    let m = core.settings.get().media;
+    json!({
+        "volume": crate::media::audio::get(),
+        "eq": { "status": crate::media::eq::status(), "enabled": m.eq_enabled, "bass": m.bass_db, "treble": m.treble_db, "maxDb": crate::media::eq::MAX_DB },
+    })
+}
+
+async fn media_get(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    media_allowed(&core)?;
+    let c = core.clone();
+    let audio = tokio::task::spawn_blocking(move || audio_json(&c)).await?;
+    Ok(Json(json!({ "state": core.media.state(), "nowMs": crate::media::now_ms(), "audio": audio })))
+}
+
+#[derive(Deserialize)]
+struct ArtQuery {
+    id: String,
+}
+
+async fn media_art(State(core): State<Ctx>, Query(q): Query<ArtQuery>) -> ApiResult<Response> {
+    media_allowed(&core)?;
+    let (bytes, mime) = core.media.art(&q.id).ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "no artwork"))?;
+    Ok(([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, "private, max-age=3600".to_string())], (*bytes).clone()).into_response())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MediaControl {
+    action: crate::media::Action,
+    #[serde(default)]
+    position_ms: u64,
+}
+
+async fn media_control(State(core): State<Ctx>, Json(c): Json<MediaControl>) -> ApiResult<Json<serde_json::Value>> {
+    media_allowed(&core)?;
+    let c2 = core.clone();
+    tokio::task::spawn_blocking(move || c2.media.control(c.action, c.position_ms)).await?.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn media_lyrics(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    media_allowed(&core)?;
+    Ok(Json(json!({ "key": core.media.state().map(|s| s.key), "lyrics": core.media.lyrics() })))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MediaAudio {
+    level: Option<f32>,
+    muted: Option<bool>,
+    bass: Option<f32>,
+    treble: Option<f32>,
+    eq_enabled: Option<bool>,
+}
+
+async fn media_audio(State(core): State<Ctx>, Json(a): Json<MediaAudio>) -> ApiResult<Json<serde_json::Value>> {
+    media_allowed(&core)?;
+    let c = core.clone();
+    let out = tokio::task::spawn_blocking(move || -> Result<serde_json::Value, String> {
+        if a.level.is_some() || a.muted.is_some() {
+            crate::media::audio::set(a.level, a.muted)?;
+        }
+        let mut patch = serde_json::Map::new();
+        let clamp = |v: f32| v.clamp(-crate::media::eq::MAX_DB, crate::media::eq::MAX_DB);
+        if let Some(b) = a.bass.filter(|v| v.is_finite()) {
+            patch.insert("bassDb".into(), json!(clamp(b)));
+        }
+        if let Some(t) = a.treble.filter(|v| v.is_finite()) {
+            patch.insert("trebleDb".into(), json!(clamp(t)));
+        }
+        if let Some(e) = a.eq_enabled {
+            patch.insert("eqEnabled".into(), json!(e));
+        }
+        if !patch.is_empty() {
+            c.update_settings(&json!({ "media": patch })).map_err(|e| e.to_string())?;
+        }
+        Ok(audio_json(&c))
+    })
+    .await?
+    .map_err(ApiError::bad)?;
+    Ok(Json(out))
+}
+
 /// Put text from the phone on this PC's clipboard.
 async fn clipboard_set(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(c): Json<ClipboardText>) -> ApiResult<StatusCode> {
     if !core.settings.get().remote.allow_clipboard {
@@ -776,7 +878,7 @@ fn for_phone(ev: &crate::events::Event, device_id: &str) -> bool {
     if ev.topic == "inbox:removed" {
         return true;
     }
-    ["power:", "notes:"].iter().any(|p| ev.topic.starts_with(p))
+    ["power:", "notes:", "media:"].iter().any(|p| ev.topic.starts_with(p))
 }
 
 async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws: WebSocketUpgrade) -> ApiResult<Response> {

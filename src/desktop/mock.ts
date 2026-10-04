@@ -3,12 +3,13 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { CaptureKind, DeepPartial, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
+import type { CaptureKind, DeepPartial, MediaAction, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
 import { volumes } from './mock/drives';
 import * as media from './mock/media';
+import * as music from './mock/music';
 import * as notes from './mock/notes';
 import * as remote from './mock/remote';
 import { latency } from './mock/rng';
@@ -27,6 +28,12 @@ const handlers: Record<string, Handler> = {
   // app
   app_info: () => core.appInfo,
   system_stats: () => core.systemStats(),
+  media_state: () => music.mediaState(),
+  media_control: (a) => music.mediaControl(str(a, 'action') as MediaAction, num(a, 'positionMs', 0)),
+  media_lyrics: () => music.mediaLyrics(),
+  media_art: (a) => music.mediaArt(str(a, 'id')),
+  media_audio: () => music.mediaAudio(),
+  media_set_volume: (a) => music.mediaSetVolume(a.level == null ? null : num(a, 'level'), a.muted == null ? null : bool(a, 'muted')),
   screen_share_state: () => core.shareState(),
   screen_windows: () => core.shareWindows(),
   screen_set_paused: (a) => core.setSharePaused(bool(a, 'on')),

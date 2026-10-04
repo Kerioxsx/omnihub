@@ -93,7 +93,7 @@ export interface ServerInfo {
   tls: boolean;
   paired: boolean;
   pairingOpen: boolean;
-  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean };
+  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean };
 }
 
 export interface FsEntry {
@@ -116,6 +116,12 @@ export interface Status {
   pendingPower: PendingPower | null;
   vaultUnlocked: boolean;
 }
+
+// ---------- music ----------
+
+export type { AudioInfo, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState } from '@shared/types';
+import type { AudioInfo, LyricsStatus, MediaAction, MediaState } from '@shared/types';
+
 
 export const client = {
   info: () => request<ServerInfo>('GET', '/api/info'),
@@ -176,6 +182,16 @@ export const client = {
 
   apps: () => request<{ apps: { id: string; name: string; publisher: string; source: string }[] }>('GET', '/api/apps'),
   appIcon: (id: string) => request<{ icon: string | null }>('GET', `/api/apps/${id}/icon`),
+  media: () => request<{ state: MediaState | null; nowMs: number; audio: AudioInfo }>('GET', '/api/media'),
+  mediaControl: (action: MediaAction, positionMs = 0) => request<{ ok: boolean }>('POST', '/api/media/control', { action, positionMs: Math.max(0, Math.round(positionMs)) }),
+  mediaLyrics: () => request<{ key: string | null; lyrics: LyricsStatus }>('GET', '/api/media/lyrics'),
+  mediaAudio: (patch: { level?: number; muted?: boolean; bass?: number; treble?: number; eqEnabled?: boolean }) => request<AudioInfo>('POST', '/api/media/audio', patch),
+  /** Object URL of the cover art (revoke when done). */
+  mediaArt: async (id: string): Promise<string> => {
+    const res = await fetch(`/api/media/art?id=${encodeURIComponent(id)}`, { headers: { authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) throw new Error('no artwork');
+    return URL.createObjectURL(await res.blob());
+  },
   launch: (id: string) => request<{ launched: string }>('POST', `/api/apps/${id}/launch`),
 
   notes: (kind?: NoteKind, q = '') => request<{ notes: Note[]; claudeFolder: boolean }>('GET', `/api/notes?${kind ? `kind=${kind}&` : ''}q=${encodeURIComponent(q)}`),

@@ -31,11 +31,13 @@ pub struct CoreOptions {
     /// Register with the browsers and listen for the extension when browser
     /// autofill is on (tests turn this off: no real browser config is touched).
     pub browser_integration: bool,
+    /// Use the pretend music player (tests; also `OMNIHUB_FAKE_MEDIA=1`).
+    pub fake_media: bool,
 }
 
 impl Default for CoreOptions {
     fn default() -> Self {
-        CoreOptions { dry_run_power: false, runner: Arc::new(SelfElevated), vault_kdf: None, vault_dpapi: None, browser_integration: true }
+        CoreOptions { dry_run_power: false, runner: Arc::new(SelfElevated), vault_kdf: None, vault_dpapi: None, browser_integration: true, fake_media: false }
     }
 }
 
@@ -57,6 +59,7 @@ pub struct AppCore {
     pub airplay: crate::capture::airplay::AirPlay,
     pub browser: crate::browser::BrowserBridge,
     pub procs: crate::system::procs::ProcessMonitor,
+    pub media: Arc<crate::media::MediaHub>,
     browser_integration: bool,
     /// Drives already warned about (root → when), so each warns once a day.
     low_space_warned: parking_lot::Mutex<std::collections::HashMap<String, i64>>,
@@ -88,6 +91,7 @@ impl AppCore {
             browser: crate::browser::BrowserBridge::new(db.clone(), events.clone()),
             browser_integration: opts.browser_integration,
             procs: crate::system::procs::ProcessMonitor::new(),
+            media: crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media),
             low_space_warned: Default::default(),
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
             paths,
@@ -137,6 +141,8 @@ impl AppCore {
             self.enable_browser_autofill(true);
         }
         self.start_watchers();
+        let weak = Arc::downgrade(self);
+        self.media.start(move || weak.upgrade().is_some_and(|c| c.settings.get().media.lyrics_online));
         let send_to = s.remote.send_to_menu;
         let core = self.clone();
         std::thread::spawn(move || {
@@ -255,6 +261,14 @@ impl AppCore {
             if let Err(e) = self.airplay.start(sc.uxplay_path.as_deref(), &sc.airplay, sc.airplay_keep_on_top, sc.airplay_pip) {
                 tracing::warn!("could not restart the AirPlay receiver: {e}");
             }
+        }
+        if (before.media.eq_enabled, before.media.bass_db, before.media.treble_db) != (after.media.eq_enabled, after.media.bass_db, after.media.treble_db) {
+            let m = after.media.clone();
+            std::thread::spawn(move || {
+                if let Err(e) = crate::media::eq::apply(m.bass_db, m.treble_db, m.eq_enabled) {
+                    tracing::warn!("equaliser: {e}");
+                }
+            });
         }
         if before.vault.browser_autofill != after.vault.browser_autofill {
             self.enable_browser_autofill(after.vault.browser_autofill);

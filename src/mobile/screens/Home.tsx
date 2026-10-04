@@ -1,10 +1,11 @@
 // Home: PC status, pending power action, inbox, idea composer, shortcuts.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Cpu, MemoryStick, HardDrive, Download, X, Inbox, Sparkles, Send, FolderOpen, MonitorPlay, Power, Clock, Lightbulb, ChevronRight, NotebookPen, Copy, ExternalLink, Link2, Type, Share, ClipboardPaste } from 'lucide-react';
+import { Cpu, MemoryStick, HardDrive, Download, X, Inbox, Sparkles, Send, FolderOpen, MonitorPlay, Power, Clock, Lightbulb, ChevronRight, NotebookPen, Copy, ExternalLink, Link2, Type, Share, ClipboardPaste, Music2, Pause, Play, SkipForward } from 'lucide-react';
 import { basename, formatBytes, formatRelative } from '@shared/format';
 import type { InboxItem } from '@shared/types';
-import { client, type Status } from '../client';
+import { client, type MediaState, type Status } from '../client';
+import { useEvent } from '../lib/events';
 import { useApp, useInbox, usePower, toast, type Tab } from '../state';
 import { PullToRefresh } from '../ui/PullToRefresh';
 import { Logo } from '../ui/Logo';
@@ -144,6 +145,8 @@ export function HomeScreen({ active, openMore }: { active: boolean; openMore: (p
             </button>
           ))}
         </div>
+
+        {f?.media && <NowPlayingCard onOpen={() => setTab('music')} />}
 
         {/* Inbox */}
         <SectionTitle right={inbox.items.length > 0 && <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-bold text-accent">{inbox.items.length}</span>}>From your PC</SectionTitle>
@@ -434,5 +437,57 @@ function IdeaComposer({ onOpenNotes }: { onOpenNotes: () => void }) {
         </Button>
       </section>
     </>
+  );
+}
+
+/** What the PC is playing, with play/pause and next; tap for the Music tab. */
+function NowPlayingCard({ onOpen }: { onOpen: () => void }) {
+  const [state, setState] = useState<MediaState | null>(null);
+  const [art, setArt] = useState<string | null>(null);
+  useEffect(() => {
+    void client.media().then((r) => setState(r.state), () => undefined);
+  }, []);
+  useEvent<{ state: MediaState | null }>('media:state', (p) => setState(p.state));
+  useEffect(() => {
+    if (!state?.art) return setArt(null);
+    let alive = true;
+    let made: string | null = null;
+    client.mediaArt(state.art).then(
+      (u) => {
+        made = u;
+        if (alive) setArt(u);
+        else URL.revokeObjectURL(u);
+      },
+      () => undefined,
+    );
+    return () => {
+      alive = false;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [state?.art]);
+  if (!state) return null;
+  const act = (a: 'toggle' | 'next') => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (a === 'toggle') setState({ ...state, playing: !state.playing });
+    void client.mediaControl(a).catch((err: unknown) => toast.error('The player did not respond', errorMessage(err)));
+  };
+  return (
+    <div role="button" tabIndex={0} onClick={onOpen} className="press card mt-3 flex items-center gap-3 p-3">
+      {art ? <img src={art} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" /> : <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent"><Music2 size={20} /></div>}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[15px] font-semibold">{state.title}</div>
+        <div className="truncate text-xs text-dim">{state.artist || state.appName}</div>
+      </div>
+      {state.canPlayPause && (
+        <button type="button" onClick={act('toggle')} aria-label={state.playing ? 'Pause' : 'Play'} className="grid h-10 w-10 place-items-center rounded-full bg-[var(--fg)] text-[var(--bg)]">
+          {state.playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+        </button>
+      )}
+      {state.canNext && (
+        <button type="button" onClick={act('next')} aria-label="Next track" className="grid h-10 w-10 place-items-center rounded-full text-dim">
+          <SkipForward size={20} fill="currentColor" />
+        </button>
+      )}
+    </div>
   );
 }

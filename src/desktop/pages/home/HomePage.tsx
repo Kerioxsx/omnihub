@@ -6,6 +6,7 @@ import { Activity, AlertTriangle, ArrowRight, Camera, Cpu, Crop, HardDrive, Ligh
 import { useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
+import { NowPlayingCard } from '../../components/NowPlaying';
 import { PowerBanner } from '../../components/PowerBanner';
 import { ShotThumb } from '../../components/ShotThumb';
 import { Button } from '../../components/ui/Button';
@@ -442,6 +443,7 @@ export function HomePage() {
       <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
         {power && <PowerBanner inline />}
         <LowSpaceBanner />
+        <NowPlayingCard />
         <div className="grid grid-cols-12 gap-3">
           <motion.div variants={stagger} className="col-span-12 grid grid-cols-3 gap-3 xl:col-span-8">
             {loaded ? volumes.map((v) => <DriveCard key={v.root} v={v} />) : [0, 1, 2].map((i) => <Skeleton key={i} className="h-[140px] rounded-2xl" />)}
