@@ -7,7 +7,7 @@ program uses, and use your phone to move files, control the music with
 synced lyrics, start a game or watch the PC's screen.
 
 **[Download the latest release](https://github.com/Kerioxsx/omnihub/releases/latest)**
-(Windows 10/11, 64-bit)
+(Windows 10/11, 64-bit) · **[Website and tour](https://kerioxsx.github.io/omnihub/)**
 
 Built from [`docs/PLAN.md`](docs/PLAN.md). Desktop app: Tauri 2 (Rust) +
 React. Phone: a web app served by the PC itself — nothing to install from a

@@ -105,6 +105,21 @@ Program Files installs. A release therefore has to keep the asset names
 the Release workflow produces (`OmniHub_<version>_x64-setup.exe`,
 `SHA256SUMS.txt`). Its tests run against a local HTTP server.
 
+## Website
+
+`site/` is the project website: plain HTML, CSS and JavaScript with no
+build step, served by GitHub Pages at <https://kerioxsx.github.io/omnihub/>.
+Preview it with `python3 -m http.server -d site 8000`. The `Website`
+workflow (`.github/workflows/pages.yml`) copies `site/` to the `gh-pages`
+branch on every push to `main` that touches it, or when run by hand.
+
+The download buttons ask GitHub for the latest release and link straight
+to its `x64-setup.exe` (they fall back to the Releases page), so a new
+release needs no website change. Screenshots in `site/assets/shots/` are
+WebP captures of the app with its demo data (desktop) and of the phone app
+talking to a headless server; the fonts are self-hosted under the SIL Open
+Font License.
+
 ## Adding a command
 
 1. Implement it in `omnihub-core` (with a test).
