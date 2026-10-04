@@ -1,6 +1,6 @@
 import { formatBytes, formatDate, formatNumber, formatPercent } from '@shared/format';
 import type { ChildrenPage, ExplorerView, NodeView, SortKey } from '@shared/types';
-import { ArrowDown, ArrowUp, ArrowUpLeft, ChevronRight, CircleDot, Cloud, Columns2, EyeOff, Image, LayoutDashboard, LayoutGrid, Link2, List, ShieldHalf } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpLeft, ChevronRight, CircleDot, Cloud, Columns2, EyeOff, FileSpreadsheet, Image, LayoutDashboard, LayoutGrid, Link2, List, ShieldHalf } from 'lucide-react';
 import { type CSSProperties, type KeyboardEvent, type MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { FileIcon } from '../../components/FileIcon';
@@ -13,7 +13,7 @@ import { VirtualList } from '../../components/VirtualList';
 import { cx } from '../../lib/cx';
 import { useSettings } from '../../state/settings';
 import { useStorage } from '../../state/storage';
-import { deleteItems, openItemMenu } from './actions';
+import { deleteItems, exportCsv, openItemMenu } from './actions';
 import { GridView } from './GridView';
 import { Sunburst } from './Sunburst';
 import { Treemap } from './Treemap';
@@ -350,6 +350,7 @@ export function ExplorerTab({ scanId }: { scanId: string }) {
             />
           </>
         )}
+        <IconButton icon={FileSpreadsheet} label="Export this folder as CSV" size="sm" disabled={!page} onClick={() => page && void exportCsv(scanId, page.node.id, 'children', page.node.name)} />
         <Segmented size="sm" label="View" value={view} onChange={setView} options={VIEWS.map((v) => ({ value: v.value, label: v.label, icon: v.icon, title: v.title }))} />
         <Segmented
           size="sm"

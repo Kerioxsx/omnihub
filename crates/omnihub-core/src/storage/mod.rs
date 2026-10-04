@@ -4,6 +4,7 @@
 pub mod cleanup;
 pub mod dupes;
 pub mod engine;
+pub mod growth;
 pub mod ntfs;
 pub mod snapshot;
 pub mod tree;

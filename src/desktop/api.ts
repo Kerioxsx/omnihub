@@ -67,6 +67,9 @@ export const api = {
     treemap: (scanId: string, node: number, depth = 3, maxItems = 1500) => call<T.TreemapItem>('storage_treemap', { scanId, node, depth, maxItems }),
     thumb: (path: string, size: number) => call<string | null>('storage_thumb', { path, size }),
     topFiles: (scanId: string, node: number, n = 100) => call<T.PathedNode[]>('storage_top_files', { scanId, node, n }),
+    growth: (scanId: string, limit = 15) => call<T.GrowthReport>('storage_growth', { scanId, limit }),
+    /** "children": the folder's contents; "largest": its largest files. Returns the row count. */
+    exportCsv: (scanId: string, node: number, kind: 'children' | 'largest', path: string) => call<number>('storage_export_csv', { scanId, node, kind, path }),
     extensions: (scanId: string, node: number) => call<T.ExtensionStat[]>('storage_extensions', { scanId, node }),
     search: (scanId: string, query: T.SearchQuery) => call<T.SearchResult>('storage_search', { scanId, query }),
     path: (scanId: string, node: number) => call<string>('storage_path', { scanId, node }),

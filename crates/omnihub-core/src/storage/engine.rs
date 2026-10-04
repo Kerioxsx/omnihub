@@ -311,6 +311,10 @@ impl StorageEngine {
                 let mut st = job.state.lock();
                 match result {
                     Ok(tree) => {
+                        // Keep folder sizes for "what grew" next time.
+                        if let Err(e) = super::growth::record_scan(&this.scan_dir, &scan_id_for(&tree.info.root_path), &tree, tree.info.started_at) {
+                            tracing::warn!("could not save folder sizes: {e}");
+                        }
                         let scan_id = this.install_tree(tree);
                         st.0 = JobState::Done;
                         st.1 = Some(scan_id.clone());
@@ -517,6 +521,49 @@ impl StorageEngine {
             total,
             took_ms: started.elapsed().as_millis() as u64,
         })
+    }
+
+    /// Folders that grew or shrank since the previous scan of this drive.
+    pub fn growth(&self, scan_id: &str, limit: usize) -> Result<super::growth::GrowthReport, StorageError> {
+        let t = self.tree(scan_id)?;
+        let t = t.read();
+        Ok(match super::growth::baseline(&self.scan_dir, &scan_id_for(scan_id)) {
+            Some(base) => super::growth::compare(&t, &base, limit),
+            None => super::growth::GrowthReport { since: None, total_after: t.node(t.root()).map_or(0, |n| n.size), ..Default::default() },
+        })
+    }
+
+    /// Write a folder's contents ("children") or its largest files
+    /// ("largest") as CSV for Excel; returns the number of rows.
+    pub fn export_csv(&self, scan_id: &str, node: u32, kind: &str, dest: &Path, include_hidden: bool) -> Result<usize, StorageError> {
+        let t = self.tree(scan_id)?;
+        let t = t.read();
+        if t.node(node).is_none() {
+            return Err(StorageError::UnknownNode(node));
+        }
+        let rows: Vec<NodeView> = match kind {
+            "largest" => t.top_files(node, 5000),
+            _ => t.children(node, SortKey::Size, true, 0, usize::MAX, include_hidden).0,
+        };
+        let mut out = String::from("\u{feff}Name,Path,Type,Size (bytes),Size,On disk (bytes),Files,Folders,Modified\r\n");
+        for r in &rows {
+            let modified = chrono::DateTime::from_timestamp(r.modified as i64, 0).map(|d| d.format("%Y-%m-%d %H:%M").to_string()).unwrap_or_default();
+            let fields = [
+                csv_field(&r.name),
+                csv_field(&t.path(r.id)),
+                (if r.is_dir { "Folder" } else { "File" }).to_string(),
+                r.size.to_string(),
+                csv_field(&super::format_bytes(r.size)),
+                r.alloc.to_string(),
+                r.files.to_string(),
+                r.dirs.to_string(),
+                modified,
+            ];
+            out.push_str(&fields.join(","));
+            out.push_str("\r\n");
+        }
+        crate::settings::write_atomic(dest, out.as_bytes()).map_err(|e| StorageError::Other(e.to_string()))?;
+        Ok(rows.len())
     }
 
     pub fn path_of(&self, scan_id: &str, node: u32) -> Result<String, StorageError> {
@@ -784,5 +831,26 @@ mod tests {
         let s = engine.summary("X:\\").unwrap();
         assert_eq!(s.method, ScanMethod::Mft);
         assert!(s.files > 400);
+    }
+}
+
+/// A CSV field, quoted when needed; text that Excel would run as a formula
+/// gets a leading apostrophe.
+fn csv_field(s: &str) -> String {
+    let s = if s.starts_with(['=', '+', '-', '@', '\t', '\r']) { format!("'{s}") } else { s.to_string() };
+    if s.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s
+    }
+}
+
+#[cfg(test)]
+mod csv_tests {
+    #[test]
+    fn fields_are_escaped() {
+        assert_eq!(super::csv_field("plain.txt"), "plain.txt");
+        assert_eq!(super::csv_field("a,b \"c\".txt"), "\"a,b \"\"c\"\".txt\"");
+        assert_eq!(super::csv_field("=cmd|' /C calc'!A0"), "'=cmd|' /C calc'!A0");
     }
 }

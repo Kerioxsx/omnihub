@@ -64,6 +64,8 @@ const handlers: Record<string, Handler> = {
     return /\.(jpe?g|png|gif|webp|bmp)$/i.test(path) ? scene(path, (['game', 'desktop', 'browser', 'code'] as const)[path.length % 4], 320, 200) : null;
   },
   storage_top_files: (a) => storage.topFiles(str(a, 'scanId'), num(a, 'node'), num(a, 'n', 100)),
+  storage_growth: (a) => storage.growth(str(a, 'scanId'), num(a, 'limit', 15)),
+  storage_export_csv: (a) => storage.exportCsv(str(a, 'scanId'), num(a, 'node'), str(a, 'kind'), str(a, 'path')),
   storage_extensions: (a) => storage.extensions(str(a, 'scanId'), num(a, 'node')),
   storage_search: (a) => storage.search(str(a, 'scanId'), obj<SearchQuery>(a, 'query')),
   storage_path: (a) => storage.nodePath(str(a, 'scanId'), num(a, 'node')),

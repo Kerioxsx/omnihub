@@ -802,6 +802,24 @@ export interface AppInfoDetails {
   userName: string;
 }
 
+export interface GrowthItem {
+  path: string;
+  node: number | null;
+  before: number;
+  after: number;
+  delta: number;
+  isNew: boolean;
+}
+
+export interface GrowthReport {
+  /** when the previous scan was made; null = nothing to compare with yet */
+  since: number | null;
+  totalBefore: number;
+  totalAfter: number;
+  grew: GrowthItem[];
+  shrank: GrowthItem[];
+}
+
 export type ProcessSort = 'cpu' | 'memory';
 
 export interface ProcessGroup {

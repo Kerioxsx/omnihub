@@ -300,6 +300,23 @@ pub async fn storage_treemap(core: Core<'_>, scan_id: String, node: u32, depth: 
 }
 
 #[tauri::command]
+pub async fn storage_growth(core: Core<'_>, scan_id: String, limit: Option<usize>) -> Res<omnihub_core::storage::growth::GrowthReport> {
+    let core = core.inner().clone();
+    blocking(move || core.storage.growth(&scan_id, limit.unwrap_or(15)).map_err(err)).await
+}
+
+/// `kind`: "children" (the folder's contents) or "largest" (its largest files).
+#[tauri::command]
+pub async fn storage_export_csv(core: Core<'_>, scan_id: String, node: u32, kind: String, path: String) -> Res<usize> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let hidden = core.settings.get().storage.show_hidden;
+        core.storage.export_csv(&scan_id, node, &kind, Path::new(&path), hidden).map_err(err)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn storage_top_files(core: Core<'_>, scan_id: String, node: u32, n: usize) -> Res<Vec<PathedNode>> {
     let core = core.inner().clone();
     blocking(move || {
