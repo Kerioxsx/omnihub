@@ -1,18 +1,18 @@
-// Updates for the mock backend: a pretend 0.2.2 that downloads and
+// Updates for the mock backend: a pretend 0.2.3 that downloads and
 // "installs" (the page just reloads at the end).
 
 import type { Release, UpdateInfo, UpdateState } from '@shared/types';
 import { emit } from './bus';
 
-const CURRENT = '0.2.1';
+const CURRENT = '0.2.2';
 const RELEASE: Release = {
-  version: '0.2.2',
+  version: '0.2.3',
   notes: '- Phones connect on every Windows PC (the companion now listens on IPv4 and IPv6)\n- Updates install from inside the app\n- Fast scans can stop asking for administrator approval',
-  pageUrl: 'https://github.com/Kerioxsx/omnihub/releases/tag/v0.2.2',
+  pageUrl: 'https://github.com/Kerioxsx/omnihub/releases/tag/v0.2.3',
   publishedAt: new Date().toISOString(),
-  setup: { name: 'OmniHub_0.2.2_x64-setup.exe', url: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.2/OmniHub_0.2.2_x64-setup.exe', size: 9_300_000 },
+  setup: { name: 'OmniHub_0.2.3_x64-setup.exe', url: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.3/OmniHub_0.2.3_x64-setup.exe', size: 9_300_000 },
   msi: null,
-  sumsUrl: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.2/SHA256SUMS.txt',
+  sumsUrl: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.3/SHA256SUMS.txt',
 };
 
 const available = new URLSearchParams(window.location.search).get('update') !== 'none';

@@ -1344,6 +1344,35 @@ h2 {
   scale: 1.25;
 }
 
+.sideways {
+  max-width: 860px;
+  margin: 36px auto 0;
+  text-align: center;
+}
+
+.landscape-phone {
+  padding: 7px;
+  border-radius: 34px;
+  background: linear-gradient(145deg, #2c2940, #0e0d18);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 40px 90px -25px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.landscape-phone img {
+  width: 100%;
+  border-radius: 27px;
+  cursor: zoom-in;
+}
+
+.sideways figcaption {
+  margin-top: 18px;
+  color: var(--dim);
+}
+
+.sideways figcaption b {
+  color: var(--text);
+}
+
 /* ---------- Games ---------- */
 
 .games {

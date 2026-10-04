@@ -106,7 +106,7 @@ export function audit(actor: string, action: string, detail: string, ok = true):
 // ---------- app info & stats ----------
 
 export const appInfo: AppInfoDetails = {
-  version: '0.2.1',
+  version: '0.2.2',
   elevated: false,
   platform: 'windows',
   hostname: 'GAMING-PC',

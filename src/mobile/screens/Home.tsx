@@ -1,7 +1,7 @@
 // Home: PC status, pending power action, inbox, idea composer, shortcuts.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Cpu, MemoryStick, HardDrive, Download, X, Inbox, Sparkles, Send, FolderOpen, MonitorPlay, Power, Clock, Lightbulb, ChevronRight, NotebookPen, Copy, ExternalLink, Link2, Type, Share, ClipboardPaste, Music2, Pause, Play, SkipForward } from 'lucide-react';
+import { Cpu, MemoryStick, HardDrive, Download, X, Inbox, Sparkles, Send, FolderOpen, MonitorPlay, Power, Clock, Lightbulb, ChevronRight, NotebookPen, Copy, ExternalLink, Link2, Type, Share, ClipboardPaste, Music2, Pause, Play, SkipForward, SlidersVertical, AppWindow } from 'lucide-react';
 import { basename, formatBytes, formatRelative } from '@shared/format';
 import type { InboxItem } from '@shared/types';
 import { client, type MediaState, type Status } from '../client';
@@ -11,10 +11,12 @@ import { PullToRefresh } from '../ui/PullToRefresh';
 import { Logo } from '../ui/Logo';
 import { Button, ProgressBar, Ring, SectionTitle, Skeleton, Switch } from '../ui/common';
 import { PendingPowerCard } from './Power';
+import { CallBar } from './Sound';
+import type { MorePage } from './More';
 import { copyToClipboard, cx, errorMessage, formatUptime, greeting, linkOf, useInterval, usePageVisible } from '../lib/util';
 import { FileIcon } from './fileKinds';
 
-export function HomeScreen({ active, openMore }: { active: boolean; openMore: (page: 'notes' | 'tasks') => void }) {
+export function HomeScreen({ active, openMore }: { active: boolean; openMore: (page: MorePage) => void }) {
   const { info, socket, online, setTab } = useApp();
   const visible = usePageVisible();
   const [status, setStatus] = useState<Status | null>(null);
@@ -69,6 +71,34 @@ export function HomeScreen({ active, openMore }: { active: boolean; openMore: (p
         </header>
 
         <PendingPowerCard className="mt-4" />
+        <CallBar active={active} className="mt-4" />
+
+        {(f?.media || f?.tasks) && (
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {f?.media && (
+              <button onClick={() => openMore('sound')} className="card press flex items-center gap-3 p-3.5 text-left">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+                  <SlidersVertical size={20} />
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-[14.5px] font-semibold">Volume</div>
+                  <div className="truncate text-[12px] text-dim">Apps, mic &amp; calls</div>
+                </div>
+              </button>
+            )}
+            {f?.tasks && (
+              <button onClick={() => openMore('open')} className="card press flex items-center gap-3 p-3.5 text-left">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rose-500/15 text-rose-400">
+                  <AppWindow size={20} />
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-[14.5px] font-semibold">Open apps</div>
+                  <div className="truncate text-[12px] text-dim">Close any app</div>
+                </div>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* PC status */}
         <section className="card mt-4 overflow-hidden p-4">

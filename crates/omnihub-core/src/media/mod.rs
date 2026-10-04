@@ -10,6 +10,7 @@
 pub mod audio;
 pub mod eq;
 pub mod lyrics;
+pub mod mixer;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -359,6 +360,11 @@ impl MediaHub {
             }
         };
         Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake })
+    }
+
+    /// Whether this is the pretend player (the mixer and open apps pretend too).
+    pub fn is_fake(&self) -> bool {
+        self.fake
     }
 
     /// Poll the player a few times a second (cheap) and announce changes.

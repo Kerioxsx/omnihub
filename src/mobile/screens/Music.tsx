@@ -6,7 +6,7 @@
 // (corrected for the clock difference measured on each request).
 
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronDown, FastForward, Info, ListMusic, Minus, Music2, Pause, Play, Plus, Rewind, SkipBack, SkipForward, SlidersHorizontal, Volume1, Volume2, VolumeX } from 'lucide-react';
+import { ChevronDown, FastForward, Info, ListMusic, Minus, Music2, Pause, Play, Plus, Rewind, SkipBack, SkipForward, SlidersHorizontal, SlidersVertical, Volume1, Volume2, VolumeX } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type AudioInfo, client, type LyricLine, type LyricsStatus, type MediaAction, type MediaState } from '../client';
 import { useEvent } from '../lib/events';
@@ -14,6 +14,8 @@ import { keepAwake } from '../lib/wakelock';
 import { cx, errorMessage, useInterval, usePageVisible, vibrate } from '../lib/util';
 import { toast } from '../state';
 import { PageHeader } from '../ui/common';
+import { Sheet } from '../ui/Sheet';
+import { SoundPanel, useMixer } from './Sound';
 
 const OFFSET_KEY = 'omnihub.lyricsOffset';
 
@@ -172,8 +174,73 @@ function Slider({ value, min, max, step, onChange, label, className }: { value: 
   );
 }
 
+/** A phone turned sideways (not a tablet, which has room for the normal layout). */
+const LANDSCAPE = '(orientation: landscape) and (max-height: 540px)';
+function useLandscape(): boolean {
+  const [on, setOn] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(LANDSCAPE).matches);
+  useEffect(() => {
+    const m = window.matchMedia?.(LANDSCAPE);
+    if (!m) return;
+    const f = () => setOn(m.matches);
+    f();
+    m.addEventListener('change', f);
+    return () => m.removeEventListener('change', f);
+  }, []);
+  return on;
+}
+
+type Act = (action: MediaAction, positionMs?: number) => void;
+type VolumePatch = { level?: number; muted?: boolean };
+
+/** Back 10 s, previous, play/pause, next, forward 10 s. */
+function Controls({ state, pos, act, compact }: { state: MediaState; pos: number; act: Act; compact?: boolean }) {
+  const play = compact ? 'h-14 w-14' : 'h-[72px] w-[72px]';
+  const skip = compact ? 'h-12 w-12' : 'h-14 w-14';
+  const big = compact ? 26 : 30;
+  return (
+    <div className="flex items-center justify-between px-1">
+      <button type="button" aria-label="Back 10 seconds" disabled={!state.canSeek} onClick={() => act('seek', Math.max(0, pos - 10000))} className="grid h-11 w-11 place-items-center rounded-full text-white/80 disabled:opacity-30">
+        <Rewind size={compact ? 20 : 22} fill="currentColor" />
+      </button>
+      <button type="button" aria-label="Previous track" disabled={!state.canPrevious} onClick={() => act('previous')} className={cx('grid place-items-center rounded-full disabled:opacity-30', skip)}>
+        <SkipBack size={big} fill="currentColor" />
+      </button>
+      <button type="button" aria-label={state.playing ? 'Pause' : 'Play'} disabled={!state.canPlayPause} onClick={() => act('toggle')} className={cx('grid place-items-center rounded-full bg-white text-black shadow-lg transition-transform active:scale-95 disabled:opacity-40', play)}>
+        {state.playing ? <Pause size={compact ? 26 : 34} fill="currentColor" /> : <Play size={compact ? 26 : 34} fill="currentColor" className="translate-x-0.5" />}
+      </button>
+      <button type="button" aria-label="Next track" disabled={!state.canNext} onClick={() => act('next')} className={cx('grid place-items-center rounded-full disabled:opacity-30', skip)}>
+        <SkipForward size={big} fill="currentColor" />
+      </button>
+      <button type="button" aria-label="Forward 10 seconds" disabled={!state.canSeek} onClick={() => act('seek', Math.min(state.durationMs || Infinity, pos + 10000))} className="grid h-11 w-11 place-items-center rounded-full text-white/80 disabled:opacity-30">
+        <FastForward size={compact ? 20 : 22} fill="currentColor" />
+      </button>
+    </div>
+  );
+}
+
+/** The PC's volume: mute button, slider, percentage (and optionally the mixer). */
+function VolumeRow({ volume, onChange, onMixer }: { volume: { level: number; muted: boolean }; onChange: (p: VolumePatch) => void; onMixer?: () => void }) {
+  const shown = volume.muted ? 0 : volume.level;
+  return (
+    <div className="flex items-center gap-3">
+      <button type="button" aria-label={volume.muted ? 'Unmute' : 'Mute'} onClick={() => onChange({ muted: !volume.muted })} className="text-white/70">
+        {volume.muted || volume.level === 0 ? <VolumeX size={20} /> : volume.level < 0.5 ? <Volume1 size={20} /> : <Volume2 size={20} />}
+      </button>
+      <Slider label="Volume" min={0} max={1} step={0.01} value={shown} onChange={(level) => onChange({ level, muted: false })} />
+      <span className="w-9 text-right font-mono text-[12px] tabular-nums text-white/60">{Math.round(shown * 100)}</span>
+      {onMixer && (
+        <button type="button" onClick={onMixer} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-white/80" aria-label="Volume of each app, microphone and calls">
+          <SlidersVertical size={17} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Full-screen lyrics, Apple Music style: the line being sung bright, the rest dim, following the song. */
-function LyricsView({ lines, pos, canSeek, onSeek, onClose, art, state, offset, setOffset }: { lines: LyricLine[]; pos: number; canSeek: boolean; onSeek: (ms: number) => void; onClose: () => void; art: string | null; state: MediaState; offset: number; setOffset: (o: number) => void }) {
+function LyricsView({ lines, pos, act, onClose, art, state, offset, setOffset, volume, onVolume, landscape }: { lines: LyricLine[]; pos: number; act: Act; onClose: () => void; art: string | null; state: MediaState; offset: number; setOffset: (o: number) => void; volume: { level: number; muted: boolean } | null; onVolume: (p: VolumePatch) => void; landscape: boolean }) {
+  const canSeek = state.canSeek;
+  const onSeek = (ms: number) => act('seek', ms);
   const t = pos + offset;
   const active = useMemo(() => {
     let lo = 0;
@@ -203,30 +270,70 @@ function LyricsView({ lines, pos, canSeek, onSeek, onClose, art, state, offset, 
   // An instrumental break: dots before the next line.
   const next = lines[active + 1];
   const gap = next && (active < 0 ? next.ms : next.ms - lines[active].ms) > 7000 && next.ms - t > 2500 && (active < 0 || t - lines[active].ms > 4000);
-  return (
-    <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} transition={{ type: 'spring', damping: 30, stiffness: 320 }} className="fixed inset-0 z-50 flex flex-col bg-black text-white">
-      <Backdrop url={art} />
-      <div className="relative flex items-center gap-3 px-5 pb-2" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
-        <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full bg-white/10" aria-label="Close lyrics">
-          <ChevronDown size={22} />
-        </button>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[15px] font-semibold">{state.title}</div>
-          <div className="truncate text-[13px] text-white/60">{state.artist}</div>
-        </div>
-        <div className="flex items-center gap-1 rounded-full bg-white/10 px-1.5 py-1 text-[11px]" aria-label="Lyrics timing">
-          <button type="button" className="grid h-7 w-7 place-items-center" onClick={() => setOffset(offset - 250)} aria-label="Lyrics later">
-            <Minus size={14} />
-          </button>
-          <span className="w-12 text-center font-mono tabular-nums">{offset === 0 ? 'sync' : `${offset > 0 ? '+' : ''}${(offset / 1000).toFixed(2)}`}</span>
-          <button type="button" className="grid h-7 w-7 place-items-center" onClick={() => setOffset(offset + 250)} aria-label="Lyrics earlier">
-            <Plus size={14} />
-          </button>
-        </div>
+  const closeButton = (
+    <button type="button" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10" aria-label="Close lyrics">
+      <ChevronDown size={22} />
+    </button>
+  );
+  const timing = (
+    <div className="flex shrink-0 items-center gap-1 rounded-full bg-white/10 px-1.5 py-1 text-[11px]" aria-label="Lyrics timing">
+      <button type="button" className="grid h-7 w-7 place-items-center" onClick={() => setOffset(offset - 250)} aria-label="Lyrics later">
+        <Minus size={14} />
+      </button>
+      <span className="w-12 text-center font-mono tabular-nums">{offset === 0 ? 'sync' : `${offset > 0 ? '+' : ''}${(offset / 1000).toFixed(2)}`}</span>
+      <button type="button" className="grid h-7 w-7 place-items-center" onClick={() => setOffset(offset + 250)} aria-label="Lyrics earlier">
+        <Plus size={14} />
+      </button>
+    </div>
+  );
+  const player = (
+    <>
+      <Progress pos={pos} duration={state.durationMs} canSeek={canSeek} onSeek={onSeek} />
+      <div className="mt-1">
+        <Controls state={state} pos={pos} act={act} compact />
       </div>
+      {volume && (
+        <div className="mt-1">
+          <VolumeRow volume={volume} onChange={onVolume} />
+        </div>
+      )}
+    </>
+  );
+  return (
+    <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }} transition={{ type: 'spring', damping: 30, stiffness: 320 }} className={cx('fixed inset-0 z-50 flex bg-black text-white', landscape ? 'flex-row' : 'flex-col')}>
+      <Backdrop url={art} />
+      {landscape ? (
+        <aside className="relative flex w-[42%] max-w-[420px] shrink-0 flex-col justify-center gap-2.5 pr-6" style={{ paddingLeft: 'max(20px, var(--safe-left))', paddingTop: 'calc(var(--safe-top) + 10px)', paddingBottom: 'calc(var(--safe-bottom) + 10px)' }}>
+          <div className="flex items-center justify-between gap-2">
+            {closeButton}
+            {timing}
+          </div>
+          <div className="flex items-center gap-3.5">
+            <div className="w-[min(28vh,112px)] shrink-0">
+              <Artwork url={art} title={state.title} className="rounded-xl" />
+            </div>
+            <div className="min-w-0">
+              <div className="line-clamp-2 font-display text-[18px] font-bold leading-tight">{state.title}</div>
+              <div className="truncate text-[14px] text-white/60">{state.artist}</div>
+            </div>
+          </div>
+          <div>{player}</div>
+        </aside>
+      ) : (
+        <div className="relative flex items-center gap-3 px-5 pb-2" style={{ paddingTop: 'calc(var(--safe-top) + 10px)' }}>
+          {closeButton}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-semibold">{state.title}</div>
+            <div className="truncate text-[13px] text-white/60">{state.artist}</div>
+          </div>
+          {timing}
+        </div>
+      )}
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <div
         ref={box}
-        className="relative flex-1 overflow-y-auto px-6 pb-[45vh] pt-[18vh] [mask-image:linear-gradient(to_bottom,transparent,black_12%,black_80%,transparent)]"
+        className={cx('relative flex-1 overflow-y-auto [mask-image:linear-gradient(to_bottom,transparent,black_12%,black_80%,transparent)]', landscape ? 'pb-[50vh] pl-2 pt-[24vh]' : 'px-6 pb-[40vh] pt-[16vh]')}
+        style={landscape ? { paddingRight: 'max(24px, var(--safe-right))' } : undefined}
         onTouchMove={() => setUserScroll(Date.now())}
         onWheel={() => setUserScroll(Date.now())}
       >
@@ -248,7 +355,7 @@ function LyricsView({ lines, pos, canSeek, onSeek, onClose, art, state, offset, 
                 setUserScroll(0);
                 onSeek(Math.max(0, l.ms - offset));
               }}
-              className={cx('block w-full origin-left py-2.5 text-left font-display text-[30px] font-extrabold leading-[1.18] tracking-tight transition-all duration-500 ease-out', isActive ? 'scale-100 text-white' : 'scale-[0.97] text-white/30')}
+              className={cx('block w-full origin-left py-2.5 text-left font-display font-extrabold leading-[1.18] tracking-tight transition-all duration-500 ease-out', landscape ? 'text-[27px]' : 'text-[30px]', isActive ? 'scale-100 text-white' : 'scale-[0.97] text-white/30')}
               style={{ filter: !isActive && dist > 1 ? `blur(${Math.min(2.4, (dist - 1) * 0.7)}px)` : undefined }}
             >
               {words
@@ -266,7 +373,7 @@ function LyricsView({ lines, pos, canSeek, onSeek, onClose, art, state, offset, 
           );
         })}
         {gap && (
-          <div className="pointer-events-none absolute left-6 flex gap-2" style={{ top: (refs.current[Math.max(0, active)]?.offsetTop ?? 0) + 64 }} aria-hidden>
+          <div className={cx('pointer-events-none absolute flex gap-2', landscape ? 'left-2' : 'left-6')} style={{ top: (refs.current[Math.max(0, active)]?.offsetTop ?? 0) + 64 }} aria-hidden>
             {[0, 1, 2].map((d) => (
               <motion.span key={d} className="h-3 w-3 rounded-full bg-white" animate={{ opacity: [0.25, 1, 0.25], scale: [0.85, 1.1, 0.85] }} transition={{ duration: 1.6, repeat: Infinity, delay: d * 0.25 }} />
             ))}
@@ -274,9 +381,15 @@ function LyricsView({ lines, pos, canSeek, onSeek, onClose, art, state, offset, 
         )}
       </div>
       {Date.now() - userScroll < 4000 && (
-        <button type="button" onClick={() => setUserScroll(0)} className="absolute bottom-[calc(var(--safe-bottom)+24px)] left-1/2 -translate-x-1/2 rounded-full bg-white/15 px-4 py-2 text-[13px] font-semibold backdrop-blur">
+        <button type="button" onClick={() => setUserScroll(0)} className={cx('absolute left-1/2 -translate-x-1/2 rounded-full bg-white/15 px-4 py-2 text-[13px] font-semibold backdrop-blur', landscape ? 'bottom-[calc(var(--safe-bottom)+16px)]' : 'bottom-4')}>
           Back to the song
         </button>
+      )}
+      </div>
+      {!landscape && (
+        <div className="relative px-6 pt-1" style={{ paddingBottom: 'calc(var(--safe-bottom) + 12px)' }}>
+          {player}
+        </div>
       )}
     </motion.div>
   );
@@ -289,6 +402,9 @@ export function MusicScreen({ active }: { active: boolean }) {
   const [lyrics, setLyrics] = useState<LyricsStatus | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showEq, setShowEq] = useState(false);
+  const [showMixer, setShowMixer] = useState(false);
+  const landscape = useLandscape();
+  const mixer = useMixer(active && showMixer);
   const [offset, setOffsetState] = useState(() => Number(localStorage.getItem(OFFSET_KEY) ?? 0) || 0);
   const clock = useClock();
   const visible = usePageVisible();
@@ -393,148 +509,168 @@ export function MusicScreen({ active }: { active: boolean }) {
 
   const v = audio?.volume;
   const eq = audio?.eq;
+  const onVolume = (p: VolumePatch) => {
+    if (p.level != null) {
+      const level = p.level;
+      debounced(volTimer, { level, muted: false }, () => setAudio(audio && { ...audio, volume: { level, muted: false } }));
+    } else if (p.muted != null) void setAudioPart({ muted: p.muted });
+  };
+  const doAct: Act = (a, ms) => void act(a, ms);
+
+  // Lyrics preview: tap for the full view.
+  const lyricsCard = state && (
+    <>
+      <button type="button" onClick={() => setShowLyrics(true)} disabled={!lines.length} className="mt-6 block w-full rounded-3xl bg-white/10 p-5 text-left backdrop-blur-xl transition-colors active:bg-white/15 disabled:active:bg-white/10">
+        <div className="mb-2 flex items-center justify-between text-[12px] font-semibold uppercase tracking-wider text-white/55">
+          <span>Lyrics</span>
+          {lines.length > 0 && <span className="normal-case tracking-normal">Tap to follow along</span>}
+        </div>
+        {lyrics?.status === 'ready' && lines.length ? (
+          <div className="space-y-1.5">
+            {[current, current + 1].map((i, k) =>
+              i >= 0 && i < lines.length ? (
+                <p key={`${i}-${k}`} className={cx('font-display text-[21px] font-bold leading-snug', k === 0 ? 'text-white' : 'text-white/40')}>
+                  {lines[i].text || '♪'}
+                </p>
+              ) : k === 0 ? (
+                <p key="pre" className="font-display text-[21px] font-bold text-white/60">♪</p>
+              ) : null,
+            )}
+          </div>
+        ) : (
+          <p className="text-[15px] text-white/60">
+            {lyrics == null || lyrics.status === 'searching'
+              ? 'Finding lyrics…'
+              : lyrics.status === 'off'
+                ? 'Online lyrics are turned off on the PC (Settings → Music).'
+                : lyrics.status === 'ready' && lyrics.lyrics.instrumental
+                  ? 'Instrumental — no lyrics.'
+                  : lyrics.status === 'ready' && lyrics.lyrics.plain
+                    ? lyrics.lyrics.plain.split('\n').slice(0, 3).join(' / ') + ' … (not time-synced)'
+                    : 'No lyrics found for this song.'}
+          </p>
+        )}
+        {state.positionSource === 'estimated' && lines.length > 0 && (
+          <p className="mt-3 flex items-start gap-1.5 text-[12px] text-white/50">
+            <Info size={13} className="mt-px shrink-0" /> {state.appName} doesn't share its exact position, so timing is estimated from when the song started. Use the ± buttons in the lyrics view if it drifts.
+          </p>
+        )}
+      </button>
+    </>
+  );
+  // Bass and treble.
+  const eqCard = (
+    <>
+      <div className="mt-4 rounded-3xl bg-white/10 p-5 backdrop-blur-xl">
+        <button type="button" onClick={() => setShowEq(!showEq)} className="flex w-full items-center gap-3 text-left">
+          <SlidersHorizontal size={18} className="text-white/70" />
+          <span className="flex-1 text-[15px] font-semibold">Bass &amp; treble</span>
+          {eq?.status.available && <span className={cx('rounded-full px-2.5 py-0.5 text-[12px] font-semibold', eq.enabled ? 'bg-white text-black' : 'bg-white/15 text-white/70')}>{eq.enabled ? 'On' : 'Off'}</span>}
+          <ChevronDown size={18} className={cx('text-white/60 transition-transform', showEq && 'rotate-180')} />
+        </button>
+        <AnimatePresence initial={false}>
+          {showEq && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+              {eq?.status.available ? (
+                <div className="space-y-4 pt-4">
+                  <label className="flex items-center justify-between text-[14px]">
+                    Equaliser
+                    <input type="checkbox" checked={eq.enabled} onChange={(e) => void setAudioPart({ eqEnabled: e.target.checked })} className="h-5 w-5 accent-white" />
+                  </label>
+                  {(['bass', 'treble'] as const).map((band) => (
+                    <div key={band}>
+                      <div className="mb-1 flex justify-between text-[13px] text-white/70">
+                        <span className="capitalize">{band}</span>
+                        <span className="font-mono tabular-nums">{eq[band] > 0 ? '+' : ''}{eq[band].toFixed(1)} dB</span>
+                      </div>
+                      <Slider label={band === 'bass' ? 'Bass' : 'Treble'} min={-eq.maxDb} max={eq.maxDb} step={0.5} value={eq[band]} onChange={(val) => debounced(eqTimer, { [band]: val, eqEnabled: true }, () => setAudio(audio && { ...audio, eq: { ...audio.eq, [band]: val, enabled: true } }))} />
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => void setAudioPart({ bass: 0, treble: 0 })} className="text-[13px] font-semibold text-white/70 underline-offset-2 active:underline">
+                    Reset to flat
+                  </button>
+                </div>
+              ) : (
+                <p className="pt-3 text-[14px] leading-relaxed text-white/65">Windows has no bass control of its own. Install the free <b className="text-white">Equalizer APO</b> on the PC (choose your speakers or headphones during setup), then come back — the sliders appear here.</p>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </>
+  );
+
+  const details = state && (
+    <>
+      <div className={cx('flex items-end gap-3', !landscape && 'mt-6')}>
+        <div className="min-w-0 flex-1">
+          {landscape && <div className="truncate text-[13px] text-white/55">Playing in {state.appName}</div>}
+          <h2 className="truncate font-display text-[23px] font-bold leading-tight">{state.title}</h2>
+          <p className="truncate text-[17px] text-white/65">{[state.artist, state.album].filter(Boolean).join(' — ')}</p>
+        </div>
+      </div>
+      <div className="mt-4">
+        <Progress pos={pos} duration={state.durationMs} canSeek={state.canSeek} onSeek={(ms) => void act('seek', ms)} />
+      </div>
+      <div className="mt-3">
+        <Controls state={state} pos={pos} act={doAct} compact={landscape} />
+      </div>
+      {v ? (
+        <div className="mt-5">
+          <VolumeRow volume={v} onChange={onVolume} onMixer={() => setShowMixer(true)} />
+        </div>
+      ) : (
+        <button type="button" onClick={() => setShowMixer(true)} className="mt-5 flex items-center gap-2 text-[14px] font-semibold text-white/75">
+          <SlidersVertical size={17} /> Volume of each app &amp; calls
+        </button>
+      )}
+      {lyricsCard}
+      {eqCard}
+    </>
+  );
 
   return (
     <div className="relative h-full overflow-hidden bg-black text-white">
       <Backdrop url={art} />
-      <div className="relative h-full overflow-y-auto pb-[calc(var(--tabbar-h)+var(--safe-bottom)+24px)]">
-        <PageHeader title="Music" subtitle={state ? `Playing in ${state.appName}` : 'From your PC'} />
-        {!state ? (
-          <div className="flex flex-col items-center px-8 pt-16 text-center">
-            <div className="grid h-24 w-24 place-items-center rounded-3xl bg-white/10">
-              <ListMusic size={40} className="text-white/70" />
-            </div>
-            <h2 className="mt-6 font-display text-[22px] font-bold">{loaded ? 'Nothing is playing' : 'Looking for music…'}</h2>
-            <p className="mt-2 text-[15px] text-white/60">Play something on the PC — Spotify, Apple Music, YouTube Music in a browser, or any app that shows in Windows' media controls.</p>
-            {loaded && (
-              <button type="button" onClick={() => void act('play')} className="mt-6 flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[15px] font-semibold text-black">
-                <Play size={18} fill="currentColor" /> Resume on the PC
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="mx-auto max-w-[460px] px-6">
-            <motion.div key={state.key} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: state.playing ? 1 : 0.92 }} transition={{ type: 'spring', damping: 22, stiffness: 220 }} className="mx-auto mt-2 w-[min(100%,340px)]">
-              <Artwork url={art} title={state.title} />
-            </motion.div>
-            <div className="mt-6 flex items-end gap-3">
-              <div className="min-w-0 flex-1">
-                <h2 className="truncate font-display text-[23px] font-bold leading-tight">{state.title}</h2>
-                <p className="truncate text-[17px] text-white/65">{[state.artist, state.album].filter(Boolean).join(' — ')}</p>
+      {state && landscape ? (
+        <div className="relative flex h-full items-center gap-7" style={{ paddingLeft: 'max(20px, var(--safe-left))', paddingRight: 'max(20px, var(--safe-right))', paddingTop: 'calc(var(--safe-top) + 10px)', paddingBottom: 'calc(var(--tabbar-h) + var(--safe-bottom) + 10px)' }}>
+          <motion.div key={state.key} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: state.playing ? 1 : 0.92 }} transition={{ type: 'spring', damping: 22, stiffness: 220 }} className="aspect-square h-full max-h-[320px] shrink-0">
+            <Artwork url={art} title={state.title} className="h-full" />
+          </motion.div>
+          <div className="h-full min-w-0 flex-1 overflow-y-auto py-1 pr-1">{details}</div>
+        </div>
+      ) : (
+        <div className="relative h-full overflow-y-auto pb-[calc(var(--tabbar-h)+var(--safe-bottom)+24px)]">
+          <PageHeader title="Music" subtitle={state ? `Playing in ${state.appName}` : 'From your PC'} />
+          {!state ? (
+            <div className="flex flex-col items-center px-8 pt-16 text-center">
+              <div className="grid h-24 w-24 place-items-center rounded-3xl bg-white/10">
+                <ListMusic size={40} className="text-white/70" />
               </div>
-            </div>
-            <div className="mt-4">
-              <Progress pos={pos} duration={state.durationMs} canSeek={state.canSeek} onSeek={(ms) => void act('seek', ms)} />
-            </div>
-            <div className="mt-3 flex items-center justify-between px-1">
-              <button type="button" aria-label="Back 10 seconds" disabled={!state.canSeek} onClick={() => void act('seek', Math.max(0, pos - 10000))} className="grid h-11 w-11 place-items-center rounded-full text-white/80 disabled:opacity-30">
-                <Rewind size={22} fill="currentColor" />
-              </button>
-              <button type="button" aria-label="Previous track" disabled={!state.canPrevious} onClick={() => void act('previous')} className="grid h-14 w-14 place-items-center rounded-full disabled:opacity-30">
-                <SkipBack size={30} fill="currentColor" />
-              </button>
-              <button type="button" aria-label={state.playing ? 'Pause' : 'Play'} disabled={!state.canPlayPause} onClick={() => void act('toggle')} className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white text-black shadow-lg transition-transform active:scale-95 disabled:opacity-40">
-                {state.playing ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" className="translate-x-0.5" />}
-              </button>
-              <button type="button" aria-label="Next track" disabled={!state.canNext} onClick={() => void act('next')} className="grid h-14 w-14 place-items-center rounded-full disabled:opacity-30">
-                <SkipForward size={30} fill="currentColor" />
-              </button>
-              <button type="button" aria-label="Forward 10 seconds" disabled={!state.canSeek} onClick={() => void act('seek', Math.min(state.durationMs || Infinity, pos + 10000))} className="grid h-11 w-11 place-items-center rounded-full text-white/80 disabled:opacity-30">
-                <FastForward size={22} fill="currentColor" />
-              </button>
-            </div>
-
-            {v && (
-              <div className="mt-5 flex items-center gap-3">
-                <button type="button" aria-label={v.muted ? 'Unmute' : 'Mute'} onClick={() => void setAudioPart({ muted: !v.muted })} className="text-white/70">
-                  {v.muted || v.level === 0 ? <VolumeX size={20} /> : v.level < 0.5 ? <Volume1 size={20} /> : <Volume2 size={20} />}
+              <h2 className="mt-6 font-display text-[22px] font-bold">{loaded ? 'Nothing is playing' : 'Looking for music…'}</h2>
+              <p className="mt-2 text-[15px] text-white/60">Play something on the PC — Spotify, Apple Music, YouTube Music in a browser, or any app that shows in Windows' media controls.</p>
+              {loaded && (
+                <button type="button" onClick={() => void act('play')} className="mt-6 flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[15px] font-semibold text-black">
+                  <Play size={18} fill="currentColor" /> Resume on the PC
                 </button>
-                <Slider label="Volume" min={0} max={1} step={0.01} value={v.muted ? 0 : v.level} onChange={(level) => debounced(volTimer, { level, muted: false }, () => setAudio(audio && { ...audio, volume: { level, muted: false } }))} />
-                <span className="w-9 text-right font-mono text-[12px] tabular-nums text-white/60">{Math.round((v.muted ? 0 : v.level) * 100)}</span>
-              </div>
-            )}
-
-            {/* Lyrics preview: tap for the full view. */}
-            <button type="button" onClick={() => setShowLyrics(true)} disabled={!lines.length} className="mt-6 block w-full rounded-3xl bg-white/10 p-5 text-left backdrop-blur-xl transition-colors active:bg-white/15 disabled:active:bg-white/10">
-              <div className="mb-2 flex items-center justify-between text-[12px] font-semibold uppercase tracking-wider text-white/55">
-                <span>Lyrics</span>
-                {lines.length > 0 && <span className="normal-case tracking-normal">Tap to follow along</span>}
-              </div>
-              {lyrics?.status === 'ready' && lines.length ? (
-                <div className="space-y-1.5">
-                  {[current, current + 1].map((i, k) =>
-                    i >= 0 && i < lines.length ? (
-                      <p key={`${i}-${k}`} className={cx('font-display text-[21px] font-bold leading-snug', k === 0 ? 'text-white' : 'text-white/40')}>
-                        {lines[i].text || '♪'}
-                      </p>
-                    ) : k === 0 ? (
-                      <p key="pre" className="font-display text-[21px] font-bold text-white/60">♪</p>
-                    ) : null,
-                  )}
-                </div>
-              ) : (
-                <p className="text-[15px] text-white/60">
-                  {lyrics == null || lyrics.status === 'searching'
-                    ? 'Finding lyrics…'
-                    : lyrics.status === 'off'
-                      ? 'Online lyrics are turned off on the PC (Settings → Music).'
-                      : lyrics.status === 'ready' && lyrics.lyrics.instrumental
-                        ? 'Instrumental — no lyrics.'
-                        : lyrics.status === 'ready' && lyrics.lyrics.plain
-                          ? lyrics.lyrics.plain.split('\n').slice(0, 3).join(' / ') + ' … (not time-synced)'
-                          : 'No lyrics found for this song.'}
-                </p>
               )}
-              {state.positionSource === 'estimated' && lines.length > 0 && (
-                <p className="mt-3 flex items-start gap-1.5 text-[12px] text-white/50">
-                  <Info size={13} className="mt-px shrink-0" /> {state.appName} doesn't share its exact position, so timing is estimated from when the song started. Use the ± buttons in the lyrics view if it drifts.
-                </p>
-              )}
-            </button>
-
-            {/* Bass and treble. */}
-            <div className="mt-4 rounded-3xl bg-white/10 p-5 backdrop-blur-xl">
-              <button type="button" onClick={() => setShowEq(!showEq)} className="flex w-full items-center gap-3 text-left">
-                <SlidersHorizontal size={18} className="text-white/70" />
-                <span className="flex-1 text-[15px] font-semibold">Bass &amp; treble</span>
-                {eq?.status.available && <span className={cx('rounded-full px-2.5 py-0.5 text-[12px] font-semibold', eq.enabled ? 'bg-white text-black' : 'bg-white/15 text-white/70')}>{eq.enabled ? 'On' : 'Off'}</span>}
-                <ChevronDown size={18} className={cx('text-white/60 transition-transform', showEq && 'rotate-180')} />
-              </button>
-              <AnimatePresence initial={false}>
-                {showEq && (
-                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                    {eq?.status.available ? (
-                      <div className="space-y-4 pt-4">
-                        <label className="flex items-center justify-between text-[14px]">
-                          Equaliser
-                          <input type="checkbox" checked={eq.enabled} onChange={(e) => void setAudioPart({ eqEnabled: e.target.checked })} className="h-5 w-5 accent-white" />
-                        </label>
-                        {(['bass', 'treble'] as const).map((band) => (
-                          <div key={band}>
-                            <div className="mb-1 flex justify-between text-[13px] text-white/70">
-                              <span className="capitalize">{band}</span>
-                              <span className="font-mono tabular-nums">{eq[band] > 0 ? '+' : ''}{eq[band].toFixed(1)} dB</span>
-                            </div>
-                            <Slider label={band === 'bass' ? 'Bass' : 'Treble'} min={-eq.maxDb} max={eq.maxDb} step={0.5} value={eq[band]} onChange={(val) => debounced(eqTimer, { [band]: val, eqEnabled: true }, () => setAudio(audio && { ...audio, eq: { ...audio.eq, [band]: val, enabled: true } }))} />
-                          </div>
-                        ))}
-                        <button type="button" onClick={() => void setAudioPart({ bass: 0, treble: 0 })} className="text-[13px] font-semibold text-white/70 underline-offset-2 active:underline">
-                          Reset to flat
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="pt-3 text-[14px] leading-relaxed text-white/65">Windows has no bass control of its own. Install the free <b className="text-white">Equalizer APO</b> on the PC (choose your speakers or headphones during setup), then come back — the sliders appear here.</p>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="mx-auto max-w-[460px] px-6">
+              <motion.div key={state.key} initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: state.playing ? 1 : 0.92 }} transition={{ type: 'spring', damping: 22, stiffness: 220 }} className="mx-auto mt-2 w-[min(100%,340px)]">
+                <Artwork url={art} title={state.title} />
+              </motion.div>
+              {details}
+            </div>
+          )}
+        </div>
+      )}
       <AnimatePresence>
-        {showLyrics && state && lines.length > 0 && <LyricsView lines={lines} pos={pos} canSeek={state.canSeek} onSeek={(ms) => void act('seek', ms)} onClose={() => setShowLyrics(false)} art={art} state={state} offset={offset} setOffset={setOffset} />}
+        {showLyrics && state && lines.length > 0 && <LyricsView lines={lines} pos={pos} act={doAct} onClose={() => setShowLyrics(false)} art={art} state={state} offset={offset} setOffset={setOffset} volume={v ?? null} onVolume={onVolume} landscape={landscape} />}
       </AnimatePresence>
+      <Sheet open={showMixer} onClose={() => setShowMixer(false)} title="Volume & calls" subtitle="Each app on the PC, your microphone and calls">
+        <SoundPanel api={mixer} />
+      </Sheet>
     </div>
   );
 }

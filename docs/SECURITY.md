@@ -107,15 +107,23 @@ and lets a phone do some of that. This is what protects each part.
   not let a standard-user app inject input into elevated windows.
 - **Tasks** (on by default, can be turned off): the phone sees running
   programs and can change priority or end one; Windows' own processes and
-  OmniHub itself are refused, priority never goes to Realtime.
+  OmniHub itself are refused, priority never goes to Realtime. **Open apps**
+  follows the same permission: it lists programs with a window (names and
+  window titles, never paths) and can ask one to close (`WM_CLOSE`, the same
+  as clicking ×) or quit it; Explorer is never ended.
 - **Music** control and **Games** (start a game with its boost) follow the
-  "Music" and "Launch apps" permissions.
+  "Music" and "Launch apps" permissions. **Volume & calls** follows "Music":
+  each app's volume and mute, the master volume, and muting every recording
+  device. Which apps are in a call is read from the list Windows keeps for
+  its own "using your microphone" indicator; OmniHub never records or
+  listens. It cannot hang up a call — no app offers that to others.
 - **Vault on the phone** is a separate opt-in, HTTPS only, needs the master
   password on the phone each time, and gives that phone its own decrypted
   copy for 5 idle minutes (the PC's vault stays locked). Listing never
   includes secrets; every reveal is logged.
 - **Audit log:** pairing, revocation, downloads, uploads, power requests and
-  cancellations, app launches, screen sharing and control, vault unlocks and
+  cancellations, app launches, apps closed or quit from the phone,
+  microphone muted or unmuted, screen sharing and control, vault unlocks and
   reveals, deletions from the desktop. Kept 180 days.
 - Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff` and
   `no-referrer` on every response.

@@ -5,6 +5,7 @@ pub mod dpapi;
 pub mod elevation;
 pub mod firewall;
 pub mod gpu;
+pub mod open_apps;
 pub mod power;
 pub mod procs;
 pub mod schedtask;

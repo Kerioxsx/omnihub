@@ -1,8 +1,11 @@
 ## New in this version
 
-- **Phones connect again on Windows.** The phone companion only listened for IPv6 on Windows, so phones opening `192.168.x.x` saw "site can't be reached". It now takes IPv4 and IPv6, and Phone → Connection check tests the address from the PC itself.
-- **Updates from inside the app.** OmniHub checks for new versions and installs them for you (Settings → About). Your settings, pairings and data stay. This is the last time you need to download an installer yourself.
-- **Approve fast scans once.** Settings → Storage → "Approve fast scans once" stops the administrator prompt before every fast scan.
+- **Volume & calls on your phone.** Every app's volume and mute (like Windows' volume mixer), the PC's volume, and a button that mutes your microphone in every app. When Discord, WhatsApp, Nyxen, Teams or a browser is using the microphone, Home shows the call with **Mute mic** and **Deafen**.
+- **Close any app from your phone** (More → Open apps): **Close** works like clicking ×, **Quit** ends apps that only hide in the tray.
+- **Music sideways.** Turn the iPhone and the Music screen and full-screen lyrics switch to a side-by-side layout. Full-screen lyrics now have play/pause, skip and volume too.
+- The vault's "primary account" warning only shows for the provider's own login (not for any entry with a Gmail address).
+
+Updating from 0.2.1: OmniHub installs this by itself (or Settings → About → Install now).
 
 ## Install
 

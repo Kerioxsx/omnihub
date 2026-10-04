@@ -122,6 +122,38 @@ export interface Status {
 export type { AudioInfo, GameKind, GameSession, GameStep, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, PingResult, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
 import type { AudioInfo, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
 
+/** One app in the PC's volume mixer. */
+export interface AppVolume {
+  key: string;
+  name: string;
+  level: number;
+  muted: boolean;
+  active: boolean;
+}
+
+/** An app using the PC's microphone right now. */
+export interface Call {
+  key: string;
+  name: string;
+  sinceMs: number | null;
+}
+
+export interface Mixer {
+  master: { level: number; muted: boolean } | null;
+  mic: { muted: boolean; devices: number } | null;
+  apps: AppVolume[];
+  calls: Call[];
+}
+
+/** A program with a window open on the PC. */
+export interface OpenApp {
+  key: string;
+  exeName: string;
+  name: string;
+  titles: string[];
+  canQuit: boolean;
+}
+
 export interface PhoneGame {
   id: string;
   name: string;
@@ -202,6 +234,13 @@ export const client = {
   mediaControl: (action: MediaAction, positionMs = 0) => request<{ ok: boolean }>('POST', '/api/media/control', { action, positionMs: Math.max(0, Math.round(positionMs)) }),
   mediaLyrics: () => request<{ key: string | null; lyrics: LyricsStatus }>('GET', '/api/media/lyrics'),
   mediaAudio: (patch: { level?: number; muted?: boolean; bass?: number; treble?: number; eqEnabled?: boolean }) => request<AudioInfo>('POST', '/api/media/audio', patch),
+  sound: () => request<Mixer>('GET', '/api/sound'),
+  soundMaster: (patch: { level?: number; muted?: boolean }) => request<Mixer>('POST', '/api/sound/master', patch),
+  soundApp: (key: string, patch: { level?: number; muted?: boolean }) => request<Mixer>('POST', '/api/sound/app', { key, ...patch }),
+  soundMic: (muted: boolean) => request<Mixer>('POST', '/api/sound/mic', { muted }),
+  openApps: () => request<{ apps: OpenApp[] }>('GET', '/api/open-apps'),
+  closeApp: (key: string) => request<{ windows: number }>('POST', '/api/open-apps/close', { key }),
+  openAppIcon: (key: string) => request<{ icon: string | null }>('GET', `/api/open-apps/icon?key=${encodeURIComponent(key)}`),
   /** Object URL of the cover art (revoke when done). */
   mediaArt: async (id: string): Promise<string> => {
     const res = await fetch(`/api/media/art?id=${encodeURIComponent(id)}`, { headers: { authorization: `Bearer ${getToken()}` } });

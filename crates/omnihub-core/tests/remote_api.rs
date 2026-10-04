@@ -371,6 +371,69 @@ fn music_from_the_phone() {
     core.remote.stop();
 }
 
+/// The volume mixer, microphone, calls and closing apps from the phone
+/// (the pretend mixer and window list).
+#[test]
+fn sound_calls_and_open_apps_from_the_phone() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = AppCore::new(AppPaths::at(&dir.path().join("home")).unwrap(), CoreOptions { fake_media: true, vault_dpapi: Some(false), ..Default::default() }).unwrap();
+    let port = free_port();
+    core.update_settings(&json!({ "remote": { "enabled": true, "port": port, "tls": false, "bind": "localhost" } })).unwrap();
+    let base = format!("http://127.0.0.1:{port}");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let pairing = core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        let post = |path: &str, body: Value| c.post(format!("{base}{path}")).header("authorization", &auth).json(&body).send();
+        let app = |m: &Value, key: &str| m["apps"].as_array().unwrap().iter().find(|a| a["key"] == key).cloned().unwrap();
+
+        // Who is in a call, and the mixer.
+        let m: Value = c.get(format!("{base}/api/sound")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(m["calls"][0]["name"], "Discord");
+        assert_eq!(m["mic"]["muted"], false);
+        assert_eq!(app(&m, "system")["name"], "System sounds");
+
+        // Deafen Discord, turn Spotify down, mute the microphone, set the PC's volume.
+        let m: Value = post("/api/sound/app", json!({ "key": "discord.exe", "muted": true })).await.unwrap().json().await.unwrap();
+        assert_eq!(app(&m, "discord.exe")["muted"], true);
+        let m: Value = post("/api/sound/app", json!({ "key": "spotify.exe", "level": 0.2 })).await.unwrap().json().await.unwrap();
+        assert!((app(&m, "spotify.exe")["level"].as_f64().unwrap() - 0.2).abs() < 1e-6);
+        let m: Value = post("/api/sound/mic", json!({ "muted": true })).await.unwrap().json().await.unwrap();
+        assert_eq!(m["mic"]["muted"], true);
+        let m: Value = post("/api/sound/master", json!({ "level": 0.3 })).await.unwrap().json().await.unwrap();
+        assert!((m["master"]["level"].as_f64().unwrap() - 0.3).abs() < 1e-6);
+        assert_eq!(post("/api/sound/mic", json!({})).await.unwrap().status(), StatusCode::BAD_REQUEST);
+        assert_eq!(post("/api/sound/app", json!({ "key": "nothing.exe", "muted": true })).await.unwrap().status(), StatusCode::BAD_REQUEST);
+
+        // Open apps: close Spotify politely; Explorer is never quit.
+        let l: Value = c.get(format!("{base}/api/open-apps")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let apps = l["apps"].as_array().unwrap();
+        assert!(apps.iter().any(|a| a["name"] == "Spotify" && a["canQuit"] == true));
+        assert!(apps.iter().any(|a| a["key"] == "explorer.exe" && a["canQuit"] == false));
+        assert!(apps.iter().all(|a| a.get("path").is_none()), "paths stay on the PC");
+        let r: Value = post("/api/open-apps/close", json!({ "key": "spotify.exe" })).await.unwrap().json().await.unwrap();
+        assert_eq!(r["windows"], 1);
+        let l: Value = c.get(format!("{base}/api/open-apps")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert!(!l["apps"].as_array().unwrap().iter().any(|a| a["key"] == "spotify.exe"));
+        assert_eq!(post("/api/open-apps/close", json!({ "key": "spotify.exe" })).await.unwrap().status(), StatusCode::BAD_REQUEST);
+        let i: Value = c.get(format!("{base}/api/open-apps/icon?key=discord.exe")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert!(i["icon"].is_null());
+
+        let audit: Vec<String> = core.audit.list(100, 0).into_iter().map(|e| e.action).collect();
+        assert!(audit.iter().any(|a| a == "app.close") && audit.iter().any(|a| a == "microphone.mute"), "{audit:?}");
+
+        // Turned off on the PC: refused.
+        core.update_settings(&json!({ "media": { "allowPhone": false }, "remote": { "allowTasks": false } })).unwrap();
+        assert_eq!(c.get(format!("{base}/api/sound")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+        assert_eq!(c.get(format!("{base}/api/open-apps")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+    });
+    omnihub_core::media::mixer::reset_fake();
+    omnihub_core::system::open_apps::reset_fake();
+    core.remote.stop();
+}
+
 /// Tasks from the phone: CPU/memory of the whole PC and per program,
 /// priority and "End task" on a program started for the test.
 #[test]

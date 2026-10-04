@@ -2,7 +2,7 @@
 // slide-in sub-page stack.
 
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, Gamepad2, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { Activity, Gamepad2, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft, SlidersVertical, SquareX } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useApp } from '../state';
 import { Logo } from '../ui/Logo';
@@ -15,8 +15,10 @@ import { VaultPage } from './Vault';
 import { SettingsPage } from './Settings';
 import { TasksPage } from './Tasks';
 import { GamesPage } from './Games';
+import { SoundPage } from './Sound';
+import { OpenAppsPage } from './OpenApps';
 
-export type MorePage = 'tasks' | 'games' | 'notes' | 'apps' | 'vault' | 'settings';
+export type MorePage = 'sound' | 'open' | 'tasks' | 'games' | 'notes' | 'apps' | 'vault' | 'settings';
 
 export function MoreScreen({ active, page, setPage, onUnpaired }: { active: boolean; page: MorePage | null; setPage: (p: MorePage | null) => void; onUnpaired: () => void }) {
   const info = useApp((s) => s.info);
@@ -24,6 +26,8 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
   useBackHandler(active && page !== null, () => setPage(null));
 
   const items: { id: MorePage; title: string; sub: string; icon: ReactNode; tone: string; show: boolean }[] = [
+    { id: 'sound', title: 'Volume & calls', sub: 'Each app’s volume, your mic, Discord & WhatsApp calls', icon: <SlidersVertical size={21} />, tone: 'bg-indigo-500/15 text-indigo-400', show: !!f?.media },
+    { id: 'open', title: 'Open apps', sub: 'Close any program on the PC', icon: <SquareX size={21} />, tone: 'bg-rose-500/15 text-rose-400', show: !!f?.tasks },
     { id: 'tasks', title: 'Tasks', sub: 'CPU, memory and GPU of every program', icon: <Activity size={21} />, tone: 'bg-emerald-500/15 text-emerald-400', show: !!f?.tasks },
     { id: 'games', title: 'Games', sub: 'Boost the PC and start a game', icon: <Gamepad2 size={21} />, tone: 'bg-fuchsia-500/15 text-fuchsia-400', show: !!f?.games },
     { id: 'notes', title: 'Notes & ideas', sub: 'Read, search and capture ideas for Claude', icon: <NotebookPen size={21} />, tone: 'bg-violet-500/15 text-violet-400', show: !!f?.notes },
@@ -80,6 +84,8 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 34, stiffness: 340 }}
           >
+            {page === 'sound' && <SoundPage active={active} onBack={() => setPage(null)} />}
+            {page === 'open' && <OpenAppsPage active={active} onBack={() => setPage(null)} />}
             {page === 'tasks' && <TasksPage active={active} onBack={() => setPage(null)} />}
             {page === 'games' && <GamesPage onBack={() => setPage(null)} />}
             {page === 'notes' && <NotesPage active={active} onBack={() => setPage(null)} />}

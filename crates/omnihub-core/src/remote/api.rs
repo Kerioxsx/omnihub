@@ -82,6 +82,10 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/media/control", post(media_control))
         .route("/api/media/lyrics", get(media_lyrics))
         .route("/api/media/audio", post(media_audio))
+        .route("/api/sound", get(sound_get))
+        .route("/api/sound/master", post(sound_master))
+        .route("/api/sound/app", post(sound_app))
+        .route("/api/sound/mic", post(sound_mic))
         .route("/api/games", get(games_list))
         .route("/api/games/stop", post(games_stop))
         .route("/api/games/ping", post(games_ping))
@@ -89,6 +93,9 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/tasks", get(tasks_list))
         .route("/api/tasks/end", post(tasks_end))
         .route("/api/tasks/priority", post(tasks_priority))
+        .route("/api/open-apps", get(open_apps_list))
+        .route("/api/open-apps/close", post(open_apps_close))
+        .route("/api/open-apps/icon", get(open_apps_icon))
         .route("/api/power", get(power_info).post(power_request))
         .route("/api/power/cancel", post(power_cancel))
         .route("/api/apps", get(apps_list))
@@ -636,6 +643,43 @@ async fn media_audio(State(core): State<Ctx>, Json(a): Json<MediaAudio>) -> ApiR
     Ok(Json(out))
 }
 
+// ---------- sound: volume mixer, microphone and calls ----------
+
+async fn sound_get(State(core): State<Ctx>) -> ApiResult<Json<crate::media::mixer::Mixer>> {
+    media_allowed(&core)?;
+    let fake = core.media.is_fake();
+    Ok(Json(tokio::task::spawn_blocking(move || crate::media::mixer::get(fake)).await?))
+}
+
+#[derive(Deserialize)]
+struct SoundReq {
+    #[serde(default)]
+    key: String,
+    level: Option<f32>,
+    muted: Option<bool>,
+}
+
+async fn sound_master(State(core): State<Ctx>, Json(req): Json<SoundReq>) -> ApiResult<Json<crate::media::mixer::Mixer>> {
+    media_allowed(&core)?;
+    let fake = core.media.is_fake();
+    Ok(Json(tokio::task::spawn_blocking(move || crate::media::mixer::set_master(fake, req.level, req.muted)).await?.map_err(ApiError::bad)?))
+}
+
+async fn sound_app(State(core): State<Ctx>, Json(req): Json<SoundReq>) -> ApiResult<Json<crate::media::mixer::Mixer>> {
+    media_allowed(&core)?;
+    let fake = core.media.is_fake();
+    Ok(Json(tokio::task::spawn_blocking(move || crate::media::mixer::set_app(fake, &req.key, req.level, req.muted)).await?.map_err(ApiError::bad)?))
+}
+
+async fn sound_mic(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<SoundReq>) -> ApiResult<Json<crate::media::mixer::Mixer>> {
+    media_allowed(&core)?;
+    let muted = req.muted.ok_or_else(|| ApiError::bad("say whether to mute"))?;
+    let fake = core.media.is_fake();
+    let r = tokio::task::spawn_blocking(move || crate::media::mixer::set_mic(fake, muted)).await?;
+    core.audit.record(&actor(&dev), if muted { "microphone.mute" } else { "microphone.unmute" }, "all recording devices", r.is_ok());
+    Ok(Json(r.map_err(ApiError::bad)?))
+}
+
 /// Put text from the phone on this PC's clipboard.
 async fn clipboard_set(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(c): Json<ClipboardText>) -> ApiResult<StatusCode> {
     if !core.settings.get().remote.allow_clipboard {
@@ -739,6 +783,38 @@ async fn tasks_priority(State(core): State<Ctx>, Extension(dev): Extension<Devic
     core.audit.record(&actor(&dev), "process.priority", &format!("{} → {priority:?}", req.name), r.is_ok());
     let changed = r.map_err(ApiError::bad)?;
     Ok(Json(json!({ "changed": changed })))
+}
+
+// ---------- open apps: close them from the phone ----------
+
+async fn open_apps_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    tasks_allowed(&core)?;
+    let fake = core.media.is_fake();
+    let apps = tokio::task::spawn_blocking(move || crate::system::open_apps::list(fake)).await?;
+    Ok(Json(json!({ "apps": apps })))
+}
+
+#[derive(Deserialize)]
+struct OpenAppReq {
+    key: String,
+}
+
+/// Ask an app's windows to close, like clicking ×.
+async fn open_apps_close(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<OpenAppReq>) -> ApiResult<Json<serde_json::Value>> {
+    tasks_allowed(&core)?;
+    let fake = core.media.is_fake();
+    let key = req.key.clone();
+    let r = tokio::task::spawn_blocking(move || crate::system::open_apps::close(fake, &key)).await?;
+    core.audit.record(&actor(&dev), "app.close", &req.key, r.is_ok());
+    let windows = r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "windows": windows })))
+}
+
+async fn open_apps_icon(State(core): State<Ctx>, Query(req): Query<OpenAppReq>) -> ApiResult<Json<serde_json::Value>> {
+    tasks_allowed(&core)?;
+    let fake = core.media.is_fake();
+    let icon = tokio::task::spawn_blocking(move || crate::system::open_apps::path_of(fake, &req.key.to_ascii_lowercase()).and_then(|p| crate::apps::exe_icon_data_url(&p))).await?;
+    Ok(Json(json!({ "icon": icon })))
 }
 
 // ---------- games: boost and launch from the phone ----------
