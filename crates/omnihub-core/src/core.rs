@@ -56,7 +56,10 @@ pub struct AppCore {
     pub thumbs: crate::thumbs::Thumbs,
     pub airplay: crate::capture::airplay::AirPlay,
     pub browser: crate::browser::BrowserBridge,
+    pub procs: crate::system::procs::ProcessMonitor,
     browser_integration: bool,
+    /// Drives already warned about (root → when), so each warns once a day.
+    low_space_warned: parking_lot::Mutex<std::collections::HashMap<String, i64>>,
 }
 
 impl AppCore {
@@ -84,6 +87,8 @@ impl AppCore {
             thumbs: crate::thumbs::Thumbs::default(),
             browser: crate::browser::BrowserBridge::new(db.clone(), events.clone()),
             browser_integration: opts.browser_integration,
+            procs: crate::system::procs::ProcessMonitor::new(),
+            low_space_warned: Default::default(),
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
             paths,
             settings,
@@ -131,6 +136,7 @@ impl AppCore {
         if s.vault.browser_autofill {
             self.enable_browser_autofill(true);
         }
+        self.start_watchers();
         let send_to = s.remote.send_to_menu;
         let core = self.clone();
         std::thread::spawn(move || {
@@ -155,6 +161,39 @@ impl AppCore {
         }
         if let Err(e) = self.browser.set_listening(self, on) {
             tracing::warn!("browser autofill pipe: {e}");
+        }
+    }
+
+    /// Once a minute: due note reminders; every five minutes: drive space.
+    fn start_watchers(self: &Arc<Self>) {
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("watchers".into())
+            .spawn(move || {
+                let mut tick: u64 = 0;
+                loop {
+                    let Some(core) = weak.upgrade() else { return };
+                    if tick.is_multiple_of(5) {
+                        core.check_low_space();
+                    }
+                    drop(core);
+                    tick += 1;
+                    std::thread::sleep(Duration::from_secs(60));
+                }
+            })
+            .ok();
+    }
+
+    /// Emit `storage:low-space` for drives that just ran low.
+    pub fn check_low_space(&self) {
+        let s = self.settings.get().storage;
+        if !s.low_space_alert {
+            return;
+        }
+        let vols = crate::storage::volumes::list();
+        let due = low_space_due(&vols, s.low_space_percent, &mut self.low_space_warned.lock(), crate::db::now());
+        for v in due {
+            self.events.emit("storage:low-space", serde_json::json!({ "root": v.root, "label": v.label, "free": v.free, "total": v.total }));
         }
     }
 
@@ -227,5 +266,46 @@ impl AppCore {
         }
         self.events.emit("settings:changed", &after);
         Ok(after)
+    }
+}
+
+/// Fixed drives below `percent` free that were not warned about in the last
+/// day; drives that recovered are forgotten, so they warn again next time.
+pub fn low_space_due(vols: &[crate::storage::volumes::VolumeInfo], percent: u8, warned: &mut std::collections::HashMap<String, i64>, now: i64) -> Vec<crate::storage::volumes::VolumeInfo> {
+    let mut due = Vec::new();
+    for v in vols.iter().filter(|v| v.kind == crate::storage::volumes::DriveKind::Fixed && v.total > 0) {
+        let low = (v.free as u128) * 100 < (v.total as u128) * percent as u128;
+        if !low {
+            warned.remove(&v.root);
+            continue;
+        }
+        if warned.get(&v.root).is_none_or(|t| now - t >= 24 * 3600) {
+            warned.insert(v.root.clone(), now);
+            due.push(v.clone());
+        }
+    }
+    due
+}
+
+#[cfg(test)]
+mod low_space_tests {
+    use super::*;
+    use crate::storage::volumes::{DriveKind, VolumeInfo};
+
+    fn vol(root: &str, free: u64, kind: DriveKind) -> VolumeInfo {
+        VolumeInfo { root: root.into(), label: String::new(), file_system: "NTFS".into(), kind, total: 1000, free, cluster_size: 4096, serial: None, mft_capable: false }
+    }
+
+    #[test]
+    fn warns_once_a_day_and_again_after_recovering() {
+        let mut warned = std::collections::HashMap::new();
+        let vols = vec![vol("C:\\", 50, DriveKind::Fixed), vol("D:\\", 500, DriveKind::Fixed), vol("E:\\", 10, DriveKind::Removable)];
+        let due = low_space_due(&vols, 10, &mut warned, 1000);
+        assert_eq!(due.iter().map(|v| v.root.as_str()).collect::<Vec<_>>(), ["C:\\"]);
+        assert!(low_space_due(&vols, 10, &mut warned, 1000 + 3600).is_empty());
+        assert_eq!(low_space_due(&vols, 10, &mut warned, 1000 + 25 * 3600).len(), 1);
+        // Freed up, then low again: warns at once.
+        low_space_due(&[vol("C:\\", 400, DriveKind::Fixed)], 10, &mut warned, 1000 + 26 * 3600);
+        assert_eq!(low_space_due(&vols, 10, &mut warned, 1000 + 26 * 3600 + 60).len(), 1);
     }
 }

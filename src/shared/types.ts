@@ -706,6 +706,10 @@ export interface Settings {
     startMinimized: boolean;
     closeToTray: boolean;
     onboarded: boolean;
+    /** greeting name; empty = Windows account's first name */
+    displayName: string;
+    /** interface size in percent (80–150) */
+    uiScale: number;
   };
   storage: {
     defaultMode: ScanMode;
@@ -717,6 +721,8 @@ export interface Settings {
     explorerView: ExplorerView;
     gridSize: 'sm' | 'md' | 'lg';
     gridPreviews: boolean;
+    lowSpaceAlert: boolean;
+    lowSpacePercent: number;
   };
   notes: {
     claudeFolder: string | null;
@@ -792,6 +798,21 @@ export interface AppInfoDetails {
   cacheDir: string;
   screenshotDir: string;
   incomingDir: string;
+  /** First name of the signed-in user, for greetings. */
+  userName: string;
+}
+
+export type ProcessSort = 'cpu' | 'memory';
+
+export interface ProcessGroup {
+  name: string;
+  count: number;
+  /** share of the whole CPU, 0–100 */
+  cpu: number;
+  memory: number;
+  exe: string | null;
+  pids: number[];
+  canEnd: boolean;
 }
 
 export interface SystemStats {

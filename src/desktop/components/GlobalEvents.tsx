@@ -104,5 +104,26 @@ export function ThemeController() {
   useEffect(() => {
     document.documentElement.classList.toggle('reduce-motion', !!reduced);
   }, [reduced]);
+  // Interface size: CSS zoom on the root scales layout like browser zoom.
+  const scale = useSettings((s) => s.settings?.general.uiScale ?? 100);
+  useEffect(() => {
+    const z = Math.min(150, Math.max(80, scale)) / 100;
+    document.documentElement.style.zoom = z === 1 ? '' : String(z);
+  }, [scale]);
+  // Ctrl+= / Ctrl+- / Ctrl+0 change it from anywhere.
+  useEffect(() => {
+    const steps = [80, 90, 100, 110, 125, 150];
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const cur = useSettings.getState().settings?.general.uiScale ?? 100;
+      const i = steps.indexOf(cur) < 0 ? 2 : steps.indexOf(cur);
+      const next = e.key === '=' || e.key === '+' ? steps[Math.min(steps.length - 1, i + 1)] : e.key === '-' ? steps[Math.max(0, i - 1)] : e.key === '0' ? 100 : null;
+      if (next == null) return;
+      e.preventDefault();
+      if (next !== cur) void useSettings.getState().update({ general: { uiScale: next } });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   return null;
 }

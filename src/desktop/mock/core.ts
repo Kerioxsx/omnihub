@@ -1,6 +1,6 @@
 // Settings, audit log, app info and system stats for the mock backend.
 
-import type { AppInfoDetails, AuditEntry, DeepPartial, Settings, SystemStats } from '@shared/types';
+import type { AppInfoDetails, AuditEntry, DeepPartial, ProcessGroup, ProcessSort, Settings, SystemStats } from '@shared/types';
 import { emit } from './bus';
 import { DAY, GB, NOW } from './rng';
 
@@ -11,8 +11,8 @@ export const flags = {
 };
 
 export const settings: Settings = {
-  general: { theme: 'dark', accent: 'violet', reducedMotion: false, launchAtLogin: false, startMinimized: false, closeToTray: true, onboarded: !flags.onboarding },
-  storage: { defaultMode: 'fast', exclude: [], cleanup: { largeFileMin: 1 << 30, largeFileAgeDays: 180, installerAgeDays: 30 }, showHidden: true, sizeMetric: 'size', explorerView: query.get('view') === 'grid' ? 'grid' : query.get('view') === 'sunburst' ? 'sunburst' : query.get('view') === 'list' ? 'list' : query.get('view') === 'treemap' ? 'treemap' : 'split', gridSize: 'md', gridPreviews: true },
+  general: { theme: 'dark', accent: 'violet', reducedMotion: false, launchAtLogin: false, startMinimized: false, closeToTray: true, onboarded: !flags.onboarding, displayName: '', uiScale: 100 },
+  storage: { defaultMode: 'fast', exclude: [], cleanup: { largeFileMin: 1 << 30, largeFileAgeDays: 180, installerAgeDays: 30 }, showHidden: true, sizeMetric: 'size', explorerView: query.get('view') === 'grid' ? 'grid' : query.get('view') === 'sunburst' ? 'sunburst' : query.get('view') === 'list' ? 'list' : query.get('view') === 'treemap' ? 'treemap' : 'split', gridSize: 'md', gridPreviews: true, lowSpaceAlert: true, lowSpacePercent: 10 },
   notes: { claudeFolder: 'C:\\Users\\Alex\\Documents\\Claude Ideas', sidecarJson: false, autoExportIdeas: false, indexFile: true },
   vault: { autoLockMinutes: 5, clipboardClearSeconds: 20, lockOnSessionLock: true, allowPhone: false, helloEnabled: false, browserAutofill: false, browserOfferSave: true },
   remote: {
@@ -112,6 +112,7 @@ export const appInfo: AppInfoDetails = {
   cacheDir: 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\cache',
   screenshotDir: 'C:\\Users\\Alex\\Pictures\\OmniHub',
   incomingDir: 'C:\\Users\\Alex\\Downloads\\OmniHub',
+  userName: 'Alex',
 };
 
 const bootedAt = NOW - Math.round(DAY * 2.2);
@@ -134,4 +135,43 @@ export function pickFolder(title: string | null): string | null {
 
 export function pickFiles(): string[] {
   return ['C:\\Users\\Alex\\Videos\\Edits\\Phoenix Trailer\\Phoenix Trailer v3 final.mp4', 'C:\\Users\\Alex\\Documents\\Work\\Roadmap 2026-10.pdf'];
+}
+
+// ---------- processes ----------
+
+const PROCS: { name: string; count: number; cpu: number; mem: number; exe: string }[] = [
+  { name: 'brave.exe', count: 18, cpu: 7.5, mem: 2.4 * GB, exe: 'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe' },
+  { name: 'Discord.exe', count: 6, cpu: 1.2, mem: 0.62 * GB, exe: 'C:\\Users\\Alex\\AppData\\Local\\Discord\\app-1.0.9187\\Discord.exe' },
+  { name: 'Code.exe', count: 11, cpu: 3.1, mem: 1.3 * GB, exe: 'C:\\Users\\Alex\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe' },
+  { name: 'steamwebhelper.exe', count: 7, cpu: 0.8, mem: 0.51 * GB, exe: 'C:\\Program Files (x86)\\Steam\\bin\\cef\\cef.win7x64\\steamwebhelper.exe' },
+  { name: 'Spotify.exe', count: 5, cpu: 0.6, mem: 0.38 * GB, exe: 'C:\\Users\\Alex\\AppData\\Roaming\\Spotify\\Spotify.exe' },
+  { name: 'explorer.exe', count: 1, cpu: 0.4, mem: 0.21 * GB, exe: 'C:\\Windows\\explorer.exe' },
+  { name: 'MsMpEng.exe', count: 1, cpu: 1.9, mem: 0.29 * GB, exe: 'C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\MsMpEng.exe' },
+  { name: 'omnihub.exe', count: 1, cpu: 0.9, mem: 0.16 * GB, exe: 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\OmniHub.exe' },
+  { name: 'dwm.exe', count: 1, cpu: 1.4, mem: 0.12 * GB, exe: 'C:\\Windows\\System32\\dwm.exe' },
+  { name: 'OBS64.exe', count: 1, cpu: 4.2, mem: 0.44 * GB, exe: 'C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe' },
+];
+const PROTECTED = new Set(['msmpeng.exe', 'dwm.exe', 'omnihub.exe']);
+
+export function processes(sort: ProcessSort, limit: number): ProcessGroup[] {
+  const list = PROCS.map((p, i) => ({
+    name: p.name,
+    count: p.count,
+    cpu: Math.round(Math.max(0, p.cpu + (Math.random() - 0.5) * p.cpu * 0.6) * 10) / 10,
+    memory: Math.round(p.mem * (0.97 + Math.random() * 0.06)),
+    exe: p.exe,
+    pids: Array.from({ length: p.count }, (_, k) => 1000 + i * 100 + k * 4),
+    canEnd: !PROTECTED.has(p.name.toLowerCase()),
+  }));
+  list.sort((a, b) => (sort === 'cpu' ? b.cpu - a.cpu : b.memory - a.memory));
+  return list.slice(0, limit);
+}
+
+export function endProcess(name: string): number {
+  const i = PROCS.findIndex((p) => p.name.toLowerCase() === name.toLowerCase());
+  if (i < 0) throw new Error(`${name} is not running`);
+  if (PROTECTED.has(name.toLowerCase())) throw new Error(`${name} is part of Windows and cannot be ended here`);
+  const [p] = PROCS.splice(i, 1);
+  audit('desktop', 'process.end', `Ended ${p.name}`);
+  return p.count;
 }

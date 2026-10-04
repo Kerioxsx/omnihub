@@ -39,6 +39,10 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
             let by = payload["requestedBy"].as_str().unwrap_or("");
             by.starts_with("phone:").then(|| (format!("{} requested by {}", payload["label"].as_str().unwrap_or("Power action"), by.trim_start_matches("phone:")), "Open OmniHub to cancel.".into()))
         }
+        "storage:low-space" => Some((
+            format!("{} is almost full", payload["root"].as_str().unwrap_or("A drive").trim_end_matches('\\')),
+            format!("Only {} left. Open OmniHub to see what takes the space.", omnihub_core::storage::format_bytes(payload["free"].as_u64().unwrap_or(0))),
+        )),
         "screen:viewers" => payload.as_array().filter(|v| !v.is_empty()).map(|v| ("Screen is being shared".into(), format!("{} viewing your screen.", v[0]["device"].as_str().unwrap_or("A phone")))),
         _ => None,
     }
@@ -265,6 +269,8 @@ pub fn run(args: Vec<String>) {
             commands::airplay_place,
             commands::airplay_firewall,
             commands::airplay_fix_firewall,
+            commands::system_processes,
+            commands::system_end_process,
             commands::browser_status,
             commands::browser_repair,
             commands::browser_pair_respond,

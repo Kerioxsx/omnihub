@@ -33,6 +33,8 @@ export const api = {
   app: {
     info: () => call<T.AppInfoDetails>('app_info'),
     stats: () => call<T.SystemStats>('system_stats'),
+    processes: (sort: T.ProcessSort, limit = 8) => call<T.ProcessGroup[]>('system_processes', { sort, limit }),
+    endProcess: (name: string) => call<number>('system_end_process', { name }),
     settings: () => call<T.Settings>('settings_get'),
     updateSettings: (patch: T.DeepPartial<T.Settings>) => call<T.Settings>('settings_update', { patch }),
     openPath: (path: string) => call<void>('open_path', { path }),

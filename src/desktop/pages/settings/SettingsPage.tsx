@@ -82,7 +82,7 @@ function PathRow({ title, hint, value, fallback, pickTitle, onPick, onClear }: {
 }
 
 /** Text/number input that saves on blur or Enter. */
-function CommitInput({ value, onCommit, type = 'text', className, label, validate }: { value: string; onCommit: (v: string) => void; type?: string; className?: string; label: string; validate?: (v: string) => string | null }) {
+function CommitInput({ value, onCommit, type = 'text', className, label, validate, placeholder }: { value: string; onCommit: (v: string) => void; type?: string; className?: string; label: string; validate?: (v: string) => string | null; placeholder?: string }) {
   const [v, setV] = useState(value);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => setV(value), [value]);
@@ -94,7 +94,7 @@ function CommitInput({ value, onCommit, type = 'text', className, label, validat
   };
   return (
     <div className={className}>
-      <TextInput type={type} value={v} onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()} aria-label={label} aria-invalid={!!err} inputSize="sm" />
+      <TextInput type={type} value={v} onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()} aria-label={label} aria-invalid={!!err} inputSize="sm" placeholder={placeholder} />
       {err && <div className="mt-1 text-[11.5px] text-bad">{err}</div>}
     </div>
   );
@@ -198,9 +198,21 @@ export function SettingsPage() {
             <Row title="Reduce motion" hint="Turns off page transitions, zoom animations and springy effects.">
               <Switch checked={s.general.reducedMotion} onChange={(v) => void update({ general: { reducedMotion: v } })} label="Reduce motion" />
             </Row>
+            <Row title="Interface size" hint="Makes text and controls larger or smaller. Ctrl+= and Ctrl+- work too.">
+              <Select value={String(s.general.uiScale)} onChange={(e) => void update({ general: { uiScale: Number(e.target.value) } })} className="w-[140px]" aria-label="Interface size">
+                {[80, 90, 100, 110, 125, 150].map((z) => (
+                  <option key={z} value={z}>
+                    {z}%{z === 100 ? ' (default)' : ''}
+                  </option>
+                ))}
+              </Select>
+            </Row>
           </Section>
 
           <Section id="general" title="General">
+            <Row title="Your name" hint="Used in the greeting on Home. Leave empty to use your Windows name.">
+              <CommitInput label="Your name" value={s.general.displayName} placeholder={info?.userName || 'Your name'} className="w-[220px]" onCommit={(v) => void update({ general: { displayName: v.trim().slice(0, 40) } })} />
+            </Row>
             <Row title="Launch at Windows sign-in" hint="OmniHub starts in the background so hotkeys and the phone companion are ready.">
               <Switch checked={s.general.launchAtLogin} onChange={(v) => void setAutostart(v)} label="Launch at login" />
             </Row>
@@ -252,6 +264,18 @@ export function SettingsPage() {
             </Row>
             <Row title="Image previews in the grid" hint="Reads image files to make small previews; turn off on slow or network drives.">
               <Switch checked={s.storage.gridPreviews} onChange={(v) => void update({ storage: { gridPreviews: v } })} label="Image previews" />
+            </Row>
+            <Row title="Warn when a drive is almost full" hint="A banner on Home, and a Windows notification when OmniHub is in the tray.">
+              <div className="flex items-center gap-2">
+                <Select value={String(s.storage.lowSpacePercent)} onChange={(e) => void update({ storage: { lowSpacePercent: Number(e.target.value) } })} disabled={!s.storage.lowSpaceAlert} className="w-[150px]" aria-label="Low space threshold">
+                  {[5, 10, 15, 20].map((p) => (
+                    <option key={p} value={p}>
+                      Under {p}% free
+                    </option>
+                  ))}
+                </Select>
+                <Switch checked={s.storage.lowSpaceAlert} onChange={(v) => void update({ storage: { lowSpaceAlert: v } })} label="Low space warning" />
+              </div>
             </Row>
             <Row title="Include hidden and system files">
               <Switch checked={s.storage.showHidden} onChange={(v) => void update({ storage: { showHidden: v } })} label="Show hidden files" />

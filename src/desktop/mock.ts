@@ -3,7 +3,7 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { CaptureKind, DeepPartial, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
+import type { CaptureKind, DeepPartial, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
@@ -27,6 +27,8 @@ const handlers: Record<string, Handler> = {
   // app
   app_info: () => core.appInfo,
   system_stats: () => core.systemStats(),
+  system_processes: (a) => core.processes((optStr(a, 'sort') ?? 'cpu') as ProcessSort, num(a, 'limit') || 8),
+  system_end_process: (a) => core.endProcess(str(a, 'name')),
   settings_get: () => core.settings,
   settings_update: (a) => core.updateSettings(obj<DeepPartial<Settings>>(a, 'patch')),
   open_path: (a) => void str(a, 'path'),

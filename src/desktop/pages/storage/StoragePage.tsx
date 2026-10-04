@@ -62,6 +62,11 @@ export function StoragePage() {
     else if (!root && volumes.length) void select((volumes.find((v) => v.root.toUpperCase().startsWith('C:')) ?? volumes[0]).root);
     else if (root && !summaries[rootKey(root)]) void select(root);
   }, [loaded, volumes, route.params, root]);
+  // ?tab= opens a tab directly (Home's "Clean up", "See what's big").
+  useEffect(() => {
+    const t = route.params.get('tab') as StorageTab | null;
+    if (t && ['explorer', 'largest', 'types', 'cleanup', 'duplicates', 'search'].includes(t)) setTab(t);
+  }, [route.params]);
 
   const key = root ? rootKey(root) : null;
   const volume = key ? (volumes.find((v) => rootKey(v.root) === key) ?? null) : null;

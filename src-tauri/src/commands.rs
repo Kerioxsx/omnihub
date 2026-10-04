@@ -63,6 +63,8 @@ pub struct AppInfoDetails {
     cache_dir: String,
     screenshot_dir: String,
     incoming_dir: String,
+    /// First name of the signed-in user, for greetings.
+    user_name: String,
 }
 
 #[tauri::command]
@@ -78,6 +80,7 @@ pub async fn app_info(core: Core<'_>) -> Res<AppInfoDetails> {
         cache_dir: core.paths.cache.to_string_lossy().into(),
         screenshot_dir: core.screenshot_dir().to_string_lossy().into(),
         incoming_dir: core.incoming_dir().to_string_lossy().into(),
+        user_name: omnihub_core::system::user_display_name(),
     })
 }
 
@@ -110,6 +113,24 @@ pub async fn system_stats() -> Res<SystemStats> {
         uptime: sysinfo::System::uptime(),
         os: sysinfo::System::long_os_version().unwrap_or_default(),
     })
+}
+
+#[tauri::command]
+pub async fn system_processes(core: Core<'_>, sort: omnihub_core::system::procs::ProcessSort, limit: Option<usize>) -> Res<Vec<omnihub_core::system::procs::ProcessGroup>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.procs.top(sort, limit.unwrap_or(8)))).await
+}
+
+/// End every process with this name ("End task").
+#[tauri::command]
+pub async fn system_end_process(core: Core<'_>, name: String) -> Res<usize> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.procs.end(&name);
+        core.audit.record("desktop", "process.end", &name, r.is_ok());
+        r
+    })
+    .await
 }
 
 #[tauri::command]

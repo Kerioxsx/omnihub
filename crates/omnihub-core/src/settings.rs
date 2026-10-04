@@ -44,6 +44,10 @@ pub struct GeneralSettings {
     pub start_minimized: bool,
     pub close_to_tray: bool,
     pub onboarded: bool,
+    /// Name used in greetings; empty = the Windows account's first name.
+    pub display_name: String,
+    /// Interface size in percent (80–150).
+    pub ui_scale: u16,
 }
 
 impl Default for GeneralSettings {
@@ -56,6 +60,8 @@ impl Default for GeneralSettings {
             start_minimized: false,
             close_to_tray: true,
             onboarded: false,
+            display_name: String::new(),
+            ui_scale: 100,
         }
     }
 }
@@ -74,6 +80,10 @@ pub struct StorageSettings {
     pub grid_size: String,
     /// Show previews of images in the grid view.
     pub grid_previews: bool,
+    /// Warn when a drive runs low on space.
+    pub low_space_alert: bool,
+    /// "Low" means less than this share of the drive free.
+    pub low_space_percent: u8,
 }
 
 impl Default for StorageSettings {
@@ -87,6 +97,8 @@ impl Default for StorageSettings {
             explorer_view: ExplorerView::Split,
             grid_size: "md".into(),
             grid_previews: true,
+            low_space_alert: true,
+            low_space_percent: 10,
         }
     }
 }
