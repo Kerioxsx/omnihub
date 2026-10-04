@@ -22,6 +22,14 @@ pub struct Settings {
     pub remote: RemoteSettings,
     pub screenshots: ScreenshotSettings,
     pub screen: ScreenShareSettings,
+    pub apps: AppsSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AppsSettings {
+    /// IDs of apps pinned as favourites.
+    pub favorites: Vec<String>,
 }
 
 

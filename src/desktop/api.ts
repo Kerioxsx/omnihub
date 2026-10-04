@@ -88,6 +88,9 @@ export const api = {
     launch: (id: string) => call<void>('apps_launch', { id }),
     uninstall: (id: string) => call<void>('apps_uninstall', { id }),
     screenshots: (id: string) => call<T.Screenshot[]>('apps_screenshots', { id }),
+    startup: () => call<T.StartupItem[]>('startup_list'),
+    /** Returns the updated list. */
+    setStartup: (id: string, enabled: boolean) => call<T.StartupItem[]>('startup_set', { id, enabled }),
   },
 
   shots: {

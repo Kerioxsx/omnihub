@@ -134,6 +134,24 @@ pub async fn system_end_process(core: Core<'_>, name: String) -> Res<usize> {
 }
 
 #[tauri::command]
+pub async fn startup_list() -> Res<Vec<omnihub_core::startup::StartupItem>> {
+    blocking(|| Ok(omnihub_core::startup::list())).await
+}
+
+/// Switch a startup entry on or off (all-users entries ask for approval).
+#[tauri::command]
+pub async fn startup_set(core: Core<'_>, id: String, enabled: bool) -> Res<Vec<omnihub_core::startup::StartupItem>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = omnihub_core::startup::set_enabled(&id, enabled);
+        core.audit.record("desktop", if enabled { "startup.enable" } else { "startup.disable" }, id.split_once(':').map_or(id.as_str(), |(_, n)| n), r.is_ok());
+        r.map_err(err)?;
+        Ok(omnihub_core::startup::list())
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn settings_get(core: Core<'_>) -> Res<Settings> {
     Ok(core.settings.get())
 }

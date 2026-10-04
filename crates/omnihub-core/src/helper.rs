@@ -4,6 +4,7 @@
 //! `omnihub.exe --omnihub-helper scan-volume C <scan-dir>`
 //! `omnihub.exe --omnihub-helper firewall-allow <program> <rule-name> <profile-mask>`
 //! `omnihub.exe --omnihub-helper network-private <network-guid>`
+//! `omnihub.exe --omnihub-helper startup-set <location> <name> <0|1>`
 //!
 //! Exit codes: 0 success, 1 failure (message in the error file), 2 cancelled,
 //! 64 bad arguments.
@@ -25,6 +26,10 @@ pub fn run_if_helper(args: &[String]) -> Option<i32> {
         },
         Some("network-private") => match rest.get(1) {
             Some(id) if rest.len() == 2 => crate::system::firewall::helper_make_private(id),
+            _ => 64,
+        },
+        Some("startup-set") => match (rest.get(1), rest.get(2), rest.get(3)) {
+            (Some(loc), Some(name), Some(on)) if rest.len() == 4 => crate::startup::helper_set(loc, name, on),
             _ => 64,
         },
         _ => 64,

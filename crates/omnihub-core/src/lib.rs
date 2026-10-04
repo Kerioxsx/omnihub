@@ -16,6 +16,7 @@ pub mod notes;
 pub mod paths;
 pub mod remote;
 pub mod settings;
+pub mod startup;
 pub mod storage;
 pub mod system;
 pub mod thumbs;

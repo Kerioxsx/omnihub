@@ -1,7 +1,7 @@
 import { formatBytes, formatDate } from '@shared/format';
 import type { AppInfo, AppSource } from '@shared/types';
 import { motion } from 'motion/react';
-import { ArrowUpDown, LayoutGrid, LayoutList, PackageSearch, RefreshCw } from 'lucide-react';
+import { ArrowUpDown, LayoutGrid, LayoutList, PackageSearch, Power, RefreshCw, Star } from 'lucide-react';
 import { type CSSProperties, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { AppIcon } from '../../components/AppIcon';
@@ -13,11 +13,13 @@ import { EmptyState, ErrorState } from '../../components/ui/States';
 import { VirtualList } from '../../components/VirtualList';
 import { cx } from '../../lib/cx';
 import { useAsync, useStoredState } from '../../lib/hooks';
+import { useSettings } from '../../state/settings';
 import { AppDrawer } from './AppDrawer';
 import { SOURCE_LABEL, SizeHint } from './shared';
+import { StartupPanel } from './StartupPanel';
 
 type Sort = 'name' | 'size' | 'date' | 'publisher';
-type Filter = 'all' | AppSource;
+type Filter = 'all' | 'favorites' | 'startup' | AppSource;
 
 export function AppsPage() {
   const apps = useAsync(() => api.apps.list(false), []);
@@ -29,18 +31,24 @@ export function AppsPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const all = apps.data ?? [];
-  const counts = useMemo(() => ({ all: all.length, desktop: all.filter((a) => a.source === 'desktop').length, store: all.filter((a) => a.source === 'store').length, startMenu: all.filter((a) => a.source === 'startMenu').length }), [all]);
+  const favorites = useSettings((s) => s.settings?.apps.favorites) ?? [];
+  const favSet = useMemo(() => new Set(favorites), [favorites]);
+  const counts = useMemo(
+    () => ({ all: all.length, favorites: all.filter((a) => favSet.has(a.id)).length, desktop: all.filter((a) => a.source === 'desktop').length, store: all.filter((a) => a.source === 'store').length, startMenu: all.filter((a) => a.source === 'startMenu').length }),
+    [all, favSet],
+  );
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const out = all.filter((a) => (filter === 'all' || a.source === filter) && (!needle || `${a.name} ${a.publisher}`.toLowerCase().includes(needle)));
+    const out = all.filter((a) => (filter === 'all' || filter === 'startup' || (filter === 'favorites' ? favSet.has(a.id) : a.source === filter)) && (!needle || `${a.name} ${a.publisher}`.toLowerCase().includes(needle)));
     const by: Record<Sort, (a: AppInfo, b: AppInfo) => number> = {
       name: (a, b) => a.name.localeCompare(b.name),
       size: (a, b) => (b.size ?? -1) - (a.size ?? -1),
       date: (a, b) => (b.installDate ?? 0) - (a.installDate ?? 0),
       publisher: (a, b) => a.publisher.localeCompare(b.publisher) || a.name.localeCompare(b.name),
     };
-    return out.sort(by[sort]);
-  }, [all, q, filter, sort]);
+    // Favourites first, then the chosen order.
+    return out.sort((a, b) => Number(favSet.has(b.id)) - Number(favSet.has(a.id)) || by[sort](a, b));
+  }, [all, q, filter, sort, favSet]);
   const totalSize = list.reduce((a, x) => a + (x.size ?? 0), 0);
 
   const refresh = async () => {
@@ -57,7 +65,10 @@ export function AppsPage() {
       <span className="flex min-w-0 items-center gap-3">
         <AppIcon id={a.id} name={a.name} size={30} />
         <span className="min-w-0">
-          <span className="block truncate text-[13.5px] font-medium text-fg">{a.name}</span>
+          <span className="flex items-center gap-1.5 truncate text-[13.5px] font-medium text-fg">
+            {a.name}
+            {favSet.has(a.id) && <Star size={11} className="shrink-0 fill-current text-warn" aria-label="Favourite" />}
+          </span>
           <span className="block truncate text-[12px] text-faint">{a.publisher}</span>
         </span>
       </span>
@@ -76,7 +87,7 @@ export function AppsPage() {
     <Page
       title="Apps"
       subtitle={apps.data ? `${counts.all} installed · ${counts.store} from the Microsoft Store · ${formatBytes(totalSize)} shown` : 'Reading installed programs…'}
-      scroll={view === 'grid'}
+      scroll={view === 'grid' || filter === 'startup'}
       actions={
         <>
           <SearchInput value={q} onChange={setQ} placeholder="Search apps or publishers" className="w-64" aria-label="Search apps" />
@@ -103,14 +114,18 @@ export function AppsPage() {
           onChange={setFilter}
           options={[
             { value: 'all', label: <span>All <span className="text-faint">{counts.all}</span></span> },
+            { value: 'favorites', icon: Star, label: <span>Favourites <span className="text-faint">{counts.favorites}</span></span> },
             { value: 'desktop', label: <span>Desktop <span className="text-faint">{counts.desktop}</span></span> },
             { value: 'store', label: <span>Store <span className="text-faint">{counts.store}</span></span> },
             { value: 'startMenu', label: <span>Start menu <span className="text-faint">{counts.startMenu}</span></span> },
+            { value: 'startup', icon: Power, label: 'Startup apps' },
           ]}
         />
       }
     >
-      {apps.error ? (
+      {filter === 'startup' ? (
+        <StartupPanel q={q} />
+      ) : apps.error ? (
         <ErrorState title="Could not list apps" error={apps.error} onRetry={apps.reload} />
       ) : !apps.data ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
@@ -136,7 +151,10 @@ export function AppsPage() {
             >
               <AppIcon id={a.id} name={a.name} size={44} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13.5px] font-semibold text-fg">{a.name}</span>
+                <span className="flex items-center gap-1.5 truncate text-[13.5px] font-semibold text-fg">
+                  <span className="truncate">{a.name}</span>
+                  {favSet.has(a.id) && <Star size={12} className="shrink-0 fill-current text-warn" aria-label="Favourite" />}
+                </span>
                 <span className="block truncate text-[12px] text-faint">{a.publisher}</span>
                 <span className="mt-1 flex items-center justify-between gap-2 text-[12px]">
                   <SizeHint app={a} />

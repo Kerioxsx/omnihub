@@ -27,6 +27,8 @@ const handlers: Record<string, Handler> = {
   // app
   app_info: () => core.appInfo,
   system_stats: () => core.systemStats(),
+  startup_list: () => core.startupList(),
+  startup_set: (a) => core.startupSet(str(a, 'id'), bool(a, 'enabled')),
   system_processes: (a) => core.processes((optStr(a, 'sort') ?? 'cpu') as ProcessSort, num(a, 'limit') || 8),
   system_end_process: (a) => core.endProcess(str(a, 'name')),
   settings_get: () => core.settings,

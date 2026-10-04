@@ -1,6 +1,6 @@
 // Settings, audit log, app info and system stats for the mock backend.
 
-import type { AppInfoDetails, AuditEntry, DeepPartial, ProcessGroup, ProcessSort, Settings, SystemStats } from '@shared/types';
+import type { AppInfoDetails, AuditEntry, DeepPartial, ProcessGroup, ProcessSort, Settings, StartupItem, StartupLocation, SystemStats } from '@shared/types';
 import { emit } from './bus';
 import { DAY, GB, NOW } from './rng';
 
@@ -37,6 +37,7 @@ export const settings: Settings = {
   },
   screenshots: { dir: null, format: 'png', hotkeyRegion: 'Alt+Shift+S', hotkeyFull: 'Alt+Shift+A', hotkeyWindow: 'Alt+Shift+W', copyToClipboard: true },
   screen: { preset: 'balanced', maxFps: 60, scrcpyPath: null, sunshinePath: null, airplay: { name: 'ALEX-DESKTOP (OmniHub)', quality: '1080p', fps: 60, audio: true, requirePin: true, lowLatency: true, fullscreen: false }, airplayKeepOnTop: false, airplayPip: false, airplayAutoStart: false, uxplayPath: null },
+  apps: { favorites: ['spotify-music', 'visual-studio-code'] },
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -174,4 +175,36 @@ export function endProcess(name: string): number {
   const [p] = PROCS.splice(i, 1);
   audit('desktop', 'process.end', `Ended ${p.name}`);
   return p.count;
+}
+
+// ---------- startup apps ----------
+
+const startupItems: StartupItem[] = [
+  { name: 'Discord', command: '"C:\\Users\\Alex\\AppData\\Local\\Discord\\Update.exe" --processStart Discord.exe', location: 'runUser', enabled: true },
+  { name: 'Spotify', command: '"C:\\Users\\Alex\\AppData\\Roaming\\Spotify\\Spotify.exe" --autostart --minimized', location: 'runUser', enabled: true },
+  { name: 'Steam', command: '"C:\\Program Files (x86)\\Steam\\steam.exe" -silent', location: 'runUser', enabled: false },
+  { name: 'OneDrive', command: '"C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe" /background', location: 'runUser', enabled: true },
+  { name: 'SecurityHealth', command: '%windir%\\system32\\SecurityHealthSystray.exe', location: 'runMachine', enabled: true },
+  { name: 'RtkAudUService', command: '"C:\\Windows\\System32\\DriverStore\\FileRepository\\realtekservice.inf_amd64\\RtkAudUService64.exe" -background', location: 'runMachine', enabled: true },
+  { name: 'Logitech Download Assistant', command: 'C:\\Windows\\system32\\rundll32.exe C:\\Windows\\System32\\LogiLDA.dll,LogiFetch', location: 'runMachine32', enabled: false },
+  { name: 'OmniHub.lnk', command: 'C:\\Users\\Alex\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OmniHub.lnk', location: 'folderUser', enabled: true },
+  { name: 'Send to OneNote.lnk', command: 'C:\\Users\\Alex\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Send to OneNote.lnk', location: 'folderUser', enabled: false },
+].map((i) => {
+  const loc = i.location as StartupLocation;
+  const machine = loc !== 'runUser' && loc !== 'folderUser';
+  const key = { runUser: 'run-user', runMachine: 'run-machine', runMachine32: 'run-machine32', folderUser: 'folder-user', folderCommon: 'folder-common' }[loc];
+  const target = i.command.startsWith('"') ? i.command.slice(1, i.command.indexOf('"', 1)) : i.command.split(' ')[0];
+  return { id: `${key}:${i.name}`, name: i.name, displayName: i.name.replace(/\.lnk$/i, ''), command: i.command, target, location: loc, enabled: i.enabled, needsAdmin: machine };
+});
+
+export function startupList(): StartupItem[] {
+  return startupItems.map((i) => ({ ...i })).sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+export function startupSet(id: string, enabled: boolean): StartupItem[] {
+  const item = startupItems.find((i) => i.id === id);
+  if (!item) throw new Error('that startup entry no longer exists');
+  item.enabled = enabled;
+  audit('desktop', enabled ? 'startup.enable' : 'startup.disable', item.displayName);
+  return startupList();
 }

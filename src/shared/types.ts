@@ -782,6 +782,10 @@ export interface Settings {
     airplayAutoStart: boolean;
     uxplayPath: string | null;
   };
+  apps: {
+    /** IDs of apps pinned as favourites */
+    favorites: string[];
+  };
 }
 
 /** Deep partial used for settings patches (JSON merge patch). */
@@ -818,6 +822,20 @@ export interface GrowthReport {
   totalAfter: number;
   grew: GrowthItem[];
   shrank: GrowthItem[];
+}
+
+export type StartupLocation = 'runUser' | 'runMachine' | 'runMachine32' | 'folderUser' | 'folderCommon';
+
+export interface StartupItem {
+  id: string;
+  name: string;
+  displayName: string;
+  command: string;
+  target: string | null;
+  location: StartupLocation;
+  enabled: boolean;
+  /** changing it asks for administrator approval */
+  needsAdmin: boolean;
 }
 
 export type ProcessSort = 'cpu' | 'memory';
