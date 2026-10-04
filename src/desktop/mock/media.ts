@@ -14,7 +14,7 @@ type AppSeed = [name: string, publisher: string, version: string, source: AppInf
 
 const PF = 'C:\\Program Files';
 const PF86 = 'C:\\Program Files (x86)';
-const LOCAL = 'C:\\Users\\Alex\\AppData\\Local';
+const LOCAL = 'C:\\Users\\Player\\AppData\\Local';
 const GAMES = 'C:\\Games\\Steam\\steamapps\\common';
 const WA = 'C:\\Program Files\\WindowsApps';
 
@@ -55,7 +55,7 @@ const APPS: AppSeed[] = [
   ['JetBrains Toolbox', 'JetBrains s.r.o.', '2.4.2', 'desktop', `${LOCAL}\\JetBrains\\Toolbox`, 200, 300, 'jetbrains-toolbox.exe', ['#000000', '#fe2857']],
   ['Ollama', 'Ollama', '0.3.12', 'startMenu', `${LOCAL}\\Programs\\Ollama`, 60, null, 'ollama app.exe', ['#111827', '#e5e7eb']],
   ['Obsidian', 'Obsidian', '1.6.7', 'startMenu', `${LOCAL}\\Programs\\Obsidian`, 230, null, 'Obsidian.exe', ['#483699', '#a88bfa']],
-  ['Telegram Desktop', 'Telegram FZ-LLC', '5.5.5', 'startMenu', 'C:\\Users\\Alex\\AppData\\Roaming\\Telegram Desktop', 330, null, 'Telegram.exe', ['#229ed9', '#2aabee']],
+  ['Telegram Desktop', 'Telegram FZ-LLC', '5.5.5', 'startMenu', 'C:\\Users\\Player\\AppData\\Roaming\\Telegram Desktop', 330, null, 'Telegram.exe', ['#229ed9', '#2aabee']],
   ['Calculator', 'Microsoft Corporation', '11.2405.2.0', 'store', `${WA}\\Microsoft.WindowsCalculator_11.2405.2.0_x64__8wekyb3d8bbwe`, 120, null, null, ['#3b3b3b', '#6b6b6b']],
   ['Photos', 'Microsoft Corporation', '2024.11070.15005.0', 'store', `${WA}\\Microsoft.Windows.Photos_2024.11070.15005.0_x64__8wekyb3d8bbwe`, 120, null, null, ['#0078d4', '#50e6ff']],
   ['Windows Terminal', 'Microsoft Corporation', '1.21.2361.0', 'store', `${WA}\\Microsoft.WindowsTerminal_1.21.2361.0_x64__8wekyb3d8bbwe`, 300, null, 'WindowsTerminal.exe', ['#1f1f1f', '#4cc2ff']],
@@ -142,7 +142,7 @@ const SHOT_APPS: [exe: string, title: string, kind: SceneKind, tags: string[]][]
   ['firefox.exe', 'Linear – Roadmap — Mozilla Firefox', 'browser', ['inspiration', 'ui-idea']],
   ['chrome.exe', 'Order confirmation – Google Chrome', 'browser', ['receipt']],
   ['Discord.exe', '#general | Game Night - Discord', 'chat', ['meme']],
-  ['blender.exe', 'Blender [C:\\Users\\Alex\\Documents\\scene_v4.blend]', 'blender', ['3d', 'wip']],
+  ['blender.exe', 'Blender [C:\\Users\\Player\\Documents\\scene_v4.blend]', 'blender', ['3d', 'wip']],
 ];
 
 const NOTES = ['', '', '', 'Photo mode — use for wallpaper', 'Repro: crash when zooming out twice quickly', 'Love this sidebar density', 'Return window ends Oct 30', 'Boss phase 2 positioning', 'Lighting pass v2'];
@@ -166,7 +166,7 @@ for (let i = 0; i < 46; i++) {
   const tags = r.chance(0.55) ? [...tagPool].slice(0, r.int(1, tagPool.length)) : [];
   shots.push({
     id,
-    path: `C:\\Users\\Alex\\Pictures\\OmniHub\\${name}`,
+    path: `C:\\Users\\Player\\Pictures\\OmniHub\\${name}`,
     created,
     width,
     height,
@@ -230,7 +230,7 @@ function addShot(kind: SceneKind, width: number, height: number, exe: string | n
   kinds.set(id, kind);
   const shot: Screenshot = {
     id,
-    path: `C:\\Users\\Alex\\Pictures\\OmniHub\\${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}.png`,
+    path: `C:\\Users\\Player\\Pictures\\OmniHub\\${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}.png`,
     created,
     width,
     height,

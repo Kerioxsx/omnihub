@@ -13,7 +13,7 @@ export const flags = {
 export const settings: Settings = {
   general: { theme: 'dark', accent: 'violet', reducedMotion: false, launchAtLogin: false, startMinimized: false, closeToTray: true, onboarded: !flags.onboarding, displayName: '', uiScale: 100 },
   storage: { defaultMode: 'fast', exclude: [], cleanup: { largeFileMin: 1 << 30, largeFileAgeDays: 180, installerAgeDays: 30 }, showHidden: true, sizeMetric: 'size', explorerView: query.get('view') === 'grid' ? 'grid' : query.get('view') === 'sunburst' ? 'sunburst' : query.get('view') === 'list' ? 'list' : query.get('view') === 'treemap' ? 'treemap' : 'split', gridSize: 'md', gridPreviews: true, lowSpaceAlert: true, lowSpacePercent: 10 },
-  notes: { claudeFolder: 'C:\\Users\\Alex\\Documents\\Claude Ideas', sidecarJson: false, autoExportIdeas: false, indexFile: true },
+  notes: { claudeFolder: 'C:\\Users\\Player\\Documents\\Claude Ideas', sidecarJson: false, autoExportIdeas: false, indexFile: true },
   vault: { autoLockMinutes: 5, clipboardClearSeconds: 20, lockOnSessionLock: true, allowPhone: false, helloEnabled: false, browserAutofill: false, browserOfferSave: true },
   remote: {
     enabled: false,
@@ -31,13 +31,13 @@ export const settings: Settings = {
     allowAppLaunch: true,
     allowNotes: true,
     incomingDir: null,
-    deviceName: 'ALEX-DESKTOP',
+    deviceName: 'GAMING-PC',
     allowClipboard: true,
     allowTasks: true,
     sendToMenu: true,
   },
   screenshots: { dir: null, format: 'png', hotkeyRegion: 'Alt+Shift+S', hotkeyFull: 'Alt+Shift+A', hotkeyWindow: 'Alt+Shift+W', copyToClipboard: true },
-  screen: { preset: 'balanced', maxFps: 60, scrcpyPath: null, sunshinePath: null, airplay: { name: 'ALEX-DESKTOP (OmniHub)', quality: '1080p', fps: 60, audio: true, requirePin: true, lowLatency: true, fullscreen: false }, airplayKeepOnTop: false, airplayPip: false, airplayAutoStart: false, uxplayPath: null },
+  screen: { preset: 'balanced', maxFps: 60, scrcpyPath: null, sunshinePath: null, airplay: { name: 'GAMING-PC (OmniHub)', quality: '1080p', fps: 60, audio: true, requirePin: true, lowLatency: true, fullscreen: false }, airplayKeepOnTop: false, airplayPip: false, airplayAutoStart: false, uxplayPath: null },
   apps: { favorites: ['spotify-music', 'visual-studio-code'] },
   media: { allowPhone: true, lyricsOnline: true, eqEnabled: false, bassDb: 0, trebleDb: 0 },
 };
@@ -105,17 +105,17 @@ export function audit(actor: string, action: string, detail: string, ok = true):
 // ---------- app info & stats ----------
 
 export const appInfo: AppInfoDetails = {
-  version: '0.1.0',
+  version: '0.2.0',
   elevated: false,
   platform: 'windows',
-  hostname: 'ALEX-DESKTOP',
+  hostname: 'GAMING-PC',
   dpapi: true,
-  dataDir: 'C:\\Users\\Alex\\AppData\\Roaming\\OmniHub',
-  configDir: 'C:\\Users\\Alex\\AppData\\Roaming\\OmniHub',
-  cacheDir: 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\cache',
-  screenshotDir: 'C:\\Users\\Alex\\Pictures\\OmniHub',
-  incomingDir: 'C:\\Users\\Alex\\Downloads\\OmniHub',
-  userName: 'Alex',
+  dataDir: 'C:\\Users\\Player\\AppData\\Roaming\\OmniHub',
+  configDir: 'C:\\Users\\Player\\AppData\\Roaming\\OmniHub',
+  cacheDir: 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\cache',
+  screenshotDir: 'C:\\Users\\Player\\Pictures\\OmniHub',
+  incomingDir: 'C:\\Users\\Player\\Downloads\\OmniHub',
+  userName: '',
 };
 
 const bootedAt = NOW - Math.round(DAY * 2.2);
@@ -129,15 +129,15 @@ export function systemStats(): SystemStats {
 
 export function pickFolder(title: string | null): string | null {
   const t = (title ?? '').toLowerCase();
-  if (t.includes('claude')) return 'C:\\Users\\Alex\\Documents\\Claude Ideas';
-  if (t.includes('incoming') || t.includes('phone')) return 'C:\\Users\\Alex\\Downloads\\From phone';
-  if (t.includes('screenshot')) return 'C:\\Users\\Alex\\Pictures\\Screenshots';
+  if (t.includes('claude')) return 'C:\\Users\\Player\\Documents\\Claude Ideas';
+  if (t.includes('incoming') || t.includes('phone')) return 'C:\\Users\\Player\\Downloads\\From phone';
+  if (t.includes('screenshot')) return 'C:\\Users\\Player\\Pictures\\Screenshots';
   if (t.includes('browse') || t.includes('root')) return 'D:\\Media';
-  return 'C:\\Users\\Alex\\Documents';
+  return 'C:\\Users\\Player\\Documents';
 }
 
 export function pickFiles(): string[] {
-  return ['C:\\Users\\Alex\\Videos\\Edits\\Phoenix Trailer\\Phoenix Trailer v3 final.mp4', 'C:\\Users\\Alex\\Documents\\Work\\Roadmap 2026-10.pdf'];
+  return ['C:\\Users\\Player\\Videos\\Edits\\Phoenix Trailer\\Phoenix Trailer v3 final.mp4', 'C:\\Users\\Player\\Documents\\Work\\Roadmap 2026-10.pdf'];
 }
 
 // ---------- processes ----------
@@ -234,15 +234,15 @@ export function endProcess(name: string): number {
 // ---------- startup apps ----------
 
 const startupItems: StartupItem[] = [
-  { name: 'Discord', command: '"C:\\Users\\Alex\\AppData\\Local\\Discord\\Update.exe" --processStart Discord.exe', location: 'runUser', enabled: true },
-  { name: 'Spotify', command: '"C:\\Users\\Alex\\AppData\\Roaming\\Spotify\\Spotify.exe" --autostart --minimized', location: 'runUser', enabled: true },
+  { name: 'Discord', command: '"C:\\Users\\Player\\AppData\\Local\\Discord\\Update.exe" --processStart Discord.exe', location: 'runUser', enabled: true },
+  { name: 'Spotify', command: '"C:\\Users\\Player\\AppData\\Roaming\\Spotify\\Spotify.exe" --autostart --minimized', location: 'runUser', enabled: true },
   { name: 'Steam', command: '"C:\\Program Files (x86)\\Steam\\steam.exe" -silent', location: 'runUser', enabled: false },
   { name: 'OneDrive', command: '"C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe" /background', location: 'runUser', enabled: true },
   { name: 'SecurityHealth', command: '%windir%\\system32\\SecurityHealthSystray.exe', location: 'runMachine', enabled: true },
   { name: 'RtkAudUService', command: '"C:\\Windows\\System32\\DriverStore\\FileRepository\\realtekservice.inf_amd64\\RtkAudUService64.exe" -background', location: 'runMachine', enabled: true },
   { name: 'Logitech Download Assistant', command: 'C:\\Windows\\system32\\rundll32.exe C:\\Windows\\System32\\LogiLDA.dll,LogiFetch', location: 'runMachine32', enabled: false },
-  { name: 'OmniHub.lnk', command: 'C:\\Users\\Alex\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OmniHub.lnk', location: 'folderUser', enabled: true },
-  { name: 'Send to OneNote.lnk', command: 'C:\\Users\\Alex\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Send to OneNote.lnk', location: 'folderUser', enabled: false },
+  { name: 'OmniHub.lnk', command: 'C:\\Users\\Player\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\OmniHub.lnk', location: 'folderUser', enabled: true },
+  { name: 'Send to OneNote.lnk', command: 'C:\\Users\\Player\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Send to OneNote.lnk', location: 'folderUser', enabled: false },
 ].map((i) => {
   const loc = i.location as StartupLocation;
   const machine = loc !== 'runUser' && loc !== 'folderUser';

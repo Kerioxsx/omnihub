@@ -9,7 +9,7 @@ pub mod power;
 pub mod procs;
 pub mod shell;
 
-/// The signed-in user's first name for greetings ("Alex" from "Alex Morgan"),
+/// The signed-in user's first name for greetings ("Sam" from "Sam Rivera"),
 /// falling back to the account name.
 pub fn user_display_name() -> String {
     #[cfg(windows)]

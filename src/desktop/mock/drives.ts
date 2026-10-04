@@ -21,7 +21,7 @@ class Builder {
     return Math.floor(NOW - days * DAY - this.r.range(0, 6 * 3600));
   }
 
-  /** Create (or reuse) nested folders, e.g. mk(root, 'Users\\Alex\\AppData'). */
+  /** Create (or reuse) nested folders, e.g. mk(root, 'Users\\Player\\AppData'). */
   mk(parent: number, rel: string, flags = 0, age: Age = [20, 400]): number {
     let cur = parent;
     for (const name of rel.split('\\').filter(Boolean)) {
@@ -311,23 +311,23 @@ function buildC(): FakeTree {
   b.spread(b.mk(wold, 'Windows\\System32'), 300, 6.2 * GB, dll(), [120, 900]);
   b.spread(b.mk(wold, 'Windows\\WinSxS'), 200, 7.6 * GB, dll(['dll', 'manifest']), [120, 900]);
   b.spread(b.mk(wold, 'Program Files'), 160, 4.1 * GB, dll(), [120, 900]);
-  b.spread(b.mk(wold, 'Users\\Alex\\AppData'), 140, 2.4 * GB, dll(['dat', 'db', 'log', 'tmp']), [120, 900]);
+  b.spread(b.mk(wold, 'Users\\Player\\AppData'), 140, 2.4 * GB, dll(['dat', 'db', 'log', 'tmp']), [120, 900]);
 
   // Users
   const users = b.mk(root, 'Users', 0, [0, 30]);
   b.spread(b.mk(users, 'Default', FLAG_HIDDEN), 40, 12 * MB, (i) => (i === 0 ? 'NTUSER.DAT' : `ntuser_${i}.ini`), [300, 600], 1, FLAG_HIDDEN);
   b.spread(b.mk(users, 'Public\\Desktop'), 6, 20 * KB, fromList(['Steam', 'Discord', 'OBS Studio', 'Blender 4.2', 'Battle.net', 'VLC media player'], ['lnk']), [10, 300]);
-  const alex = b.mk(users, 'Alex', 0, [0, 5]);
-  b.file(alex, 'NTUSER.DAT', 18 * MB, 0, HS);
-  b.file(alex, 'ntuser.dat.LOG1', 2.1 * MB, 0, HS);
-  b.spread(b.mk(alex, '.cargo\\registry\\cache\\index.crates.io-6f17d22bba15001f'), 340, 1.6 * GB, (i, rr) => `${rr.pick(['tokio', 'serde', 'windows', 'rustls', 'axum', 'hyper', 'regex', 'rayon', 'image', 'tauri', 'wry', 'syn', 'quote', 'clap', 'anyhow'])}-${rr.int(0, 2)}.${rr.int(0, 40)}.${i}.crate`, [5, 200]);
-  b.spread(b.mk(alex, '.gradle\\caches\\modules-2\\files-2.1'), 160, 2.2 * GB, (i, rr) => `${rr.pick(['kotlin-stdlib', 'okhttp', 'androidx.core', 'gson', 'guava', 'compose-ui'])}-${rr.int(1, 9)}.${i}.jar`, [60, 400]);
-  b.folders(b.mk(alex, '.vscode\\extensions'), ['rust-lang.rust-analyzer-0.3.2129-win32-x64', 'ms-python.python-2024.14.1', 'esbenp.prettier-vscode-11.0.0', 'dbaeumer.vscode-eslint-3.0.10', 'tauri-apps.tauri-vscode-0.2.9', 'bradlc.vscode-tailwindcss-0.12.11', 'github.copilot-1.234.0', 'ms-vscode.cpptools-1.21.6-win32-x64', 'anthropic.claude-code-2.0.12'], [6, 18], 1.1 * GB, (i, rr) => `${rr.pick(['extension', 'server', 'main', 'bundle', 'worker'])}${i}.${rr.pick(['js', 'json', 'exe', 'wasm', 'node'])}`, [5, 40]);
-  b.spread(b.mk(alex, '.ollama\\models\\blobs'), 5, 17.2 * GB, (_, rr) => `sha256-${rr.hex(64)}`, [20, 90], 0.9);
+  const home = b.mk(users, 'Player', 0, [0, 5]);
+  b.file(home, 'NTUSER.DAT', 18 * MB, 0, HS);
+  b.file(home, 'ntuser.dat.LOG1', 2.1 * MB, 0, HS);
+  b.spread(b.mk(home, '.cargo\\registry\\cache\\index.crates.io-6f17d22bba15001f'), 340, 1.6 * GB, (i, rr) => `${rr.pick(['tokio', 'serde', 'windows', 'rustls', 'axum', 'hyper', 'regex', 'rayon', 'image', 'tauri', 'wry', 'syn', 'quote', 'clap', 'anyhow'])}-${rr.int(0, 2)}.${rr.int(0, 40)}.${i}.crate`, [5, 200]);
+  b.spread(b.mk(home, '.gradle\\caches\\modules-2\\files-2.1'), 160, 2.2 * GB, (i, rr) => `${rr.pick(['kotlin-stdlib', 'okhttp', 'androidx.core', 'gson', 'guava', 'compose-ui'])}-${rr.int(1, 9)}.${i}.jar`, [60, 400]);
+  b.folders(b.mk(home, '.vscode\\extensions'), ['rust-lang.rust-analyzer-0.3.2129-win32-x64', 'ms-python.python-2024.14.1', 'esbenp.prettier-vscode-11.0.0', 'dbaeumer.vscode-eslint-3.0.10', 'tauri-apps.tauri-vscode-0.2.9', 'bradlc.vscode-tailwindcss-0.12.11', 'github.copilot-1.234.0', 'ms-vscode.cpptools-1.21.6-win32-x64', 'anthropic.claude-code-2.0.12'], [6, 18], 1.1 * GB, (i, rr) => `${rr.pick(['extension', 'server', 'main', 'bundle', 'worker'])}${i}.${rr.pick(['js', 'json', 'exe', 'wasm', 'node'])}`, [5, 40]);
+  b.spread(b.mk(home, '.ollama\\models\\blobs'), 5, 17.2 * GB, (_, rr) => `sha256-${rr.hex(64)}`, [20, 90], 0.9);
 
   // AppData
-  const local = b.mk(alex, 'AppData\\Local', 0, [0, 2]);
-  t.node(b.mk(alex, 'AppData')).flags = FLAG_HIDDEN;
+  const local = b.mk(home, 'AppData\\Local', 0, [0, 2]);
+  t.node(b.mk(home, 'AppData')).flags = FLAG_HIDDEN;
   const temp = b.mk(local, 'Temp', 0, [0, 1]);
   b.spread(temp, 380, 4.4 * GB, (i, rr) => `${rr.pick(['tmp', '~DF', 'chrome_', 'msedge_', 'Discord_', 'vs_setup_', 'nsis', 'wct', 'pip-', 'rust_'])}${rr.hex(6).toUpperCase()}${i}.${rr.pick(['tmp', 'tmp', 'log', 'etl', 'cab', 'msi', 'zip', 'dmp', 'json'])}`, [0, 140]);
   b.folders(temp, Array.from({ length: 10 }, () => GUID(r)), [3, 20], 1.1 * GB, (i, rr) => `${rr.pick(['setup', 'payload', 'cab', 'data'])}${i}.${rr.pick(['cab', 'msi', 'exe', 'dat'])}`, [2, 60]);
@@ -378,7 +378,7 @@ function buildC(): FakeTree {
   b.spread(b.mk(local, 'JetBrains\\Toolbox\\cache'), 120, 820 * MB, hexName(24, 'cache'), [5, 90]);
   b.spread(b.mk(local, 'EpicGamesLauncher\\Saved\\webcache_4430'), 200, 410 * MB, (i) => `f_${(0x400 + i).toString(16).padStart(6, '0')}`, [0, 60]);
   b.spread(b.mk(local, 'Unity\\cache\\packages'), 90, 1.2 * GB, (i, rr) => `com.unity.${rr.pick(['render-pipelines', 'textmeshpro', 'inputsystem', 'cinemachine'])}-${i}.tgz`, [30, 300]);
-  const roaming = b.mk(alex, 'AppData\\Roaming', 0, [0, 2]);
+  const roaming = b.mk(home, 'AppData\\Roaming', 0, [0, 2]);
   b.spread(b.mk(roaming, 'Code\\User\\workspaceStorage'), 220, 520 * MB, (_, rr) => `${rr.hex(32)}_state.vscdb`, [0, 120]);
   b.spread(b.mk(roaming, 'Code\\Cache\\Cache_Data'), 240, 230 * MB, (i) => `f_${(0x300 + i).toString(16).padStart(6, '0')}`, [0, 30]);
   b.spread(b.mk(roaming, 'Code\\CachedData'), 60, 400 * MB, hexName(40, 'code'), [0, 60]);
@@ -388,14 +388,14 @@ function buildC(): FakeTree {
   b.spread(b.mk(roaming, 'obs-studio\\logs'), 50, 12 * MB, (i) => `2026-09-${String((i % 28) + 1).padStart(2, '0')} 2${i % 4}-1${i % 6}-0${i % 9}.txt`, [0, 60]);
   b.spread(b.mk(roaming, 'Microsoft\\Windows\\Recent'), 220, 300 * KB, (i, rr) => `${rr.pick(['report', 'IMG', 'notes', 'budget', 'trailer', 'design', 'invoice'])}_${i}.lnk`, [0, 120]);
   b.spread(b.mk(roaming, 'Adobe\\Common\\Media Cache Files'), 180, 2.4 * GB, (i) => `trailer_v${i}.cfa`, [5, 120], 1.3);
-  b.spread(b.mk(alex, 'AppData\\LocalLow\\Unity'), 30, 200 * MB, (i) => `Player_${i}.log`, [5, 200]);
+  b.spread(b.mk(home, 'AppData\\LocalLow\\Unity'), 30, 200 * MB, (i) => `Player_${i}.log`, [5, 200]);
 
   // Desktop
-  const desktop = b.mk(alex, 'Desktop', 0, [0, 3]);
+  const desktop = b.mk(home, 'Desktop', 0, [0, 3]);
   [['Steam.lnk', 2 * KB, 200], ['Discord.lnk', 2 * KB, 180], ['todo.txt', 3 * KB, 1], ['Screenshot 2026-09-12 203311.png', 3.4 * MB, 21], ['budget-2026.xlsx', 88 * KB, 5], ['Project Phoenix.pptx', 24 * MB, 9], ['ubuntu-24.04.1-desktop-amd64.iso', 5.8 * GB, 214], ['render_final_v3.mp4', 1.1 * GB, 33]].forEach(([n, s, a]) => b.file(desktop, String(n), Number(s), Number(a)));
 
   // Documents
-  const docs = b.mk(alex, 'Documents', 0, [0, 3]);
+  const docs = b.mk(home, 'Documents', 0, [0, 3]);
   const claude = b.mk(docs, 'Claude Ideas', 0, [0, 1]);
   [['INDEX.md', 3 * KB, 0], ['2026-09-21-storage-treemap-zoom.md', 4 * KB, 12], ['2026-09-28-phone-companion-onboarding.md', 6 * KB, 5], ['2026-09-29-vault-passkeys-plan.md', 5 * KB, 4], ['REPLY-storage-treemap-zoom.md', 9 * KB, 11], ['claude-notes.md', 2 * KB, 2]].forEach(([n, s, a]) => b.file(claude, String(n), Number(s), Number(a)));
   const omni = b.mk(docs, 'Projects\\omnihub', 0, [0, 1]);
@@ -407,7 +407,7 @@ function buildC(): FakeTree {
   const site = b.mk(docs, 'Projects\\portfolio-site', 0, [10, 60]);
   nodeModules(b, site, 50, 260 * MB);
   b.spread(b.mk(site, '.next\\cache'), 160, 410 * MB, hexName(20, 'pack'), [10, 60]);
-  b.spread(b.mk(docs, "My Games\\Baldur's Gate 3\\PlayerProfiles\\Public\\Savegames\\Story"), 48, 1.1 * GB, (i) => `Alex-${1000 + i}__QuickSave_${i}.lsv`, [0, 60], 0.3);
+  b.spread(b.mk(docs, "My Games\\Baldur's Gate 3\\PlayerProfiles\\Public\\Savegames\\Story"), 48, 1.1 * GB, (i) => `Save-${1000 + i}__QuickSave_${i}.lsv`, [0, 60], 0.3);
   b.spread(b.mk(docs, 'My Games\\Cyberpunk 2077'), 30, 260 * MB, (i) => `ManualSave-${i}.dat`, [20, 200], 0.3);
   b.spread(b.mk(docs, 'Work'), 180, 1.4 * GB, (i, rr) => `${rr.pick(['Q3 Review', 'Roadmap', 'Invoice', 'Contract', 'Meeting notes', 'Budget', 'Design spec', 'Pitch deck', 'Onboarding'])} ${2024 + (i % 3)}-${String((i % 12) + 1).padStart(2, '0')}.${rr.pick(['docx', 'xlsx', 'pptx', 'pdf', 'pdf'])}`, [3, 700]);
   b.spread(b.mk(docs, 'Taxes'), 30, 120 * MB, (i) => `${2019 + (i % 7)} ${['W-2', '1099', 'Return', 'Receipts', 'Deductions'][i % 5]}.pdf`, [100, 2000], 0.6);
@@ -416,7 +416,7 @@ function buildC(): FakeTree {
   b.spread(b.mk(docs, 'Visual Studio 2022\\Projects\\HelloWin32'), 20, 40 * MB, (i, rr) => `${rr.pick(['main', 'resource', 'HelloWin32', 'stdafx'])}${i}.${rr.pick(['cpp', 'h', 'vcxproj', 'pdb', 'obj'])}`, [300, 500]);
 
   // Downloads
-  const dl = b.mk(alex, 'Downloads', 0, [0, 1]);
+  const dl = b.mk(home, 'Downloads', 0, [0, 1]);
   const big: [string, number, number][] = [
     ['Win11_24H2_English_x64.iso', 5.84 * GB, 160],
     ['ubuntu-24.04-desktop-amd64.iso', 5.7 * GB, 240],
@@ -454,10 +454,10 @@ function buildC(): FakeTree {
   b.copy(dlIds.get('DaVinci_Resolve_19.0_Windows.zip')!, backups, 'DaVinci_Resolve_19.0_Windows.zip', 90);
 
   // Music
-  music(b, b.mk(alex, 'Music', 0, [30, 300]), 20, 'flac');
+  music(b, b.mk(home, 'Music', 0, [30, 300]), 20, 'flac');
 
   // Pictures
-  const pics = b.mk(alex, 'Pictures', 0, [0, 2]);
+  const pics = b.mk(home, 'Pictures', 0, [0, 2]);
   const roll = b.mk(pics, 'Camera Roll', 0, [0, 30]);
   b.spread(b.mk(roll, '2024'), 520, 2.6 * GB, PHOTO(2024), [280, 640], 0.5);
   b.spread(b.mk(roll, '2025'), 640, 3.3 * GB, PHOTO(2025), [30, 280], 0.5);
@@ -475,7 +475,7 @@ function buildC(): FakeTree {
   t.node(roll26).children.slice(0, 26).forEach((id) => b.copy(id, imports, undefined, 22));
 
   // Videos
-  const vids = b.mk(alex, 'Videos', 0, [0, 3]);
+  const vids = b.mk(home, 'Videos', 0, [0, 3]);
   b.spread(b.mk(vids, 'OBS'), 24, 156 * GB, (i) => `2026-0${(i % 9) + 1}-${String((i % 27) + 1).padStart(2, '0')} 2${i % 3}-${String(i * 7 % 60).padStart(2, '0')}-${String(i * 11 % 60).padStart(2, '0')}.mkv`, [0, 270], 0.6);
   b.spread(b.mk(vids, 'OBS\\Replays'), 40, 22 * GB, (i) => `Replay ${2026}-09-${String((i % 28) + 1).padStart(2, '0')} 21-${String(i % 60).padStart(2, '0')}-12.mp4`, [0, 40], 0.5);
   b.spread(b.mk(vids, 'Captures'), 60, 38 * GB, (i, rr) => `${rr.pick(['Cyberpunk 2077', "Baldur's Gate 3", 'ELDEN RING', 'Counter-Strike 2', 'Hades II'])} ${2026}-0${(i % 9) + 1}-${String((i % 28) + 1).padStart(2, '0')} ${String(100000 + i * 911).slice(-6)}.mp4`, [0, 270], 0.9);
@@ -483,7 +483,7 @@ function buildC(): FakeTree {
   b.copy(dlIds.get('IMG_4471.MOV')!, vids, 'IMG_4471.MOV', 17);
 
   // source\repos
-  const repos = b.mk(alex, 'source\\repos', 0, [0, 30]);
+  const repos = b.mk(home, 'source\\repos', 0, [0, 30]);
   for (const name of ['dotfiles', 'game-jam-2026', 'rust-raytracer', 'discord-bot', 'home-assistant-config', 'ml-experiments']) {
     const repo = b.mk(repos, name, 0, [0, 120]);
     b.spread(b.mk(repo, '.git\\objects\\pack'), r.int(2, 6), r.range(20, 900) * MB, (_, rr) => `pack-${rr.hex(40)}.${rr.pick(['pack', 'idx', 'rev'])}`, [0, 120], 1.2);
@@ -493,7 +493,7 @@ function buildC(): FakeTree {
   }
 
   // OneDrive (cloud placeholders — size but nothing on disk)
-  const od = b.mk(alex, 'OneDrive', 0, [0, 10]);
+  const od = b.mk(home, 'OneDrive', 0, [0, 10]);
   b.spread(b.mk(od, 'Documents'), 90, 3.4 * GB, (i, rr) => `${rr.pick(['Thesis', 'Notes', 'Plan', 'Recipe', 'Statement'])} ${i}.${rr.pick(['docx', 'pdf', 'xlsx'])}`, [10, 900], 1.2, FLAG_CLOUD);
   b.spread(b.mk(od, 'Pictures'), 120, 2.2 * GB, PHOTO(2023), [500, 900], 0.5, FLAG_CLOUD);
 
@@ -612,10 +612,10 @@ export function volumeFor(root: string): VolumeInfo | null {
 
 /** Environment tokens used by the cleanup rules. */
 export const TOKENS: Record<string, string> = {
-  TEMP: 'C:\\Users\\Alex\\AppData\\Local\\Temp',
-  LOCALAPPDATA: 'C:\\Users\\Alex\\AppData\\Local',
-  APPDATA: 'C:\\Users\\Alex\\AppData\\Roaming',
-  USERPROFILE: 'C:\\Users\\Alex',
+  TEMP: 'C:\\Users\\Player\\AppData\\Local\\Temp',
+  LOCALAPPDATA: 'C:\\Users\\Player\\AppData\\Local',
+  APPDATA: 'C:\\Users\\Player\\AppData\\Roaming',
+  USERPROFILE: 'C:\\Users\\Player',
   WINDIR: 'C:\\Windows',
   PROGRAMDATA: 'C:\\ProgramData',
   SYSTEMDRIVE: 'C:',

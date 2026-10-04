@@ -7,7 +7,7 @@ import { DAY, NOW } from './rng';
 
 let seq = 0;
 const nid = () => `note-${(++seq).toString(36)}-${Date.now().toString(36).slice(-4)}`;
-const FOLDER = 'C:\\Users\\Alex\\Documents\\Claude Ideas';
+const FOLDER = 'C:\\Users\\Player\\Documents\\Claude Ideas';
 
 type Seed = [kind: Note['kind'], title: string, body: string, tags: string[], pinned: boolean, color: string | null, createdAgo: number, updatedAgo: number, exported: string | null, exportedAgo: number | null];
 
@@ -166,7 +166,7 @@ Let the user accept suggestions with one click.`,
 - Mobile companion goes to beta with **HTTPS on by default**
 
 ### Action items
-- [ ] Alex: write the cleanup risk copy
+- [ ] Me: write the cleanup risk copy
 - [ ] Priya: threat model for remote control
 - [ ] Jordan: perf budget for the treemap (60 fps at 1500 tiles)`,
     ['work', 'meetings'],

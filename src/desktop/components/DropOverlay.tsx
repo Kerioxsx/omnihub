@@ -53,7 +53,7 @@ export function DropOverlay() {
       e.preventDefault();
       depth = 0;
       setOver(false);
-      const names = [...(e.dataTransfer?.files ?? [])].map((f) => `C:\\Users\\Alex\\Desktop\\${f.name}`);
+      const names = [...(e.dataTransfer?.files ?? [])].map((f) => `C:\\Users\\Player\\Desktop\\${f.name}`);
       if (names.length) useSend.getState().openFiles(names);
     };
     window.addEventListener('dragenter', enter);

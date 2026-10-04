@@ -1,8 +1,10 @@
 # OmniHub
 
 A Windows companion for your PC: see what fills your drives in seconds, keep
-notes and ideas for Claude, store passwords in a local encrypted vault, and
-use your phone to move files, shut the PC down or watch its screen.
+notes and ideas for Claude, store passwords in a local encrypted vault (with
+autofill in Brave, Chrome and Edge), boost the PC for games, see what every
+program uses, and use your phone to move files, control the music with
+synced lyrics, start a game or watch the PC's screen.
 
 **[Download the latest release](https://github.com/Kerioxsx/omnihub/releases/latest)**
 (Windows 10/11, 64-bit)
@@ -17,9 +19,21 @@ store, no cloud.
 | **Apps** | Desktop programs, Store apps and Start menu entries with icons, size (from the latest scan), launch, uninstall, and the screenshots you took in each. |
 | **Screenshots** | Region (frozen-screen overlay), screen, window, all screens; global hotkeys; a searchable library with tags, notes and favourites. Files stay normal PNG/JPEG files in *Pictures\OmniHub Screenshots*. |
 | **Notes & ideas** | Markdown notes. "Ideas for Claude" are written as `.md` files (YAML front matter, optional JSON sidecar, an `INDEX.md`) into a folder you choose; the folder is watched so replies Claude writes there show up. |
-| **Vault** | Passwords, logins, Wi-Fi keys and secure notes, encrypted with Argon2id + AES-256-GCM and bound to your Windows account with DPAPI. Auto-lock, lock with Windows, Windows Hello unlock, clipboard that clears itself and stays out of clipboard history. |
-| **Phone** | Pair by QR code or PIN. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, launch apps, jot ideas, read the vault (opt-in, HTTPS only). |
-| **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, which OmniHub finds, configures and launches. |
+| **Vault** | Passwords, logins, Wi-Fi keys and secure notes, encrypted with Argon2id + AES-256-GCM and bound to your Windows account with DPAPI. Auto-lock, lock with Windows, Windows Hello unlock, clipboard that clears itself and stays out of clipboard history. Two-factor codes (TOTP), a password health report with an optional breach check, and **autofill in Brave, Chrome and Edge** through a small extension that talks only to the app on your PC. |
+| **Tasks** | CPU, memory, **GPU**, video memory and disk use of every program, live, like Task Manager — with End task, priority and file location. Also on the phone. |
+| **Games** | A boost profile per game (Fortnite, Roblox, VALORANT, CS2, Apex, Rocket League, League, GTA V, Call of Duty or any program): power plan, background apps, notifications, GPU choice, game priority, Wi-Fi low-latency mode and network priority — applied when you press Play and put back when the game closes. A ping helper (latency, jitter, loss per region) and Roblox Fast Flag presets. |
+| **Music** | What the PC plays (Spotify, Apple Music, browsers…) on your phone: cover, play/pause/skip/seek, volume, bass and treble (with Equalizer APO), and time-synced lyrics in an Apple Music–style view. |
+| **Phone** | Pair by QR code or PIN. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only). |
+| **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
+
+## New in 0.2.0
+
+- **Games** page: boost profiles, Play/Boost from the PC or the phone, ping helper, Roblox Fast Flags.
+- **Tasks** page: per-program CPU, memory, GPU, video memory and disk; priority and End task; on the phone too.
+- **Music** on the phone: synced lyrics, cover art, controls, volume, bass/treble.
+- **Browser autofill** for the vault (Brave, Chrome, Edge), TOTP codes, password health.
+- **iPhone mirroring** to the PC over AirPlay; screen-share privacy (pause, one window).
+- PC → phone sending, storage view modes, storage growth report, startup apps, screenshot markup and text recognition, note reminders and templates, settings backup — and the greeting uses *your* name (from Windows, or Settings → General → Your name).
 
 ## Screenshots
 
@@ -30,12 +44,18 @@ The desktop app (shown with its built-in demo data) and the phone app (talking t
 | ![Storage: treemap and folder list](docs/screenshots/desktop-storage-explorer.jpg) | ![Home](docs/screenshots/desktop-home.jpg) |
 | ![Notes and the Claude folder](docs/screenshots/desktop-notes-sent-reply.jpg) | ![Vault with a primary-account warning](docs/screenshots/desktop-vault-unlocked.jpg) |
 | ![Pairing a phone](docs/screenshots/desktop-phone-pair.jpg) | ![Screen sharing options](docs/screenshots/desktop-screen-share.jpg) |
+| ![Tasks: CPU, memory, GPU and disk per program](docs/screenshots/desktop-tasks.jpg) | ![Games: a boost running for Fortnite](docs/screenshots/desktop-games.jpg) |
 
 <p>
 <img src="docs/screenshots/phone-home.png" width="195" alt="Phone: home">
 <img src="docs/screenshots/phone-files-grid.png" width="195" alt="Phone: photo folder">
 <img src="docs/screenshots/phone-screen-viewer.png" width="195" alt="Phone: screen viewer with live stats">
 <img src="docs/screenshots/phone-power-countdown.png" width="195" alt="Phone: shutdown countdown">
+</p>
+<p>
+<img src="docs/screenshots/phone-music.png" width="195" alt="Phone: music from the PC">
+<img src="docs/screenshots/phone-lyrics.png" width="195" alt="Phone: time-synced lyrics">
+<img src="docs/screenshots/phone-games.png" width="195" alt="Phone: start a game with its boost">
 </p>
 
 ## How fast is the storage scan?
@@ -55,7 +75,7 @@ system drive. See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
 3. **Screen sharing** — both: a built-in stream that needs nothing installed, plus bridges to Sunshine/Moonlight (PC → phone, 4K60, hardware encode) and scrcpy (Android → PC). See [`docs/SCREEN_SHARE.md`](docs/SCREEN_SHARE.md).
 4. **Claude ideas folder** — Markdown with YAML front matter by default; JSON sidecars and `INDEX.md` are options.
 5. **Name** — OmniHub (working title kept).
-6. **Network** — LAN only in v1 (private addresses; Tailscale's range can be allowed in settings). No cloud relay.
+6. **Network** — LAN only (private addresses; Tailscale's range can be allowed in settings). No cloud relay. The few internet requests are listed in [`docs/SECURITY.md`](docs/SECURITY.md#internet).
 
 ## Security in one paragraph
 
@@ -115,7 +135,8 @@ More in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md); the code layout is in
 
 ```
 omnihub/
-├── crates/omnihub-core/   Rust: storage engine, vault, notes, apps, capture, phone server
+├── crates/omnihub-core/   Rust: storage, vault, notes, apps, capture, music, tasks, games, phone server
+├── browser-extension/     Brave/Chrome/Edge autofill extension (talks to the app over native messaging)
 ├── src-tauri/             Tauri shell: window, tray, hotkeys, region overlay, commands
 ├── src/desktop/           Desktop UI (React)
 ├── src/mobile/            Phone web app (React)

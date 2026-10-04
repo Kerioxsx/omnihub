@@ -31,7 +31,32 @@ npm run dev:mobile                  # http://<your-ip>:1421, proxies /api to por
 Debug builds read the embedded phone app from `dist-mobile/` at runtime, so
 `npm run build:mobile` is enough after UI changes. `--dry-run-power` logs
 power actions instead of performing them. On Linux the screen stream is an
-animated test pattern (`OMNIHUB_FAKE_SCREEN=1` forces it on Windows).
+animated test pattern (`OMNIHUB_FAKE_SCREEN=1` forces it on Windows), and
+`OMNIHUB_FAKE_MEDIA=1` plays two pretend songs with timed lyrics so the
+Music tab works without Windows' media sessions.
+
+`--home DIR` keeps all data in one folder (seed `DIR/data/games.json` to try
+the phone's Games screen). The headless server reads commands on stdin:
+`send <path>` / `text <words>` (offer to phones), `pair`, `vault-create|
+unlock|lock|list <…>`, `vault-add <entry JSON>`, `browser on|off`,
+`browser-allow|browser-deny` (answer an extension's pairing request) and
+`screen-pause`.
+
+### Browser extension
+
+Load `browser-extension/` unpacked (`brave://extensions` → Developer mode →
+Load unpacked); its key in `manifest.json` pins the extension ID the native
+host allows. With the app (or the headless server with `browser on`)
+running, the extension pairs and fills. The app's executable doubles as the
+native-messaging host (`browser_host` is a thin standalone build of it).
+
+### Games
+
+`cargo test -p omnihub-core --test games` runs a whole boost with stand-in
+programs (close an app, launch, follow, restore, reopen). The Windows-only
+tweaks report "Windows only" elsewhere; on Windows the tests leave the power
+plan and other system settings alone. Roblox detection and flag writing are
+tested against a temporary folder (`GameHub::set_roblox_roots`).
 
 ### Storage engine against NTFS images
 
@@ -83,10 +108,12 @@ rebuilds and replaces the files.
 
 Core services publish on an in-process bus (`events.rs`); the shell forwards
 every event to the windows, the phone server forwards `transfer:*`,
-`inbox:*`, `power:*`, `notes:*` and `screen:*` to paired phones. Topics:
+`inbox:*`, `power:*`, `notes:*`, `media:*` and `games:*` to paired phones.
+Topics:
 `storage:progress|done|failed|deleted|dupes-done`, `screenshots:new|deleted|synced`,
 `notes:changed|exported|folder-changed`, `vault:locked|unlocked`,
 `remote:status|paired|devices`, `transfer:started|progress|done|cancelled`,
 `inbox:new`, `power:pending|cancelled|executed`, `screen:viewers`,
-`audit:new`, `settings:changed`; the shell adds `app:navigate` (tray) and
+`audit:new`, `settings:changed`, `media:state|lyrics`, `games:session`,
+`browser:clients|pair-request|pair-done`, `notes:reminder`; the shell adds `app:navigate` (tray) and
 `region:pending` (overlay).

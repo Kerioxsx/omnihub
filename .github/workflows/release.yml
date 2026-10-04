@@ -3,7 +3,7 @@ name: Release
 # Publishes the Windows installers for the version in src-tauri/tauri.conf.json.
 # Either run this workflow from the Actions tab (it builds the chosen branch
 # and creates the tag v<version> on that commit), or push the tag yourself:
-#   git tag v0.1.0 && git push origin v0.1.0
+#   git tag v0.2.0 && git push origin v0.2.0
 # Running it again for a version that is already released rebuilds the same
 # commit and replaces the files; a new commit needs a new version.
 

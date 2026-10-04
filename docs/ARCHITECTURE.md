@@ -12,7 +12,10 @@
 │    notes     SQLite · Markdown export · Claude folder watcher                               │ │
 │    apps      registry · Get-StartApps · Appx · shell icons                                  │ │
 │    capture   screenshots library · DXGI/GDI capture · JPEG streamer · input · bridges       │ │
-│    system    elevation · power · clipboard · DPAPI · shell                                  │ │
+│    system    elevation · power · clipboard · DPAPI · shell · processes · GPU counters       │ │
+│    media     media sessions · lyrics (LRCLIB) · volume · Equalizer APO                      │ │
+│    games     profiles · boost/restore journal · Roblox flags · ping                         │ │
+│    browser   native-messaging host · pipe to the app · site matching · pairing              │ │
 │    remote    axum HTTPS/WS server for the phone ── serves dist-mobile (embedded)            │ │
 │    settings · db (SQLite) · audit · events (broadcast bus)                                  │ │
 │  └──────────────────────────────────────────────────────────────────────────────────────────┘ │
@@ -86,9 +89,26 @@ most two frames are in flight, so latency stays bounded on slow links (old
 frames are skipped, not queued). Quality and size adapt to the measured
 round trip.
 
+## Music, tasks and games
+
+`media/` polls Windows' media sessions (GSMTC) every 250 ms for the track,
+cover and position, and sends `media:state` with the PC's clock so the phone
+can line up time-synced lyrics (fetched from LRCLIB, cached per song) to
+within a frame. `system/procs.rs` groups processes by name; GPU figures come
+from the "GPU Engine" and "GPU Process Memory" performance counters (the
+busiest engine per program, like Task Manager) via `system/gpu.rs`.
+
+`games/` keeps profiles in `games.json`. Play runs a session on its own
+thread: each step (close apps, power plan, notifications, per-game registry
+settings, admin-only settings in one helper call, Wi-Fi low-latency handle,
+Roblox flags, launch) is recorded as it happens and in a journal on disk;
+the thread then follows the game's process and restores everything when it
+exits or on Stop. The ping helper uses `IcmpSendEcho` (no admin) and TCP
+connect timing for `host:port` targets.
+
 ## Desktop shell
 
-`src-tauri` registers about 100 commands (`commands.rs`) that call into `AppCore`,
+`src-tauri` registers about 160 commands (`commands.rs`) that call into `AppCore`,
 forwards every core event to the windows (and shows a notification for a
 few when the window is hidden), owns the tray menu and the global hotkeys,
 and manages the region-capture overlay window. Closing the window hides it

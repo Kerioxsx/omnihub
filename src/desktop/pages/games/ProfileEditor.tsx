@@ -132,10 +132,10 @@ export function ProfileEditor({ profile, busy, activeHere, onSaved, onDeleted, o
         <GameTile kind={draft.kind} size={56} />
         <div className="min-w-0 flex-1">
           <input value={draft.name} onChange={(e) => change({ ...draft, name: e.target.value })} className="w-full bg-transparent font-display text-[20px] font-semibold text-fg outline-none" aria-label="Profile name" />
-          <div className="flex items-center gap-2 text-[12.5px] text-faint">
-            {GAMES[draft.kind].label}
-            {draft.process && <span className="font-mono text-[11.5px]">· {draft.process}</span>}
-            <span className={cx('ml-1 transition-opacity', saved === 'idle' && 'opacity-0')}>{saved === 'saving' ? 'Saving…' : <span className="inline-flex items-center gap-1 text-good"><Check size={12} /> Saved</span>}</span>
+          <div className="flex min-w-0 items-center gap-2 text-[12.5px] text-faint">
+            <span className="shrink-0">{GAMES[draft.kind].label}</span>
+            {draft.process && <span className="min-w-0 truncate font-mono text-[11.5px]" title={draft.process}>· {draft.process}</span>}
+            <span className={cx('ml-1 shrink-0 whitespace-nowrap transition-opacity', saved === 'idle' && 'opacity-0')}>{saved === 'saving' ? 'Saving…' : <span className="inline-flex items-center gap-1 text-good"><Check size={12} /> Saved</span>}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">

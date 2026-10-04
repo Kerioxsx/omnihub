@@ -35,16 +35,16 @@ function seedEntries(): Entry[] {
     totp: id === 'v-gmail' || id === 'v-github' ? 'JBSWY3DPEHPK3PXP' : '',
   });
   return [
-    e('v-gmail', 'email', 'Gmail (personal)', 'alex.morgan', 'alex.morgan@gmail.com', 'Tr0ub4dor&3-sunrise', 'https://accounts.google.com', 'Recovery phone ends in 42. 2-Step Verification is on.', ['personal'], true, 40),
-    e('v-github', 'login', 'GitHub', 'alexm-dev', 'alex.morgan@gmail.com', 'vX7#qL2!pN9@wR4$zK', 'https://github.com/login', 'Recovery codes are in the safe.', ['dev'], true, 12),
-    e('v-steam', 'login', 'Steam', 'alexplays', 'alex.morgan@gmail.com', 'steamPass2021!', 'https://store.steampowered.com/login', 'Steam Guard on phone.', ['games'], false, 220),
-    e('v-discord', 'login', 'Discord', 'alex#0420', 'alex.morgan@gmail.com', 'q8Kc-2vRm-Lz7X-pT4w', 'https://discord.com/login', '', ['social'], false, 60),
-    e('v-netflix', 'login', 'Netflix', '', 'alex.morgan@gmail.com', 'netflix123', 'https://www.netflix.com/login', 'Shared with the family profile.', ['streaming'], false, 410),
-    e('v-msa', 'email', 'Microsoft account', '', 'alex.morgan@outlook.com', 'Blue-Kettle-Orbit-73', 'https://login.live.com', 'Used for Windows sign-in and Xbox.', ['personal'], false, 95),
-    e('v-wifi', 'wifi', 'Home Wi-Fi (Morgan-5G)', 'Morgan-5G', '', 'lantern-cobalt-meadow-91', '', 'WPA3-Personal. Guest network: Morgan-Guest / see below.', ['home'], false, 300),
-    e('v-visa', 'card', 'Visa ending 4242', 'ALEX MORGAN', '', '7391', '', 'Number: 4242 4242 4242 4242\nExpires: 09/29\nCVC: 314', ['finance'], false, 150),
+    e('v-gmail', 'email', 'Gmail (personal)', 'demo.user', 'demo.user@gmail.com', 'Tr0ub4dor&3-sunrise', 'https://accounts.google.com', 'Recovery phone ends in 42. 2-Step Verification is on.', ['personal'], true, 40),
+    e('v-github', 'login', 'GitHub', 'demo-dev', 'demo.user@gmail.com', 'vX7#qL2!pN9@wR4$zK', 'https://github.com/login', 'Recovery codes are in the safe.', ['dev'], true, 12),
+    e('v-steam', 'login', 'Steam', 'demoplays', 'demo.user@gmail.com', 'steamPass2021!', 'https://store.steampowered.com/login', 'Steam Guard on phone.', ['games'], false, 220),
+    e('v-discord', 'login', 'Discord', 'demo#0420', 'demo.user@gmail.com', 'q8Kc-2vRm-Lz7X-pT4w', 'https://discord.com/login', '', ['social'], false, 60),
+    e('v-netflix', 'login', 'Netflix', '', 'demo.user@gmail.com', 'netflix123', 'https://www.netflix.com/login', 'Shared with the family profile.', ['streaming'], false, 410),
+    e('v-msa', 'email', 'Microsoft account', '', 'demo.user@outlook.com', 'Blue-Kettle-Orbit-73', 'https://login.live.com', 'Used for Windows sign-in and Xbox.', ['personal'], false, 95),
+    e('v-wifi', 'wifi', 'Home Wi-Fi (Home-5G)', 'Home-5G', '', 'lantern-cobalt-meadow-91', '', 'WPA3-Personal. Guest network: Home-Guest / see below.', ['home'], false, 300),
+    e('v-visa', 'card', 'Visa ending 4242', 'DEMO USER', '', '7391', '', 'Number: 4242 4242 4242 4242\nExpires: 09/29\nCVC: 314', ['finance'], false, 150),
     e('v-router', 'other', 'Router admin', 'admin', '', 'R0uter!Adm1n#2024', 'http://192.168.1.1', 'ASUS RT-AX86U, firmware 3.0.0.6', ['home'], false, 400),
-    e('v-ssh', 'note', 'Homelab SSH', 'alex', '', '', '', 'Host nas.local\n  User alex\n  Port 2222\n  IdentityFile ~/.ssh/id_ed25519', ['homelab'], false, 25),
+    e('v-ssh', 'note', 'Homelab SSH', 'demo', '', '', '', 'Host nas.local\n  User demo\n  Port 2222\n  IdentityFile ~/.ssh/id_ed25519', ['homelab'], false, 25),
   ];
 }
 
@@ -300,11 +300,11 @@ export function browserStatus(): BrowserStatus {
   return {
     enabled: on,
     listening: on,
-    host: 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\OmniHub.exe',
+    host: 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\OmniHub.exe',
     browsers: ['Brave', 'Chrome', 'Edge', 'Chromium'].map((browser) => ({ browser, registered: on && browser !== 'Chromium' })),
     clients: browserClients.map((c) => ({ ...c })),
     pending: pendingPair,
-    extensionDir: 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\browser-extension',
+    extensionDir: 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\browser-extension',
     extensionId: 'hfkbdbcemgoondnmkeeoclpcmcjjbdeg',
   };
 }

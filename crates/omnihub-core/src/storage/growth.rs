@@ -157,8 +157,8 @@ mod tests {
         let mut b = TreeBuilder::with_capacity(16);
         let root = b.add(u32::MAX, "C:\\", true, 0, 0, 0, 0);
         let users = b.add(root, "Users", true, 0, 0, 0, 0);
-        let alex = b.add(users, "Alex", true, 0, 0, 0, 0);
-        let dl = b.add(alex, "Downloads", true, 0, 0, 0, 0);
+        let sam = b.add(users, "Sam", true, 0, 0, 0, 0);
+        let dl = b.add(sam, "Downloads", true, 0, 0, 0, 0);
         b.add(dl, "big.iso", false, downloads, downloads, 0, 0);
         let g = b.add(root, "Games", true, 0, 0, 0, 0);
         b.add(g, "game.pak", false, games, games, 0, 0);
@@ -178,7 +178,7 @@ mod tests {
         let report = compare(&tree(3000 * MB, 2000 * MB, true), &old, 10);
         assert_eq!(report.since, Some(100));
         let grew: Vec<(&str, i64)> = report.grew.iter().map(|i| (i.path.rsplit(['\\', '/']).next().unwrap(), i.delta / MB as i64)).collect();
-        // Downloads (not Users or Alex), and the new folder.
+        // Downloads (not Users or Sam), and the new folder.
         assert_eq!(grew, [("Downloads", 2000), ("NewStuff", 500)]);
         assert!(report.grew[1].is_new);
         assert_eq!(report.shrank.len(), 1);

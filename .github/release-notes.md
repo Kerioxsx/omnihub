@@ -1,3 +1,11 @@
+## New in this version
+
+- **Games**: a boost profile per game (Fortnite, Roblox, VALORANT, CS2 and more) — power plan, background apps, notifications, GPU, priority, Wi-Fi low-latency mode and network priority, all put back when the game closes. Ping helper and Roblox Fast Flag presets. Start a game from your phone.
+- **Tasks**: CPU, memory, GPU, video memory and disk of every program, with priority and End task — on the PC and the phone.
+- **Music** on your phone: what the PC plays, with synced lyrics, cover art, controls, volume and bass.
+- **Browser autofill** for the vault in Brave, Chrome and Edge (Vault → Browser autofill), two-factor codes and a password health check.
+- **iPhone → PC mirroring** (AirPlay), screen-share privacy, sending files to the phone, and much more.
+
 ## Install
 
 1. Download **`OmniHub_{{VERSION}}_x64-setup.exe`** below.

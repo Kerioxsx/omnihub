@@ -9,7 +9,7 @@ import { Badge, Card, Skeleton, Spinner } from '../../components/ui/Card';
 import { SearchInput, Select } from '../../components/ui/Form';
 import { Callout, EmptyState } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
-import { useEvent, useNow } from '../../lib/hooks';
+import { useEvent, useMediaQuery, useNow } from '../../lib/hooks';
 import { formatCountdown, prettyUrl } from '../../lib/util';
 import { confirm } from '../../state/dialogs';
 import { useLive } from '../../state/live';
@@ -309,12 +309,13 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
 
   const secs = locksAt ? Math.max(0, (locksAt - now) / 1000) : null;
   const weak = (entries ?? []).filter((e) => e.hasPassword && e.passwordScore <= 1).length;
+  const wide = useMediaQuery('(min-width: 1320px)');
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3" onMouseMove={touch} onKeyDown={touch}>
       <div className="flex items-center gap-2">
-        <SearchInput value={q} onChange={setQ} placeholder="Search entries" className="w-60" aria-label="Search entries" />
-        <Select value={kind} onChange={(e) => setKind(e.target.value as '' | EntryKind)} aria-label="Kind" className="w-[150px]">
+        <SearchInput value={q} onChange={setQ} placeholder="Search entries" className="w-60 min-w-[140px] shrink" aria-label="Search entries" />
+        <Select value={kind} onChange={(e) => setKind(e.target.value as '' | EntryKind)} aria-label="Kind" className="w-[136px] shrink-0">
           <option value="">All kinds</option>
           {KINDS.map((k) => (
             <option key={k.value} value={k.value}>
@@ -322,7 +323,7 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
             </option>
           ))}
         </Select>
-        <button type="button" onClick={() => setFavs(!favs)} aria-pressed={favs} className={cx('inline-flex h-9 items-center gap-1.5 rounded-[10px] border px-3 text-[13px] transition-colors', favs ? 'border-warn/40 bg-warn/12 text-warn' : 'border-line bg-surface text-dim hover:text-fg')}>
+        <button type="button" onClick={() => setFavs(!favs)} aria-pressed={favs} className={cx('inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] border px-3 text-[13px] transition-colors', favs ? 'border-warn/40 bg-warn/12 text-warn' : 'border-line bg-surface text-dim hover:text-fg')}>
           <Star size={14} fill={favs ? 'currentColor' : 'none'} aria-hidden /> Favourites
         </button>
         <button type="button" onClick={() => setHealthOpen(true)} className={cx('inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-3 text-[13px] transition-colors', weak > 0 ? 'border-bad/40 bg-bad/10 text-bad hover:bg-bad/15' : 'border-line bg-surface text-dim hover:text-fg')} title="Weak, reused and old passwords, and breach check">
@@ -332,16 +333,24 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
         <div className="flex-1" />
         {secs != null && (
           <span className={cx('flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-[12px] tabular', secs < 60 ? 'border-warn/40 bg-warn/10 text-warn' : 'border-line bg-surface text-dim')} title="The vault locks itself after inactivity">
-            <Timer size={13} /> Locks in {formatCountdown(secs)}
+            <Timer size={13} /> {wide ? `Locks in ${formatCountdown(secs)}` : formatCountdown(secs)}
           </span>
         )}
-        <Button icon={Globe} onClick={() => setBrowserOpen(true)}>
-          Browser autofill
-        </Button>
+        {wide ? (
+          <Button icon={Globe} onClick={() => setBrowserOpen(true)} className="shrink-0">
+            Browser autofill
+          </Button>
+        ) : (
+          <IconButton icon={Globe} label="Browser autofill" variant="secondary" onClick={() => setBrowserOpen(true)} />
+        )}
         <IconButton icon={Settings2} label="Vault settings" variant="secondary" onClick={() => setSettingsOpen(true)} />
-        <Button icon={LockKeyhole} onClick={() => void lock()}>
-          Lock
-        </Button>
+        {wide ? (
+          <Button icon={LockKeyhole} onClick={() => void lock()}>
+            Lock
+          </Button>
+        ) : (
+          <IconButton icon={LockKeyhole} label="Lock" variant="secondary" onClick={() => void lock()} />
+        )}
         <Button variant="primary" icon={Plus} onClick={() => setForm({ open: true, entry: null })}>
           New entry
         </Button>

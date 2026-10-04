@@ -64,7 +64,7 @@ function firewallReport(): FirewallReport {
       ? 'This network is marked Public, and Windows Firewall has no rule allowing OmniHub on it.'
       : 'Windows Firewall has no rule allowing OmniHub, so it blocks phones by default.';
   const rules = firewallAllowed ? [{ name: 'OmniHub phone companion', allow: true, enabled: true, profiles: firewallAllowed | 1, protocol: 'Any', ports: '*' }] : [];
-  return { supported: true, program: 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\omnihub.exe', networks: [{ ...network }], activeProfiles: profile, verdict, rules, message };
+  return { supported: true, program: 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\omnihub.exe', networks: [{ ...network }], activeProfiles: profile, verdict, rules, message };
 }
 
 function simulateVisit() {
@@ -123,7 +123,7 @@ function simulateUpload(name: string, size: number, device: string, delay: numbe
         done = Math.min(size, done + step * (0.7 + Math.random() * 0.6));
         if (done >= size) {
           clearInterval(t);
-          const path = `${settings.remote.incomingDir ?? 'C:\\Users\\Alex\\Downloads\\OmniHub'}\\${name}`;
+          const path = `${settings.remote.incomingDir ?? 'C:\\Users\\Player\\Downloads\\OmniHub'}\\${name}`;
           emit('transfer:done', { id, direction: 'upload', name, path, size, sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', device });
           audit(device, 'files.upload', `${name} → ${path}`);
         } else emit('transfer:progress', { id, direction: 'upload', name, done: Math.round(done), size, device });
@@ -363,7 +363,7 @@ const adbDevices: AdbDevice[] = [
 ];
 
 export function scrcpyStatus(): ScrcpyStatus {
-  const dir = 'C:\\Users\\Alex\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Genymobile.scrcpy_Microsoft.Winget.Source_8wekyb3d8bbwe\\scrcpy-win64-v3.1';
+  const dir = 'C:\\Users\\Player\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Genymobile.scrcpy_Microsoft.Winget.Source_8wekyb3d8bbwe\\scrcpy-win64-v3.1';
   return { found: true, path: `${dir}\\scrcpy.exe`, version: '3.1', adb: `${dir}\\adb.exe`, devices: adbDevices.map((d) => ({ ...d })), running: scrcpyRunning, installHint: 'winget install --id Genymobile.scrcpy' };
 }
 
@@ -427,7 +427,7 @@ function query() {
 function markInstalled() {
   airplay.installed = true;
   airplay.source = 'addon';
-  airplay.path = 'C:\\Users\\Alex\\AppData\\Local\\OmniHub\\addons\\airplay\\bin\\uxplay.exe';
+  airplay.path = 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\addons\\airplay\\bin\\uxplay.exe';
   airplay.version = 'UxPlay 1.74';
 }
 if (airplay.installed) markInstalled();
@@ -477,9 +477,9 @@ export function airplayStart(): string | null {
     demoTimers.push(
       setTimeout(() => {
         if (!airplay.running) return;
-        airplay.client = { name: "Alex's iPhone", model: 'iPhone16,2', deviceId: '5E:12:AB:CD:00:01' };
+        airplay.client = { name: "My iPhone", model: 'iPhone16,2', deviceId: '5E:12:AB:CD:00:01' };
         airplay.mirroring = true;
-        airplay.log.push("connection request from Alex's iPhone (iPhone16,2) with deviceID = 5E:12:AB:CD:00:01");
+        airplay.log.push("connection request from My iPhone (iPhone16,2) with deviceID = 5E:12:AB:CD:00:01");
         emit('airplay:client', airplay.client);
         emit('airplay:changed', { mirroring: true });
       }, 3500),

@@ -675,10 +675,10 @@ mod tests {
     #[test]
     fn arguments() {
         let reg = Path::new("/data/airplay-devices.txt");
-        let o = AirPlayOptions { name: "Alex's PC".into(), ..Default::default() };
+        let o = AirPlayOptions { name: "Sam's PC".into(), ..Default::default() };
         let a = uxplay_args(&o, Some("0427"), reg);
         let s = a.join(" ");
-        assert!(s.starts_with("-n Alex's PC -nh -p"), "{s}");
+        assert!(s.starts_with("-n Sam's PC -nh -p"), "{s}");
         assert!(s.contains("-s 1920x1080@60 -fps 60"), "{s}");
         assert!(s.contains("-vsync no"));
         assert!(s.contains("-pin 0427 -reg /data/airplay-devices.txt"));
@@ -693,8 +693,8 @@ mod tests {
     #[test]
     fn log_lines() {
         assert_eq!(
-            parse_log_line("connection request from Alex's iPhone (iPhone16,2) with deviceID = 5E:12:AB:CD:00:01"),
-            Some(LogEvent::Client(AirPlayClient { name: "Alex's iPhone".into(), model: "iPhone16,2".into(), device_id: "5E:12:AB:CD:00:01".into() }))
+            parse_log_line("connection request from Sam's iPhone (iPhone16,2) with deviceID = 5E:12:AB:CD:00:01"),
+            Some(LogEvent::Client(AirPlayClient { name: "Sam's iPhone".into(), model: "iPhone16,2".into(), device_id: "5E:12:AB:CD:00:01".into() }))
         );
         assert_eq!(parse_log_line("***ERROR lost connection with client (network problem?)"), Some(LogEvent::Lost));
         assert!(matches!(parse_log_line("** (uxplay.exe:6432): ERROR **: gst_parse_launch error"), Some(LogEvent::Error(_))));

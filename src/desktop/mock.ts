@@ -73,7 +73,7 @@ const handlers: Record<string, Handler> = {
   },
   pick_folder: (a) => core.pickFolder(optStr(a, 'title')),
   pick_files: () => core.pickFiles(),
-  pick_save_file: (a) => `C:\\Users\\Alex\\Documents\\${str(a, 'defaultName')}`,
+  pick_save_file: (a) => `C:\\Users\\Player\\Documents\\${str(a, 'defaultName')}`,
   set_autostart: (a) => {
     core.updateSettings({ general: { launchAtLogin: bool(a, 'enabled') } });
   },
