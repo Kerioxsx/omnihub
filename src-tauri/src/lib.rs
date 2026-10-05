@@ -93,6 +93,8 @@ pub fn run(args: Vec<String>) {
         tracing::warn!("the previous run did not end normally; details in logs/last-crash.txt");
     }
     let core = AppCore::new(paths, CoreOptions::default()).expect("cannot open the OmniHub database");
+    #[cfg(windows)]
+    let session_logs = logs_dir.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -162,6 +164,19 @@ pub fn run(args: Vec<String>) {
             if let Some(w) = app.get_webview_window("main") {
                 if !(start_hidden && settings.general.start_minimized) {
                     let _ = w.show();
+                }
+                // Windows signing out, or an installer closing OmniHub to
+                // replace it: leave (closing would only hide to the tray and
+                // keep omnihub.exe locked).
+                #[cfg(windows)]
+                if let Ok(hwnd) = w.hwnd() {
+                    let (h, c) = (handle.clone(), core.clone());
+                    omnihub_core::system::session_end::watch(hwnd.0 as isize, move || {
+                        tracing::info!("Windows asked OmniHub to close");
+                        c.remote.stop();
+                        omnihub_core::crashlog::end_session(&session_logs);
+                        h.exit(0);
+                    });
                 }
             }
             handle_send_to(&handle, &launch_args);

@@ -9,6 +9,7 @@ pub mod open_apps;
 pub mod power;
 pub mod procs;
 pub mod schedtask;
+pub mod session_end;
 pub mod shell;
 
 /// The signed-in user's first name for greetings ("Sam" from "Sam Rivera"),

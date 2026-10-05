@@ -26,14 +26,17 @@ async fn connect(name: &str) -> std::io::Result<tokio::net::UnixStream> {
     tokio::net::UnixStream::connect(name).await
 }
 
-/// Start OmniHub minimised: this executable when the app itself is the
-/// host, otherwise the app next to the stand-alone host.
+/// Start OmniHub minimised: the app next to the stand-alone host, the
+/// installed app for a host copy in the data folder, otherwise this
+/// executable.
 fn launch_app() {
     let Ok(me) = std::env::current_exe() else { return };
     let standalone = me.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(super::ipc::host_file_name()));
     let app = if standalone {
         let Some(dir) = me.parent() else { return };
         dir.join(if cfg!(windows) { "OmniHub.exe" } else { "omnihub" })
+    } else if let Some(app) = super::register::app_for_copy(&me) {
+        app
     } else {
         me
     };

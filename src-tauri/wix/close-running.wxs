@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Close every running OmniHub before Windows Installer checks for files in
+  use: the app (it hides to the tray when asked to close), and the helper
+  Brave, Chrome or Edge start for the OmniHub extension. Either keeps
+  omnihub.exe locked, and the install stops with error 1310 "Error writing
+  to file". Linked through the component below (bundle > windows > wix >
+  componentRefs).
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <CustomAction Id="OmniHubCloseRunning" Directory="TARGETDIR" ExeCommand="taskkill.exe /F /T /IM omnihub.exe" Execute="immediate" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="OmniHubCloseRunning" Before="InstallValidate" />
+    </InstallExecuteSequence>
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="OmniHubCloseRunningMarker" Guid="*">
+        <RegistryValue Root="HKCU" Key="Software\[Manufacturer]\[ProductName]" Name="ClosesRunningApp" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

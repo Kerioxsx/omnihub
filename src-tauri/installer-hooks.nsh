@@ -49,6 +49,26 @@
   ${EndIf}
   FileClose $0
   Delete "$INSTDIR\.omnihub-write-test"
+
+  ; Close every OmniHub still running, wherever it runs from: the app
+  ; (it hides to the tray when asked to close), a copy in another folder,
+  ; and the helper Brave, Chrome or Edge start for the OmniHub extension.
+  ; Any of them would keep files locked.
+  nsExec::Exec 'cmd.exe /C tasklist /FI "IMAGENAME eq omnihub.exe" /NH | find "omnihub.exe"'
+  Pop $1
+  ${If} $1 == 0
+    ${IfNot} ${Silent}
+    ${AndIf} $PassiveMode <> 1
+      MessageBox MB_OKCANCEL|MB_ICONINFORMATION "OmniHub is running. Click OK to close it and continue." IDOK omnihub_close
+      Pop $1
+      Pop $0
+      Abort
+    ${EndIf}
+    omnihub_close:
+    nsExec::Exec 'taskkill.exe /F /T /IM omnihub.exe'
+    Pop $1
+    Sleep 1000
+  ${EndIf}
   Pop $1
   Pop $0
 !macroend

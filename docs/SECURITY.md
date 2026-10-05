@@ -64,8 +64,9 @@ and lets a phone do some of that. This is what protects each part.
 
 - The extension (in `browser-extension/`, loaded unpacked) has no access to
   the vault file. It talks to the OmniHub app through the browser's
-  **native messaging**: the browser starts OmniHub's executable as a host,
-  and the host relays requests to the running app over a per-user named
+  **native messaging**: the browser starts OmniHub's executable as a host
+  (on Windows a copy of it in OmniHub's data folder, so it never locks the
+  installed program), and the host relays requests to the running app over a per-user named
   pipe. The host manifest allows exactly one origin, the extension's fixed
   ID (`chrome-extension://hfkbdbcemgoondnmkeeoclpcmcjjbdeg/`).
 - Each browser profile must be **paired**: the app shows a 4-digit code that

@@ -1,9 +1,12 @@
 ## New in this version
 
-- **Fixed "Error writing to file … omnihub.exe" when installing.** If your OmniHub is in *Program Files* (or another folder only an administrator can change), the setup now explains that and asks for administrator approval once, instead of stopping with an error. **Install now** in OmniHub does the same; automatic updates leave those installs to your click, so no Windows prompt pops up unasked.
-- Moving to a folder that never needs approval: uninstall OmniHub in Windows Settings → Apps (your notes, vault and settings are kept), then run the setup and keep the folder it suggests.
+- **Fixed "Error writing to file … omnihub.exe" when installing or updating** (Windows Installer error 1310). The file was still in use: OmniHub only hid in the tray when the installer asked it to close, and Brave, Chrome or Edge kept a hidden OmniHub helper running for the browser extension. Now:
+  - both installers close every running OmniHub, including that helper, before they copy anything;
+  - OmniHub closes when Windows or an installer asks;
+  - the browser extension's helper runs from a copy in OmniHub's data folder, so it never locks the installed program.
+- If OmniHub is in *Program Files*, the setup asks for administrator approval once instead of failing (new in 0.2.5).
 
-Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
+Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it. If an install from an older version still stops with that error: quit OmniHub from the tray, close your browser, end any `omnihub.exe` in Task Manager → Details, and run it again. The .msi always updates OmniHub in the folder it is already in.
 
 ## Install
 

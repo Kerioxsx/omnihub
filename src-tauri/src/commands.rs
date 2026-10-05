@@ -1521,7 +1521,7 @@ pub async fn browser_status(app: AppHandle, core: Core<'_>) -> Res<BrowserStatus
         Ok(BrowserStatus {
             enabled: core.settings.get().vault.browser_autofill,
             listening: core.browser.is_listening(),
-            host: omnihub_core::browser::register::host_path().map(|p| p.to_string_lossy().into_owned()),
+            host: omnihub_core::browser::register::host_path(&core.paths.data).map(|p| p.to_string_lossy().into_owned()),
             browsers: omnihub_core::browser::register::status(),
             clients: core.browser.clients(),
             pending: core.browser.pending(),

@@ -48,7 +48,8 @@ Load `browser-extension/` unpacked (`brave://extensions` → Developer mode →
 Load unpacked); its key in `manifest.json` pins the extension ID the native
 host allows. With the app (or the headless server with `browser on`)
 running, the extension pairs and fills. The app's executable doubles as the
-native-messaging host (`browser_host` is a thin standalone build of it).
+native-messaging host (`browser_host` is a thin standalone build of it); on
+Windows browsers run a copy of it from `data/browser` (see Updates below).
 
 ### Games
 
@@ -113,10 +114,21 @@ cannot replace a copy in Program Files ("Error writing to file").
 `src-tauri/installer-hooks.nsh` (`NSIS_HOOK_PREINSTALL`) checks that the
 install folder is writable and otherwise runs the same setup again through
 UAC, passive or silent like the first run, with `/OHELEVATED` so an
-elevated run that still cannot write stops instead of asking again. Check
-it compiles with `makensis` (NSIS 3) and a small script that includes
-`LogicLib.nsh`, `FileFunc.nsh`, declares `UpdateMode` and `NoShortcutMode`
-and inserts the macro in a section.
+elevated run that still cannot write stops instead of asking again. The
+hook then closes every running `omnihub.exe` (asking first in the full
+wizard), and `src-tauri/wix/close-running.wxs` does the same for the MSI
+before `InstallValidate`: a running OmniHub keeps its executable locked,
+and Windows Installer stops with error 1310 "Error writing to file". Check
+the hook compiles with `makensis` (NSIS 3) and a small script that
+includes `LogicLib.nsh`, `FileFunc.nsh`, declares `PassiveMode`,
+`UpdateMode` and `NoShortcutMode` and inserts the macro in a section.
+
+Two things keep OmniHub from locking itself: the app leaves on
+`WM_QUERYENDSESSION`/`WM_ENDSESSION` (sign-out, shutdown, and the Restart
+Manager installers use; `system/session_end.rs`) instead of hiding to the
+tray, and browsers start a copy of the executable for the extension
+(`data/browser/omnihub-host-<version>.exe`, `browser/register.rs`), which
+starts the installed app from `app-path.txt` on `launch-app`.
 
 Automatic installs wait until the window is hidden (tray) and nothing is
 running (game boost, screen viewers, AirPlay receiver, phone transfers); the

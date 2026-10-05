@@ -29,13 +29,70 @@ pub struct Registration {
     pub registered: bool,
 }
 
+/// File name start of the host copies in `data/browser`.
+pub const HOST_COPY_PREFIX: &str = "omnihub-host-";
+/// Next to the copies: the OmniHub executable a copy starts on `launch-app`.
+pub const APP_PATH_FILE: &str = "app-path.txt";
+
 /// What the browser should start: the stand-alone host when it sits next
-/// to the running executable, otherwise the OmniHub executable itself
-/// (which relays when started with the extension's origin).
-pub fn host_path() -> Option<PathBuf> {
+/// to the running executable; on Windows otherwise a copy of the OmniHub
+/// executable in the data folder (see [`copy_host`]); elsewhere the
+/// executable itself. OmniHub relays when started with the extension's
+/// origin.
+pub fn host_path(data_dir: &Path) -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let standalone = exe.parent()?.join(ipc::host_file_name());
-    Some(if standalone.is_file() { standalone } else { exe })
+    if standalone.is_file() {
+        return Some(standalone);
+    }
+    if cfg!(windows) {
+        match copy_host(&exe, &data_dir.join("browser")) {
+            Ok(copy) => return Some(copy),
+            Err(e) => tracing::warn!("could not copy the browser host: {e}"),
+        }
+    }
+    Some(exe)
+}
+
+/// A browser keeps its host running while the extension is in use. Were
+/// that the installed omnihub.exe, Windows would keep it locked and setups
+/// fail with "Error writing to file … omnihub.exe" — so browsers start a
+/// copy, `omnihub-host-<version>.exe` in `dir`, made once per version.
+/// Copies of other versions are removed once no browser runs them.
+pub fn copy_host(exe: &Path, dir: &Path) -> std::io::Result<PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let name = format!("{HOST_COPY_PREFIX}{}{}", env!("CARGO_PKG_VERSION"), std::env::consts::EXE_SUFFIX);
+    let copy = dir.join(&name);
+    let len = |p: &Path| std::fs::metadata(p).map(|m| m.len()).ok();
+    if len(&copy).is_none() || len(&copy) != len(exe) {
+        let tmp = dir.join(format!("{name}.tmp"));
+        let r = std::fs::copy(exe, &tmp).and_then(|_| std::fs::rename(&tmp, &copy));
+        if let Err(e) = r {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
+    }
+    crate::settings::write_atomic(&dir.join(APP_PATH_FILE), exe.to_string_lossy().as_bytes())?;
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let n = e.file_name().to_string_lossy().into_owned();
+            if n.starts_with(HOST_COPY_PREFIX) && n != name {
+                // Still running in a browser: removed another time.
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
+    }
+    Ok(copy)
+}
+
+/// The OmniHub executable for a host copy made by [`copy_host`].
+pub fn app_for_copy(host: &Path) -> Option<PathBuf> {
+    let name = host.file_name()?.to_string_lossy();
+    if !name.starts_with(HOST_COPY_PREFIX) {
+        return None;
+    }
+    let app = std::fs::read_to_string(host.parent()?.join(APP_PATH_FILE)).ok()?;
+    Some(PathBuf::from(app.trim()))
 }
 
 pub fn manifest(host: &Path) -> serde_json::Value {
@@ -54,7 +111,7 @@ fn manifest_file(dir: &Path) -> PathBuf {
 
 /// Write the manifest into `data_dir` and register it with every browser.
 pub fn register(data_dir: &Path) -> std::io::Result<Vec<Registration>> {
-    let host = host_path().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "cannot find the OmniHub executable"))?;
+    let host = host_path(data_dir).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "cannot find the OmniHub executable"))?;
     let dir = data_dir.join("browser");
     std::fs::create_dir_all(&dir)?;
     let file = manifest_file(&dir);
@@ -125,6 +182,32 @@ pub fn status() -> Vec<Registration> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn browsers_run_a_copy_of_the_app() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = dir.path().join("app").join("omnihub.exe");
+        std::fs::create_dir_all(app.parent().unwrap()).unwrap();
+        std::fs::write(&app, b"version one").unwrap();
+        let hosts = dir.path().join("data").join("browser");
+        std::fs::create_dir_all(&hosts).unwrap();
+        // A copy left by an older version.
+        let old = hosts.join(format!("{HOST_COPY_PREFIX}0.0.1{}", std::env::consts::EXE_SUFFIX));
+        std::fs::write(&old, b"old").unwrap();
+
+        let copy = copy_host(&app, &hosts).unwrap();
+        assert_ne!(copy, app);
+        assert_eq!(std::fs::read(&copy).unwrap(), b"version one");
+        assert_eq!(app_for_copy(&copy), Some(app.clone()));
+        assert!(!old.exists(), "older copies are removed");
+        assert_eq!(app_for_copy(&app), None, "the app itself is no copy");
+
+        // A rebuilt app of the same version replaces the copy; an unchanged one is left alone.
+        std::fs::write(&app, b"version one, rebuilt").unwrap();
+        assert_eq!(std::fs::read(copy_host(&app, &hosts).unwrap()).unwrap(), b"version one, rebuilt");
+        let leftovers: Vec<_> = std::fs::read_dir(&hosts).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert_eq!(leftovers.len(), 2, "the copy and app-path.txt: {leftovers:?}");
+    }
 
     #[test]
     fn manifest_allows_only_our_extension() {
