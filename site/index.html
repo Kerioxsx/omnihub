@@ -191,25 +191,26 @@
       <div class="section-head reveal">
         <span class="eyebrow">Game boost</span>
         <h2>Press Play. OmniHub gets out of the way.</h2>
-        <p>A profile per game — Fortnite, Roblox, VALORANT, CS2, Minecraft and more, found on your PC. It sets the game itself for the most frames, tunes Windows for it, starts it, and puts everything back when you quit.</p>
+        <p>A profile per game — Fortnite, VALORANT, CS2, Apex, Overwatch 2, Roblox, Minecraft and more, found on your PC. <b>Competitive</b> sets the game itself for the most frames; <b>Quality</b> leaves its graphics alone, so a 4K Ultra game stays 4K Ultra. Either way OmniHub clears Windows out of the way, measures every frame, and puts everything back when you quit.</p>
       </div>
       <div class="games">
         <div class="card boost reveal">
           <div class="card-head">
-            <div class="game-tile">FN</div>
-            <div><b>Fortnite</b><span data-boost-status>Ready</span></div>
+            <div class="game-tile" data-boost-tile>FN</div>
+            <div><b data-boost-game>Fortnite</b><span data-boost-status>Ready</span></div>
             <button class="btn btn-primary btn-sm" data-boost>Play with boost</button>
           </div>
-          <ol class="steps" data-steps>
-            <li>Fortnite: unlimited FPS, Performance mode, lowest settings</li>
-            <li>Ultimate Performance power plan</li>
-            <li>Close the apps you picked (and reopen them later)</li>
-            <li>Pause notification pop-ups</li>
-            <li>High-performance GPU for this game</li>
-            <li>Wi-Fi low-latency mode</li>
-            <li>Game priority: High</li>
-            <li>Start Fortnite</li>
-          </ol>
+          <div class="seg" role="tablist" aria-label="Boost mode" data-modes>
+            <button role="tab" aria-selected="true" data-mode="competitive">Competitive</button>
+            <button role="tab" aria-selected="false" data-mode="quality">Quality</button>
+          </div>
+          <ol class="steps" data-steps></ol>
+          <div class="fps" data-fps hidden>
+            <div><small>Live</small><b data-fps-now>—</b><span>FPS</span></div>
+            <div><small>1% low</small><b data-fps-low>—</b></div>
+            <div><small>Frame time</small><b data-fps-ms>—</b></div>
+            <svg viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polyline data-fps-line fill="none" stroke="currentColor" stroke-width="2" vector-effect="non-scaling-stroke" points="" /></svg>
+          </div>
         </div>
         <div class="card ping reveal">
           <div class="card-head">
@@ -217,7 +218,8 @@
             <button class="btn btn-ghost btn-sm" data-ping>Test ping</button>
           </div>
           <div class="ping-rows" data-ping-rows></div>
-          <p class="note">No app can shorten the distance to a server. OmniHub removes what adds lag on your side — background scans, downloads, a busy Wi-Fi.</p>
+          <div class="bloat" data-bloat hidden><span class="grade" data-bloat-grade>B</span><span>Lag under load: <b data-bloat-text>+45 ms while downloading</b> — turn on Smart Queue/SQM on the router, or use a cable.</span></div>
+          <p class="note">No app can make your ping 0 or shorten the distance to a server — the closest region is the floor. OmniHub removes what adds lag on your side: background scans, downloads, a busy line.</p>
         </div>
         <div class="card flags reveal">
           <div class="card-head">

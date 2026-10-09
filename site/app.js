@@ -297,7 +297,7 @@
     { id: 'storage', icon: 'drive', label: 'Storage', title: 'Storage', heading: 'See what fills your drives — in seconds', text: "OmniHub reads the NTFS file table directly, like WizTree and Everything, and keeps it current from Windows' change journal. Treemap, largest files, file types, what grew, duplicates and cleanup.", tags: ['1.15M files in 3.3 s', 'Treemap', 'Duplicates', 'Cleanup'] },
     { id: 'apps', icon: 'apps', label: 'Apps', title: 'Apps', heading: 'Every program, with its real size', text: 'Desktop programs, Store apps and Start menu entries with their icons and the size from your last scan. Launch, uninstall, manage startup apps, or see the screenshots you took in each.', tags: ['Store apps', 'Uninstall', 'Startup apps', 'Favourites'] },
     { id: 'tasks', icon: 'tasks', label: 'Tasks', title: 'Tasks', heading: 'What each program really uses', text: 'CPU, memory, GPU, video memory and disk for every program, live — with End task, priority and file location. Same view on your phone.', tags: ['GPU per app', 'Video memory', 'Priority', 'End task'] },
-    { id: 'games', icon: 'game', label: 'Games', title: 'Games', heading: 'A boost for every game — and Fortnite at max FPS', text: 'Press Play and OmniHub sets Fortnite to unlimited FPS, Performance mode and its lowest settings, switches the power plan, closes what you picked and raises the game — then puts everything back when you quit. It finds the games you have on Epic, Steam, Riot, Roblox and Minecraft.', tags: ['Fortnite max FPS', 'Finds your games', 'Roblox flags', 'Ping helper'] },
+    { id: 'games', icon: 'game', label: 'Games', title: 'Games', heading: 'Max FPS where it counts — and every frame measured', text: 'Competitive mode sets Fortnite, VALORANT, CS2, Apex, Overwatch 2, Roblox or Minecraft to their fastest settings, closes background junk, gives the game the processor and a 0.5 ms timer; Quality mode does the same for Windows but never touches the game’s graphics. The FPS meter shows live FPS and 1% lows — and everything comes back when you quit.', tags: ['Competitive & Quality', '7 games tuned', 'FPS meter', 'Lag under load'] },
     { id: 'music', icon: 'music', label: 'Music', title: 'Music', heading: 'Lyrics, Apple Music style — full screen', text: 'Whatever the PC plays, with its cover art blurred into drifting light, big lyrics that glide up line by line and fill word by word, and three dots through the breaks. Click any line to jump there.', tags: ['Full screen', 'Word by word', 'Click to seek', 'Spotify & more'] },
     { id: 'vault', icon: 'lock', label: 'Vault', title: 'Vault', heading: 'Passwords, properly locked', text: 'Argon2id and AES-256-GCM, bound to your Windows account. Two-factor codes, a password health report, an optional breach check — and autofill in Brave, Chrome and Edge.', tags: ['Windows Hello', '2FA codes', 'Autofill', 'Breach check'] },
     { id: 'notes', icon: 'idea', label: 'Notes', title: 'Notes', heading: 'Notes, and ideas for Claude', text: 'Markdown notes with templates and reminders. Ideas are written as .md files into a folder Claude can read — and replies Claude writes there show up next to your note.', tags: ['Markdown', 'Templates', 'Reminders', 'Claude folder'] },
@@ -424,7 +424,10 @@
     ['apps', 'Apps with real sizes', 'Every desktop and Store app with its size. Uninstall, launch, and turn off startup apps.'],
     ['tasks', 'GPU per program', 'CPU, memory, GPU, video memory and disk for every program — End task and priority included.'],
     ['game', 'Game boost', 'Power plan, background apps, notifications, GPU, Wi-Fi and priority — tuned for the game, then put back.'],
-    ['game', 'Fortnite at max FPS', 'Unlimited frame rate, Performance mode, lowest settings, VSync off and the FPS counter — written into Fortnite’s own settings, with yours kept to put back.'],
+    ['game', 'Competitive or Quality', 'Competitive goes for every frame, game graphics included. Quality leaves the game’s graphics alone — 4K Ultra stays 4K Ultra.'],
+    ['game', 'Max FPS in 7 games', 'Fortnite, VALORANT, CS2, Apex, Overwatch 2, Roblox and Minecraft set for frames — written into their own settings, with yours kept to put back.'],
+    ['tasks', 'FPS meter', 'Live FPS, 1% lows and stutters while you play, on the PC and your phone — measured with Intel PresentMon, results kept per game.'],
+    ['send', 'Lag under load', 'Pings while the line is busy, grades it A+ to F and tells you what fixes it — usually the router, a cable, or a paused download.'],
     ['tasks', 'Optimize this PC', 'Monitor at its full refresh rate, Ultimate power plan, no background game recording, GPU scheduling and more — each one checked and undoable.'],
     ['apps', 'Finds your games', 'Epic, Steam, Riot, Roblox and Minecraft games on this PC, ready to add with one click.'],
     ['music', 'Full-screen lyrics', 'Apple Music–style lyrics on the PC: drifting cover-art light, lines that glide up and fill word by word.'],
@@ -459,7 +462,7 @@
     ['phone-sound', 'Volume & calls', 'Every app’s volume, mute your mic, Mute mic and Deafen for a Discord call.'],
     ['phone-open-apps', 'Open apps', 'Close any program on the PC — or quit it.'],
     ['phone-files', 'Files', 'Browse folders and photos, download or send to the PC.'],
-    ['phone-games', 'Games', 'Start a game on the PC with its boost, or test your ping.'],
+    ['phone-games', 'Games', 'Start a game on the PC with its boost, watch its FPS, or test your ping.'],
     ['phone-power', 'Power', 'Lock, sleep or shut down, with a countdown you can cancel.'],
   ];
   const carousel = $('[data-carousel]');
@@ -673,10 +676,67 @@
 
   const boostBtn = $('[data-boost]');
   const boostStatus = $('[data-boost-status]');
-  const steps = $$('[data-steps] li');
+  const stepsEl = $('[data-steps]');
+  const fpsEl = $('[data-fps]');
+  const fpsLine = $('[data-fps-line]');
+  let steps = [];
   let boosted = false;
   let boosting = false;
   const wait = (ms) => new Promise((r) => setTimeout(r, reduced ? 0 : ms));
+
+  // What each mode does (the app's Boost::with_mode), for a fast game and a pretty one.
+  const MODES = {
+    competitive: { game: 'Fortnite', tile: 'FN', fps: 470, steps: ['Fortnite: unlimited FPS, Performance mode, lowest settings', 'Close OneDrive, Widgets and updaters (reopened later)', 'Browsers and launchers to Below normal', 'Ultimate Performance power plan', 'Precise 0.5 ms timer', 'Wi-Fi low-latency mode', 'Game priority: High, full speed', 'Start Fortnite — FPS meter on'] },
+    quality: { game: 'Cyberpunk 2077', tile: '77', fps: 88, steps: ['Game graphics untouched — 4K Ultra stays', 'Close OneDrive, Widgets and updaters (reopened later)', 'Browsers and launchers to Below normal', 'Ultimate Performance power plan', 'Precise 0.5 ms timer', 'Pause notification pop-ups', 'Game priority: Above normal, full speed', 'Start Cyberpunk 2077 — FPS meter on'] },
+  };
+  let mode = 'competitive';
+  let fpsTimer = 0;
+  const trail = [];
+  function renderMode() {
+    const m = MODES[mode];
+    $('[data-boost-game]').textContent = m.game;
+    $('[data-boost-tile]').textContent = m.tile;
+    stepsEl.innerHTML = m.steps.map((s) => `<li>${s}</li>`).join('');
+    steps = $$('li', stepsEl);
+    $$('[data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
+  }
+  function startFps() {
+    const m = MODES[mode];
+    trail.length = 0;
+    fpsEl.hidden = false;
+    const tickFps = () => {
+      const fps = m.fps * (0.95 + Math.random() * 0.08);
+      trail.push(fps);
+      if (trail.length > 24) trail.shift();
+      $('[data-fps-now]').textContent = Math.round(fps);
+      $('[data-fps-low]').textContent = Math.round(fps * (0.7 + Math.random() * 0.05));
+      $('[data-fps-ms]').textContent = `${(1000 / fps).toFixed(2)} ms`;
+      const max = Math.max(...trail) * 1.05;
+      const min = Math.min(...trail) * 0.95;
+      fpsLine.setAttribute('points', trail.map((v, i) => `${(i / Math.max(1, trail.length - 1)) * 100},${30 - ((v - min) / Math.max(1, max - min)) * 28 - 1}`).join(' '));
+    };
+    tickFps();
+    fpsTimer = setInterval(tickFps, reduced ? 2000 : 900);
+  }
+  function stopFps() {
+    clearInterval(fpsTimer);
+    fpsEl.hidden = true;
+  }
+  $$('[data-mode]').forEach((b) =>
+    b.addEventListener('click', () => {
+      if (boosting || b.dataset.mode === mode) return;
+      if (boosted) {
+        boosted = false;
+        stopFps();
+        boostBtn.textContent = 'Play with boost';
+        boostStatus.classList.remove('live');
+      }
+      mode = b.dataset.mode;
+      boostStatus.textContent = mode === 'quality' ? 'Ready — graphics stay as you set them' : 'Ready';
+      renderMode();
+    }),
+  );
+  renderMode();
 
   async function runBoost() {
     if (boosting) return;
@@ -695,7 +755,9 @@
       boostStatus.classList.add('live');
       boostBtn.textContent = 'Stop boost';
       boosted = true;
+      startFps();
     } else {
+      stopFps();
       boostStatus.textContent = 'Putting everything back…';
       boostStatus.classList.remove('live');
       for (const s of [...steps].reverse()) {
@@ -759,6 +821,11 @@
       $('.ms', rowEls[i]).textContent = `${ms} ms`;
     }
     rowEls[best].classList.add('best');
+    await wait(500);
+    const extra = Math.round(38 + Math.random() * 14);
+    $('[data-bloat-grade]').textContent = extra < 30 ? 'A' : extra < 60 ? 'B' : 'C';
+    $('[data-bloat-text]').textContent = `+${extra} ms while downloading`;
+    $('[data-bloat]').hidden = false;
     const sub = pingBtn.closest('.card-head').querySelector('span');
     sub.textContent = 'Sample numbers — the app measures from your PC';
     pingBtn.textContent = 'Test again';
