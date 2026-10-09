@@ -3,6 +3,7 @@
 
 import type { GameKind, GameLaunch, GameProfile, GameSession, GameState, GameStep, PingResult, PingTarget, RobloxFlags, RobloxInstall } from '@shared/types';
 import { emit } from './bus';
+import { settingsStep } from './optimize';
 
 const FORTNITE_APP = 'fn%3A4fe75bbc5a674f4f9b356b5c90567da5%3AFortnite';
 
@@ -16,6 +17,7 @@ const TEMPLATES: Record<GameKind, { name: string; launch: GameLaunch; process: s
   gta5: { name: 'GTA V', launch: { type: 'steam', appId: 271590 }, process: 'GTA5.exe' },
   callOfDuty: { name: 'Call of Duty', launch: { type: 'steam', appId: 1938090 }, process: 'cod.exe' },
   league: { name: 'League of Legends', launch: { type: 'riot', product: 'league_of_legends' }, process: 'League of Legends.exe' },
+  minecraft: { name: 'Minecraft', launch: { type: 'none' }, process: 'javaw.exe' },
   custom: { name: 'My game', launch: { type: 'none' }, process: '' },
 };
 
@@ -30,7 +32,7 @@ function template(kind: GameKind): GameProfile {
     launch: t.launch,
     process: t.process,
     exePath: kind === 'fortnite' ? 'C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe' : kind === 'roblox' ? 'C:\\Users\\You\\AppData\\Local\\Roblox\\Versions\\version-6d3a1b2c4e5f4a1b\\RobloxPlayerBeta.exe' : null,
-    boost: { powerPlan: 'ultimate', priority: 'high', closeApps: [], reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, fullscreenOptimizationsOff: false, wifiLowLatency: true, networkPriority: false, startHighPriority: false },
+    boost: { powerPlan: 'ultimate', priority: 'high', closeApps: [], reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, fullscreenOptimizationsOff: false, wifiLowLatency: true, networkPriority: false, startHighPriority: false, gameSettings: true },
     pingHost: null,
     roblox: { ...ROBLOX_DEFAULT },
     lastPlayed: null,
@@ -54,6 +56,15 @@ let timers: ReturnType<typeof setTimeout>[] = [];
 
 export function list() {
   return { profiles: structuredClone(profiles), session };
+}
+
+export function addProfile(p: GameProfile): GameProfile {
+  profiles.push(p);
+  return structuredClone(p);
+}
+
+export function newProfile(kind: GameKind): GameProfile {
+  return template(kind);
 }
 
 export function create(kind: GameKind): GameProfile {
@@ -114,6 +125,7 @@ export function play(id: string, launch: boolean): GameSession {
     applied.set(id, { qos: b.networkPriority || a.qos, ifeo: b.startHighPriority || a.ifeo });
   }
   if (b.wifiLowLatency) steps.push({ id: 'wifi', label: 'Wi-Fi', status: 'done', detail: 'Low-latency mode on Intel(R) Wi-Fi 6E AX211 160MHz' });
+  if ((p.kind === 'fortnite' || p.kind === 'minecraft') && b.gameSettings) steps.push(settingsStep(p.kind));
   if (p.kind === 'roblox' && p.roblox.enabled) steps.push({ id: 'roblox', label: 'Roblox flags', status: 'done', detail: `${Object.keys(preview(p.roblox).flags).length} flags written (1 file)` });
   if (launch) steps.push({ id: 'launch', label: 'Launch', status: p.launch.type === 'none' ? 'skipped' : 'done', detail: p.launch.type === 'none' ? 'no launcher set — start the game yourself' : `Started ${p.name}` });
   steps.forEach((s, i) => timers.push(setTimeout(() => push((x) => x.steps.push(s)), 250 + i * 220)));

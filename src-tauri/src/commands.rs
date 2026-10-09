@@ -1343,6 +1343,88 @@ pub async fn games_roblox_preview(flags: games::roblox::RobloxFlags) -> Res<serd
     Ok(serde_json::json!({ "flags": map, "ignored": ignored }))
 }
 
+// ---------- game settings, installed games, PC tweaks ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameConfigs {
+    options: games::configs::ConfigOptions,
+    games: Vec<games::configs::ConfigStatus>,
+}
+
+fn game_configs(core: &AppCore) -> GameConfigs {
+    GameConfigs { options: core.games.config_options(), games: games::configs::ConfigGame::all().into_iter().map(|g| core.games.config_status(g)).collect() }
+}
+
+#[tauri::command]
+pub async fn games_configs(core: Core<'_>) -> Res<GameConfigs> {
+    let core = core.inner().clone();
+    blocking(move || Ok(game_configs(&core))).await
+}
+
+#[tauri::command]
+pub async fn games_config_options(core: Core<'_>, options: games::configs::ConfigOptions) -> Res<GameConfigs> {
+    let core = core.inner().clone();
+    blocking(move || {
+        core.games.set_config_options(options);
+        Ok(game_configs(&core))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn games_config_apply(core: Core<'_>, game: games::configs::ConfigGame) -> Res<GameConfigs> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.games.config_apply(game);
+        core.audit.record("desktop", "game.settings", &format!("{} ({} changes)", game.label(), r.as_ref().map(Vec::len).unwrap_or(0)), r.is_ok());
+        r?;
+        Ok(game_configs(&core))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn games_config_restore(core: Core<'_>, game: games::configs::ConfigGame) -> Res<GameConfigs> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.games.config_restore(game);
+        core.audit.record("desktop", "game.settings-restore", game.label(), r.is_ok());
+        r?;
+        Ok(game_configs(&core))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn games_library(core: Core<'_>) -> Res<Vec<games::library::InstalledGame>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.library())).await
+}
+
+#[tauri::command]
+pub async fn games_add_installed(core: Core<'_>, key: String) -> Res<GameProfile> {
+    let core = core.inner().clone();
+    blocking(move || core.games.add_installed(&key)).await
+}
+
+#[tauri::command]
+pub async fn pc_status(core: Core<'_>) -> Res<games::pc::PcStatus> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.pc_status())).await
+}
+
+#[tauri::command]
+pub async fn pc_set(core: Core<'_>, id: games::pc::TweakId, on: bool) -> Res<games::pc::PcStatus> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.games.pc_set(id, on);
+        core.audit.record("desktop", if on { "pc.optimize" } else { "pc.undo" }, &format!("{id:?}"), r.is_ok());
+        r
+    })
+    .await
+}
+
 // ---------- screen sharing privacy ----------
 
 #[derive(Serialize)]

@@ -3,10 +3,11 @@
 
 import type { LyricLine, MediaAction, MediaState } from '@shared/types';
 import { motion } from 'motion/react';
-import { Music2, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
+import { Maximize2, Music2, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../api';
 import { useEvent } from '../lib/hooks';
+import { usePlayer } from '../lib/nowPlaying';
 import { toast } from '../state/toasts';
 import { IconButton } from './ui/Button';
 
@@ -22,6 +23,7 @@ export function NowPlayingCard() {
   const [art, setArt] = useState<string | null>(null);
   const [lines, setLines] = useState<LyricLine[]>([]);
   const [now, setNow] = useState(() => Date.now());
+  const showPlayer = usePlayer((s) => s.show);
 
   const load = useCallback(() => {
     void api.media.state().then((r) => {
@@ -73,9 +75,12 @@ export function NowPlayingCard() {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="card relative flex items-center gap-4 overflow-hidden p-3 pr-4">
       {art && <img src={art} alt="" className="pointer-events-none absolute inset-0 h-full w-full scale-150 object-cover opacity-25 blur-3xl" aria-hidden />}
-      <div className="relative shrink-0">
+      <button type="button" onClick={showPlayer} className="group relative shrink-0 rounded-xl" aria-label="Open the full-screen player" title="Full-screen lyrics">
+        <span className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-xl bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+          <Maximize2 size={18} className="text-white" />
+        </span>
         {art ? <img src={art} alt={`Cover of ${state.title}`} className="h-16 w-16 rounded-xl object-cover shadow-lg" /> : <div className="grid h-16 w-16 place-items-center rounded-xl bg-accent-soft text-accent"><Music2 size={24} /></div>}
-      </div>
+      </button>
       <div className="relative min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="truncate text-[15px] font-semibold text-fg">{state.title}</span>
@@ -95,6 +100,7 @@ export function NowPlayingCard() {
         <IconButton icon={SkipBack} label="Previous track" disabled={!state.canPrevious} onClick={act('previous')} />
         <IconButton icon={state.playing ? Pause : Play} label={state.playing ? 'Pause' : 'Play'} variant="subtle" disabled={!state.canPlayPause} onClick={act('toggle')} />
         <IconButton icon={SkipForward} label="Next track" disabled={!state.canNext} onClick={act('next')} />
+        <IconButton icon={Maximize2} label="Full-screen lyrics" onClick={showPlayer} />
       </div>
     </motion.div>
   );

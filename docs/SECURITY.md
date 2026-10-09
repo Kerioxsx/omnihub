@@ -146,8 +146,22 @@ and lets a phone do some of that. This is what protects each part.
   Image File Execution Options `PerfOptions\CpuPriorityClass` so Windows
   starts the game at High priority. The helper accepts only plain `.exe`
   names for these.
-- Nothing touches a game's memory or files, so anti-cheat has nothing to
-  object to. The one exception is Roblox's own settings file,
+- Game settings (Fortnite, Minecraft): OmniHub writes values the game's
+  own settings menu writes, into the game's settings file in your profile
+  (`%LOCALAPPDATA%\FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini`,
+  `%APPDATA%\.minecraft\options.txt`) — never the game's program files —
+  and only while the game is closed. A copy of the file from before its
+  first change is kept in `data\game-settings-backup` for "Put back mine".
+- Optimize PC changes, one click each and journaled in `data\pc-tweaks.json`
+  so each can be undone: the monitor's refresh rate (the same as Windows'
+  display settings), the active power plan, Game DVR
+  (`GameDVR_Enabled`, `AppCaptureEnabled`), Game Mode, the DirectX
+  `SwapEffectUpgradeEnable` setting, mouse acceleration (`SPI_SETMOUSE`), and
+  — with a UAC prompt — `HwSchMode` for GPU scheduling. Memory Integrity is
+  only reported, with a link to Windows Security.
+- Nothing touches a game's memory or program files, so anti-cheat has
+  nothing to object to. Besides the settings files above, the exception is
+  Roblox's own settings file,
   `ClientSettings\ClientAppSettings.json`, where OmniHub writes Fast Flags
   (keeping any flags it did not write).
 

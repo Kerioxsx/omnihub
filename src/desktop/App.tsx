@@ -18,6 +18,8 @@ import { useMediaQuery, useStoredState } from './lib/hooks';
 import { PAGE_IDS, type RouteId, navigate, useRoute } from './lib/router';
 import { AppsPage } from './pages/apps/AppsPage';
 import { GamesPage } from './pages/games/GamesPage';
+import { MusicPage } from './pages/music/MusicPage';
+import { PlayerHost } from './components/music/PlayerHost';
 import { HomePage } from './pages/home/HomePage';
 import { NotesPage } from './pages/notes/NotesPage';
 import { Onboarding } from './pages/onboarding/Onboarding';
@@ -37,6 +39,7 @@ const PAGES: Record<Exclude<RouteId, 'overlay'>, ComponentType> = {
   apps: AppsPage,
   screenshots: ScreenshotsPage,
   notes: NotesPage,
+  music: MusicPage,
   tasks: TasksPage,
   games: GamesPage,
   vault: VaultPage,
@@ -135,6 +138,7 @@ export function App() {
       <CommandPalette />
       <ConfirmHost />
       <MenuHost />
+      <PlayerHost />
       <SendDialog />
       <DropOverlay />
       <BrowserPairDialog />

@@ -1,12 +1,22 @@
 ## New in this version
 
-- **Fixed "Error writing to file … omnihub.exe" when installing or updating** (Windows Installer error 1310). The file was still in use: OmniHub only hid in the tray when the installer asked it to close, and Brave, Chrome or Edge kept a hidden OmniHub helper running for the browser extension. Now:
-  - both installers close every running OmniHub, including that helper, before they copy anything;
-  - OmniHub closes when Windows or an installer asks;
-  - the browser extension's helper runs from a copy in OmniHub's data folder, so it never locks the installed program.
-- If OmniHub is in *Program Files*, the setup asks for administrator approval once instead of failing (new in 0.2.5).
+- **Fortnite at max FPS.** Games → Fortnite now sets Fortnite itself for frames: unlimited frame rate (or a cap you pick), Performance rendering mode, every quality setting at its lowest, VSync and motion blur off, fullscreen, and Fortnite's own FPS counter so you can see what you get. It's written into Fortnite's settings file (only while Fortnite is closed), again before every launch if you like, and **Put back mine** restores your own settings.
+- **Optimize PC** (Games → Optimize PC) checks what holds games back on this PC and fixes it in one click each — or all at once:
+  - monitor at its full refresh rate (Windows often leaves 144/240 Hz screens at 60 Hz),
+  - Ultimate Performance power plan,
+  - background game recording (Game DVR) off,
+  - Game Mode on,
+  - optimizations for windowed games (Windows 11),
+  - hardware-accelerated GPU scheduling (asks for administrator approval, takes effect after a restart),
+  - mouse acceleration off.
+  
+  It also shows your processor, graphics card, memory and monitor, and links to Memory Integrity in Windows Security. Every change can be undone.
+- **Finds your games.** Games installed through Epic, Steam, Riot, Roblox and Minecraft show up under "On this PC", ready to add with one click. Minecraft (Java) gets its own optimizer too: unlimited FPS, fast graphics, minimal particles, no clouds.
+- **Full-screen lyrics, Apple Music style.** A new **Music** page, and a full-screen player from Home's Now Playing card or Ctrl K. The cover art is blurred into slowly drifting light, and big lyrics glide up line by line, filling word by word when the lyrics time words. Breaks show three breathing dots, and clicking a line jumps there. Space, the arrows and Esc work, and the controls fade away while you watch.
 
-Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it. If an install from an older version still stops with that error: quit OmniHub from the tray, close your browser, end any `omnihub.exe` in Task Manager → Details, and run it again. The .msi always updates OmniHub in the folder it is already in.
+About frame rates: no app can promise a number like 540 FPS — it tops out where your processor and graphics card do. OmniHub takes away everything else in the way.
+
+Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 
 ## Install
 

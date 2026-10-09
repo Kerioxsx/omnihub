@@ -13,6 +13,7 @@ import { EmptyState, ErrorState } from '../../components/ui/States';
 import { VirtualList } from '../../components/VirtualList';
 import { cx } from '../../lib/cx';
 import { useAsync, useStoredState } from '../../lib/hooks';
+import { useRoute } from '../../lib/router';
 import { useSettings } from '../../state/settings';
 import { AppDrawer } from './AppDrawer';
 import { SOURCE_LABEL, SizeHint } from './shared';
@@ -26,7 +27,9 @@ export function AppsPage() {
   const [q, setQ] = useState('');
   const [sort, setSort] = useStoredState<Sort>('omnihub.apps.sort', 'name');
   const [view, setView] = useStoredState<'grid' | 'list'>('omnihub.apps.view', 'grid');
-  const [filter, setFilter] = useState<Filter>('all');
+  // ?filter=startup opens the startup apps (from Games → Optimize PC).
+  const route = useRoute();
+  const [filter, setFilter] = useState<Filter>(() => (route.params.get('filter') === 'startup' ? 'startup' : 'all'));
   const [open, setOpen] = useState<AppInfo | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 

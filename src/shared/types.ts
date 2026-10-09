@@ -1011,7 +1011,7 @@ export interface EqStatus {
 
 // ---------- games ----------
 
-export type GameKind = 'fortnite' | 'roblox' | 'valorant' | 'cs2' | 'apex' | 'rocketLeague' | 'gta5' | 'callOfDuty' | 'league' | 'custom';
+export type GameKind = 'fortnite' | 'roblox' | 'valorant' | 'cs2' | 'apex' | 'rocketLeague' | 'gta5' | 'callOfDuty' | 'league' | 'minecraft' | 'custom';
 
 export type GameLaunch =
   | { type: 'none' }
@@ -1036,6 +1036,106 @@ export interface GameBoost {
   wifiLowLatency: boolean;
   networkPriority: boolean;
   startHighPriority: boolean;
+  /** Fortnite, Minecraft: write the fastest in-game settings before each launch. */
+  gameSettings: boolean;
+}
+
+// ---------- the games' own settings, installed games, PC tweaks ----------
+
+export type ConfigGame = 'fortnite' | 'minecraft';
+
+export interface FortniteOptions {
+  /** 0 = unlimited */
+  frameLimit: number;
+  performanceMode: boolean;
+  lowestQuality: boolean;
+  /** 0 near … 3 epic */
+  viewDistance: number;
+  resolutionScale: number;
+  showFps: boolean;
+  fullscreen: boolean;
+}
+
+export interface MinecraftOptions {
+  unlimitedFps: boolean;
+  fastGraphics: boolean;
+  minimalParticles: boolean;
+  noClouds: boolean;
+  renderDistance: number | null;
+}
+
+export interface ConfigOptions {
+  fortnite: FortniteOptions;
+  minecraft: MinecraftOptions;
+}
+
+export interface ConfigChange {
+  label: string;
+  key: string;
+  from: string | null;
+  to: string;
+}
+
+export interface ConfigSetting {
+  label: string;
+  value: string;
+  good: boolean;
+}
+
+export interface ConfigStatus {
+  game: ConfigGame;
+  path: string | null;
+  found: boolean;
+  running: boolean;
+  settings: ConfigSetting[];
+  pending: ConfigChange[];
+  backupAt: number | null;
+}
+
+export interface GameConfigs {
+  options: ConfigOptions;
+  games: ConfigStatus[];
+}
+
+export interface InstalledGame {
+  key: string;
+  name: string;
+  source: 'epic' | 'steam' | 'riot' | 'roblox' | 'minecraft';
+  kind: GameKind;
+  launch: GameLaunch;
+  process: string;
+  exePath: string | null;
+  installDir: string | null;
+  profileId: string | null;
+}
+
+export type TweakId = 'refreshRate' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'gpuScheduling' | 'mouseAcceleration' | 'memoryIntegrity';
+
+export interface PcTweak {
+  id: TweakId;
+  title: string;
+  description: string;
+  impact: 'high' | 'medium' | 'low';
+  available: boolean;
+  optimized: boolean;
+  current: string;
+  admin: boolean;
+  restart: boolean;
+  settingsLink: string | null;
+  canUndo: boolean;
+}
+
+export interface PcDisplay {
+  name: string;
+  width: number;
+  height: number;
+  hz: number;
+  maxHz: number;
+}
+
+export interface PcStatus {
+  tweaks: PcTweak[];
+  machine: { cpu: string; cores: number; threads: number; ramGb: number; gpus: string[]; displays: PcDisplay[] };
 }
 
 export type RobloxPreset = 'maxFps' | 'balanced' | 'quality' | 'custom';

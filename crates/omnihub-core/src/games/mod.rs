@@ -6,6 +6,10 @@
 //! Nothing here can make a server closer: the ping helper measures the
 //! connection and removes the things on this PC that add lag and spikes.
 
+pub mod configs;
+pub mod ini;
+pub mod library;
+pub mod pc;
 pub mod ping;
 pub mod roblox;
 pub mod tweaks;
@@ -19,6 +23,9 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::events::EventBus;
+use configs::{ConfigGame, ConfigOptions, ConfigStatus};
+use library::InstalledGame;
+use pc::{PcStatus, TweakId};
 use crate::system::procs::{Priority, ProcessMonitor};
 use ping::{PingResult, PingTarget};
 use roblox::RobloxFlags;
@@ -38,14 +45,24 @@ pub enum GameKind {
     Gta5,
     CallOfDuty,
     League,
+    Minecraft,
     #[default]
     Custom,
 }
 
 impl GameKind {
-    pub fn all() -> [GameKind; 10] {
+    pub fn all() -> [GameKind; 11] {
         use GameKind::*;
-        [Fortnite, Roblox, Valorant, Cs2, Apex, RocketLeague, Gta5, CallOfDuty, League, Custom]
+        [Fortnite, Roblox, Valorant, Cs2, Apex, RocketLeague, Gta5, CallOfDuty, League, Minecraft, Custom]
+    }
+
+    /// The game whose own settings file OmniHub can optimize.
+    pub fn config_game(self) -> Option<ConfigGame> {
+        match self {
+            GameKind::Fortnite => Some(ConfigGame::Fortnite),
+            GameKind::Minecraft => Some(ConfigGame::Minecraft),
+            _ => None,
+        }
     }
 }
 
@@ -94,6 +111,9 @@ pub struct Boost {
     /// Per game, needs admin once: Windows starts it at High priority (works
     /// with anti-cheat, which can block changing it later).
     pub start_high_priority: bool,
+    /// Fortnite, Minecraft: write the fastest in-game settings before each
+    /// launch (see `configs`).
+    pub game_settings: bool,
 }
 
 impl Default for Boost {
@@ -110,6 +130,7 @@ impl Default for Boost {
             wifi_low_latency: true,
             network_priority: false,
             start_high_priority: false,
+            game_settings: true,
         }
     }
 }
@@ -144,6 +165,8 @@ pub fn template(kind: GameKind) -> GameProfile {
         GameKind::Gta5 => ("GTA V", Launch::Steam { app_id: 271_590 }, "GTA5.exe"),
         GameKind::CallOfDuty => ("Call of Duty", Launch::Steam { app_id: 1_938_090 }, "cod.exe"),
         GameKind::League => ("League of Legends", Launch::Riot { product: "league_of_legends".into() }, "League of Legends.exe"),
+        // Java edition; the launcher starts the game.
+        GameKind::Minecraft => ("Minecraft", Launch::None, "javaw.exe"),
         GameKind::Custom => ("My game", Launch::None, ""),
     };
     GameProfile { id: String::new(), name: name.into(), kind, launch, process: process.into(), exe_path: None, boost: Boost::default(), ping_host: None, roblox: RobloxFlags::default(), last_played: None }
@@ -327,6 +350,8 @@ struct Store {
     ultimate_plan: Option<String>,
     /// Roblox flags OmniHub wrote last, replaced on the next write.
     roblox_managed: Vec<String>,
+    /// How Fortnite and Minecraft are set up by "Optimize".
+    config_options: ConfigOptions,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -355,6 +380,11 @@ struct Inner {
 pub struct GameHub {
     store_path: PathBuf,
     journal_path: PathBuf,
+    /// Copies of the games' own settings from before OmniHub's first change.
+    backups_dir: PathBuf,
+    pc_journal: PathBuf,
+    config_paths: Mutex<std::collections::HashMap<ConfigGame, PathBuf>>,
+    library_roots: Mutex<library::Roots>,
     events: EventBus,
     procs: Arc<ProcessMonitor>,
     inner: Mutex<Inner>,
@@ -391,6 +421,10 @@ impl GameHub {
         let store = std::fs::read(&store_path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
         Arc::new(GameHub {
             journal_path: data_dir.join("games-session.json"),
+            backups_dir: data_dir.join("game-settings-backup"),
+            pc_journal: data_dir.join("pc-tweaks.json"),
+            config_paths: Mutex::new(ConfigGame::all().into_iter().filter_map(|g| Some((g, g.default_path()?))).collect()),
+            library_roots: Mutex::new(library::Roots::system()),
             store_path,
             events,
             procs,
@@ -584,6 +618,109 @@ impl GameHub {
         ping::measure_all(&targets, 10, Duration::from_millis(150))
     }
 
+    // ---------- the games' own settings ----------
+
+    /// For tests: the games' settings files and the launchers' records in
+    /// temporary folders.
+    pub fn set_test_paths(&self, configs: Vec<(ConfigGame, PathBuf)>, roots: library::Roots) {
+        *self.config_paths.lock() = configs.into_iter().collect();
+        *self.library_roots.lock() = roots;
+    }
+
+    fn config_path(&self, game: ConfigGame) -> Option<PathBuf> {
+        self.config_paths.lock().get(&game).cloned()
+    }
+
+    pub fn config_options(&self) -> ConfigOptions {
+        self.inner.lock().store.config_options.clone()
+    }
+
+    pub fn config_status(&self, game: ConfigGame) -> ConfigStatus {
+        let running = !self.procs.pids_named(game.process()).is_empty();
+        configs::status(game, &self.config_options(), self.config_path(game).as_deref(), &self.backups_dir, running)
+    }
+
+    pub fn set_config_options(&self, opts: ConfigOptions) {
+        let mut inner = self.inner.lock();
+        inner.store.config_options = opts;
+        self.save_store(&inner.store);
+    }
+
+    /// Write the fastest settings into the game's file (not while it runs:
+    /// it would overwrite them when it closes).
+    pub fn config_apply(&self, game: ConfigGame) -> Result<Vec<configs::Change>, String> {
+        if !self.procs.pids_named(game.process()).is_empty() {
+            return Err(format!("Close {} first — it saves its own settings when it closes and would undo these.", game.label()));
+        }
+        let path = self.config_path(game).ok_or("Can't tell where the game keeps its settings.")?;
+        configs::apply(game, &self.config_options(), &path, &self.backups_dir)
+    }
+
+    pub fn config_restore(&self, game: ConfigGame) -> Result<(), String> {
+        if !self.procs.pids_named(game.process()).is_empty() {
+            return Err(format!("Close {} first.", game.label()));
+        }
+        let path = self.config_path(game).ok_or("Can't tell where the game keeps its settings.")?;
+        configs::restore(game, &path, &self.backups_dir)
+    }
+
+    // ---------- installed games ----------
+
+    /// Games installed on this PC, each with the profile already made for it.
+    pub fn library(&self) -> Vec<InstalledGame> {
+        let roots = self.library_roots.lock().clone();
+        let roblox = roblox::detect_in(&self.roblox_roots.lock()).player;
+        let mut games = library::scan(&roots, roblox);
+        let profiles = self.profiles();
+        for g in &mut games {
+            g.profile_id = profiles
+                .iter()
+                .find(|p| (g.kind != GameKind::Custom && p.kind == g.kind) || (!g.process.is_empty() && p.process.eq_ignore_ascii_case(&g.process)) || (p.launch != Launch::None && p.launch == g.launch))
+                .map(|p| p.id.clone());
+        }
+        games
+    }
+
+    /// Make a profile for an installed game.
+    pub fn add_installed(&self, key: &str) -> Result<GameProfile, String> {
+        let g = self.library().into_iter().find(|g| g.key == key).ok_or("That game is no longer installed.")?;
+        if let Some(id) = &g.profile_id {
+            return self.profile(id).ok_or_else(|| "That profile no longer exists.".into());
+        }
+        let mut p = self.create(g.kind);
+        if g.kind == GameKind::Custom || p.exe_path.is_none() {
+            p.name = g.name.chars().take(60).collect();
+            p.launch = g.launch.clone();
+            if !g.process.is_empty() && tweaks::valid_exe_name(&g.process) {
+                p.process = g.process.clone();
+            }
+            p.exe_path = g.exe_path.clone().or(p.exe_path);
+            let mut inner = self.inner.lock();
+            if let Some(slot) = inner.store.profiles.iter_mut().find(|q| q.id == p.id) {
+                *slot = p.clone();
+            }
+            self.save_store(&inner.store);
+        }
+        Ok(p)
+    }
+
+    // ---------- PC-wide settings ----------
+
+    pub fn pc_status(&self) -> PcStatus {
+        let plan = self.inner.lock().store.ultimate_plan.clone();
+        pc::status(&self.pc_journal, plan.as_deref())
+    }
+
+    pub fn pc_set(&self, id: TweakId, on: bool) -> Result<PcStatus, String> {
+        let plan = self.inner.lock().store.ultimate_plan.clone();
+        if let Some(created) = pc::set(id, on, &self.pc_journal, plan.as_deref())? {
+            let mut inner = self.inner.lock();
+            inner.store.ultimate_plan = Some(created);
+            self.save_store(&inner.store);
+        }
+        Ok(self.pc_status())
+    }
+
     fn emit(&self) {
         let s = self.inner.lock().session.clone();
         self.events.emit("games:session", &s);
@@ -746,6 +883,20 @@ impl GameHub {
         if p.kind == GameKind::Roblox && p.roblox.enabled {
             let r = self.write_roblox(&p.roblox).map(|files| format!("{} flags written ({} file{})", p.roblox.to_flags().len(), files.len(), if files.len() == 1 { "" } else { "s" }));
             self.push(step("roblox", "Roblox flags", r));
+        }
+
+        // 8b. The game's own settings (only while it is closed).
+        if let (Some(game), true) = (p.kind.config_game(), b.game_settings) {
+            let r = if !self.procs.pids_named(game.process()).is_empty() {
+                Ok(format!("skip: {} is already running", game.label()))
+            } else {
+                self.config_apply(game).map(|c| if c.is_empty() { "skip: already set for the most FPS".to_string() } else { format!("{} settings set for the most FPS", c.len()) })
+            };
+            let r = match r {
+                Err(e) if e.contains("Start it once") => Ok(format!("skip: {e}")),
+                r => r,
+            };
+            self.push(step("settings", "Game settings", r));
         }
 
         // 9. Launch.

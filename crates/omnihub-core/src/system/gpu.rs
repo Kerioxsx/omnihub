@@ -157,6 +157,18 @@ impl GpuSampler {
     }
 }
 
+/// The graphics cards' names, the one with the most video memory first.
+pub fn adapter_names() -> Vec<String> {
+    #[cfg(windows)]
+    {
+        win::adapters().into_iter().map(|(_, name, _)| name).collect()
+    }
+    #[cfg(not(windows))]
+    {
+        Vec::new()
+    }
+}
+
 #[cfg(windows)]
 mod win {
     use windows::core::PCWSTR;
@@ -257,7 +269,7 @@ mod win {
         }
     }
 
-    fn adapters() -> Vec<(String, String, u64)> {
+    pub(super) fn adapters() -> Vec<(String, String, u64)> {
         let mut out = Vec::new();
         unsafe {
             let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory1>() else { return out };

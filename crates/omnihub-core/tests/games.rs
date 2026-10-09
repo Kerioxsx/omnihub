@@ -111,3 +111,59 @@ fn boost_launch_watch_restore() {
     assert_eq!(again.profiles().len(), 1);
     let _ = hog_proc.kill();
 }
+
+/// Fortnite found through its Epic manifest, added as a profile, its
+/// settings file optimized and restored, and the boost writing it again
+/// before a launch.
+#[test]
+fn installed_fortnite_settings_and_boost() {
+    use omnihub_core::games::configs::ConfigGame;
+    use omnihub_core::games::library::Roots;
+
+    let dir = tempfile::tempdir().unwrap();
+    let epic = dir.path().join("epic");
+    std::fs::create_dir_all(&epic).unwrap();
+    std::fs::write(epic.join("fn.item"), serde_json::json!({"AppName": "Fortnite", "DisplayName": "Fortnite", "CatalogNamespace": "fn", "CatalogItemId": "4fe75bbc5a674f4f9b356b5c90567da5", "InstallLocation": dir.path().join("Fortnite"), "AppCategories": ["games"]}).to_string()).unwrap();
+    let ini = dir.path().join("GameUserSettings.ini");
+    let original = "[/Script/FortniteGame.FortGameUserSettings]\nFrameRateLimit=144.000000\nbUseVSync=True\n";
+    std::fs::write(&ini, original).unwrap();
+
+    let events = EventBus::new();
+    let hub = GameHub::with_test_timing(dir.path(), events, Arc::new(ProcessMonitor::new()), Duration::from_millis(100), Duration::from_secs(10));
+    hub.set_test_paths(vec![(ConfigGame::Fortnite, ini.clone())], Roots { epic_manifests: Some(epic), ..Default::default() });
+
+    let found = hub.library();
+    let f = found.iter().find(|g| g.key == "epic:Fortnite").expect("Fortnite found");
+    assert!(f.profile_id.is_none());
+    let p = hub.add_installed("epic:Fortnite").unwrap();
+    assert_eq!(p.kind, GameKind::Fortnite);
+    assert_eq!(hub.library().iter().find(|g| g.key == "epic:Fortnite").unwrap().profile_id.as_deref(), Some(p.id.as_str()));
+    assert_eq!(hub.add_installed("epic:Fortnite").unwrap().id, p.id, "adding twice gives the same profile");
+
+    let s = hub.config_status(ConfigGame::Fortnite);
+    assert!(s.found && !s.pending.is_empty());
+    let changed = hub.config_apply(ConfigGame::Fortnite).unwrap();
+    assert!(!changed.is_empty());
+    assert!(hub.config_status(ConfigGame::Fortnite).pending.is_empty());
+    assert!(std::fs::read_to_string(&ini).unwrap().contains("FrameRateLimit=0.000000"));
+    hub.config_restore(ConfigGame::Fortnite).unwrap();
+    assert_eq!(std::fs::read_to_string(&ini).unwrap(), original);
+
+    // The boost (without touching this PC's settings) writes them again.
+    let mut p = p;
+    p.launch = Launch::None;
+    p.boost.power_plan = omnihub_core::games::tweaks::PowerPlan::Keep;
+    p.boost.silence_notifications = false;
+    p.boost.game_mode = false;
+    p.boost.gpu_high_performance = false;
+    p.boost.wifi_low_latency = false;
+    p.boost.priority = None;
+    let p = hub.save(p).unwrap().profile;
+    hub.play(&p.id, false).unwrap();
+    wait_until("the settings step", Duration::from_secs(10), || hub.session().is_some_and(|s| s.steps.iter().any(|x| x.id == "settings")));
+    let step = hub.session().unwrap().steps.into_iter().find(|x| x.id == "settings").unwrap();
+    assert_eq!(step.status, StepStatus::Done, "{step:?}");
+    assert!(std::fs::read_to_string(&ini).unwrap().contains("bUseVSync=False"));
+    hub.stop();
+    wait_until("the end of the boost", Duration::from_secs(10), || hub.session().is_some_and(|s| s.phase == Phase::Ended));
+}

@@ -45,6 +45,7 @@ pub fn run_if_helper(args: &[String]) -> Option<i32> {
             _ => 64,
         },
         Some("game-admin") => crate::games::tweaks::helper_admin(&rest[1..]),
+        Some("pc-admin") => crate::games::pc::helper_admin(&rest[1..]),
         Some("startup-set") => match (rest.get(1), rest.get(2), rest.get(3)) {
             (Some(loc), Some(name), Some(on)) if rest.len() == 4 => crate::startup::helper_set(loc, name, on),
             _ => 64,

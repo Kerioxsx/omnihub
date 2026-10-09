@@ -2,24 +2,28 @@
 // starts it, and puts everything back when it closes.
 
 import { formatRelative } from '@shared/format';
-import type { GameKind, GameProfile, GameSession, GameStep } from '@shared/types';
+import type { GameKind, GameProfile, GameSession, GameStep, InstalledGame } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, CircleSlash, Gamepad2, LoaderCircle, Plus, Rocket, Square, XCircle, Zap } from 'lucide-react';
+import { CheckCircle2, CircleSlash, Gamepad2, Gauge, HardDriveDownload, LoaderCircle, Plus, Rocket, Square, XCircle, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { type MenuItem, openMenu } from '../../components/ui/Menu';
+import { Tabs } from '../../components/ui/Form';
 import { EmptyState } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { useEvent } from '../../lib/hooks';
 import { navigate, useRoute } from '../../lib/router';
 import { toast } from '../../state/toasts';
+import { PcOptimize } from './PcOptimize';
 import { ProfileEditor } from './ProfileEditor';
 import { GAMES, GameTile, launchSummary } from './shared';
 
-const ORDER: GameKind[] = ['fortnite', 'roblox', 'valorant', 'cs2', 'apex', 'rocketLeague', 'league', 'gta5', 'callOfDuty', 'custom'];
+const ORDER: GameKind[] = ['fortnite', 'roblox', 'valorant', 'cs2', 'apex', 'rocketLeague', 'league', 'gta5', 'callOfDuty', 'minecraft', 'custom'];
+
+const SOURCE: Record<InstalledGame['source'], string> = { epic: 'Epic Games', steam: 'Steam', riot: 'Riot', roblox: 'Roblox', minecraft: 'Minecraft Launcher' };
 
 const PHASE: Record<GameSession['phase'], string> = {
   starting: 'Boosting…',
@@ -34,7 +38,13 @@ export function GamesPage() {
   const route = useRoute();
   const [profiles, setProfiles] = useState<GameProfile[] | null>(null);
   const [session, setSession] = useState<GameSession | null>(null);
+  const [installed, setInstalled] = useState<InstalledGame[] | null>(null);
+  const tab = route.params.get('tab') === 'pc' ? 'pc' : 'games';
   const selected = route.params.get('id') ?? profiles?.[0]?.id ?? null;
+
+  const loadInstalled = () => void api.games.library().then(setInstalled, () => setInstalled([]));
+  useEffect(loadInstalled, []);
+  const notAdded = installed?.filter((g) => !g.profileId) ?? [];
 
   const load = () =>
     void api.games.list().then(
@@ -59,9 +69,21 @@ export function GamesPage() {
       toast.error('Could not add the game', errorText(e));
     }
   };
+  const addInstalled = async (g: InstalledGame) => {
+    try {
+      const p = await api.games.addInstalled(g.key);
+      setProfiles((l) => (l?.some((q) => q.id === p.id) ? l : [...(l ?? []), p]));
+      loadInstalled();
+      navigate('games', { id: p.id });
+    } catch (e) {
+      toast.error(`Could not add ${g.name}`, errorText(e));
+    }
+  };
   const addMenu = (e: React.MouseEvent) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const items: MenuItem[] = [{ kind: 'header', label: 'Add a game' }, ...ORDER.map((k): MenuItem => ({ label: GAMES[k].label, hint: GAMES[k].blurb, onSelect: () => void add(k) }))];
+    const items: MenuItem[] = [];
+    if (notAdded.length) items.push({ kind: 'header', label: 'On this PC' }, ...notAdded.map((g): MenuItem => ({ label: g.name, hint: SOURCE[g.source], onSelect: () => void addInstalled(g) })), { kind: 'separator' });
+    items.push({ kind: 'header', label: 'Add a game' }, ...ORDER.map((k): MenuItem => ({ label: GAMES[k].label, hint: GAMES[k].blurb, onSelect: () => void add(k) })));
     openMenu({ clientX: r.left, clientY: r.bottom + 6, preventDefault: () => undefined }, items);
   };
 
@@ -86,11 +108,40 @@ export function GamesPage() {
         </Button>
       }
     >
+      <Tabs
+        className="-mt-1 mb-5"
+        value={tab}
+        onChange={(t) => navigate('games', t === 'pc' ? { tab: 'pc' } : {})}
+        items={[
+          { value: 'games', label: 'Games', icon: Gamepad2 },
+          { value: 'pc', label: 'Optimize PC', icon: Gauge },
+        ]}
+      />
       <AnimatePresence>{session && <SessionCard key="session" session={session} onDismiss={() => setSession(null)} />}</AnimatePresence>
 
-      {profiles && profiles.length === 0 ? (
+      {tab === 'pc' ? (
+        <PcOptimize />
+      ) : profiles && profiles.length === 0 ? (
         <Card className="mt-2 p-8">
           <EmptyState icon={Gamepad2} title="Add your first game" description="Pick a game and OmniHub sets up a boost profile for it: power plan, background apps, GPU, Wi-Fi and more — all put back when you stop playing." />
+          {notAdded.length > 0 && (
+            <div className="mx-auto mt-6 max-w-3xl">
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
+                <HardDriveDownload size={13} /> Found on this PC
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {notAdded.map((g) => (
+                  <button key={g.key} type="button" onClick={() => void addInstalled(g)} className="flex items-center gap-3 rounded-xl border border-accent/30 bg-accent-soft/40 p-2.5 text-left transition-colors hover:border-accent/60 hover:bg-accent-soft">
+                    <GameTile kind={g.kind} size={36} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold text-fg">{g.name}</span>
+                      <span className="block truncate text-[11.5px] text-faint">{SOURCE[g.source]}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="mx-auto mt-6 grid max-w-3xl grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
             {ORDER.map((k) => (
               <button key={k} type="button" onClick={() => void add(k)} className="flex flex-col items-center gap-2 rounded-xl border border-line bg-surface p-3 text-[12.5px] font-medium text-fg transition-colors hover:border-line-strong hover:bg-surface-2">
@@ -128,6 +179,18 @@ export function GamesPage() {
                 </div>
               );
             })}
+            {notAdded.length > 0 && (
+              <div className="pt-3">
+                <div className="mb-1 px-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">On this PC</div>
+                {notAdded.map((g) => (
+                  <button key={g.key} type="button" onClick={() => void addInstalled(g)} className="group flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-surface" title={`Add ${g.name} (${SOURCE[g.source]})`}>
+                    <GameTile kind={g.kind} size={30} className="opacity-70 group-hover:opacity-100" />
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] text-dim group-hover:text-fg">{g.name}</span>
+                    <Plus size={14} className="text-faint group-hover:text-accent" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="min-w-0 flex-1">
             {current && (

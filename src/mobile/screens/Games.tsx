@@ -23,6 +23,7 @@ const TILE: Record<GameKind, { short: string; from: string; to: string }> = {
   gta5: { short: 'V', from: '#16a34a', to: '#14532d' },
   callOfDuty: { short: 'CoD', from: '#57534e', to: '#1c1917' },
   league: { short: 'LoL', from: '#c8aa6e', to: '#0a1428' },
+  minecraft: { short: 'MC', from: '#65a30d', to: '#3f2a14' },
   custom: { short: '★', from: '#8b5cf6', to: '#22d3ee' },
 };
 

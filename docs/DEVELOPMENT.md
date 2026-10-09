@@ -59,6 +59,26 @@ tweaks report "Windows only" elsewhere; on Windows the tests leave the power
 plan and other system settings alone. Roblox detection and flag writing are
 tested against a temporary folder (`GameHub::set_roblox_roots`).
 
+Game settings files (`games/configs.rs`) are edited with `games/ini.rs`,
+which changes single values and keeps every other byte (comments, order,
+line endings, UTF-16). Keys a game is known to read are added when missing;
+the rest change only when the file has them. The installed-games scan
+(`games/library.rs`) reads Epic manifests, Steam's `libraryfolders.vdf` and
+app manifests, Riot's product settings, `.minecraft` and Roblox; tests and
+`GameHub::set_test_paths` point both at temporary folders. PC tweaks
+(`games/pc.rs`) keep the previous value of everything they change in
+`data/pc-tweaks.json`; GPU scheduling goes through the elevated helper
+(`--omnihub-helper pc-admin hags+|hags-`).
+
+### Music
+
+The Music page and the full-screen player (`components/music/FullPlayer.tsx`)
+share `lib/nowPlaying.ts` with Home's card. The lyric that is being sung is
+filled per frame without React renders (styles written in a
+`requestAnimationFrame` loop); the lines move with springs whose delay grows
+below the current line. In demo mode the made-up songs time every word and
+have an instrumental break after the eighth line.
+
 ### Storage engine against NTFS images
 
 ```sh

@@ -53,7 +53,8 @@ pub fn reveal(path: &Path) -> std::io::Result<()> {
 
 /// Open an http(s) or ms-settings: URL.
 pub fn open_url(url: &str) -> std::io::Result<()> {
-    let ok = url.starts_with("https://") || url.starts_with("http://") || url.starts_with("ms-settings:");
+    // Windows Security's Core isolation page (Memory Integrity) too.
+    let ok = url.starts_with("https://") || url.starts_with("http://") || url.starts_with("ms-settings:") || url == "windowsdefender://coreisolation";
     if !ok {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "only web and settings links can be opened"));
     }

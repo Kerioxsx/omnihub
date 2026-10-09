@@ -12,6 +12,7 @@ import { type MenuItem, openMenu } from '../../components/ui/Menu';
 import { cx } from '../../lib/cx';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
+import { GameSettingsCard } from './GameSettingsCard';
 import { PingCard } from './PingCard';
 import { RobloxCard } from './RobloxCard';
 import { AdminBadge, GAMES, GameTile, PerGameBadge, Row } from './shared';
@@ -148,6 +149,8 @@ export function ProfileEditor({ profile, busy, activeHere, onSaved, onDeleted, o
           <IconButton icon={Trash2} variant="danger" label="Delete profile" onClick={() => void remove()} disabled={activeHere} />
         </div>
       </Card>
+
+      {(draft.kind === 'fortnite' || draft.kind === 'minecraft') && <GameSettingsCard game={draft.kind} beforeLaunch={b.gameSettings} onBeforeLaunch={(v) => boost({ gameSettings: v })} />}
 
       <Card>
         <CardHeader title="Start" subtitle="How OmniHub starts the game, and which program to follow" className="px-5 pt-4" />

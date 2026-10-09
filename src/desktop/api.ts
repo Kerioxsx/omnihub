@@ -181,6 +181,17 @@ export const api = {
     robloxStatus: () => call<T.RobloxInstall>('games_roblox_status'),
     robloxWrite: (flags: T.RobloxFlags) => call<string[]>('games_roblox_write', { flags }),
     robloxPreview: (flags: T.RobloxFlags) => call<{ flags: Record<string, unknown>; ignored: string[] }>('games_roblox_preview', { flags }),
+    configs: () => call<T.GameConfigs>('games_configs'),
+    setConfigOptions: (options: T.ConfigOptions) => call<T.GameConfigs>('games_config_options', { options }),
+    applyConfig: (game: T.ConfigGame) => call<T.GameConfigs>('games_config_apply', { game }),
+    restoreConfig: (game: T.ConfigGame) => call<T.GameConfigs>('games_config_restore', { game }),
+    library: () => call<T.InstalledGame[]>('games_library'),
+    addInstalled: (key: string) => call<T.GameProfile>('games_add_installed', { key }),
+  },
+
+  pc: {
+    status: () => call<T.PcStatus>('pc_status'),
+    set: (id: T.TweakId, on: boolean) => call<T.PcStatus>('pc_set', { id, on }),
   },
 
   media: {

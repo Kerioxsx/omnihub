@@ -91,7 +91,15 @@ export function mediaControl(action: MediaAction, positionMs: number): void {
 
 export function mediaLyrics(): { key: string; lyrics: LyricsStatus } {
   const s = state();
-  const lines = Array.from({ length: 40 }, (_, i) => ({ ms: i * 4000 + 2000, text: LYRICS[i % LYRICS.length] }));
+  // Words timed through each line, and an instrumental break after the
+  // first verse (so the dots show).
+  const starts = Array.from({ length: 40 }, (_, i) => i * 4000 + 6000 + (i >= 8 ? 9000 : 0));
+  const lines = starts.map((ms, i) => {
+    const text = LYRICS[i % LYRICS.length];
+    const parts = text.split(/(?<= )/);
+    const step = 3200 / parts.length;
+    return { ms, text, words: parts.map((w, k) => ({ ms: Math.round(ms + k * step), text: w })) };
+  });
   return { key: s.key, lyrics: { status: 'ready', lyrics: { lines, plain: null, instrumental: false, source: 'mock' } } };
 }
 

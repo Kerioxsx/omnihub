@@ -13,6 +13,7 @@ export const GAMES: Record<GameKind, { label: string; short: string; from: strin
   gta5: { label: 'GTA V', short: 'V', from: '#16a34a', to: '#14532d', blurb: 'Steam' },
   callOfDuty: { label: 'Call of Duty', short: 'CoD', from: '#57534e', to: '#1c1917', blurb: 'Steam' },
   league: { label: 'League of Legends', short: 'LoL', from: '#c8aa6e', to: '#0a1428', blurb: 'Riot Client' },
+  minecraft: { label: 'Minecraft', short: 'MC', from: '#65a30d', to: '#3f2a14', blurb: 'Java edition' },
   custom: { label: 'Any game', short: '★', from: '#8b5cf6', to: '#22d3ee', blurb: 'Pick its program or link' },
 };
 

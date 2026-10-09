@@ -21,10 +21,17 @@ store, no cloud.
 | **Notes & ideas** | Markdown notes. "Ideas for Claude" are written as `.md` files (YAML front matter, optional JSON sidecar, an `INDEX.md`) into a folder you choose; the folder is watched so replies Claude writes there show up. |
 | **Vault** | Passwords, logins, Wi-Fi keys and secure notes, encrypted with Argon2id + AES-256-GCM and bound to your Windows account with DPAPI. Auto-lock, lock with Windows, Windows Hello unlock, clipboard that clears itself and stays out of clipboard history. Two-factor codes (TOTP), a password health report with an optional breach check, and **autofill in Brave, Chrome and Edge** through a small extension that talks only to the app on your PC. |
 | **Tasks** | CPU, memory, **GPU**, video memory and disk use of every program, live, like Task Manager — with End task, priority and file location. Also on the phone. |
-| **Games** | A boost profile per game (Fortnite, Roblox, VALORANT, CS2, Apex, Rocket League, League, GTA V, Call of Duty or any program): power plan, background apps, notifications, GPU choice, game priority, Wi-Fi low-latency mode and network priority — applied when you press Play and put back when the game closes. A ping helper (latency, jitter, loss per region) and Roblox Fast Flag presets. |
-| **Music** | What the PC plays (Spotify, Apple Music, browsers…) on your phone: cover, play/pause/skip/seek, volume, bass and treble (with Equalizer APO), and time-synced lyrics in an Apple Music–style view. |
+| **Games** | A boost profile per game (Fortnite, Roblox, VALORANT, CS2, Apex, Rocket League, League, GTA V, Call of Duty, Minecraft or any program), found on your PC from Epic, Steam, Riot, Roblox and Minecraft: power plan, background apps, notifications, GPU choice, game priority, Wi-Fi low-latency mode and network priority — applied when you press Play and put back when the game closes. Fortnite and Minecraft settings for max FPS, **Optimize PC** (refresh rate, power plan, Game DVR, GPU scheduling and more), a ping helper and Roblox Fast Flag presets. |
+| **Music** | What the PC plays (Spotify, Apple Music, browsers…) — full-screen on the PC with Apple Music–style lyrics, and on your phone: cover, play/pause/skip/seek, volume, bass and treble (with Equalizer APO), and time-synced lyrics. |
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
+
+## New in 0.3.0
+
+- **Fortnite at max FPS**: unlimited frame rate, Performance mode, lowest settings, VSync off and the FPS counter, written into Fortnite's own settings (yours kept to put back), before every launch.
+- **Optimize PC**: full monitor refresh rate, Ultimate Performance, no Game DVR, Game Mode, windowed-game optimizations, GPU scheduling, no mouse acceleration — checked, one click each, undoable.
+- **Finds your games** from Epic, Steam, Riot, Roblox and Minecraft, and a Minecraft optimizer.
+- **Full-screen lyrics** on the PC, Apple Music style, and a Music page.
 
 ## New in 0.2.6
 

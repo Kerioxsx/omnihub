@@ -342,3 +342,28 @@ textarea:focus-visible,
 select:focus-visible {
   outline: none;
 }
+
+/* Full-screen player: the cover art, blurred into slowly drifting light
+   (each blob is rasterised once and only moved, so it stays cheap). */
+.ambient-blob {
+  position: absolute;
+  width: 75vmax;
+  height: 75vmax;
+  border-radius: 50%;
+  object-fit: cover;
+  filter: blur(72px) saturate(1.7) brightness(0.9);
+  opacity: 0.85;
+  will-change: transform;
+}
+.ambient-blob.a { left: -25vmax; top: -30vmax; animation: ambient-a 46s linear infinite; }
+.ambient-blob.b { right: -28vmax; top: -18vmax; animation: ambient-b 58s linear infinite; }
+.ambient-blob.c { left: -10vmax; bottom: -38vmax; animation: ambient-c 64s linear infinite; }
+.ambient-blob.d { right: -20vmax; bottom: -30vmax; animation: ambient-d 52s linear infinite; opacity: 0.7; }
+@keyframes ambient-a { from { transform: rotate(0deg) translate(6vmax) rotate(0deg) scale(1.1); } to { transform: rotate(360deg) translate(6vmax) rotate(-360deg) scale(1.1); } }
+@keyframes ambient-b { from { transform: rotate(360deg) translate(8vmax) rotate(0deg) scaleX(-1); } to { transform: rotate(0deg) translate(8vmax) rotate(360deg) scaleX(-1); } }
+@keyframes ambient-c { from { transform: rotate(0deg) translate(10vmax) rotate(180deg); } to { transform: rotate(360deg) translate(10vmax) rotate(-180deg); } }
+@keyframes ambient-d { from { transform: rotate(180deg) translate(7vmax) rotate(0deg) scale(0.9); } to { transform: rotate(-180deg) translate(7vmax) rotate(360deg) scale(0.9); } }
+@keyframes lyric-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) {
+  .ambient-blob { animation: none !important; }
+}
