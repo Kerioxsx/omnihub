@@ -7,7 +7,9 @@
 //! connection and removes the things on this PC that add lag and spikes.
 
 pub mod configs;
+pub mod fps;
 pub mod ini;
+pub mod junk;
 pub mod library;
 pub mod pc;
 pub mod ping;
@@ -24,6 +26,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::events::EventBus;
 use configs::{ConfigGame, ConfigOptions, ConfigStatus};
+use fps::{FpsRecord, FpsStatus};
 use library::InstalledGame;
 use pc::{PcStatus, TweakId};
 use crate::system::procs::{Priority, ProcessMonitor};
@@ -46,14 +49,24 @@ pub enum GameKind {
     CallOfDuty,
     League,
     Minecraft,
+    Overwatch,
+    Cyberpunk,
     #[default]
     Custom,
 }
 
 impl GameKind {
-    pub fn all() -> [GameKind; 11] {
+    pub fn all() -> [GameKind; 13] {
         use GameKind::*;
-        [Fortnite, Roblox, Valorant, Cs2, Apex, RocketLeague, Gta5, CallOfDuty, League, Minecraft, Custom]
+        [Fortnite, Roblox, Valorant, Cs2, Apex, Overwatch, RocketLeague, Gta5, CallOfDuty, League, Minecraft, Cyberpunk, Custom]
+    }
+
+    /// Competitive games go for frames; the rest keep their picture.
+    pub fn default_mode(self) -> BoostMode {
+        match self {
+            GameKind::Gta5 | GameKind::Cyberpunk | GameKind::Custom => BoostMode::Quality,
+            _ => BoostMode::Competitive,
+        }
     }
 
     /// The game whose own settings file OmniHub can optimize.
@@ -61,6 +74,11 @@ impl GameKind {
         match self {
             GameKind::Fortnite => Some(ConfigGame::Fortnite),
             GameKind::Minecraft => Some(ConfigGame::Minecraft),
+            GameKind::Valorant => Some(ConfigGame::Valorant),
+            GameKind::Cs2 => Some(ConfigGame::Cs2),
+            GameKind::Apex => Some(ConfigGame::Apex),
+            GameKind::Overwatch => Some(ConfigGame::Overwatch),
+            GameKind::Roblox => Some(ConfigGame::Roblox),
             _ => None,
         }
     }
@@ -88,9 +106,25 @@ pub enum Launch {
     },
 }
 
+/// How far a boost goes.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum BoostMode {
+    /// The most frames and the least delay: also sets the game's own
+    /// graphics to the fastest (where OmniHub knows them).
+    Competitive,
+    /// Everything that doesn't change the picture: the game's graphics are
+    /// never touched (4K Ultra stays 4K Ultra).
+    Quality,
+    /// Each switch as you set it.
+    #[default]
+    Custom,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Boost {
+    pub mode: BoostMode,
     pub power_plan: PowerPlan,
     /// Priority given to the game once it runs.
     pub priority: Option<Priority>,
@@ -111,14 +145,53 @@ pub struct Boost {
     /// Per game, needs admin once: Windows starts it at High priority (works
     /// with anti-cheat, which can block changing it later).
     pub start_high_priority: bool,
-    /// Fortnite, Minecraft: write the fastest in-game settings before each
-    /// launch (see `configs`).
+    /// Games OmniHub knows the settings of: write the fastest in-game
+    /// settings before each launch (see `configs`).
     pub game_settings: bool,
+    /// Close cloud sync, Windows extras and updaters (`junk::JUNK`) for the
+    /// session.
+    pub close_junk: bool,
+    /// Browsers, launchers' web views and sync apps at "Below normal"
+    /// priority while playing.
+    pub lower_background: bool,
+    /// Windows' finest timer (0.5 ms) while playing.
+    pub precise_timer: bool,
+    /// Windows never slows the game down to save power.
+    pub full_speed: bool,
+    /// Measure frames per second while playing (PresentMon).
+    pub fps_meter: bool,
+}
+
+impl Boost {
+    /// The switches a mode stands for. Close lists and the per-game
+    /// admin settings stay as they are.
+    pub fn with_mode(&self, mode: BoostMode) -> Boost {
+        let mut b = self.clone();
+        b.mode = mode;
+        if mode == BoostMode::Custom {
+            return b;
+        }
+        let competitive = mode == BoostMode::Competitive;
+        b.power_plan = PowerPlan::Ultimate;
+        b.priority = Some(if competitive { Priority::High } else { Priority::AboveNormal });
+        b.reopen_apps = true;
+        b.silence_notifications = true;
+        b.game_mode = true;
+        b.gpu_high_performance = true;
+        b.wifi_low_latency = true;
+        b.game_settings = competitive;
+        b.close_junk = true;
+        b.lower_background = true;
+        b.precise_timer = true;
+        b.full_speed = true;
+        b
+    }
 }
 
 impl Default for Boost {
     fn default() -> Self {
         Boost {
+            mode: BoostMode::Custom,
             power_plan: PowerPlan::Ultimate,
             priority: Some(Priority::High),
             close_apps: Vec::new(),
@@ -131,6 +204,11 @@ impl Default for Boost {
             network_priority: false,
             start_high_priority: false,
             game_settings: true,
+            close_junk: true,
+            lower_background: true,
+            precise_timer: true,
+            full_speed: true,
+            fps_meter: true,
         }
     }
 }
@@ -165,11 +243,14 @@ pub fn template(kind: GameKind) -> GameProfile {
         GameKind::Gta5 => ("GTA V", Launch::Steam { app_id: 271_590 }, "GTA5.exe"),
         GameKind::CallOfDuty => ("Call of Duty", Launch::Steam { app_id: 1_938_090 }, "cod.exe"),
         GameKind::League => ("League of Legends", Launch::Riot { product: "league_of_legends".into() }, "League of Legends.exe"),
+        // Battle.net's link for Overwatch 2 (its product code is "Pro").
+        GameKind::Overwatch => ("Overwatch 2", Launch::Url { url: "battlenet://Pro".into() }, "Overwatch.exe"),
+        GameKind::Cyberpunk => ("Cyberpunk 2077", Launch::Steam { app_id: 1_091_500 }, "Cyberpunk2077.exe"),
         // Java edition; the launcher starts the game.
         GameKind::Minecraft => ("Minecraft", Launch::None, "javaw.exe"),
         GameKind::Custom => ("My game", Launch::None, ""),
     };
-    GameProfile { id: String::new(), name: name.into(), kind, launch, process: process.into(), exe_path: None, boost: Boost::default(), ping_host: None, roblox: RobloxFlags::default(), last_played: None }
+    GameProfile { id: String::new(), name: name.into(), kind, launch, process: process.into(), exe_path: None, boost: Boost::default().with_mode(kind.default_mode()), ping_host: None, roblox: RobloxFlags::default(), last_played: None }
 }
 
 /// Where a known game's executable is, when it can be found.
@@ -189,6 +270,7 @@ fn needed_by(launch: &Launch) -> &'static [&'static str] {
         Launch::Epic { .. } => &["EpicGamesLauncher.exe", "EpicWebHelper.exe"],
         Launch::Steam { .. } => &["steam.exe", "steamwebhelper.exe", "steamservice.exe"],
         Launch::Riot { .. } => &["RiotClientServices.exe", "Riot Client.exe", "RiotClientUx.exe", "RiotClientCrashHandler.exe"],
+        Launch::Url { url } if url.starts_with("battlenet://") => &["Battle.net.exe", "Agent.exe"],
         _ => &[],
     }
 }
@@ -313,6 +395,7 @@ pub struct Step {
 pub struct Session {
     pub profile_id: String,
     pub name: String,
+    pub mode: BoostMode,
     pub phase: Phase,
     pub started_at: i64,
     pub ended_at: Option<i64>,
@@ -321,6 +404,8 @@ pub struct Session {
     /// Restore steps, once the session ends.
     pub restored: Vec<Step>,
     pub message: Option<String>,
+    /// Frames per second over the session, when the FPS meter ran.
+    pub fps: Option<fps::Summary>,
 }
 
 impl Session {
@@ -340,6 +425,8 @@ struct Journal {
     /// (name, executable) of closed programs.
     closed: Vec<(String, Option<String>)>,
     reopen: bool,
+    /// Programs set to "Below normal" for the session.
+    lowered: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -350,9 +437,14 @@ struct Store {
     ultimate_plan: Option<String>,
     /// Roblox flags OmniHub wrote last, replaced on the next write.
     roblox_managed: Vec<String>,
-    /// How Fortnite and Minecraft are set up by "Optimize".
+    /// How each game is set up by "Optimize".
     config_options: ConfigOptions,
+    /// FPS meter results, newest last.
+    fps_records: Vec<FpsRecord>,
 }
+
+/// Results kept (all games together).
+const FPS_RECORDS: usize = 60;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -383,8 +475,17 @@ pub struct GameHub {
     /// Copies of the games' own settings from before OmniHub's first change.
     backups_dir: PathBuf,
     pc_journal: PathBuf,
-    config_paths: Mutex<std::collections::HashMap<ConfigGame, PathBuf>>,
+    /// For tests: the games' settings files; otherwise they are looked up.
+    config_paths: Mutex<Option<std::collections::HashMap<ConfigGame, Vec<PathBuf>>>>,
     library_roots: Mutex<library::Roots>,
+    /// Downloaded tools (PresentMon).
+    tools_dir: PathBuf,
+    /// Written once Windows was asked to let OmniHub read frame timings.
+    fps_marker: PathBuf,
+    fps_installing: AtomicBool,
+    live_fps: Mutex<Option<fps::Live>>,
+    /// For tests: a stand-in PresentMon, allowed to run.
+    fps_test_tool: Mutex<Option<PathBuf>>,
     events: EventBus,
     procs: Arc<ProcessMonitor>,
     inner: Mutex<Inner>,
@@ -423,8 +524,13 @@ impl GameHub {
             journal_path: data_dir.join("games-session.json"),
             backups_dir: data_dir.join("game-settings-backup"),
             pc_journal: data_dir.join("pc-tweaks.json"),
-            config_paths: Mutex::new(ConfigGame::all().into_iter().filter_map(|g| Some((g, g.default_path()?))).collect()),
+            config_paths: Mutex::new(None),
             library_roots: Mutex::new(library::Roots::system()),
+            tools_dir: data_dir.join("tools"),
+            fps_marker: data_dir.join("fps-access.json"),
+            fps_installing: AtomicBool::new(false),
+            live_fps: Mutex::new(None),
+            fps_test_tool: Mutex::new(None),
             store_path,
             events,
             procs,
@@ -516,6 +622,7 @@ impl GameHub {
             }
         }
         p.boost.close_apps.retain(|a| tweaks::valid_exe_name(a) && !crate::system::procs::is_protected(a));
+        p.boost = p.boost.with_mode(p.boost.mode);
         let old = self.profile(&p.id).ok_or("That profile no longer exists.")?;
         let mut warnings = Vec::new();
         // Per-game settings turned off: take them away now.
@@ -618,17 +725,38 @@ impl GameHub {
         ping::measure_all(&targets, 10, Duration::from_millis(150))
     }
 
+    /// Lag under load against the profile's closest server (or the nearest
+    /// Cloudflare/Google one). Progress goes out as `games:loadTest`.
+    pub fn load_test(&self, id: Option<&str>) -> ping::LoadTest {
+        let targets = self.ping_targets(id);
+        let quick = ping::measure_all(&targets, 4, Duration::from_millis(100));
+        let best = quick.iter().filter(|r| r.avg_ms.is_some()).min_by(|a, b| a.avg_ms.unwrap_or(f32::MAX).total_cmp(&b.avg_ms.unwrap_or(f32::MAX))).and_then(|r| targets.iter().find(|t| t.id == r.id)).or(targets.first()).cloned();
+        let Some(target) = best else { return ping::LoadTest { error: Some("Nothing to ping.".into()), ..Default::default() } };
+        ping::load_test(&target, &ping::LoadUrls::default(), Duration::from_secs(8), tweaks::on_wifi(), &mut |phase, progress, ms| {
+            self.events.emit("games:loadTest", serde_json::json!({ "phase": phase, "progress": progress, "ms": ms }));
+        })
+    }
+
     // ---------- the games' own settings ----------
 
     /// For tests: the games' settings files and the launchers' records in
     /// temporary folders.
     pub fn set_test_paths(&self, configs: Vec<(ConfigGame, PathBuf)>, roots: library::Roots) {
-        *self.config_paths.lock() = configs.into_iter().collect();
+        let mut map = std::collections::HashMap::<ConfigGame, Vec<PathBuf>>::new();
+        for (g, p) in configs {
+            map.entry(g).or_default().push(p);
+        }
+        *self.config_paths.lock() = Some(map);
         *self.library_roots.lock() = roots;
     }
 
-    fn config_path(&self, game: ConfigGame) -> Option<PathBuf> {
-        self.config_paths.lock().get(&game).cloned()
+    /// The game's settings files (looked up each time: a game makes its
+    /// file the first time it runs).
+    fn config_files(&self, game: ConfigGame) -> Vec<PathBuf> {
+        match self.config_paths.lock().as_ref() {
+            Some(map) => map.get(&game).map(|v| v.iter().filter(|p| p.is_file()).cloned().collect()).unwrap_or_default(),
+            None => game.locate(),
+        }
     }
 
     pub fn config_options(&self) -> ConfigOptions {
@@ -637,7 +765,7 @@ impl GameHub {
 
     pub fn config_status(&self, game: ConfigGame) -> ConfigStatus {
         let running = !self.procs.pids_named(game.process()).is_empty();
-        configs::status(game, &self.config_options(), self.config_path(game).as_deref(), &self.backups_dir, running)
+        configs::status(game, &self.config_options(), &self.config_files(game), &self.backups_dir, running)
     }
 
     pub fn set_config_options(&self, opts: ConfigOptions) {
@@ -652,16 +780,14 @@ impl GameHub {
         if !self.procs.pids_named(game.process()).is_empty() {
             return Err(format!("Close {} first — it saves its own settings when it closes and would undo these.", game.label()));
         }
-        let path = self.config_path(game).ok_or("Can't tell where the game keeps its settings.")?;
-        configs::apply(game, &self.config_options(), &path, &self.backups_dir)
+        configs::apply(game, &self.config_options(), &self.config_files(game), &self.backups_dir)
     }
 
     pub fn config_restore(&self, game: ConfigGame) -> Result<(), String> {
         if !self.procs.pids_named(game.process()).is_empty() {
             return Err(format!("Close {} first.", game.label()));
         }
-        let path = self.config_path(game).ok_or("Can't tell where the game keeps its settings.")?;
-        configs::restore(game, &path, &self.backups_dir)
+        configs::restore(game, &self.config_files(game), &self.backups_dir)
     }
 
     // ---------- installed games ----------
@@ -721,6 +847,105 @@ impl GameHub {
         Ok(self.pc_status())
     }
 
+    // ---------- FPS meter ----------
+
+    /// For tests: a stand-in for PresentMon that is allowed to run.
+    pub fn set_fps_test_tool(&self, exe: PathBuf) {
+        *self.fps_test_tool.lock() = Some(exe);
+    }
+
+    fn fps_exe(&self) -> PathBuf {
+        self.fps_test_tool.lock().clone().unwrap_or_else(|| self.tools_dir.join("PresentMon.exe"))
+    }
+
+    pub fn fps_status(&self) -> FpsStatus {
+        let test = self.fps_test_tool.lock().is_some();
+        let allowed = test || fps::allowed();
+        FpsStatus { installed: self.fps_exe().is_file(), allowed, sign_out_needed: !allowed && self.fps_marker.exists(), supported: test || cfg!(windows) }
+    }
+
+    /// The live figures while a game is measured.
+    pub fn fps_live(&self) -> Option<fps::Live> {
+        self.live_fps.lock().clone()
+    }
+
+    /// Download PresentMon from this release and check it against its
+    /// published checksum. Progress goes out as `games:fpsInstall`.
+    pub fn fps_install(&self) -> Result<FpsStatus, String> {
+        if self.fps_installing.swap(true, Ordering::SeqCst) {
+            return Err("The FPS meter is already downloading.".into());
+        }
+        let r = (|| -> Result<(), String> {
+            use crate::capture::airplay;
+            let url = format!("{}/v{}/{}", airplay::releases_url(), env!("CARGO_PKG_VERSION"), fps::ASSET);
+            std::fs::create_dir_all(&self.tools_dir).map_err(|e| e.to_string())?;
+            let part = self.tools_dir.join("PresentMon.exe.part");
+            let hash = airplay::download(&url, &part, &mut |done, total| self.events.emit("games:fpsInstall", serde_json::json!({ "done": done, "total": total }))).map_err(|e| format!("Could not download the FPS meter: {e}"))?;
+            let expected = match fps::pinned_sha256() {
+                Some(h) => h.to_lowercase(),
+                None => {
+                    let sums = airplay::fetch_text(&format!("{}/v{}/SHA256SUMS.txt", airplay::releases_url(), env!("CARGO_PKG_VERSION"))).map_err(|e| e.to_string())?;
+                    airplay::checksum_for(&sums, fps::ASSET).ok_or("This release lists no checksum for the FPS meter.")?
+                }
+            };
+            if hash != expected {
+                let _ = std::fs::remove_file(&part);
+                return Err("The download did not match its published checksum, so it was not kept.".into());
+            }
+            std::fs::rename(&part, self.tools_dir.join("PresentMon.exe")).map_err(|e| e.to_string())
+        })();
+        self.fps_installing.store(false, Ordering::SeqCst);
+        r.map(|_| self.fps_status())
+    }
+
+    /// One administrator prompt: Windows adds you to "Performance Log
+    /// Users" (it counts from your next sign-in).
+    pub fn fps_allow(&self) -> Result<FpsStatus, String> {
+        if !self.fps_status().allowed {
+            fps::request_access()?;
+            let _ = write_json(&self.fps_marker, &serde_json::json!({ "at": crate::db::now() }));
+        }
+        Ok(self.fps_status())
+    }
+
+    /// Past results, newest first (one game's, or all).
+    pub fn fps_history(&self, profile_id: Option<&str>) -> Vec<FpsRecord> {
+        self.inner.lock().store.fps_records.iter().rev().filter(|r| profile_id.is_none_or(|id| r.profile_id == id)).cloned().collect()
+    }
+
+    /// Start measuring the game, or say why not.
+    fn start_meter(self: &Arc<Self>, p: &GameProfile, stats: &Arc<Mutex<fps::Stats>>) -> Option<fps::Meter> {
+        let st = self.fps_status();
+        let why = if !st.supported {
+            Some("Windows only".to_string())
+        } else if !st.installed {
+            Some("skip: get the FPS meter in Games → FPS first".to_string())
+        } else if !st.allowed {
+            Some(if st.sign_out_needed { "skip: sign out of Windows and back in once to finish turning on the FPS meter".to_string() } else { "skip: allow the FPS meter once in Games → FPS".to_string() })
+        } else {
+            None
+        };
+        if let Some(w) = why {
+            self.push(step("fps", "FPS meter", if w == "Windows only" { Err(w) } else { Ok(w) }));
+            return None;
+        }
+        let pid = *self.procs.pids_named(&p.process).first()?;
+        let hub = self.clone();
+        match fps::Meter::start(&self.fps_exe(), pid, stats.clone(), move |l| {
+            *hub.live_fps.lock() = Some(l.clone());
+            hub.events.emit("games:fps", &l);
+        }) {
+            Ok(m) => {
+                self.push(step("fps", "FPS meter", Ok("Measuring every frame (PresentMon)".into())));
+                Some(m)
+            }
+            Err(e) => {
+                self.push(step("fps", "FPS meter", Err(e)));
+                None
+            }
+        }
+    }
+
     fn emit(&self) {
         let s = self.inner.lock().session.clone();
         self.events.emit("games:session", &s);
@@ -744,7 +969,7 @@ impl GameHub {
             if let Some(s) = inner.session.as_ref().filter(|s| s.active()) {
                 return Err(format!("{} is already boosted — stop that first.", s.name));
             }
-            inner.session = Some(Session { profile_id: p.id.clone(), name: p.name.clone(), phase: Phase::Starting, started_at: crate::db::now(), ended_at: None, launched: false, steps: Vec::new(), restored: Vec::new(), message: None });
+            inner.session = Some(Session { profile_id: p.id.clone(), name: p.name.clone(), mode: p.boost.mode, phase: Phase::Starting, started_at: crate::db::now(), ended_at: None, launched: false, steps: Vec::new(), restored: Vec::new(), message: None, fps: None });
             inner.stop = Some(stop.clone());
         }
         self.emit();
@@ -783,32 +1008,65 @@ impl GameHub {
         };
         save_journal(&j);
 
-        // 1. Background programs.
-        if !b.close_apps.is_empty() {
+        // 1. Background programs: the profile's list, plus the junk nobody
+        // needs mid-game.
+        let mut to_close: Vec<String> = b.close_apps.clone();
+        if b.close_junk {
+            for x in junk::JUNK {
+                if !to_close.iter().any(|c| c.eq_ignore_ascii_case(x.exe)) {
+                    to_close.push(x.exe.to_string());
+                }
+            }
+        }
+        let running = if !to_close.is_empty() || b.lower_background { self.procs.usage(crate::system::procs::ProcessSort::Name, 10_000, false).processes } else { Vec::new() };
+        if !to_close.is_empty() {
             let keep: Vec<&str> = needed_by(&p.launch).to_vec();
-            let running = self.procs.usage(crate::system::procs::ProcessSort::Name, 10_000, false).processes;
-            let mut closed = Vec::new();
+            let mut closed: Vec<String> = Vec::new();
             let mut failed = Vec::new();
-            for name in &b.close_apps {
+            for name in &to_close {
                 if keep.iter().any(|k| k.eq_ignore_ascii_case(name)) || name.eq_ignore_ascii_case(&p.process) {
                     continue;
                 }
                 let Some(g) = running.iter().find(|g| g.name.eq_ignore_ascii_case(name) && g.can_end) else { continue };
+                let known = junk::find(&g.name).filter(|_| !b.close_apps.iter().any(|c| c.eq_ignore_ascii_case(&g.name)));
+                // Junk Windows restarts by itself is not started again.
+                let exe = if known.is_some_and(|k| k.reopen.is_none()) { None } else { g.exe.clone() };
+                let label = known.map_or_else(|| short(&g.name).to_string(), |k| k.label.to_string());
                 match self.procs.end(&g.name) {
                     Ok(_) => {
-                        closed.push(short(&g.name).to_string());
-                        j.closed.push((g.name.clone(), g.exe.clone()));
+                        if !closed.contains(&label) {
+                            closed.push(label);
+                        }
+                        j.closed.push((g.name.clone(), exe));
                     }
-                    Err(_) => failed.push(short(&g.name).to_string()),
+                    Err(_) => failed.push(label),
                 }
             }
             save_journal(&j);
             let r = match (closed.is_empty(), failed.is_empty()) {
-                (true, true) => Ok("skip: none of them were running".to_string()),
+                (true, true) => Ok("skip: nothing to close was running".to_string()),
                 (false, true) => Ok(format!("Closed {}", closed.join(", "))),
                 (_, false) => Err(format!("Could not close {}{}", failed.join(", "), if closed.is_empty() { String::new() } else { format!(" (closed {})", closed.join(", ")) })),
             };
             self.push(step("apps", "Background apps", r));
+        }
+
+        // 1b. What stays open gets the processor after the game.
+        if b.lower_background {
+            let mut lowered = Vec::new();
+            for g in running.iter().filter(|g| junk::lowered(&g.name) && !g.name.eq_ignore_ascii_case(&p.process) && g.priority == Some(Priority::Normal)) {
+                if j.closed.iter().any(|(n, _)| n.eq_ignore_ascii_case(&g.name)) {
+                    continue;
+                }
+                if self.procs.set_priority(&g.name, Priority::BelowNormal).is_ok() {
+                    lowered.push(short(&g.name).to_string());
+                    j.lowered.push(g.name.clone());
+                }
+            }
+            save_journal(&j);
+            let r = if lowered.is_empty() { Ok("skip: no browser, launcher or sync app was running".to_string()) } else { Ok(format!("{} at Below normal priority", lowered.join(", "))) };
+            let r = if cfg!(windows) { r } else { Err("Windows only".into()) };
+            self.push(step("background", "Background priority", r));
         }
 
         // 2. Power plan.
@@ -865,6 +1123,22 @@ impl GameHub {
             self.push(step("admin", "Network & start priority", Ok("skip: already on".into())));
         }
 
+        // 6b. Windows' finest timer, held for the session.
+        let mut timer = None;
+        if b.precise_timer {
+            let r = tweaks::timer_reaches_games().map_err(|e| format!("skip: {e}")).and_then(|_| {
+                tweaks::TimerResolution::start().map(|(guard, ms)| {
+                    timer = Some(guard);
+                    format!("{ms:.1} ms (Windows' default is up to 15.6 ms)")
+                })
+            });
+            let r = match r {
+                Err(e) if e.starts_with("skip:") => Ok(e),
+                r => r,
+            };
+            self.push(step("timer", "Precise timer", r));
+        }
+
         // 7. Wi-Fi low-latency mode, held for the session.
         let mut wifi = None;
         if b.wifi_low_latency {
@@ -918,6 +1192,9 @@ impl GameHub {
         self.update(|s| s.launched = launched);
 
         // 10. Watch the game (boost only: until it has been played and closed).
+        let fps_stats = Arc::new(Mutex::new(fps::Stats::default()));
+        let mut meter: Option<fps::Meter> = None;
+        let mut meter_starts = 0;
         if !p.process.is_empty() {
             self.update(|s| s.phase = Phase::Waiting);
             let t0 = Instant::now();
@@ -933,6 +1210,17 @@ impl GameHub {
                     missing = 0;
                     self.update(|s| s.phase = Phase::Playing);
                     self.on_game_started(&mut p);
+                    if b.fps_meter {
+                        meter = self.start_meter(&p, &fps_stats);
+                        meter_starts = 1;
+                    }
+                } else if running && meter.as_mut().is_some_and(|m| !m.running()) && meter_starts < 3 {
+                    // The launcher restarted the game: follow the new one.
+                    if let Some(m) = meter.take() {
+                        m.stop();
+                    }
+                    meter = self.start_meter(&p, &fps_stats);
+                    meter_starts += 1;
                 } else if !running && seen {
                     // Launchers sometimes restart the game; allow a moment.
                     missing += 1;
@@ -955,12 +1243,29 @@ impl GameHub {
             }
         }
 
+        if let Some(m) = meter.take() {
+            m.stop();
+        }
+        *self.live_fps.lock() = None;
+        let summary = fps_stats.lock().summary();
+        if let Some(sum) = summary.clone().filter(|s| s.seconds >= 10.0) {
+            let mut inner = self.inner.lock();
+            inner.store.fps_records.push(FpsRecord { profile_id: p.id.clone(), name: p.name.clone(), mode: b.mode, at: crate::db::now(), summary: sum });
+            let extra = inner.store.fps_records.len().saturating_sub(FPS_RECORDS);
+            inner.store.fps_records.drain(..extra);
+            self.save_store(&inner.store);
+        }
+        self.update(|s| s.fps = summary);
+
         // Put everything back.
         self.update(|s| s.phase = Phase::Restoring);
         let mut restored = Vec::new();
         // Closing the handle hands Wi-Fi back to Windows.
         if wifi.take().is_some() {
             restored.push(step("wifi", "Wi-Fi", Ok("Back to normal".into())));
+        }
+        if timer.take().is_some() {
+            restored.push(step("timer", "Precise timer", Ok("Back to Windows' timer".into())));
         }
         restored.extend(self.restore(&j, true));
         let _ = std::fs::remove_file(&self.journal_path);
@@ -1021,6 +1326,18 @@ impl GameHub {
                 self.per_exe_settings(p);
             }
         }
+        if p.boost.full_speed {
+            let pids = self.procs.pids_named(&p.process);
+            let ok = pids.iter().filter(|&&pid| tweaks::set_power_throttling(Some(pid), true).is_ok()).count();
+            let r = if !cfg!(windows) {
+                Err("Windows only".to_string())
+            } else if ok > 0 {
+                Ok("Never slowed down to save power".to_string())
+            } else {
+                Ok("skip: the game's anti-cheat doesn't allow it (Game Mode does the same for the game in front)".to_string())
+            };
+            self.push(step("fullspeed", "Full speed", r));
+        }
         if let Some(pr) = p.boost.priority {
             let r = self.procs.set_priority(&p.process, pr).map(|_| format!("{pr:?} priority")).map_err(|e| {
                 if p.boost.start_high_priority {
@@ -1046,6 +1363,12 @@ impl GameHub {
         if let Some(before) = j.toasts_before {
             out.push(step("notifications", "Notifications", tweaks::restore_notifications(before).map(|_| "Pop-ups back on".into())));
         }
+        if !j.lowered.is_empty() {
+            for name in &j.lowered {
+                let _ = self.procs.set_priority(name, Priority::Normal);
+            }
+            out.push(step("background", "Background priority", Ok("Back to Normal".into())));
+        }
         if reopen && j.reopen && !j.closed.is_empty() {
             let mut started = Vec::new();
             for (name, exe) in &j.closed {
@@ -1053,7 +1376,7 @@ impl GameHub {
                     continue;
                 }
                 if let Some(exe) = exe.as_deref().filter(|e| Path::new(e).is_file()) {
-                    if start(exe, "").is_ok() {
+                    if start(exe, junk::find(name).and_then(|k| k.reopen).unwrap_or("")).is_ok() {
                         started.push(short(name).to_string());
                     }
                 }

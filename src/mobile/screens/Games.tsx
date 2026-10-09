@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Activity, CheckCircle2, CircleSlash, Gamepad2, LoaderCircle, Rocket, Square, XCircle, Zap } from 'lucide-react';
 import { formatRelative } from '@shared/format';
-import { client, type GameKind, type GameSession, type PhoneGame, type PingResult } from '../client';
+import { client, type FpsLive, type GameKind, type GameSession, type PhoneGame, type PingResult } from '../client';
 import { useEvent } from '../lib/events';
 import { toast } from '../state';
 import { PullToRefresh } from '../ui/PullToRefresh';
@@ -19,11 +19,13 @@ const TILE: Record<GameKind, { short: string; from: string; to: string }> = {
   valorant: { short: 'VA', from: '#ff4655', to: '#7f1d1d' },
   cs2: { short: 'CS', from: '#f59e0b', to: '#78350f' },
   apex: { short: 'AP', from: '#dc2626', to: '#450a0a' },
+  overwatch: { short: 'OW', from: '#f97316', to: '#1e293b' },
   rocketLeague: { short: 'RL', from: '#2563eb', to: '#ea580c' },
   gta5: { short: 'V', from: '#16a34a', to: '#14532d' },
   callOfDuty: { short: 'CoD', from: '#57534e', to: '#1c1917' },
   league: { short: 'LoL', from: '#c8aa6e', to: '#0a1428' },
   minecraft: { short: 'MC', from: '#65a30d', to: '#3f2a14' },
+  cyberpunk: { short: '77', from: '#facc15', to: '#0e7490' },
   custom: { short: '★', from: '#8b5cf6', to: '#22d3ee' },
 };
 
@@ -51,12 +53,14 @@ export function GamesPage({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [ping, setPing] = useState<{ game: PhoneGame; results: PingResult[] | null } | null>(null);
+  const [fps, setFps] = useState<FpsLive | null>(null);
 
   const load = useCallback(async () => {
     try {
       const r = await client.games();
       setGames(r.profiles);
       setSession(r.session);
+      setFps(r.fps ?? null);
       setError(null);
     } catch (e) {
       setError(errorMessage(e));
@@ -67,8 +71,13 @@ export function GamesPage({ onBack }: { onBack: () => void }) {
   }, [load]);
   useEvent<GameSession | null>('games:session', (s) => {
     setSession(s);
-    if (s?.phase === 'ended') void load();
+    if (s?.phase === 'ended') {
+      setFps(null);
+      void load();
+    }
   });
+  // The PC's FPS meter, live: the phone as a second screen.
+  useEvent<FpsLive>('games:fps', setFps);
 
   const play = async (g: PhoneGame, launch: boolean) => {
     setBusy(g.id);
@@ -119,6 +128,39 @@ export function GamesPage({ onBack }: { onBack: () => void }) {
                   <div className={cx('truncate text-[13px]', active ? 'text-accent' : 'text-dim')}>{session.message ?? PHASE[session.phase]}</div>
                 </div>
               </div>
+              {active && fps && (
+                <div className="mt-3 flex items-end justify-between rounded-2xl bg-accent-soft px-4 py-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-accent">Live on the PC</div>
+                    <div className="num font-display text-[40px] font-bold leading-none">
+                      {Math.round(fps.fps)}
+                      <span className="ml-1 text-[14px] font-semibold text-dim">FPS</span>
+                    </div>
+                  </div>
+                  <div className="text-right text-[12.5px] text-dim">
+                    <div>
+                      <b className="num text-[15px] text-fg">{Math.round(fps.low1)}</b> 1% low
+                    </div>
+                    <div>
+                      <b className="num text-[15px] text-fg">{fps.frameMs.toFixed(2)}</b> ms/frame
+                    </div>
+                  </div>
+                </div>
+              )}
+              {session.phase === 'ended' && session.fps && (
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  {[
+                    ['FPS avg', session.fps.avg],
+                    ['1% low', session.fps.low1],
+                    ['0.1% low', session.fps.low01],
+                  ].map(([l, v]) => (
+                    <div key={l as string} className="rounded-xl bg-surface-2 px-2 py-2">
+                      <div className="num text-[18px] font-bold">{Math.round(v as number)}</div>
+                      <div className="text-[11px] text-dim">{l}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <ul className="mt-3 space-y-1.5">
                 {(session.phase === 'ended' && session.restored.length ? session.restored : session.steps).map((s) => {
                   const Icon = s.status === 'done' ? CheckCircle2 : s.status === 'failed' ? XCircle : CircleSlash;

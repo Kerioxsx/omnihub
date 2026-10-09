@@ -134,11 +134,18 @@ and lets a phone do some of that. This is what protects each part.
 - A boost changes only documented Windows settings and puts the session
   ones back when the game closes: the power plan (it may add Windows'
   built-in "Ultimate Performance" plan once), notification pop-ups
-  (`ToastEnabled`), Game Mode, programs you chose to close (reopened
-  afterwards), the game's priority, and Wi-Fi background scanning /
-  streaming mode (held through a WLAN handle; Windows reverts it when the
-  handle closes, even if OmniHub crashes). What it changed is written to a
-  journal first, so a crash or power cut is undone at the next start.
+  (`ToastEnabled`), Game Mode, programs you chose to close and the fixed
+  list of background programs "Close background junk" closes (cloud sync,
+  Widgets, Phone Link, updaters — `games/junk.rs`; sync apps are reopened
+  afterwards, chat apps are never on it), browsers and similar programs
+  set to "Below normal" priority and back to "Normal", the game's priority
+  and power-throttling opt-out (`SetProcessInformation`), a 0.5 ms timer
+  request (`NtSetTimerResolution`, released with the session, or by Windows
+  when OmniHub exits), and Wi-Fi background scanning / streaming mode (held
+  through a WLAN handle; Windows reverts it when the handle closes, even if
+  OmniHub crashes). What it changed is written to a journal first, so a
+  crash or power cut is undone at the next start. Quality mode never
+  changes a game's own graphics settings.
 - Per-game settings stay until turned off in the profile: the
   high-performance GPU choice and "disable fullscreen optimizations" (both
   per-user registry, the same keys Windows' own settings write), and — with
@@ -146,19 +153,34 @@ and lets a phone do some of that. This is what protects each part.
   Image File Execution Options `PerfOptions\CpuPriorityClass` so Windows
   starts the game at High priority. The helper accepts only plain `.exe`
   names for these.
-- Game settings (Fortnite, Minecraft): OmniHub writes values the game's
-  own settings menu writes, into the game's settings file in your profile
-  (`%LOCALAPPDATA%\FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini`,
+- Game settings (Fortnite, VALORANT, Counter-Strike 2, Apex Legends,
+  Overwatch 2, Roblox, Minecraft): OmniHub writes values the game's own
+  settings menu writes, into the game's settings files in your profile
+  (for example
+  `%LOCALAPPDATA%\FortniteGame\Saved\Config\WindowsClient\GameUserSettings.ini`,
+  Steam's `userdata\<account>\730\local\cfg\cs2_video.txt`,
   `%APPDATA%\.minecraft\options.txt`) — never the game's program files —
-  and only while the game is closed. A copy of the file from before its
-  first change is kept in `data\game-settings-backup` for "Put back mine".
+  and only while the game is closed. Only Fortnite's standard Unreal Engine
+  keys are added when missing; other values change only when the game
+  already wrote them. A copy of each file from before its first change is
+  kept in `data\game-settings-backup` for "Put back mine".
 - Optimize PC changes, one click each and journaled in `data\pc-tweaks.json`
   so each can be undone: the monitor's refresh rate (the same as Windows'
   display settings), the active power plan, Game DVR
   (`GameDVR_Enabled`, `AppCaptureEnabled`), Game Mode, the DirectX
-  `SwapEffectUpgradeEnable` setting, mouse acceleration (`SPI_SETMOUSE`), and
-  — with a UAC prompt — `HwSchMode` for GPU scheduling. Memory Integrity is
-  only reported, with a link to Windows Security.
+  `SwapEffectUpgradeEnable` setting, mouse acceleration (`SPI_SETMOUSE`),
+  the Sticky Keys shortcut (`SPI_SETSTICKYKEYS`), and — with a UAC prompt —
+  `HwSchMode` for GPU scheduling, `GlobalTimerResolutionRequests` (Windows
+  11) and the multimedia `NetworkThrottlingIndex`/`SystemResponsiveness`.
+  Memory Integrity is only reported, with a link to Windows Security.
+- FPS meter: Intel PresentMon, downloaded from this repository's release and
+  checked against a SHA-256 built into the app, runs as you while the game
+  plays and reads the frame events Windows records (ETW); it never opens the
+  game. Windows allows that to administrators and "Performance Log Users":
+  turning the meter on asks once (UAC) to add your account to that group
+  (`--omnihub-helper fps-admin allow <account>`, which runs `net localgroup`
+  with the group's name looked up from its SID). Remove yourself from the
+  group in Computer Management to undo it.
 - Nothing touches a game's memory or program files, so anti-cheat has
   nothing to object to. Besides the settings files above, the exception is
   Roblox's own settings file,
@@ -189,7 +211,11 @@ internet only for:
 - **AirPlay add-on** (only when you install it): downloaded from this
   repository's releases and checked against a SHA-256 built into the app.
 - **Ping helper** (only when you run it): ICMP echo requests to the game's
-  regions or the host you entered.
+  regions or the host you entered. **Lag under load** (only when you run
+  it) also downloads from and uploads zeros to Cloudflare's speed test
+  (`speed.cloudflare.com`) for about 16 seconds.
+- **FPS meter** (only when you turn it on): PresentMon from this
+  repository's release, checked like the AirPlay add-on.
 - **Updates** (on by default, can be turned off): GitHub's "latest release"
   API for this repository, and then the installer and `SHA256SUMS.txt` from
   that release. The installer must come from this repository's releases and

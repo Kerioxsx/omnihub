@@ -103,8 +103,13 @@ thread: each step (close apps, power plan, notifications, per-game registry
 settings, admin-only settings in one helper call, Wi-Fi low-latency handle,
 Roblox flags, launch) is recorded as it happens and in a journal on disk;
 the thread then follows the game's process and restores everything when it
-exits or on Stop. The ping helper uses `IcmpSendEcho` (no admin) and TCP
-connect timing for `host:port` targets.
+exits or on Stop. Boost modes (Competitive, Quality, Custom) decide which
+switches are on; Quality never touches the game's own settings. While the
+game runs, `games/fps.rs` runs PresentMon on its process and sends
+`games:fps` once a second (to the phone too); the session's summary is kept
+per profile. The ping helper uses `IcmpSendEcho` (no admin) and TCP connect
+timing for `host:port` targets; lag under load pings while saturating the
+line with downloads, then uploads.
 
 ## Desktop shell
 

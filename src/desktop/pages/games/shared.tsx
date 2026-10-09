@@ -1,4 +1,4 @@
-import type { GameKind, GameProfile } from '@shared/types';
+import type { ConfigGame, GameKind, GameProfile } from '@shared/types';
 import type { ReactNode } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { cx } from '../../lib/cx';
@@ -9,13 +9,18 @@ export const GAMES: Record<GameKind, { label: string; short: string; from: strin
   valorant: { label: 'VALORANT', short: 'VA', from: '#ff4655', to: '#7f1d1d', blurb: 'Riot Client' },
   cs2: { label: 'Counter-Strike 2', short: 'CS', from: '#f59e0b', to: '#78350f', blurb: 'Steam' },
   apex: { label: 'Apex Legends', short: 'AP', from: '#dc2626', to: '#450a0a', blurb: 'Steam' },
+  overwatch: { label: 'Overwatch 2', short: 'OW', from: '#f97316', to: '#1e293b', blurb: 'Battle.net' },
   rocketLeague: { label: 'Rocket League', short: 'RL', from: '#2563eb', to: '#ea580c', blurb: 'Epic Games launcher' },
   gta5: { label: 'GTA V', short: 'V', from: '#16a34a', to: '#14532d', blurb: 'Steam' },
   callOfDuty: { label: 'Call of Duty', short: 'CoD', from: '#57534e', to: '#1c1917', blurb: 'Steam' },
   league: { label: 'League of Legends', short: 'LoL', from: '#c8aa6e', to: '#0a1428', blurb: 'Riot Client' },
   minecraft: { label: 'Minecraft', short: 'MC', from: '#65a30d', to: '#3f2a14', blurb: 'Java edition' },
+  cyberpunk: { label: 'Cyberpunk 2077', short: '77', from: '#facc15', to: '#0e7490', blurb: 'Steam · plays in Quality mode' },
   custom: { label: 'Any game', short: '★', from: '#8b5cf6', to: '#22d3ee', blurb: 'Pick its program or link' },
 };
+
+/** Games whose own settings OmniHub can set. */
+export const CONFIG_GAME: Partial<Record<GameKind, ConfigGame>> = { fortnite: 'fortnite', valorant: 'valorant', cs2: 'cs2', apex: 'apex', overwatch: 'overwatch', roblox: 'roblox', minecraft: 'minecraft' };
 
 export function GameTile({ kind, size = 44, className }: { kind: GameKind; size?: number; className?: string }) {
   const g = GAMES[kind];

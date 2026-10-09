@@ -563,7 +563,7 @@ pub fn download(url: &str, dest: &Path, progress: &mut dyn FnMut(u64, u64)) -> s
     Ok(hex::encode(hasher.finalize()))
 }
 
-fn fetch_text(url: &str) -> std::io::Result<String> {
+pub fn fetch_text(url: &str) -> std::io::Result<String> {
     agent().get(url).call().map_err(|e| std::io::Error::other(format!("download failed: {e}")))?.body_mut().read_to_string().map_err(std::io::Error::other)
 }
 

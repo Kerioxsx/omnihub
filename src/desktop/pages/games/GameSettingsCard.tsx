@@ -1,11 +1,12 @@
-// The game's own settings, set for frames per second: Fortnite's
-// GameUserSettings.ini and Minecraft's options.txt. Shows what the file
-// says now, what Optimize changes, and puts your own settings back.
+// A game's own settings, set for frames per second and low delay:
+// Fortnite, VALORANT, Counter-Strike 2, Apex Legends, Overwatch 2, Roblox
+// and Minecraft. Shows what the file says now, what Optimize changes, and
+// puts your own settings back.
 
-import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteOptions, GameConfigs, GameSession, MinecraftOptions } from '@shared/types';
+import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteOptions, GameConfigs, GameSession, MinecraftOptions, ProOptions } from '@shared/types';
 import { formatRelative } from '@shared/format';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, ChevronDown, Gauge, Info, RotateCcw, Sparkles, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Gauge, Info, Lightbulb, RotateCcw, Sparkles, XCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
@@ -20,7 +21,43 @@ import { Row } from './shared';
 
 const FPS_CAPS = [0, 1000, 540, 480, 360, 240, 165, 144, 120, 60];
 
-export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game: ConfigGame; beforeLaunch: boolean; onBeforeLaunch: (v: boolean) => void }) {
+type ProGame = 'valorant' | 'cs2' | 'apex' | 'overwatch' | 'roblox';
+
+const SUBTITLE: Record<ConfigGame, string> = {
+  fortnite: 'Written into Fortnite’s own settings file — the same values its menu would save.',
+  valorant: 'Written into VALORANT’s settings for every account that has played on this PC.',
+  cs2: 'Written into cs2_video.txt for every Steam account on this PC.',
+  apex: 'Written into Apex Legends’ videoconfig.txt.',
+  overwatch: 'Written into Overwatch’s Settings_v0.ini.',
+  roblox: 'Written into Roblox’s own settings (the in-game menu’s choices).',
+  minecraft: 'Written into Minecraft’s options.txt (Java edition).',
+};
+
+/** The switches each game has. */
+const PRO_ROWS: Record<ProGame, { key: keyof ProOptions; title: string; hint: string }[]> = {
+  valorant: [
+    { key: 'uncapped', title: 'No frame limit, VSync off', hint: 'Unlimited frames, no VSync and no dynamic resolution.' },
+    { key: 'lowestQuality', title: 'Lowest quality', hint: 'Shadows, effects, anti-aliasing, post-processing and textures at their lowest — what most pros play with.' },
+  ],
+  cs2: [
+    { key: 'uncapped', title: 'VSync off', hint: 'The frame limit itself is the console’s fps_max (see below).' },
+    { key: 'lowLatency', title: 'NVIDIA Reflex on', hint: 'Lower input delay on NVIDIA graphics cards; ignored on others.' },
+    { key: 'lowestQuality', title: 'Lowest quality', hint: 'Shader detail, shadows, multisampling, textures, particles and ambient occlusion at their lowest.' },
+  ],
+  apex: [
+    { key: 'uncapped', title: 'VSync off, no adaptive resolution', hint: 'The frame limit itself is a launch option (see below).' },
+    { key: 'lowestQuality', title: 'Lowest quality', hint: 'Anti-aliasing, shadows, ambient occlusion, volumetric lighting and effects at their lowest.' },
+  ],
+  overwatch: [
+    { key: 'uncapped', title: 'Frame limit 600, VSync off', hint: 'Overwatch’s highest frame limit, with VSync and triple buffering off.' },
+    { key: 'lowLatency', title: 'Reduce buffering', hint: 'One frame less queued up: lower input delay.' },
+  ],
+  roblox: [{ key: 'uncapped', title: 'Maximum frame rate 240', hint: 'The highest frame limit in Roblox’s own menu.' }],
+};
+
+const isPro = (g: ConfigGame): g is ProGame => g in PRO_ROWS;
+
+export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }: { game: ConfigGame; beforeLaunch: boolean; onBeforeLaunch: (v: boolean) => void; locked?: string }) {
   const [all, setAll] = useState<GameConfigs | null>(null);
   const [busy, setBusy] = useState<'apply' | 'restore' | null>(null);
   const [showChanges, setShowChanges] = useState(false);
@@ -38,7 +75,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game:
   });
 
   const status: ConfigStatus | undefined = all?.games.find((g) => g.game === game);
-  const label = game === 'fortnite' ? 'Fortnite' : 'Minecraft';
+  const label = status?.label ?? game;
 
   const setOptions = (o: ConfigOptions) => {
     setAll((a) => (a ? { ...a, options: o } : a));
@@ -47,6 +84,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game:
   };
   const fn = (p: Partial<FortniteOptions>) => all && setOptions({ ...all.options, fortnite: { ...all.options.fortnite, ...p } });
   const mc = (p: Partial<MinecraftOptions>) => all && setOptions({ ...all.options, minecraft: { ...all.options.minecraft, ...p } });
+  const pro = (g: ProGame, p: Partial<ProOptions>) => all && setOptions({ ...all.options, [g]: { ...all.options[g], ...p } });
 
   const apply = async () => {
     setBusy('apply');
@@ -78,6 +116,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game:
 
   const optimized = status?.found && status.pending.length === 0;
   const o = all?.options;
+  const accounts = status && status.paths.length > 1 ? status.paths.length : 0;
   return (
     <Card className="overflow-hidden">
       <div className="relative px-5 pb-4 pt-4">
@@ -86,7 +125,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game:
           className="relative"
           icon={Gauge}
           title={`${label} settings for max FPS`}
-          subtitle={game === 'fortnite' ? 'Written into Fortnite’s own settings file — the same values its menu would save.' : 'Written into Minecraft’s options.txt (Java edition).'}
+          subtitle={SUBTITLE[game] + (accounts ? ` (${accounts} accounts)` : '')}
           actions={
             status?.backupAt ? (
               <Button variant="ghost" size="sm" icon={RotateCcw} loading={busy === 'restore'} disabled={!!busy || status.running} onClick={() => void restore()} title={`Your settings from ${formatRelative(status.backupAt)}`}>
@@ -95,7 +134,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game:
             ) : undefined
           }
         />
-        {status && status.found && (
+        {status && status.found && status.settings.length > 0 && (
           <div className="relative mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
             {status.settings.map((s) => (
               <div key={s.label} className={cx('rounded-xl border px-3 py-2', s.good ? 'border-good/25 bg-good/6' : 'border-line bg-surface-2/70')}>
@@ -127,7 +166,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game:
 
       {o && (
         <div className="divide-y divide-line border-t border-line">
-          {game === 'fortnite' ? (
+          {game === 'fortnite' && (
             <>
               <Row title="Frame rate limit" hint="Unlimited lets Fortnite draw as many frames as your PC can. A cap a little above your monitor’s refresh rate gives steadier frame times.">
                 <Select value={o.fortnite.frameLimit} onChange={(e) => fn({ frameLimit: Number(e.target.value) })} className="w-36">
@@ -165,12 +204,13 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game:
                 <Switch checked={o.fortnite.showFps} onChange={(v) => fn({ showFps: v })} label="FPS counter" />
               </Row>
             </>
-          ) : (
+          )}
+          {game === 'minecraft' && (
             <>
               <Row title="Unlimited frame rate, VSync off">
                 <Switch checked={o.minecraft.unlimitedFps} onChange={(v) => mc({ unlimitedFps: v })} label="Unlimited frame rate" />
               </Row>
-              <Row title="Fast graphics" hint="Fast graphics, no smooth lighting, entity shadows or mipmaps.">
+              <Row title="Fast graphics" hint="Fast graphics, no smooth lighting, entity shadows or mipmaps, and chunk updates off the main thread.">
                 <Switch checked={o.minecraft.fastGraphics} onChange={(v) => mc({ fastGraphics: v })} label="Fast graphics" />
               </Row>
               <Row title="Minimal particles">
@@ -189,10 +229,26 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game:
                   ))}
                 </Select>
               </Row>
+              <Row title="Simulation distance" hint="How far the world keeps moving around you; lower is lighter on the processor.">
+                <Select value={o.minecraft.simulationDistance ?? ''} onChange={(e) => mc({ simulationDistance: e.target.value ? Number(e.target.value) : null })} className="w-36">
+                  <option value="">Keep mine</option>
+                  {[5, 6, 8, 10, 12].map((d) => (
+                    <option key={d} value={d}>
+                      {d} chunks
+                    </option>
+                  ))}
+                </Select>
+              </Row>
             </>
           )}
-          <Row title="Before every launch" hint={`When you press Play, OmniHub sets these again (${label} sometimes resets them after updates).`}>
-            <Switch checked={beforeLaunch} onChange={onBeforeLaunch} label="Apply before every launch" />
+          {isPro(game) &&
+            PRO_ROWS[game].map((r) => (
+              <Row key={r.key} title={r.title} hint={r.hint}>
+                <Switch checked={o[game][r.key]} onChange={(v) => pro(game, { [r.key]: v })} label={r.title} />
+              </Row>
+            ))}
+          <Row title="Before every launch" hint={locked ?? `When you press Play, OmniHub sets these again (${label} sometimes resets them after updates).`}>
+            <Switch checked={beforeLaunch} disabled={!!locked} onChange={onBeforeLaunch} label="Apply before every launch" />
           </Row>
         </div>
       )}
@@ -209,7 +265,11 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game:
                 <ChevronDown size={14} className={cx('transition-transform', showChanges && 'rotate-180')} />
               </button>
             )}
-            {optimized && <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-good"><CheckCircle2 size={14} /> Nothing left to change</span>}
+            {optimized && (
+              <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-good">
+                <CheckCircle2 size={14} /> Nothing left to change
+              </span>
+            )}
           </div>
           <AnimatePresence initial={false}>
             {showChanges && status.pending.length > 0 && (
@@ -225,7 +285,12 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch }: { game:
               </motion.ul>
             )}
           </AnimatePresence>
-          {game === 'fortnite' && <p className="mt-3 text-[12px] leading-relaxed text-faint">Your frame rate tops out where your processor and graphics card do; these settings remove everything else in the way. For the lowest delay, also set NVIDIA Reflex to “On + Boost” in Fortnite’s graphics settings if you have it.</p>}
+          {status.note && (
+            <p className="mt-3 flex items-start gap-2 text-[12px] leading-relaxed text-faint">
+              <Lightbulb size={14} className="mt-px shrink-0 text-accent" />
+              <span>{status.note} Frame rates top out where your processor and graphics card do; these settings remove everything else in the way.</span>
+            </p>
+          )}
         </div>
       )}
     </Card>

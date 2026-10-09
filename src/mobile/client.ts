@@ -119,8 +119,8 @@ export interface Status {
 
 // ---------- music ----------
 
-export type { AudioInfo, GameKind, GameSession, GameStep, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, PingResult, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
-import type { AudioInfo, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
+export type { AudioInfo, FpsLive, GameKind, GameSession, GameStep, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, PingResult, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
+import type { AudioInfo, FpsLive, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
 
 /** One app in the PC's volume mixer. */
 export interface AppVolume {
@@ -225,7 +225,7 @@ export const client = {
 
   apps: () => request<{ apps: { id: string; name: string; publisher: string; source: string }[] }>('GET', '/api/apps'),
   appIcon: (id: string) => request<{ icon: string | null }>('GET', `/api/apps/${id}/icon`),
-  games: () => request<{ profiles: PhoneGame[]; session: GameSession | null }>('GET', '/api/games'),
+  games: () => request<{ profiles: PhoneGame[]; session: GameSession | null; fps?: FpsLive | null }>('GET', '/api/games'),
   playGame: (id: string, launch: boolean) => request<{ session: GameSession }>('POST', `/api/games/${encodeURIComponent(id)}/play`, { launch }),
   stopGame: () => request<{ stopped: boolean }>('POST', '/api/games/stop'),
   pingGame: (id: string) => request<{ results: PingResult[] }>('POST', '/api/games/ping', { id }),

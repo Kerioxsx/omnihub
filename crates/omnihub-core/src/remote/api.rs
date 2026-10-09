@@ -835,7 +835,7 @@ async fn games_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value
         .into_iter()
         .map(|p| json!({ "id": p.id, "name": p.name, "kind": p.kind, "lastPlayed": p.last_played, "canLaunch": !matches!(p.launch, crate::games::Launch::None), "process": p.process }))
         .collect();
-    Ok(Json(json!({ "profiles": profiles, "session": core.games.session() })))
+    Ok(Json(json!({ "profiles": profiles, "session": core.games.session(), "fps": core.games.fps_live() })))
 }
 
 #[derive(Deserialize, Default)]

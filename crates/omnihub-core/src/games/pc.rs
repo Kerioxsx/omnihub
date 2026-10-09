@@ -1,10 +1,12 @@
-//! PC-wide settings that decide how well games run — only ones that make
-//! a measurable difference: the monitor at its full refresh rate, a
-//! performance power plan, no background game recording, Game Mode,
-//! Windows 11's optimizations for windowed games, hardware-accelerated GPU
-//! scheduling, and (for aim, not frames) no mouse acceleration. Memory
-//! Integrity is reported with a link to Windows' own switch: it costs some
-//! performance, but it is a security feature, so the choice stays there.
+//! PC-wide settings that decide how well games run: the monitor at its full
+//! refresh rate, a performance power plan, no background game recording,
+//! Game Mode, Windows 11's optimizations for windowed games,
+//! hardware-accelerated GPU scheduling, a shared precise timer (so a boost's
+//! 0.5 ms timer reaches the game), no network throttling while media plays,
+//! and, for aim rather than frames, no mouse acceleration and no Sticky
+//! Keys pop-up. None of them lowers picture quality. Memory Integrity is
+//! reported with a link to Windows' own switch: it costs some performance,
+//! but it is a security feature, so the choice stays there.
 //!
 //! What a setting was before OmniHub changed it is kept in a small journal,
 //! so each one can be put back exactly.
@@ -24,14 +26,17 @@ pub enum TweakId {
     GameMode,
     WindowedGames,
     GpuScheduling,
+    PreciseTimer,
+    NetworkThrottling,
     MouseAcceleration,
+    StickyKeys,
     MemoryIntegrity,
 }
 
 impl TweakId {
-    pub fn all() -> [TweakId; 8] {
+    pub fn all() -> [TweakId; 11] {
         use TweakId::*;
-        [RefreshRate, PowerPlan, GameDvr, GameMode, WindowedGames, GpuScheduling, MouseAcceleration, MemoryIntegrity]
+        [RefreshRate, PowerPlan, GameDvr, GameMode, WindowedGames, GpuScheduling, PreciseTimer, NetworkThrottling, MouseAcceleration, StickyKeys, MemoryIntegrity]
     }
 
     fn key(self) -> &'static str {
@@ -42,7 +47,10 @@ impl TweakId {
             TweakId::GameMode => "gameMode",
             TweakId::WindowedGames => "windowedGames",
             TweakId::GpuScheduling => "gpuScheduling",
+            TweakId::PreciseTimer => "preciseTimer",
+            TweakId::NetworkThrottling => "networkThrottling",
             TweakId::MouseAcceleration => "mouseAcceleration",
+            TweakId::StickyKeys => "stickyKeys",
             TweakId::MemoryIntegrity => "memoryIntegrity",
         }
     }
@@ -153,6 +161,9 @@ fn describe(id: TweakId) -> (&'static str, &'static str, Impact, bool, bool) {
         TweakId::GameMode => ("Game Mode", "Windows holds back updates and background work while a game runs.", Impact::Low, false, false),
         TweakId::WindowedGames => ("Optimizations for windowed games", "Windows 11 runs games in borderless windows with the same low input delay as fullscreen.", Impact::Medium, false, false),
         TweakId::GpuScheduling => ("Hardware-accelerated GPU scheduling", "The graphics card schedules its own work: lower delay, and needed for DLSS frame generation. Takes effect after a restart.", Impact::Medium, true, true),
+        TweakId::PreciseTimer => ("Precise timer for games", "Lets a boost's 0.5 ms Windows timer reach the game (Windows 11 otherwise keeps it to the program that asked). Games that pace frames with short waits hold steadier frame times. Takes effect after a restart.", Impact::Low, true, true),
+        TweakId::NetworkThrottling => ("No network throttling during media", "Windows slows network handling while audio or video plays and keeps 20% of the processor for background work. This lifts the limit and keeps 10%. Takes effect after a restart.", Impact::Low, true, true),
+        TweakId::StickyKeys => ("Sticky Keys shortcut off", "Pressing Shift five times no longer pops the Sticky Keys box over your game. Sticky Keys itself stays in Settings → Accessibility.", Impact::Low, false, false),
         TweakId::MouseAcceleration => ("Mouse acceleration off", "“Enhance pointer precision” off, so the same hand movement always turns the same amount — for aim, not frames.", Impact::Low, false, false),
         TweakId::MemoryIntegrity => ("Memory Integrity", "A Windows security feature that Microsoft says can lower game performance. Your choice, in Windows Security → Core isolation.", Impact::High, false, true),
     }
@@ -191,11 +202,29 @@ pub fn set(id: TweakId, on: bool, journal_path: &Path, remembered_plan: Option<&
     }
 }
 
-/// Admin-only changes, run by the elevated helper ("hags+", "hags-").
+/// A DWORD for the helper: a number, or "-" for "remove the value".
+fn helper_value(v: &str) -> Option<Option<u32>> {
+    if v == "-" {
+        Some(None)
+    } else {
+        v.parse().ok().map(Some)
+    }
+}
+
+/// Admin-only changes, run by the elevated helper ("hags+", "hags-",
+/// "timer <1|->", "mm <index|-> <responsiveness|->").
 pub fn helper_admin(args: &[String]) -> i32 {
     match args {
         [a] if a == "hags+" => i32::from(imp::set_hags(true).is_err()),
         [a] if a == "hags-" => i32::from(imp::set_hags(false).is_err()),
+        [a, v] if a == "timer" => match helper_value(v) {
+            Some(v) => i32::from(imp::set_global_timer(v).is_err()),
+            None => 64,
+        },
+        [a, i, r] if a == "mm" => match (helper_value(i), helper_value(r)) {
+            (Some(i), Some(r)) => i32::from(imp::set_multimedia(i, r).is_err()),
+            _ => 64,
+        },
         _ => 64,
     }
 }
@@ -244,6 +273,10 @@ mod imp {
     const DX_GLOBAL: &str = "DirectXUserGlobalSettings";
     const GRAPHICS: &str = r"SYSTEM\CurrentControlSet\Control\GraphicsDrivers";
     const HVCI: &str = r"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity";
+    const KERNEL: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel";
+    const MULTIMEDIA: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
+    /// NetworkThrottlingIndex: no limit.
+    const NO_THROTTLING: u32 = 0xFFFF_FFFF;
 
     // ---------- displays ----------
 
@@ -330,6 +363,30 @@ mod imp {
         unsafe { SystemParametersInfoW(SPI_SETMOUSE, 0, Some(p.as_mut_ptr().cast()), SPIF_UPDATEINIFILE | SPIF_SENDCHANGE) }.map_err(|e| e.message())
     }
 
+    // ---------- Sticky Keys ----------
+
+    use windows::Win32::UI::WindowsAndMessaging::{SPI_GETSTICKYKEYS, SPI_SETSTICKYKEYS};
+
+    /// STICKYKEYS (winuser.h).
+    #[repr(C)]
+    struct StickyKeys {
+        cb_size: u32,
+        flags: u32,
+    }
+    /// SKF_HOTKEYACTIVE: Shift five times turns Sticky Keys on.
+    const SKF_HOTKEYACTIVE: u32 = 0x4;
+
+    fn sticky_flags() -> Option<u32> {
+        let mut k = StickyKeys { cb_size: std::mem::size_of::<StickyKeys>() as u32, flags: 0 };
+        unsafe { SystemParametersInfoW(SPI_GETSTICKYKEYS, k.cb_size, Some((&mut k as *mut StickyKeys).cast()), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0)) }.ok()?;
+        Some(k.flags)
+    }
+
+    fn set_sticky_flags(flags: u32) -> Result<(), String> {
+        let mut k = StickyKeys { cb_size: std::mem::size_of::<StickyKeys>() as u32, flags };
+        unsafe { SystemParametersInfoW(SPI_SETSTICKYKEYS, k.cb_size, Some((&mut k as *mut StickyKeys).cast()), SPIF_UPDATEINIFILE | SPIF_SENDCHANGE) }.map_err(|e| e.message())
+    }
+
     // ---------- state ----------
 
     pub(super) fn state(id: TweakId, remembered_plan: Option<&str>) -> State {
@@ -376,8 +433,30 @@ mod imp {
                 let on = read_dword(HKEY_LOCAL_MACHINE, GRAPHICS, "HwSchMode") == Some(2);
                 st(true, on, if on { "On".into() } else { "Off".into() })
             }
+            TweakId::PreciseTimer => {
+                let b = build();
+                if b < 19041 {
+                    return st(true, true, "Shared already on this version of Windows".into());
+                }
+                if b < 22000 {
+                    return st(false, false, "Needs Windows 11 (Windows 10 keeps timers per program)".into());
+                }
+                let on = read_dword(HKEY_LOCAL_MACHINE, KERNEL, "GlobalTimerResolutionRequests") == Some(1);
+                st(true, on, if on { "Shared with games".into() } else { "Kept per program".into() })
+            }
+            TweakId::NetworkThrottling => {
+                let index = read_dword(HKEY_LOCAL_MACHINE, MULTIMEDIA, "NetworkThrottlingIndex");
+                let resp = read_dword(HKEY_LOCAL_MACHINE, MULTIMEDIA, "SystemResponsiveness").unwrap_or(20);
+                let open = index == Some(NO_THROTTLING);
+                let on = open && resp <= 10;
+                st(true, on, format!("{} · {}% kept for background work", if open { "No network limit" } else { "Network limited during media" }, resp.clamp(10, 100)))
+            }
             TweakId::MouseAcceleration => match mouse() {
                 Some(p) => st(true, p[2] == 0, if p[2] == 0 { "Off".into() } else { "On".into() }),
+                None => st(false, false, "Unknown".into()),
+            },
+            TweakId::StickyKeys => match sticky_flags() {
+                Some(f) => st(true, f & SKF_HOTKEYACTIVE == 0, if f & SKF_HOTKEYACTIVE == 0 { "Shortcut off".into() } else { "Shift ×5 opens Sticky Keys".into() }),
                 None => st(false, false, "Unknown".into()),
             },
             TweakId::MemoryIntegrity => {
@@ -429,12 +508,27 @@ mod imp {
             }
             TweakId::GpuScheduling => {
                 let before = read_dword(HKEY_LOCAL_MACHINE, GRAPHICS, "HwSchMode");
-                run_admin("hags+")?;
+                run_admin(&["hags+"])?;
                 Ok((json!(before), None))
+            }
+            TweakId::PreciseTimer => {
+                let before = read_dword(HKEY_LOCAL_MACHINE, KERNEL, "GlobalTimerResolutionRequests");
+                run_admin(&["timer", "1"])?;
+                Ok((json!(before), None))
+            }
+            TweakId::NetworkThrottling => {
+                let before = json!({ "index": read_dword(HKEY_LOCAL_MACHINE, MULTIMEDIA, "NetworkThrottlingIndex"), "resp": read_dword(HKEY_LOCAL_MACHINE, MULTIMEDIA, "SystemResponsiveness") });
+                run_admin(&["mm", &NO_THROTTLING.to_string(), "10"])?;
+                Ok((before, None))
             }
             TweakId::MouseAcceleration => {
                 let before = mouse().ok_or("Could not read the mouse settings.")?;
                 set_mouse([0, 0, 0])?;
+                Ok((json!(before), None))
+            }
+            TweakId::StickyKeys => {
+                let before = sticky_flags().ok_or("Could not read the Sticky Keys settings.")?;
+                set_sticky_flags(before & !SKF_HOTKEYACTIVE)?;
                 Ok((json!(before), None))
             }
             TweakId::MemoryIntegrity => Err("Memory Integrity is changed in Windows Security → Core isolation.".into()),
@@ -479,7 +573,13 @@ mod imp {
                     }
                 }
             }
-            TweakId::GpuScheduling => run_admin("hags-"),
+            TweakId::GpuScheduling => run_admin(&["hags-"]),
+            TweakId::PreciseTimer => run_admin(&["timer", &before.as_u64().map_or("-".to_string(), |v| v.to_string())]),
+            TweakId::NetworkThrottling => {
+                let v = |k: &str| before.get(k).and_then(Value::as_u64).map_or("-".to_string(), |v| v.to_string());
+                run_admin(&["mm", &v("index"), &v("resp")])
+            }
+            TweakId::StickyKeys => set_sticky_flags(before.as_u64().map_or(0x1FE, |v| v as u32)),
             TweakId::MouseAcceleration => {
                 let p = before.as_array().and_then(|a| (a.len() == 3).then(|| [a[0].as_i64().unwrap_or(6) as i32, a[1].as_i64().unwrap_or(10) as i32, a[2].as_i64().unwrap_or(1) as i32])).unwrap_or([6, 10, 1]);
                 set_mouse(p)
@@ -488,9 +588,10 @@ mod imp {
         }
     }
 
-    fn run_admin(op: &str) -> Result<(), String> {
+    fn run_admin(op: &[&str]) -> Result<(), String> {
         let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let args = vec![crate::helper::HELPER_FLAG.to_string(), "pc-admin".into(), op.into()];
+        let mut args = vec![crate::helper::HELPER_FLAG.to_string(), "pc-admin".into()];
+        args.extend(op.iter().map(|a| a.to_string()));
         match crate::system::elevation::run_elevated_and_wait(&exe, &args, false) {
             Ok(0) => Ok(()),
             Ok(code) => Err(format!("The change did not go through (code {code}).")),
@@ -501,6 +602,26 @@ mod imp {
 
     pub fn set_hags(on: bool) -> Result<(), String> {
         RegKey::predef(HKEY_LOCAL_MACHINE).create_subkey(GRAPHICS).and_then(|(k, _)| k.set_value("HwSchMode", &(if on { 2u32 } else { 1u32 }))).map_err(|e| e.to_string())
+    }
+
+    fn hklm_set_dword(path: &str, name: &str, v: Option<u32>) -> Result<(), String> {
+        let (k, _) = RegKey::predef(HKEY_LOCAL_MACHINE).create_subkey(path).map_err(|e| e.to_string())?;
+        match v {
+            Some(v) => k.set_value(name, &v).map_err(|e| e.to_string()),
+            None => match k.delete_value(name) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+                _ => Ok(()),
+            },
+        }
+    }
+
+    pub fn set_global_timer(v: Option<u32>) -> Result<(), String> {
+        hklm_set_dword(KERNEL, "GlobalTimerResolutionRequests", v)
+    }
+
+    pub fn set_multimedia(index: Option<u32>, responsiveness: Option<u32>) -> Result<(), String> {
+        hklm_set_dword(MULTIMEDIA, "NetworkThrottlingIndex", index)?;
+        hklm_set_dword(MULTIMEDIA, "SystemResponsiveness", responsiveness)
     }
 }
 
@@ -527,6 +648,14 @@ mod imp {
     pub fn set_hags(_on: bool) -> Result<(), String> {
         Err("Windows only".into())
     }
+
+    pub fn set_global_timer(_v: Option<u32>) -> Result<(), String> {
+        Err("Windows only".into())
+    }
+
+    pub fn set_multimedia(_index: Option<u32>, _responsiveness: Option<u32>) -> Result<(), String> {
+        Err("Windows only".into())
+    }
 }
 
 #[cfg(test)]
@@ -550,5 +679,9 @@ mod tests {
         assert!(s.tweaks.iter().any(|t| t.id == TweakId::MemoryIntegrity && t.settings_link.is_some()));
         assert!(s.machine.threads > 0);
         assert_eq!(helper_admin(&["rm".into()]), 64);
+        assert_eq!(helper_admin(&["timer".into(), "x".into()]), 64);
+        assert_eq!(helper_admin(&["mm".into(), "1".into()]), 64);
+        assert_eq!(helper_value("-"), Some(None));
+        assert_eq!(helper_value("4294967295"), Some(Some(u32::MAX)));
     }
 }

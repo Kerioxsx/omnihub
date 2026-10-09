@@ -17,11 +17,12 @@ import { cx } from '../../lib/cx';
 import { useEvent } from '../../lib/hooks';
 import { navigate, useRoute } from '../../lib/router';
 import { toast } from '../../state/toasts';
+import { LiveFps, MODE_LABEL, useFpsLive } from './FpsCard';
 import { PcOptimize } from './PcOptimize';
 import { ProfileEditor } from './ProfileEditor';
 import { GAMES, GameTile, launchSummary } from './shared';
 
-const ORDER: GameKind[] = ['fortnite', 'roblox', 'valorant', 'cs2', 'apex', 'rocketLeague', 'league', 'gta5', 'callOfDuty', 'minecraft', 'custom'];
+const ORDER: GameKind[] = ['fortnite', 'roblox', 'valorant', 'cs2', 'apex', 'overwatch', 'rocketLeague', 'league', 'gta5', 'callOfDuty', 'minecraft', 'cyberpunk', 'custom'];
 
 const SOURCE: Record<InstalledGame['source'], string> = { epic: 'Epic Games', steam: 'Steam', riot: 'Riot', roblox: 'Roblox', minecraft: 'Minecraft Launcher' };
 
@@ -197,6 +198,7 @@ export function GamesPage() {
               <ProfileEditor
                 key={current.id}
                 profile={current}
+                session={session}
                 busy={!!active}
                 activeHere={active?.profileId === current.id}
                 onSaved={(p) => setProfiles((l) => l?.map((q) => (q.id === p.id ? p : q)) ?? null)}
@@ -228,6 +230,8 @@ function StepRow({ s }: { s: GameStep }) {
 function SessionCard({ session, onDismiss }: { session: GameSession; onDismiss: () => void }) {
   const [stopping, setStopping] = useState(false);
   const ended = session.phase === 'ended';
+  const { live, trail } = useFpsLive(!ended);
+  const sum = session.fps;
   useEffect(() => setStopping(false), [session.phase]);
   const stop = async () => {
     setStopping(true);
@@ -247,10 +251,32 @@ function SessionCard({ session, onDismiss }: { session: GameSession; onDismiss: 
             {session.phase === 'starting' || session.phase === 'restoring' ? <LoaderCircle size={20} className="animate-spin" /> : ended ? <CheckCircle2 size={20} /> : <Zap size={20} />}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="font-display text-[16px] font-semibold text-fg">
+            <div className="flex flex-wrap items-center gap-2 font-display text-[16px] font-semibold text-fg">
               {session.name} · {PHASE[session.phase]}
+              <span className="rounded-full border border-line bg-surface-2 px-2 py-px font-sans text-[11px] font-semibold text-dim">{MODE_LABEL[session.mode]}</span>
             </div>
             {session.message && <div className="text-[13px] text-dim">{session.message}</div>}
+            {live && (
+              <div className="mt-3">
+                <LiveFps live={live} trail={trail} compact />
+              </div>
+            )}
+            {ended && sum && (
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 rounded-xl border border-line bg-surface-2/60 px-4 py-2.5 text-[12.5px]">
+                <span>
+                  <b className="text-[16px] tabular text-fg">{Math.round(sum.avg)}</b> <span className="text-faint">FPS average</span>
+                </span>
+                <span>
+                  <b className="text-[16px] tabular text-fg">{Math.round(sum.low1)}</b> <span className="text-faint">1% low</span>
+                </span>
+                <span>
+                  <b className="text-[16px] tabular text-fg">{Math.round(sum.low01)}</b> <span className="text-faint">0.1% low</span>
+                </span>
+                <span>
+                  <b className={cx('text-[16px] tabular', sum.hitches > 10 ? 'text-warn' : 'text-fg')}>{sum.hitches}</b> <span className="text-faint">stutters over {Math.max(1, Math.round(sum.seconds / 60))} min</span>
+                </span>
+              </div>
+            )}
             <div className="mt-3 grid gap-x-8 gap-y-3 lg:grid-cols-2">
               <div>
                 <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">Boost</div>

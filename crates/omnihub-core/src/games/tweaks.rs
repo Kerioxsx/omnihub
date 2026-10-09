@@ -358,6 +358,103 @@ mod imp {
         }
     }
 
+    // ---------- timer resolution ----------
+
+    type QueryTimer = unsafe extern "system" fn(*mut u32, *mut u32, *mut u32) -> i32;
+    type SetTimer = unsafe extern "system" fn(u32, u8, *mut u32) -> i32;
+
+    /// An ntdll function (not in the Windows SDK's import libraries).
+    fn ntdll(name: &std::ffi::CStr) -> Option<unsafe extern "system" fn() -> isize> {
+        use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+        unsafe {
+            let h = GetModuleHandleW(windows::core::w!("ntdll.dll")).ok()?;
+            GetProcAddress(h, windows::core::PCSTR(name.as_ptr().cast()))
+        }
+    }
+
+    /// While held, Windows' timer ticks at its finest step (0.5 ms on most
+    /// PCs) instead of 1–15.6 ms, so games that pace frames with short
+    /// sleeps wake on time. Released when dropped, or by Windows if OmniHub
+    /// exits.
+    pub struct TimerResolution {
+        set: SetTimer,
+        value: u32,
+    }
+
+    impl TimerResolution {
+        /// Returns the guard and the resolution in milliseconds.
+        pub fn start() -> Result<(TimerResolution, f32), String> {
+            let (Some(q), Some(s)) = (ntdll(c"NtQueryTimerResolution"), ntdll(c"NtSetTimerResolution")) else {
+                return Err("This version of Windows has no timer setting.".into());
+            };
+            // Safety: the documented signatures of these two ntdll functions.
+            let (query, set) = unsafe { (std::mem::transmute::<unsafe extern "system" fn() -> isize, QueryTimer>(q), std::mem::transmute::<unsafe extern "system" fn() -> isize, SetTimer>(s)) };
+            let (mut coarsest, mut finest, mut now) = (0u32, 0u32, 0u32);
+            if unsafe { query(&mut coarsest, &mut finest, &mut now) } < 0 || finest == 0 {
+                return Err("Windows did not report its timer steps.".into());
+            }
+            let mut actual = 0u32;
+            if unsafe { set(finest, 1, &mut actual) } < 0 {
+                return Err("Windows did not change its timer.".into());
+            }
+            // Windows 11 stops honouring a hidden program's request otherwise.
+            let _ = set_power_throttling(None, false);
+            Ok((TimerResolution { set, value: finest }, actual.max(finest) as f32 / 10_000.0))
+        }
+    }
+
+    impl Drop for TimerResolution {
+        fn drop(&mut self) {
+            let mut actual = 0u32;
+            unsafe {
+                (self.set)(self.value, 0, &mut actual);
+            }
+        }
+    }
+
+    const KERNEL: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel";
+
+    /// Whether a finer timer OmniHub asks for reaches games too. Since
+    /// Windows 10 2004 each program gets only the timer it asked for, and
+    /// Windows 11 brings back the shared one with GlobalTimerResolutionRequests.
+    pub fn timer_reaches_games() -> Result<(), String> {
+        let build = read_string(HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "CurrentBuildNumber").and_then(|b| b.parse::<u32>().ok()).unwrap_or(0);
+        if build < 19041 || read_dword(HKEY_LOCAL_MACHINE, KERNEL, "GlobalTimerResolutionRequests") == Some(1) {
+            return Ok(());
+        }
+        if build < 22000 {
+            return Err("Windows 10 keeps each program's timer to itself, so only the game's own timer counts".into());
+        }
+        Err("turn on “Precise timer for games” in Optimize PC once (it takes effect after a restart)".into())
+    }
+
+    // ---------- power throttling ----------
+
+    /// Opt a process (None: OmniHub itself) out of Windows' power
+    /// throttling: no slower "efficiency" cores or clock for it (`speed`),
+    /// and its timer requests count even with no visible window.
+    pub fn set_power_throttling(pid: Option<u32>, speed: bool) -> Result<(), String> {
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Threading::*;
+        let state = PROCESS_POWER_THROTTLING_STATE {
+            Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+            ControlMask: PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION | if speed { PROCESS_POWER_THROTTLING_EXECUTION_SPEED } else { 0 },
+            // Controlled and not set: throttling off.
+            StateMask: 0,
+        };
+        unsafe {
+            let (h, owned) = match pid {
+                Some(p) => (OpenProcess(PROCESS_SET_INFORMATION, false, p).map_err(|e| e.message().to_string())?, true),
+                None => (GetCurrentProcess(), false),
+            };
+            let r = SetProcessInformation(h, ProcessPowerThrottling, (&state as *const PROCESS_POWER_THROTTLING_STATE).cast(), std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32).map_err(|e| e.message().to_string());
+            if owned {
+                let _ = CloseHandle(h);
+            }
+            r
+        }
+    }
+
     /// Whether the PC is online over Wi-Fi (for the "use a cable" tip).
     pub fn on_wifi() -> Option<bool> {
         let out = run("netsh", &["wlan", "show", "interfaces"]).ok()?;
@@ -442,6 +539,18 @@ mod imp {
     }
     pub fn on_wifi() -> Option<bool> {
         None
+    }
+    pub struct TimerResolution;
+    impl TimerResolution {
+        pub fn start() -> Result<(TimerResolution, f32), String> {
+            Err(ONLY.into())
+        }
+    }
+    pub fn timer_reaches_games() -> Result<(), String> {
+        Err(ONLY.into())
+    }
+    pub fn set_power_throttling(_pid: Option<u32>, _speed: bool) -> Result<(), String> {
+        Err(ONLY.into())
     }
     pub fn riot_client() -> Option<std::path::PathBuf> {
         None

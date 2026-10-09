@@ -1409,6 +1409,56 @@ pub async fn games_add_installed(core: Core<'_>, key: String) -> Res<GameProfile
 }
 
 #[tauri::command]
+pub async fn games_load_test(core: Core<'_>, id: Option<String>) -> Res<games::ping::LoadTest> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.load_test(id.as_deref()))).await
+}
+
+// ---------- FPS meter ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FpsOverview {
+    status: games::fps::FpsStatus,
+    live: Option<games::fps::Live>,
+    history: Vec<games::fps::FpsRecord>,
+}
+
+fn fps_overview(core: &AppCore) -> FpsOverview {
+    FpsOverview { status: core.games.fps_status(), live: core.games.fps_live(), history: core.games.fps_history(None) }
+}
+
+#[tauri::command]
+pub async fn games_fps(core: Core<'_>) -> Res<FpsOverview> {
+    let core = core.inner().clone();
+    blocking(move || Ok(fps_overview(&core))).await
+}
+
+#[tauri::command]
+pub async fn games_fps_install(core: Core<'_>) -> Res<FpsOverview> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.games.fps_install();
+        core.audit.record("desktop", "game.fps-install", "PresentMon", r.is_ok());
+        r?;
+        Ok(fps_overview(&core))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn games_fps_allow(core: Core<'_>) -> Res<FpsOverview> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.games.fps_allow();
+        core.audit.record("desktop", "game.fps-allow", "Performance Log Users", r.is_ok());
+        r?;
+        Ok(fps_overview(&core))
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn pc_status(core: Core<'_>) -> Res<games::pc::PcStatus> {
     let core = core.inner().clone();
     blocking(move || Ok(core.games.pc_status())).await

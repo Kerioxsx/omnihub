@@ -1,0 +1,96 @@
+name: PresentMon
+
+# Fetches Intel's PresentMon console tool (MIT license) for OmniHub's FPS
+# meter, checks that it runs with the exact arguments the app uses
+# (games::fps::capture_args), and hands it to the release workflow, which
+# publishes it as OmniHub-PresentMon-x64.exe and builds its SHA-256 into the
+# app. The app checks every download against that checksum.
+
+on:
+  pull_request:
+    paths: ['.github/workflows/presentmon.yml']
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      sha256:
+        description: SHA-256 of OmniHub-PresentMon-x64.exe
+        value: ${{ jobs.fetch.outputs.sha256 }}
+      version:
+        description: The PresentMon release it came from
+        value: ${{ jobs.fetch.outputs.version }}
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    name: Fetch and check PresentMon
+    runs-on: windows-latest
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
+      version: ${{ steps.download.outputs.version }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download the newest PresentMon console build
+        id: download
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir pm
+          found=""
+          for tag in $(gh release list --repo GameTechDev/PresentMon --limit 20 --json tagName,isPrerelease,isDraft --jq '.[] | select((.isPrerelease or .isDraft) | not) | .tagName'); do
+            name=$(gh release view "$tag" --repo GameTechDev/PresentMon --json assets --jq '.assets[].name' | grep -E '^PresentMon-[0-9.]+-x64\.exe$' | head -n 1 || true)
+            if [ -n "$name" ]; then
+              gh release download "$tag" --repo GameTechDev/PresentMon --pattern "$name" --dir pm
+              mv "pm/$name" pm/OmniHub-PresentMon-x64.exe
+              found="$tag"
+              break
+            fi
+          done
+          if [ -z "$found" ]; then
+            echo "::error::No PresentMon release has a console build (PresentMon-<version>-x64.exe)"
+            exit 1
+          fi
+          # MIT: the license travels with the program.
+          curl -fsSL "https://raw.githubusercontent.com/GameTechDev/PresentMon/$found/LICENSE.txt" -o pm/OmniHub-PresentMon-LICENSE.txt
+          echo "version=$found" >> "$GITHUB_OUTPUT"
+          echo "PresentMon $found"
+          ls -l pm
+
+      - name: Check its signature
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature pm\OmniHub-PresentMon-x64.exe
+          "Signature: $($sig.Status) $($sig.SignerCertificate.Subject)"
+          if ($sig.Status -eq 'HashMismatch' -or $sig.Status -eq 'NotTrusted') { throw "PresentMon's signature is $($sig.Status)" }
+          if ($sig.Status -ne 'Valid') { Write-Output "::warning::PresentMon is not Authenticode-signed ($($sig.Status)); its checksum is still pinned in the app." }
+
+      # The runner is an administrator, as OmniHub users are once they allow
+      # the meter. Unknown options make PresentMon stop with an error, so this
+      # proves every argument the app passes is understood.
+      - name: Run it with the app's arguments
+        shell: pwsh
+        run: |
+          $target = Start-Process ping -ArgumentList '-n', '30', '127.0.0.1' -PassThru -WindowStyle Hidden
+          $capture = @('--process_id', "$($target.Id)", '--output_stdout', '--no_console_stats', '--v1_metrics', '--no_track_gpu', '--no_track_input', '--session_name', 'OmniHubFps', '--stop_existing_session', '--terminate_on_proc_exit')
+          $out = & pm\OmniHub-PresentMon-x64.exe @capture --timed 4 --terminate_after_timed 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          Stop-Process -Id $target.Id -ErrorAction SilentlyContinue
+          $out
+          if ($code -ne 0 -or $out -match '(?i)error') { throw "PresentMon did not accept the FPS meter's arguments (exit code $code)" }
+          # Stopping our session from a second copy, as the app does.
+          $stop = & pm\OmniHub-PresentMon-x64.exe --terminate_existing_session --session_name OmniHubFps 2>&1 | Out-String
+          $stop
+          if ($stop -match '(?i)unrecognized') { throw 'PresentMon does not know --terminate_existing_session' }
+
+      - name: Checksum
+        id: hash
+        shell: bash
+        run: echo "sha256=$(sha256sum pm/OmniHub-PresentMon-x64.exe | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omnihub-presentmon
+          path: pm/
+          if-no-files-found: error

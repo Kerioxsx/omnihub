@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use omnihub_core::events::EventBus;
-use omnihub_core::games::{GameHub, GameKind, Launch, Phase, StepStatus};
+use omnihub_core::games::{Boost, BoostMode, GameHub, GameKind, Launch, Phase, StepStatus};
 use omnihub_core::system::procs::ProcessMonitor;
 
 /// A copy of a harmless program under a short name (process names are
@@ -24,6 +24,36 @@ fn wait_args(secs: u32) -> String {
     } else {
         secs.to_string()
     }
+}
+
+/// Switches that would change the machine running the tests, off.
+fn harmless(b: &Boost) -> Boost {
+    Boost {
+        mode: BoostMode::Custom,
+        power_plan: omnihub_core::games::tweaks::PowerPlan::Keep,
+        silence_notifications: false,
+        game_mode: false,
+        gpu_high_performance: false,
+        wifi_low_latency: false,
+        close_junk: false,
+        lower_background: false,
+        precise_timer: false,
+        full_speed: false,
+        fps_meter: false,
+        ..b.clone()
+    }
+}
+
+/// A stand-in for PresentMon: a header and 400 frames at 2.5 ms, then it
+/// waits to be stopped.
+#[cfg(unix)]
+fn fake_presentmon(dir: &std::path::Path) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let exe = dir.join("presentmon");
+    let stop = dir.join("pm-stop");
+    std::fs::write(&exe, format!("#!/bin/sh\ncase \"$*\" in *terminate_existing*) touch '{0}'; exit 0;; esac\nrm -f '{0}'\necho Application,ProcessID,SwapChainAddress,MsBetweenPresents\ni=0\nwhile [ $i -lt 400 ]; do echo og.exe,1,0x1,2.5; i=$((i+1)); done\nwhile [ ! -f '{0}' ]; do sleep 0.05; done\n", stop.display())).unwrap();
+    std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+    exe
 }
 
 fn wait_until(what: &str, limit: Duration, mut f: impl FnMut() -> bool) {
@@ -49,14 +79,17 @@ fn boost_launch_watch_restore() {
     p.name = "Stand-in game".into();
     p.launch = Launch::Exe { path: game.to_string_lossy().into_owned(), args: wait_args(2) };
     p.process = String::new(); // filled in from the program
+    assert_eq!(p.boost.mode, BoostMode::Quality, "games OmniHub doesn't know keep their picture");
+    assert!(!p.boost.game_settings);
+    // Leave the machine running the tests alone.
+    p.boost = harmless(&p.boost);
     p.boost.close_apps = vec!["oh.exe".into(), "svchost.exe".into()];
     p.boost.reopen_apps = true;
-    // Leave the machine running the tests alone.
-    p.boost.power_plan = omnihub_core::games::tweaks::PowerPlan::Keep;
-    p.boost.silence_notifications = false;
-    p.boost.game_mode = false;
-    p.boost.gpu_high_performance = false;
-    p.boost.wifi_low_latency = false;
+    #[cfg(unix)]
+    {
+        hub.set_fps_test_tool(fake_presentmon(dir.path()));
+        p.boost.fps_meter = true;
+    }
     let saved = hub.save(p).unwrap().profile;
     assert_eq!(saved.process, "og.exe");
     assert_eq!(saved.boost.close_apps, vec!["oh.exe".to_string()], "Windows' own processes are never on the list");
@@ -82,6 +115,17 @@ fn boost_launch_watch_restore() {
     assert!(s.restored.iter().any(|x| x.id == "apps" && x.detail == "Reopened oh"), "{:?}", s.restored);
     assert!(!dir.path().join("games-session.json").exists(), "journal removed");
     assert!(hub.profile(&saved.id).unwrap().last_played.is_some());
+    #[cfg(unix)]
+    {
+        let fps = by_id("fps").expect("fps step");
+        assert_eq!(fps.status, StepStatus::Done, "{fps:?}");
+        let sum = s.fps.clone().expect("an FPS summary");
+        assert_eq!(sum.frames, 400);
+        assert!((sum.avg - 400.0).abs() < 0.5, "{sum:?}");
+        assert!(hub.fps_live().is_none(), "the live readout ends with the game");
+        // Under ten seconds of frames is not kept as a result.
+        assert!(hub.fps_history(Some(&saved.id)).is_empty());
+    }
 
     // The phases went by in order.
     let mut phases = Vec::new();
@@ -97,7 +141,7 @@ fn boost_launch_watch_restore() {
 
     // Boost only, nothing to watch: on until stopped.
     let mut b = hub.create(GameKind::Custom);
-    b.boost = omnihub_core::games::Boost { power_plan: omnihub_core::games::tweaks::PowerPlan::Keep, silence_notifications: false, game_mode: false, gpu_high_performance: false, wifi_low_latency: false, ..Default::default() };
+    b.boost = harmless(&Boost::default());
     let b = hub.save(b).unwrap().profile;
     hub.play(&b.id, false).unwrap();
     wait_until("boosted", Duration::from_secs(5), || hub.session().is_some_and(|s| s.phase == Phase::Boosted));
@@ -152,11 +196,9 @@ fn installed_fortnite_settings_and_boost() {
     // The boost (without touching this PC's settings) writes them again.
     let mut p = p;
     p.launch = Launch::None;
-    p.boost.power_plan = omnihub_core::games::tweaks::PowerPlan::Keep;
-    p.boost.silence_notifications = false;
-    p.boost.game_mode = false;
-    p.boost.gpu_high_performance = false;
-    p.boost.wifi_low_latency = false;
+    assert_eq!((p.boost.mode, p.boost.game_settings), (BoostMode::Competitive, true));
+    p.boost = harmless(&p.boost);
+    p.boost.game_settings = true;
     p.boost.priority = None;
     let p = hub.save(p).unwrap().profile;
     hub.play(&p.id, false).unwrap();
@@ -166,4 +208,26 @@ fn installed_fortnite_settings_and_boost() {
     assert!(std::fs::read_to_string(&ini).unwrap().contains("bUseVSync=False"));
     hub.stop();
     wait_until("the end of the boost", Duration::from_secs(10), || hub.session().is_some_and(|s| s.phase == Phase::Ended));
+}
+
+/// Modes set the switches; Quality never touches a game's own graphics.
+#[test]
+fn boost_modes() {
+    let dir = tempfile::tempdir().unwrap();
+    let hub = GameHub::new(dir.path(), EventBus::new(), Arc::new(ProcessMonitor::new()));
+    let mut cp = hub.create(GameKind::Cyberpunk);
+    assert_eq!((cp.name.as_str(), cp.boost.mode, cp.boost.game_settings), ("Cyberpunk 2077", BoostMode::Quality, false));
+    // Switching a switch while in a mode doesn't stick: the mode decides.
+    cp.boost.game_settings = true;
+    let cp = hub.save(cp).unwrap().profile;
+    assert!(!cp.boost.game_settings);
+    let mut cs = hub.create(GameKind::Cs2);
+    assert_eq!(cs.boost.mode, BoostMode::Competitive);
+    assert!(cs.boost.game_settings && cs.boost.close_junk && cs.boost.precise_timer);
+    cs.boost.mode = BoostMode::Custom;
+    cs.boost.precise_timer = false;
+    let cs = hub.save(cs).unwrap().profile;
+    assert!(!cs.boost.precise_timer, "Custom keeps your choice");
+    let back = cs.boost.with_mode(BoostMode::Quality);
+    assert!(back.precise_timer && !back.game_settings);
 }

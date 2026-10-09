@@ -67,8 +67,19 @@ the rest change only when the file has them. The installed-games scan
 app manifests, Riot's product settings, `.minecraft` and Roblox; tests and
 `GameHub::set_test_paths` point both at temporary folders. PC tweaks
 (`games/pc.rs`) keep the previous value of everything they change in
-`data/pc-tweaks.json`; GPU scheduling goes through the elevated helper
-(`--omnihub-helper pc-admin hags+|hags-`).
+`data/pc-tweaks.json`; GPU scheduling, the global timer and the multimedia
+settings go through the elevated helper (`--omnihub-helper pc-admin hags+|hags-`,
+`timer <1|->`, `mm <index|-> <responsiveness|->`).
+
+Boost modes are `Boost::with_mode` (Competitive, Quality, Custom); `save()`
+re-applies the mode, so the switches a mode sets can't drift. The FPS meter
+(`games/fps.rs`) parses PresentMon's CSV from stdout into a frame-time
+histogram; its tests and `tests/games.rs` use a shell script standing in for
+PresentMon (`GameHub::set_fps_test_tool`). `.github/workflows/presentmon.yml`
+fetches PresentMon, runs it with the app's exact arguments (a unit test checks
+the workflow lists every one), and the release builds its SHA-256 into the app
+(`OMNIHUB_PRESENTMON_SHA256`). Lag under load (`ping::load_test`) is tested
+against a local HTTP server.
 
 ### Music
 

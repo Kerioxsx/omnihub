@@ -187,6 +187,10 @@ export const api = {
     restoreConfig: (game: T.ConfigGame) => call<T.GameConfigs>('games_config_restore', { game }),
     library: () => call<T.InstalledGame[]>('games_library'),
     addInstalled: (key: string) => call<T.GameProfile>('games_add_installed', { key }),
+    loadTest: (id: string | null) => call<T.LoadTest>('games_load_test', { id }),
+    fps: () => call<T.FpsOverview>('games_fps'),
+    fpsInstall: () => call<T.FpsOverview>('games_fps_install'),
+    fpsAllow: () => call<T.FpsOverview>('games_fps_allow'),
   },
 
   pc: {

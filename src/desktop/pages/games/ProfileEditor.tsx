@@ -1,8 +1,9 @@
-// One game profile: how it starts, what the boost does, the ping helper
-// and (for Roblox) its Fast Flags. Changes save on their own.
+// One game profile: how it starts, the boost mode and what the boost
+// does, the game's own settings, the FPS meter, the ping helper and (for
+// Roblox) its Fast Flags. Changes save on their own.
 
-import type { GameBoost, GameLaunch, GameProfile, GameState, Priority, ProcessGroup } from '@shared/types';
-import { Check, FolderOpen, Plus, Rocket, Trash2, X, Zap } from 'lucide-react';
+import type { BoostMode, GameBoost, GameLaunch, GameProfile, GameSession, GameState, Priority, ProcessGroup } from '@shared/types';
+import { Check, FolderOpen, Gem, type LucideIcon, Plus, Rocket, SlidersHorizontal, Trash2, Trophy, X, Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -12,10 +13,11 @@ import { type MenuItem, openMenu } from '../../components/ui/Menu';
 import { cx } from '../../lib/cx';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
+import { FpsCard } from './FpsCard';
 import { GameSettingsCard } from './GameSettingsCard';
 import { PingCard } from './PingCard';
 import { RobloxCard } from './RobloxCard';
-import { AdminBadge, GAMES, GameTile, PerGameBadge, Row } from './shared';
+import { AdminBadge, CONFIG_GAME, GAMES, GameTile, PerGameBadge, Row } from './shared';
 
 const LAUNCH_TYPES: { value: GameLaunch['type']; label: string }[] = [
   { value: 'none', label: 'I start it myself' },
@@ -50,7 +52,47 @@ function emptyLaunch(type: GameLaunch['type']): GameLaunch {
 const SUGGEST = ['chrome.exe', 'msedge.exe', 'brave.exe', 'firefox.exe', 'opera.exe', 'OneDrive.exe', 'Dropbox.exe', 'GoogleDriveFS.exe', 'Spotify.exe', 'Teams.exe', 'ms-teams.exe', 'Slack.exe', 'qbittorrent.exe', 'uTorrent.exe', 'Creative Cloud.exe', 'Widgets.exe', 'Code.exe'];
 const NEVER = new Set(['omnihub.exe', 'explorer.exe', 'steam.exe', 'steamwebhelper.exe', 'epicgameslauncher.exe', 'riotclientservices.exe']);
 
-export function ProfileEditor({ profile, busy, activeHere, onSaved, onDeleted, onPlay }: { profile: GameProfile; busy: boolean; activeHere: boolean; onSaved: (p: GameProfile) => void; onDeleted: () => void; onPlay: (launch: boolean) => void }) {
+/** The switches a mode stands for (as the app's `Boost::with_mode`). */
+function withMode(b: GameBoost, mode: BoostMode): GameBoost {
+  if (mode === 'custom') return { ...b, mode };
+  const competitive = mode === 'competitive';
+  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, preciseTimer: true, fullSpeed: true };
+}
+
+const MODES: { value: BoostMode; icon: LucideIcon; title: string; blurb: (game: string, hasSettings: boolean) => string }[] = [
+  { value: 'competitive', icon: Trophy, title: 'Competitive', blurb: (g, s) => (s ? `Most FPS, least delay. Also sets ${g}’s graphics to its fastest.` : 'Most FPS, least delay: every boost switch on.') },
+  { value: 'quality', icon: Gem, title: 'Quality', blurb: (g) => `Everything that doesn’t change how ${g} looks — 4K Ultra stays 4K Ultra.` },
+  { value: 'custom', icon: SlidersHorizontal, title: 'Custom', blurb: () => 'Pick each switch yourself.' },
+];
+
+function ModePicker({ value, game, hasSettings, onChange }: { value: BoostMode; game: string; hasSettings: boolean; onChange: (m: BoostMode) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Boost mode" className="grid gap-2 px-5 pb-4 pt-3 sm:grid-cols-3">
+      {MODES.map((m) => {
+        const on = m.value === value;
+        return (
+          <button
+            key={m.value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(m.value)}
+            className={cx('group relative overflow-hidden rounded-xl border p-3 text-left transition-colors', on ? 'border-accent/60 bg-accent-soft' : 'border-line bg-surface-2/50 hover:border-line-strong hover:bg-surface-2')}
+          >
+            <div className="flex items-center gap-2">
+              <m.icon size={16} className={on ? 'text-accent' : 'text-dim'} />
+              <span className="text-[13.5px] font-semibold text-fg">{m.title}</span>
+              {on && <Check size={14} className="ml-auto text-accent" />}
+            </div>
+            <div className="mt-1 text-[12px] leading-snug text-dim">{m.blurb(game, hasSettings)}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function ProfileEditor({ profile, session, busy, activeHere, onSaved, onDeleted, onPlay }: { profile: GameProfile; session: GameSession | null; busy: boolean; activeHere: boolean; onSaved: (p: GameProfile) => void; onDeleted: () => void; onPlay: (launch: boolean) => void }) {
   const [draft, setDraft] = useState(profile);
   const [state, setState] = useState<GameState | null>(null);
   const [saved, setSaved] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -127,6 +169,11 @@ export function ProfileEditor({ profile, busy, activeHere, onSaved, onDeleted, o
 
   const l = draft.launch;
   const b = draft.boost;
+  const configGame = CONFIG_GAME[draft.kind];
+  const gameLabel = GAMES[draft.kind].label === 'Any game' ? 'the game' : GAMES[draft.kind].label;
+  // In Competitive and Quality the mode decides these switches.
+  const set = b.mode !== 'custom';
+  const lockedHint = set ? `Set by ${b.mode === 'competitive' ? 'Competitive' : 'Quality'} mode — choose Custom to change it.` : undefined;
   return (
     <div className="space-y-4">
       <Card className="flex flex-wrap items-center gap-4 p-5">
@@ -150,7 +197,14 @@ export function ProfileEditor({ profile, busy, activeHere, onSaved, onDeleted, o
         </div>
       </Card>
 
-      {(draft.kind === 'fortnite' || draft.kind === 'minecraft') && <GameSettingsCard game={draft.kind} beforeLaunch={b.gameSettings} onBeforeLaunch={(v) => boost({ gameSettings: v })} />}
+      <Card>
+        <CardHeader title="Boost mode" subtitle="How far Play goes. Everything comes back when the game closes." className="px-5 pt-4" />
+        <ModePicker value={b.mode} game={gameLabel} hasSettings={!!configGame} onChange={(m) => change({ ...draft, boost: withMode(b, m) }, true)} />
+      </Card>
+
+      {configGame && <GameSettingsCard game={configGame} beforeLaunch={b.gameSettings} onBeforeLaunch={(v) => boost({ gameSettings: v })} locked={b.mode === 'quality' ? 'Quality mode never changes the game’s graphics. Choose Competitive or Custom to set them before each launch.' : b.mode === 'competitive' ? 'Competitive mode sets these before every launch.' : undefined} />}
+
+      <FpsCard profile={draft} session={session} onMeter={(v) => boost({ fpsMeter: v })} />
 
       <Card>
         <CardHeader title="Start" subtitle="How OmniHub starts the game, and which program to follow" className="px-5 pt-4" />
@@ -211,29 +265,32 @@ export function ProfileEditor({ profile, busy, activeHere, onSaved, onDeleted, o
       </Card>
 
       <Card>
-        <CardHeader title="Boost" subtitle="Applied when you press Play; put back when the game closes" className="px-5 pt-4" />
+        <CardHeader title="Boost" subtitle={lockedHint ?? 'Applied when you press Play; put back when the game closes'} className="px-5 pt-4" />
         <div className="divide-y divide-line">
           <Row title="Power plan" hint="Ultimate Performance keeps the processor at full speed (OmniHub adds Windows' hidden plan the first time). Your plan comes back afterwards.">
             <Segmented
               size="sm"
               label="Power plan"
               value={b.powerPlan}
-              onChange={(v) => boost({ powerPlan: v })}
+              onChange={(v) => !set && boost({ powerPlan: v })}
               options={[
-                { value: 'keep', label: 'Keep' },
-                { value: 'high', label: 'High' },
-                { value: 'ultimate', label: 'Ultimate' },
+                { value: 'keep', label: 'Keep', disabled: set && b.powerPlan !== 'keep' },
+                { value: 'high', label: 'High', disabled: set && b.powerPlan !== 'high' },
+                { value: 'ultimate', label: 'Ultimate', disabled: set && b.powerPlan !== 'ultimate' },
               ]}
             />
           </Row>
           <Row title="Game priority" hint="Windows gives the game the processor first while it runs.">
-            <Select value={b.priority ?? ''} onChange={(e) => boost({ priority: (e.target.value || null) as Priority | null })} className="w-40">
+            <Select value={b.priority ?? ''} disabled={set} onChange={(e) => boost({ priority: (e.target.value || null) as Priority | null })} className="w-40">
               <option value="">Leave as is</option>
               <option value="aboveNormal">Above normal</option>
               <option value="high">High</option>
             </Select>
           </Row>
-          <Row title="Close while playing" hint="These programs are closed for the session — unsaved work in them is lost. Browsers usually offer to restore their tabs." stack>
+          <Row title="Close background junk" hint="OneDrive, Google Drive, Dropbox, Widgets, Phone Link, and Adobe, Java, Edge and Google updaters. Sync apps start again afterwards; chat apps like Discord stay open.">
+            <Switch checked={b.closeJunk} disabled={set} onChange={(v) => boost({ closeJunk: v })} label="Close background junk" />
+          </Row>
+          <Row title="Also close" hint="Your own picks, closed for the session — unsaved work in them is lost. Browsers usually offer to restore their tabs." stack>
             <div className="flex flex-wrap items-center gap-1.5">
               {b.closeApps.map((a) => (
                 <span key={a} className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 py-0.5 pl-2.5 pr-1 text-[12.5px] text-fg">
@@ -247,20 +304,29 @@ export function ProfileEditor({ profile, busy, activeHere, onSaved, onDeleted, o
                 Add
               </Button>
             </div>
-            {b.closeApps.length > 0 && (
+            {(b.closeApps.length > 0 || b.closeJunk) && (
               <label className="flex items-center gap-2 text-[12.5px] text-dim">
-                <Switch checked={b.reopenApps} onChange={(v) => boost({ reopenApps: v })} label="Reopen them afterwards" /> Reopen them when the game closes
+                <Switch checked={b.reopenApps} disabled={set} onChange={(v) => boost({ reopenApps: v })} label="Reopen them afterwards" /> Reopen them when the game closes
               </label>
             )}
           </Row>
+          <Row title="Background apps at lower priority" hint="Browsers, Steam and Epic web views, Spotify and sync apps run at “Below normal” while you play, so the game gets the processor first.">
+            <Switch checked={b.lowerBackground} disabled={set} onChange={(v) => boost({ lowerBackground: v })} label="Background apps at lower priority" />
+          </Row>
+          <Row title="Precise timer (0.5 ms)" hint="Windows’ finest timer while you play: games with frame limiters keep steadier frame times. Windows 11 needs “Precise timer for games” in Optimize PC once.">
+            <Switch checked={b.preciseTimer} disabled={set} onChange={(v) => boost({ preciseTimer: v })} label="Precise timer" />
+          </Row>
+          <Row title="Full speed" hint="Windows never moves the game to power-saving cores or slows it to save energy (it can on laptops and newer Intel processors).">
+            <Switch checked={b.fullSpeed} disabled={set} onChange={(v) => boost({ fullSpeed: v })} label="Full speed" />
+          </Row>
           <Row title="Silence notifications" hint="No pop-ups over the game; they come back afterwards.">
-            <Switch checked={b.silenceNotifications} onChange={(v) => boost({ silenceNotifications: v })} label="Silence notifications" />
+            <Switch checked={b.silenceNotifications} disabled={set} onChange={(v) => boost({ silenceNotifications: v })} label="Silence notifications" />
           </Row>
           <Row title="Game Mode" hint="Makes sure Windows Game Mode is on (it holds back updates and background work).">
-            <Switch checked={b.gameMode} onChange={(v) => boost({ gameMode: v })} label="Game Mode" />
+            <Switch checked={b.gameMode} disabled={set} onChange={(v) => boost({ gameMode: v })} label="Game Mode" />
           </Row>
           <Row title="Use the high-performance GPU" badge={<PerGameBadge />} hint="Same as Windows Settings → Graphics. Matters on laptops with two GPUs.">
-            <Switch checked={b.gpuHighPerformance} onChange={(v) => boost({ gpuHighPerformance: v })} label="High-performance GPU" />
+            <Switch checked={b.gpuHighPerformance} disabled={set} onChange={(v) => boost({ gpuHighPerformance: v })} label="High-performance GPU" />
           </Row>
           <Row title="Disable fullscreen optimizations" badge={<PerGameBadge />} hint="Can lower input delay in some older games; leave off if the game alt-tabs badly.">
             <Switch checked={b.fullscreenOptimizationsOff} onChange={(v) => boost({ fullscreenOptimizationsOff: v })} label="Disable fullscreen optimizations" />
@@ -272,7 +338,7 @@ export function ProfileEditor({ profile, busy, activeHere, onSaved, onDeleted, o
         </div>
       </Card>
 
-      <PingCard profile={draft} state={state} onBoost={boost} onHost={(h) => change({ ...draft, pingHost: h })} />
+      <PingCard profile={draft} state={state} locked={set} onBoost={boost} onHost={(h) => change({ ...draft, pingHost: h })} />
 
       {draft.kind === 'roblox' && <RobloxCard flags={draft.roblox} onChange={(f) => change({ ...draft, roblox: f })} />}
     </div>

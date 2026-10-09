@@ -50,7 +50,7 @@ impl Roots {
 }
 
 #[cfg(windows)]
-fn steam_root() -> Option<PathBuf> {
+pub(crate) fn steam_root() -> Option<PathBuf> {
     use winreg::enums::HKEY_CURRENT_USER;
     let p: String = winreg::RegKey::predef(HKEY_CURRENT_USER).open_subkey(r"Software\Valve\Steam").ok()?.get_value("SteamPath").ok()?;
     let p = PathBuf::from(p.replace('/', "\\"));
@@ -58,7 +58,7 @@ fn steam_root() -> Option<PathBuf> {
 }
 
 #[cfg(not(windows))]
-fn steam_root() -> Option<PathBuf> {
+pub(crate) fn steam_root() -> Option<PathBuf> {
     None
 }
 
@@ -70,6 +70,7 @@ fn steam_known(app_id: u32) -> Option<(GameKind, &'static str)> {
         271_590 => (GameKind::Gta5, "GTA5.exe"),
         1_938_090 => (GameKind::CallOfDuty, "cod.exe"),
         252_950 => (GameKind::RocketLeague, "RocketLeague.exe"),
+        2_357_570 => (GameKind::Overwatch, "Overwatch.exe"),
         _ => return None,
     })
 }

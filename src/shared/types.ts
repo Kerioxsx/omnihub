@@ -1011,7 +1011,7 @@ export interface EqStatus {
 
 // ---------- games ----------
 
-export type GameKind = 'fortnite' | 'roblox' | 'valorant' | 'cs2' | 'apex' | 'rocketLeague' | 'gta5' | 'callOfDuty' | 'league' | 'minecraft' | 'custom';
+export type GameKind = 'fortnite' | 'roblox' | 'valorant' | 'cs2' | 'apex' | 'overwatch' | 'rocketLeague' | 'gta5' | 'callOfDuty' | 'league' | 'minecraft' | 'cyberpunk' | 'custom';
 
 export type GameLaunch =
   | { type: 'none' }
@@ -1024,7 +1024,11 @@ export type GameLaunch =
 
 export type PowerPlanChoice = 'keep' | 'high' | 'ultimate';
 
+/** competitive: most FPS, also the game's own graphics · quality: nothing that changes the picture · custom: each switch as set. */
+export type BoostMode = 'competitive' | 'quality' | 'custom';
+
 export interface GameBoost {
+  mode: BoostMode;
   powerPlan: PowerPlanChoice;
   priority: Priority | null;
   closeApps: string[];
@@ -1036,13 +1040,23 @@ export interface GameBoost {
   wifiLowLatency: boolean;
   networkPriority: boolean;
   startHighPriority: boolean;
-  /** Fortnite, Minecraft: write the fastest in-game settings before each launch. */
+  /** Games OmniHub knows the settings of: write the fastest in-game settings before each launch. */
   gameSettings: boolean;
+  /** Close cloud sync, Windows extras and updaters for the session. */
+  closeJunk: boolean;
+  /** Browsers, launchers' web views and sync apps at Below normal while playing. */
+  lowerBackground: boolean;
+  /** Windows' finest timer (0.5 ms) while playing. */
+  preciseTimer: boolean;
+  /** Windows never slows the game down to save power. */
+  fullSpeed: boolean;
+  /** Measure FPS while playing (PresentMon). */
+  fpsMeter: boolean;
 }
 
 // ---------- the games' own settings, installed games, PC tweaks ----------
 
-export type ConfigGame = 'fortnite' | 'minecraft';
+export type ConfigGame = 'fortnite' | 'valorant' | 'cs2' | 'apex' | 'overwatch' | 'roblox' | 'minecraft';
 
 export interface FortniteOptions {
   /** 0 = unlimited */
@@ -1062,11 +1076,24 @@ export interface MinecraftOptions {
   minimalParticles: boolean;
   noClouds: boolean;
   renderDistance: number | null;
+  simulationDistance: number | null;
+}
+
+/** The switches for games without options of their own. */
+export interface ProOptions {
+  uncapped: boolean;
+  lowestQuality: boolean;
+  lowLatency: boolean;
 }
 
 export interface ConfigOptions {
   fortnite: FortniteOptions;
   minecraft: MinecraftOptions;
+  valorant: ProOptions;
+  cs2: ProOptions;
+  apex: ProOptions;
+  overwatch: ProOptions;
+  roblox: ProOptions;
 }
 
 export interface ConfigChange {
@@ -1084,12 +1111,15 @@ export interface ConfigSetting {
 
 export interface ConfigStatus {
   game: ConfigGame;
-  path: string | null;
+  label: string;
+  /** Several for games with one file per account. */
+  paths: string[];
   found: boolean;
   running: boolean;
   settings: ConfigSetting[];
   pending: ConfigChange[];
   backupAt: number | null;
+  note: string | null;
 }
 
 export interface GameConfigs {
@@ -1109,7 +1139,7 @@ export interface InstalledGame {
   profileId: string | null;
 }
 
-export type TweakId = 'refreshRate' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'gpuScheduling' | 'mouseAcceleration' | 'memoryIntegrity';
+export type TweakId = 'refreshRate' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'gpuScheduling' | 'preciseTimer' | 'networkThrottling' | 'mouseAcceleration' | 'stickyKeys' | 'memoryIntegrity';
 
 export interface PcTweak {
   id: TweakId;
@@ -1181,6 +1211,7 @@ export interface GameStep {
 export interface GameSession {
   profileId: string;
   name: string;
+  mode: BoostMode;
   phase: GamePhase;
   startedAt: number;
   endedAt: number | null;
@@ -1188,6 +1219,62 @@ export interface GameSession {
   steps: GameStep[];
   restored: GameStep[];
   message: string | null;
+  /** Frames per second over the session, when the FPS meter ran. */
+  fps: FpsSummary | null;
+}
+
+// ---------- FPS meter, lag under load ----------
+
+export interface FpsLive {
+  fps: number;
+  /** 1% low over the last ten seconds. */
+  low1: number;
+  frameMs: number;
+  worstMs: number;
+}
+
+export interface FpsSummary {
+  frames: number;
+  seconds: number;
+  avg: number;
+  low1: number;
+  low01: number;
+  /** Frames over 2.5× the average (and 8 ms). */
+  hitches: number;
+}
+
+export interface FpsStatus {
+  installed: boolean;
+  allowed: boolean;
+  signOutNeeded: boolean;
+  supported: boolean;
+}
+
+export interface FpsRecord {
+  profileId: string;
+  name: string;
+  mode: BoostMode;
+  at: number;
+  summary: FpsSummary;
+}
+
+export interface FpsOverview {
+  status: FpsStatus;
+  live: FpsLive | null;
+  history: FpsRecord[];
+}
+
+export interface LoadTest {
+  target: string;
+  idleMs: number | null;
+  downloadMs: number | null;
+  uploadMs: number | null;
+  downloadMbps: number | null;
+  uploadMbps: number | null;
+  extraMs: number | null;
+  grade: string | null;
+  advice: string[];
+  error: string | null;
 }
 
 export interface GameState {
