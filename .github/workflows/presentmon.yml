@@ -82,7 +82,9 @@ jobs:
           # Stopping our session from a second copy, as the app does.
           $stop = & pm\OmniHub-PresentMon-x64.exe --terminate_existing_session --session_name OmniHubFps 2>&1 | Out-String
           $stop
-          if ($stop -match '(?i)unrecognized') { throw 'PresentMon does not know --terminate_existing_session' }
+          # The capture above already ended, so "no existing sessions found" is the expected answer.
+          if ($stop -match '(?i)unrecognized' -or $stop -notmatch '(?i)no existing sessions|terminat') { throw 'PresentMon did not handle --terminate_existing_session' }
+          exit 0
 
       - name: Checksum
         id: hash
