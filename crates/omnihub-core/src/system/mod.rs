@@ -1,5 +1,6 @@
 //! Operating system integration.
 
+pub mod awake;
 pub mod clipboard;
 pub mod dpapi;
 pub mod elevation;

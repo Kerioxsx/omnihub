@@ -38,7 +38,8 @@ export function useNowPlaying() {
   const [loaded, setLoaded] = useState(false);
   const offset = useRef(0);
   const [art, setArt] = useState<string | null>(null);
-  const [lyrics, setLyrics] = useState<LyricsStatus | null>(null);
+  // Lyrics with the track they belong to, so a new track never shows the last one's.
+  const [loadedLyrics, setLyrics] = useState<{ key: string; lyrics: LyricsStatus } | null>(null);
 
   useEffect(() => {
     void api.media.state().then(
@@ -58,8 +59,9 @@ export function useNowPlaying() {
   const key = state?.key;
   const loadLyrics = useCallback(() => {
     if (!key) return setLyrics(null);
-    void api.media.lyrics().then((r) => r.key === key && setLyrics(r.lyrics), () => setLyrics(null));
+    void api.media.lyrics().then((r) => r.key === key && setLyrics({ key, lyrics: r.lyrics }), () => setLyrics(null));
   }, [key]);
+  const lyrics = loadedLyrics && loadedLyrics.key === key ? loadedLyrics.lyrics : null;
   useEffect(loadLyrics, [loadLyrics]);
   useEvent<{ key: string }>('media:lyrics', (p) => p.key === key && loadLyrics());
 

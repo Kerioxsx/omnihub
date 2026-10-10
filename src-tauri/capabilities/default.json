@@ -2,7 +2,11 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permissions for the OmniHub windows. App features go through OmniHub's own commands; plugins are limited to what the UI needs.",
-  "windows": ["main", "overlay"],
+  "windows": [
+    "main",
+    "overlay",
+    "ambient-*"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-close",

@@ -187,6 +187,35 @@ and lets a phone do some of that. This is what protects each part.
   `ClientSettings\ClientAppSettings.json`, where OmniHub writes Fast Flags
   (keeping any flags it did not write).
 
+## Aurora and the PC's sound
+
+Aurora (the music player's light, visual and floating lyrics) reacts to what
+the PC plays. How that works, and what it never does:
+
+- **What it hears.** WASAPI *loopback* on the default output device: the
+  mix Windows is already sending to your speakers or headphones. It is not
+  the microphone, Windows asks no permission for it, and OmniHub never opens
+  a recording device for Aurora.
+- **When.** Only while a view shows Aurora (the player, the Music page or
+  the glow around the screen). Each view holds a lease it renews every few
+  seconds; ten seconds after the last one goes, capture stops and the
+  device is released. Nothing listens in the background.
+- **Where it goes.** Nowhere. Samples live in memory for one 2048-sample
+  analysis window (about 43 ms) and become a handful of numbers (loudness,
+  bass, mids, highs, beats, 16 bands) that go to OmniHub's own windows as
+  `audio:frame` events. Sound is never written to disk, never recorded and
+  never sent anywhere; the phone does not receive these events.
+- **Off.** *Follow the music* (in Aurora's settings) stops capture at once;
+  *Aurora on* off stops capture and all drawing. Without capture (turned
+  off, no output device, an unsupported format) the light moves on its own.
+- **Lyrics.** Your own `.lrc` folder is only read. Online lookups send the
+  song's title, artist, album and length to LRCLIB (see Internet).
+- **The glow around the screen** is a see-through window per monitor that
+  never takes focus and lets every click through. It hides while a game,
+  video or presentation is full screen and during game boosts.
+- **Keep the screen on** asks Windows not to turn the display off only while
+  the player shows Aurora and music plays, and lets go when either stops.
+
 ## Deleting files
 
 Cleanup only suggests. Deletion goes to the Recycle Bin unless you choose

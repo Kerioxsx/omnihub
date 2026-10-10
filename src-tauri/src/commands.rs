@@ -1197,6 +1197,37 @@ pub async fn media_set_volume(level: Option<f32>, muted: Option<bool>) -> Res<om
     blocking(move || omnihub_core::media::audio::set(level, muted)).await
 }
 
+/// A view shows the music visuals: listen to the PC's sound for a while.
+/// Views call this every few seconds; `audio:frame` events follow.
+#[tauri::command]
+pub async fn visual_hold(core: Core<'_>, who: String) -> Res<omnihub_core::media::visual::VisualStatus> {
+    Ok(core.visual.hold(&who))
+}
+
+#[tauri::command]
+pub async fn visual_release(core: Core<'_>, who: String) -> Res<()> {
+    core.visual.release(&who);
+    Ok(())
+}
+
+/// The monitors the screen glow can light.
+#[tauri::command]
+pub async fn ambient_displays(app: AppHandle) -> Res<Vec<crate::ambient::AmbientDisplay>> {
+    Ok(crate::ambient::displays(&app))
+}
+
+/// Keep the screen on while the player shows Aurora and music plays.
+#[tauri::command]
+pub async fn visual_keep_awake(on: bool) -> Res<()> {
+    omnihub_core::system::awake::keep_display_on(on);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn visual_status(core: Core<'_>) -> Res<omnihub_core::media::visual::VisualStatus> {
+    Ok(core.visual.status())
+}
+
 // ---------- fast scans without a prompt ----------
 
 #[tauri::command]

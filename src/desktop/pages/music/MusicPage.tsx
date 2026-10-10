@@ -9,6 +9,8 @@ import { usePlayer } from '../../lib/nowPlaying';
 
 export function MusicPage() {
   const show = usePlayer((s) => s.show);
+  // One player at a time: the full-screen one replaces this one while open.
+  const fullOpen = usePlayer((s) => s.open);
   return (
     <Page
       title="Music"
@@ -20,7 +22,7 @@ export function MusicPage() {
       }
     >
       <div className="h-[calc(100vh-190px)] min-h-[460px] overflow-hidden rounded-2xl border border-line shadow-lg">
-        <FullPlayer mode="page" />
+        {fullOpen ? <div className="h-full w-full bg-[#07070b]" /> : <FullPlayer mode="page" />}
       </div>
     </Page>
   );

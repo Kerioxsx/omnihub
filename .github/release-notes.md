@@ -1,23 +1,16 @@
 ## New in this version
 
-- **Boost modes for every game.** Pick how far Play goes, per game:
-  - **Competitive** — the most FPS and the least delay. Every boost switch on, and the game's own graphics set to their fastest.
-  - **Quality** — everything that doesn't change the picture. The game's graphics are never touched, so Cyberpunk 2077 at 4K Ultra stays 4K Ultra.
-  - **Custom** — each switch your way.
-  
-  Everything a boost changes comes back when the game closes.
-- **Pro settings for more games.** Besides Fortnite and Minecraft, OmniHub now sets **VALORANT**, **Counter-Strike 2** (every Steam account on the PC), **Apex Legends**, **Overwatch 2** and **Roblox** for frames: VSync off, no frame cap where the file has one, lowest shadows and effects, NVIDIA Reflex in CS2, Reduce buffering in Overwatch. Each game's page says what it can't change for you (for example CS2's `fps_max`). **Optimize PC** lists every game in one place with **Optimize all**. **Put back mine** restores your own settings.
-- **Less delay while you play** (only during the game, then put back):
-  - closes background junk — OneDrive, Google Drive, Dropbox, Widgets, Phone Link, Adobe/Java/Edge/Google updaters — and starts the sync apps again afterwards (Discord and other chat apps stay open);
-  - browsers, Steam/Epic web views, Spotify and sync apps drop to "Below normal" priority, so the game gets the processor first;
-  - Windows' finest timer (0.5 ms) for steadier frame pacing;
-  - Windows never moves the game to power-saving cores or slows it down.
-- **FPS meter.** Every frame, measured by Intel PresentMon (the tool hardware reviewers use): live FPS, 1% low and frame time while you play — on the PC and on your phone — and a summary afterwards (average, 1% and 0.1% lows, stutters), kept per game so you can compare boosts. It works with anti-cheat and doesn't touch the game. Turning it on asks Windows for permission once; it counts from your next sign-in.
-- **Lag under load.** The ping helper now pings while the line is busy downloading and then uploading, grades the result (A+ to F) and says what to do about it — usually Smart Queue/SQM on the router, a cable instead of Wi-Fi, or pausing downloads.
-- **More in Optimize PC:** a precise timer for games (Windows 11), no network throttling during media, and no Sticky Keys pop-up when you hold Shift. None of the PC-wide settings lowers picture quality.
-- Overwatch 2 and Cyberpunk 2077 profiles; Cyberpunk starts in Quality mode.
+- **Aurora — a new way to see your music.** Open Music (or full screen) and the song itself becomes the show:
+  - **the cover art is the visual**, big and vivid on black: it swells with the bass, glitches, splits its colours and jumps on the beats, and changes with every song. Styles: **Visual**, **Fisheye**, **Fisheye Visual**, **Minimal** (mostly dark) and **Ambient** (colour fields);
+  - **a thin neon light around the screen** in the cover's colours: a crisp edge, an inner highlight, a soft glow and a wider bloom. Bass widens it, beats lift it, quiet parts soften it; it never flickers;
+  - **huge floating lyrics**: the word being sung in the middle, the one before above, the next one in a pill below. Word by word when the lyrics time each word; otherwise a whole line at a time (no guessing). Instrumental breaks show breathing dots, and the next line appears just before it is sung;
+  - pausing freezes everything where it is (then shows the cover as a card); seeking and skipping update at once and never show the last song's lyrics.
+- **The Apple Music–style Lyrics view is still there.** Switch between **Aurora** and **Lyrics** at the top left (or press V); OmniHub remembers your choice.
+- **Settings for everything** in a compact glass panel (Settings in the player's dock): gradient and colours (from the cover, or your own two, several or one), animation (music sync, idle, none), thickness and glow, visual style, intensity and speed, lyric font, size, weight, highlight, position and more, sensitivity and bass response, reduced motion and no flashes. Changes show at once and are saved. **Reset to defaults** is one click. **L** shows or hides the lyrics.
+- **Glow around your screen** (optional): the same light around your monitor, over every app, on one display or all. Clicks go straight through it, and it steps aside while a game or video is full screen.
+- **Your own lyrics files**: choose a folder of `.lrc` files and they are used first (matched by the file's tags or "Artist - Title.lrc" name, and only when the length fits the song).
 
-About ping and frame rates, honestly: no app can make your ping 0 — the distance to the game's server is the floor, so pick the closest region. And FPS tops out where your processor and graphics card do. OmniHub removes everything else in the way, and the FPS meter shows what you actually get.
+**How Aurora hears the music:** it reads the sound Windows is already playing (the mix you hear, called loopback), only while Aurora is on screen. It never uses the microphone, never records and never sends sound anywhere. Turn off *Follow the music* to stop it; the light then moves on its own.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

@@ -2,9 +2,10 @@
 //! (lrclib.net — a free, open lyrics database; no account or key).
 //!
 //! LRC files time each line (`[01:02.50] words`); some also time each word
-//! (`<01:02.80> word`), which the phone uses to fill words as they are sung.
+//! (`<01:02.80> word`), which the players use to fill words as they are sung.
+//! The user's own .lrc files ([`find_local`]) come first.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -114,6 +115,131 @@ pub fn parse_lrc(src: &str) -> Vec<Line> {
     out
 }
 
+/// The `[ti:]`, `[ar:]`, `[al:]` and `[length:]` tags of an LRC file.
+#[derive(Debug, Default, PartialEq)]
+pub struct LrcTags {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub length_ms: Option<u64>,
+}
+
+pub fn lrc_tags(src: &str) -> LrcTags {
+    let mut tags = LrcTags::default();
+    for raw in src.lines().take(40) {
+        let Some(inner) = raw.trim().strip_prefix('[').and_then(|r| r.strip_suffix(']')) else { continue };
+        let Some((k, v)) = inner.split_once(':') else { continue };
+        let v = v.trim();
+        if v.is_empty() {
+            continue;
+        }
+        match k.trim().to_ascii_lowercase().as_str() {
+            "ti" => tags.title = Some(v.to_string()),
+            "ar" => tags.artist = Some(v.to_string()),
+            "al" => tags.album = Some(v.to_string()),
+            // "03:20", "03:20.5" or plain seconds.
+            "length" => tags.length_ms = parse_time(v).or_else(|| v.parse::<f64>().ok().map(|s| (s * 1000.0) as u64)),
+            _ => {}
+        }
+    }
+    tags
+}
+
+/// The text of an LRC file without its tags (for files with no timings).
+fn lrc_plain(src: &str) -> Option<String> {
+    let text = src.lines().map(str::trim).filter(|l| !(l.starts_with('[') && l.ends_with(']') && l.contains(':'))).collect::<Vec<_>>().join("\n");
+    let text = text.trim();
+    (!text.is_empty()).then(|| text.to_string())
+}
+
+/// Letters and digits only, lower case ("Don't Stop" → "dontstop").
+fn norm(s: &str) -> String {
+    s.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
+}
+
+/// Lyrics that run past the end of the track belong to another version.
+fn fits(lines: &[Line], duration_ms: u64) -> bool {
+    duration_ms == 0 || lines.iter().rev().find(|l| !l.text.is_empty()).is_none_or(|l| l.ms <= duration_ms + 5_000)
+}
+
+/// The user's own lyrics: an .lrc file in `dir` (or a folder below it) for
+/// this track. Files are matched on their `[ti:]`/`[ar:]` tags, or on the
+/// file name ("Artist - Title.lrc" or "Title.lrc"); a file whose
+/// `[length:]` differs from the track by more than 8 s, or whose lines run
+/// past its end, is for another version and is skipped.
+pub fn find_local(dir: &Path, title: &str, artist: &str, duration_ms: u64) -> Option<Lyrics> {
+    let (t, a) = clean_query(title, artist);
+    let (want_t, want_t_raw, want_a) = (norm(&t), norm(title), norm(&a));
+    if want_t.is_empty() {
+        return None;
+    }
+    let mut files = Vec::new();
+    collect_lrc(dir, 0, &mut files);
+    // (score, path, lyrics).
+    let mut best: Option<(u8, PathBuf, Lyrics)> = None;
+    for path in files {
+        let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        let (name_a, name_t) = match stem.split_once(" - ") {
+            Some((a, t)) => (Some(a.to_string()), t.to_string()),
+            None => (None, stem.clone()),
+        };
+        // Cheap check on the name before reading: a tagged file may be named anything.
+        let name_hit = [norm(&name_t), norm(&clean_query(&name_t, "").0)].iter().any(|n| *n == want_t || *n == want_t_raw);
+        let Ok(meta) = std::fs::metadata(&path) else { continue };
+        if meta.len() > 512 * 1024 {
+            continue;
+        }
+        let Ok(src) = std::fs::read_to_string(&path) else { continue };
+        let tags = lrc_tags(&src);
+        let title_hit = name_hit || tags.title.as_deref().is_some_and(|ti| [norm(ti), norm(&clean_query(ti, "").0)].iter().any(|n| *n == want_t || *n == want_t_raw));
+        if !title_hit {
+            continue;
+        }
+        let cand_a = tags.artist.clone().or(name_a).map(|a| norm(&a)).filter(|a| !a.is_empty());
+        let artist_ok = match (&cand_a, want_a.is_empty()) {
+            (Some(c), false) => c == &want_a || c.contains(&want_a) || want_a.contains(c.as_str()),
+            _ => true,
+        };
+        if !artist_ok {
+            continue;
+        }
+        let length_ok = match (tags.length_ms, duration_ms > 0) {
+            (Some(len), true) if len.abs_diff(duration_ms) > 8_000 => continue,
+            (Some(_), true) => true,
+            _ => false,
+        };
+        let lines = parse_lrc(&src);
+        if !fits(&lines, duration_ms) {
+            continue;
+        }
+        // Timed lines first, then a length that agrees, then the same artist.
+        let score = u8::from(!lines.is_empty()) * 4 + u8::from(length_ok) * 3 + u8::from(cand_a.is_some() && !want_a.is_empty()) * 2;
+        if best.as_ref().is_some_and(|(s, _, _)| *s >= score) {
+            continue;
+        }
+        let plain = if lines.is_empty() { lrc_plain(&src) } else { None };
+        let source = format!("Your lyrics file ({})", path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
+        best = Some((score, path, Lyrics { lines, plain, instrumental: false, source }));
+    }
+    best.map(|(_, _, l)| l)
+}
+
+fn collect_lrc(dir: &Path, depth: u8, out: &mut Vec<PathBuf>) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return };
+    for e in rd.flatten() {
+        if out.len() >= 5_000 {
+            return;
+        }
+        let p = e.path();
+        let Ok(ft) = e.file_type() else { continue };
+        if ft.is_dir() && depth < 3 {
+            collect_lrc(&p, depth + 1, out);
+        } else if ft.is_file() && p.extension().is_some_and(|x| x.eq_ignore_ascii_case("lrc")) {
+            out.push(p);
+        }
+    }
+}
+
 /// The line playing at `ms` (index into `lines`).
 pub fn line_at(lines: &[Line], ms: u64) -> Option<usize> {
     let i = lines.partition_point(|l| l.ms <= ms);
@@ -198,14 +324,17 @@ pub fn lookup(title: &str, artist: &str, album: &str, duration_ms: u64, get: &dy
     }
     if let Some(body) = get(&url)? {
         if let Ok(track) = serde_json::from_str::<LrclibTrack>(&body) {
-            return Ok(Some(to_lyrics(track)));
+            let l = to_lyrics(track);
+            if fits(&l.lines, duration_ms) {
+                return Ok(Some(l));
+            }
         }
     }
     let Some(body) = get(&format!("https://lrclib.net/api/search?track_name={}&artist_name={}", enc(&t), enc(&a)))? else { return Ok(None) };
     let mut found: Vec<LrclibTrack> = serde_json::from_str(&body).unwrap_or_default();
     // Prefer synced lyrics, then the closest length.
     found.sort_by_key(|f| (f.synced_lyrics.is_none(), ((f.duration - secs as f64).abs() * 10.0) as i64));
-    Ok(found.into_iter().find(|f| secs == 0 || (f.duration - secs as f64).abs() < 8.0).map(to_lyrics))
+    Ok(found.into_iter().filter(|f| secs == 0 || (f.duration - secs as f64).abs() < 8.0).map(to_lyrics).find(|l| fits(&l.lines, duration_ms)))
 }
 
 fn url_encode(s: &str) -> String {
@@ -314,5 +443,67 @@ mod tests {
         let l = Lyrics { lines: parse_lrc("[00:01.00]hi"), plain: None, instrumental: false, source: "LRCLIB".into() };
         c.put("b", &Some(l.clone()));
         assert_eq!(c.get("b"), Some(Some(l)));
+    }
+
+    #[test]
+    fn tags_and_test_files() {
+        let src = include_str!("testdata/daylight-drive.lrc");
+        let tags = lrc_tags(src);
+        assert_eq!((tags.title.as_deref(), tags.artist.as_deref(), tags.length_ms), (Some("Daylight Drive"), Some("The Test Signals"), Some(200_000)));
+        let lines = parse_lrc(src);
+        // Every sung line times its words; empty lines mark the breaks.
+        assert!(lines.iter().filter(|l| !l.text.is_empty()).all(|l| !l.words.is_empty() && l.words[0].ms == l.ms));
+        assert!(lines.iter().any(|l| l.text.is_empty()));
+        assert!(fits(&lines, 200_000) && !fits(&lines, 120_000));
+        let night = parse_lrc(include_str!("testdata/night-loop.lrc"));
+        assert!(night.len() > 30 && night.iter().all(|l| l.words.is_empty()));
+        assert_eq!(lrc_tags("[length: 215]").length_ms, Some(215_000));
+    }
+
+    #[test]
+    fn local_files_match_on_tags_names_and_length() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("Albums").join("Summer");
+        std::fs::create_dir_all(&sub).unwrap();
+        // Named anything, matched on its tags.
+        std::fs::write(sub.join("01.lrc"), "[ti:Get Lucky]\n[ar:Daft Punk]\n[length:04:08]\n[00:01.00]radio edit").unwrap();
+        // Named "Artist - Title", no tags, and an album version with a [length:] far off.
+        std::fs::write(dir.path().join("Daft Punk - Get Lucky.lrc"), "[00:02.00]by name").unwrap();
+        std::fs::write(dir.path().join("Get Lucky (Album).lrc"), "[ti:Get Lucky]\n[length:06:09]\n[00:03.00]album").unwrap();
+        std::fs::write(dir.path().join("Other - Get Lucky.lrc"), "[00:04.00]someone else").unwrap();
+        std::fs::write(dir.path().join("notes.txt"), "[00:01.00]not lyrics").unwrap();
+
+        // The radio edit (4:08) matches its tagged file.
+        let l = find_local(dir.path(), "Get Lucky (Radio Edit)", "Daft Punk", 248_000).unwrap();
+        assert_eq!(l.lines[0].text, "radio edit");
+        assert!(l.source.contains("01.lrc"));
+        // The album version (6:09): only the file whose length agrees.
+        let l = find_local(dir.path(), "Get Lucky", "", 369_000).unwrap();
+        assert_eq!(l.lines[0].text, "album");
+        // Length unknown to the file: the name decides; lines past the end don't fit.
+        std::fs::remove_file(sub.join("01.lrc")).unwrap();
+        assert_eq!(find_local(dir.path(), "Get Lucky", "Daft Punk", 248_000).unwrap().lines[0].text, "by name");
+        std::fs::write(dir.path().join("Daft Punk - Get Lucky.lrc"), "[00:02.00]by name\n[05:00.00]too long").unwrap();
+        assert!(find_local(dir.path(), "Get Lucky", "Daft Punk", 248_000).is_none());
+        // Another artist's song of the same name is not used.
+        assert!(find_local(dir.path(), "Get Lucky", "Someone", 0).is_none_or(|l| l.lines[0].text != "by name"));
+        assert!(find_local(dir.path(), "Unknown", "Daft Punk", 0).is_none());
+        // A file without timings gives plain text.
+        std::fs::write(dir.path().join("Plain Song.lrc"), "[ti:Plain Song]\nfirst\nsecond").unwrap();
+        let l = find_local(dir.path(), "Plain Song", "", 0).unwrap();
+        assert!(l.lines.is_empty());
+        assert_eq!(l.plain.as_deref(), Some("first\nsecond"));
+    }
+
+    #[test]
+    fn lookup_skips_lyrics_longer_than_the_track() {
+        let get = |url: &str| -> Result<Option<String>, String> {
+            if url.contains("/api/get?") {
+                return Ok(Some(r#"{"duration":200,"syncedLyrics":"[00:01.00]a\n[05:00.00]extended mix"}"#.into()));
+            }
+            Ok(Some(r#"[{"duration":201,"syncedLyrics":"[00:01.00]right one"}]"#.into()))
+        };
+        let l = lookup("Song", "Artist", "", 200_000, &get).unwrap().unwrap();
+        assert_eq!(l.lines[0].text, "right one");
     }
 }

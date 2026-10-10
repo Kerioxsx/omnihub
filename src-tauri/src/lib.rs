@@ -2,6 +2,7 @@
 //! `omnihub-core`.
 
 mod commands;
+mod ambient;
 mod overlay;
 mod shortcuts;
 mod tray;
@@ -106,7 +107,7 @@ pub fn run(args: Vec<String>) {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["overlay"]).build())
+        .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["overlay"]).with_filter(|label| !label.starts_with("ambient-")).build())
         .manage(core.clone())
         .manage(commands::PendingSend::default())
         .manage(commands::LastCrash(parking_lot::Mutex::new(last_crash)))
@@ -151,6 +152,7 @@ pub fn run(args: Vec<String>) {
             let window_handle = handle.clone();
             core.updater.set_in_use(move || window_handle.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false)));
             core.start_background();
+            ambient::start(handle.clone());
 
             // Autostart passes --minimized; "Start minimized" decides whether
             // that start stays in the tray. A normal launch always shows.
@@ -325,6 +327,11 @@ pub fn run(args: Vec<String>) {
             commands::media_art,
             commands::media_audio,
             commands::media_set_volume,
+            commands::visual_hold,
+            commands::visual_release,
+            commands::visual_status,
+            commands::visual_keep_awake,
+            commands::ambient_displays,
             commands::settings_export,
             commands::settings_import,
             commands::screen_share_state,

@@ -98,6 +98,45 @@ within a frame. `system/procs.rs` groups processes by name; GPU figures come
 from the "GPU Engine" and "GPU Process Memory" performance counters (the
 busiest engine per program, like Task Manager) via `system/gpu.rs`.
 
+### Aurora
+
+The music visuals are split so nothing time-critical waits on the network
+or the UI:
+
+- **Capture** (`media/visual/source.rs`): WASAPI loopback of the default
+  output, mixed to mono; a synthesised beat stands in with the pretend
+  player. Device changes are noticed every 2 s and the stream reopened.
+- **Analysis** (`media/visual/analyzer.rs`, `fft.rs`): 2048-point Hann
+  windows, hop of one display frame; RMS, bass (25–160 Hz), mids, highs and
+  16 log bands, each normalised by an adaptive peak follower and smoothed
+  with separate attack and release; beats from bass-weighted spectral flux
+  above a running mean + k·σ, with hysteresis and a 250 ms refractory
+  period; tempo from the median gap. Silence switches to a cheap path.
+- **Hub** (`media/visual/mod.rs`): one thread at 60 Hz, started by a lease
+  and stopped when the last lease expires; emits `audio:frame` while there
+  is sound (a heartbeat, then nothing, when quiet) and `audio:status`.
+  Track changes (`media:state`) reset the analysis.
+- **Lyrics service** (`media/lyrics.rs`, `media/mod.rs`): the user's `.lrc`
+  folder first (matched on tags or "Artist - Title" names, length within
+  8 s, lines that fit the track), then the cache, then LRCLIB. Lyrics are
+  stored per track key, so a new track never gets the last one's lines.
+- **Frontend** (`src/desktop/lib/aurora`, `components/aurora`): one
+  animation loop per view drives two WebGL canvases — the scene (the cover
+  art with glitch slices, channel split, a fisheye lens, beat pulses and
+  spray-paint edges, or palette fields) and the edge light (a rounded-rect
+  distance field with edge, inner highlight, glow and bloom layers, which
+  skips pixels away from the edge). Audio frames land in a shared object
+  read per frame, so sound never re-renders React. Palettes are extracted
+  from the cover with k-means in OKLab and eased between songs in OKLab.
+  The lyrics overlay follows the player's clock (`useNowPlaying`), steps
+  word by word only with word timestamps, and renders only when the line or
+  word changes.
+- **Screen glow** (`src-tauri/src/ambient.rs`, `pages/overlay/AmbientOverlay.tsx`):
+  a transparent, click-through, always-on-top window per chosen monitor,
+  placed in physical pixels on the monitor or its work area; a watcher
+  follows settings, monitors, full-screen apps (`SHQueryUserNotificationState`)
+  and game boosts once a second.
+
 `games/` keeps profiles in `games.json`. Play runs a session on its own
 thread: each step (close apps, power plan, notifications, per-game registry
 settings, admin-only settings in one helper call, Wi-Fi low-latency handle,

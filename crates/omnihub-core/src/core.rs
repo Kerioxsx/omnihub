@@ -62,6 +62,8 @@ pub struct AppCore {
     pub games: Arc<crate::games::GameHub>,
     pub updater: Arc<crate::update::Updater>,
     pub media: Arc<crate::media::MediaHub>,
+    /// Listens to the PC's sound for the music visuals (only while one is shown).
+    pub visual: Arc<crate::media::visual::VisualHub>,
     browser_integration: bool,
     /// Drives already warned about (root → when), so each warns once a day.
     low_space_warned: parking_lot::Mutex<std::collections::HashMap<String, i64>>,
@@ -97,6 +99,7 @@ impl AppCore {
             updater: Arc::new(crate::update::Updater::new(&paths.cache, &paths.data, events.clone())),
             procs,
             media: crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media),
+            visual: crate::media::visual::VisualHub::new(events.clone(), opts.fake_media || std::env::var("OMNIHUB_FAKE_MEDIA").is_ok_and(|v| v == "1")),
             low_space_warned: Default::default(),
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
             paths,
@@ -107,6 +110,8 @@ impl AppCore {
             storage,
             vault,
         });
+        core.apply_visuals(&s.visuals);
+        core.media.set_lrc_folder(s.media.lrc_folder.as_ref().map(std::path::PathBuf::from));
         Ok(core)
     }
 
@@ -310,6 +315,12 @@ impl AppCore {
         ExportOptions { sidecar_json: n.sidecar_json, index_file: n.index_file }
     }
 
+    /// Audio capture on or off, and how the analysis reacts.
+    fn apply_visuals(&self, v: &crate::settings::VisualSettings) {
+        self.visual.set_enabled(v.enabled && v.audio_reactive);
+        self.visual.set_tuning(crate::media::visual::analyzer::Tuning { sensitivity: v.sensitivity, bass: v.bass, smoothing: v.smoothing });
+    }
+
     /// Apply a settings patch and react to what changed.
     pub fn update_settings(self: &Arc<Self>, patch: &serde_json::Value) -> anyhow::Result<Settings> {
         let before = self.settings.get();
@@ -333,6 +344,12 @@ impl AppCore {
                     tracing::warn!("equaliser: {e}");
                 }
             });
+        }
+        if before.media.lrc_folder != after.media.lrc_folder {
+            self.media.set_lrc_folder(after.media.lrc_folder.as_ref().map(std::path::PathBuf::from));
+        }
+        if before.visuals != after.visuals {
+            self.apply_visuals(&after.visuals);
         }
         if before.vault.browser_autofill != after.vault.browser_autofill {
             self.enable_browser_autofill(after.vault.browser_autofill);

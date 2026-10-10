@@ -334,7 +334,9 @@ fn music_from_the_phone() {
         // Lyrics, timed.
         let l: Value = c.get(format!("{base}/api/media/lyrics")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
         assert_eq!(l["lyrics"]["status"], "ready");
-        assert_eq!(l["lyrics"]["lyrics"]["lines"][0]["ms"], 2000);
+        // The test LRC: the first line at 0:12, each word timed.
+        assert_eq!(l["lyrics"]["lyrics"]["lines"][0]["ms"], 12000);
+        assert_eq!(l["lyrics"]["lyrics"]["lines"][0]["words"][1]["text"], "down ");
 
         // Pausing reaches the phone as an event.
         let t: Value = c.post(format!("{base}/api/ticket")).header("authorization", &auth).json(&json!({ "purpose": "socket" })).send().await.unwrap().json().await.unwrap();

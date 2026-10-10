@@ -15,6 +15,7 @@ const mockScanTask = { on: false };
 import { volumes } from './mock/drives';
 import * as media from './mock/media';
 import * as music from './mock/music';
+import * as visual from './mock/visual';
 import * as notes from './mock/notes';
 import * as remote from './mock/remote';
 import { latency } from './mock/rng';
@@ -70,6 +71,14 @@ const handlers: Record<string, Handler> = {
   media_art: (a) => music.mediaArt(str(a, 'id')),
   media_audio: () => music.mediaAudio(),
   media_set_volume: (a) => music.mediaSetVolume(a.level == null ? null : num(a, 'level'), a.muted == null ? null : bool(a, 'muted')),
+  visual_hold: (a) => visual.visualHold(str(a, 'who')),
+  visual_release: (a) => visual.visualRelease(str(a, 'who')),
+  visual_status: () => visual.visualStatus(),
+  visual_keep_awake: () => undefined,
+  ambient_displays: () => [
+    { name: '\\\\.\\DISPLAY1', label: 'Display 1 · 2560×1440 (main)', width: 2560, height: 1440, scale: 1.25, primary: true },
+    { name: '\\\\.\\DISPLAY2', label: 'Display 2 · 1920×1080', width: 1920, height: 1080, scale: 1, primary: false },
+  ],
   screen_share_state: () => core.shareState(),
   screen_windows: () => core.shareWindows(),
   screen_set_paused: (a) => core.setSharePaused(bool(a, 'on')),

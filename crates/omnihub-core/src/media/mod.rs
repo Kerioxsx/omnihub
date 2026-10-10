@@ -11,8 +11,11 @@ pub mod audio;
 pub mod eq;
 pub mod lyrics;
 pub mod mixer;
+pub mod visual;
 
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -249,14 +252,30 @@ pub struct FakeBackend {
 
 impl Default for FakeBackend {
     fn default() -> Self {
-        FakeBackend { tracks: vec![("Daylight Drive", "The Test Signals", "Synthetic Summer", 200_000), ("Night Loop", "The Test Signals", "Synthetic Summer", 180_000)], index: 0, pos: (0, now_ms()), playing: true }
+        FakeBackend {
+            tracks: vec![
+                ("Daylight Drive", "The Test Signals", "Synthetic Summer", 200_000),
+                ("Night Loop", "The Test Signals", "Synthetic Summer", 180_000),
+                ("Static Bloom", "The Test Signals", "Synthetic Summer", 150_000),
+                ("Unwritten Demo", "The Test Signals", "Synthetic Summer", 120_000),
+            ],
+            index: 0,
+            pos: (0, now_ms()),
+            playing: true,
+        }
     }
 }
 
-/// Lyrics of the fake player's tracks (no network needed).
+/// Lyrics of the fake player's tracks (no network needed): words timed
+/// with instrumental breaks, lines only, an instrumental, and none.
 pub fn fake_lyrics(title: &str) -> Option<Lyrics> {
-    let lines = (0..40).map(|i| format!("[{:02}:{:02}.00]{} line {}", (i * 4 + 2) / 60, (i * 4 + 2) % 60, title, i + 1)).collect::<Vec<_>>().join("\n");
-    Some(Lyrics { lines: lyrics::parse_lrc(&lines), plain: None, instrumental: false, source: "OmniHub test".into() })
+    let lrc = |src: &str| Some(Lyrics { lines: lyrics::parse_lrc(src), plain: None, instrumental: false, source: "OmniHub test lyrics".into() });
+    match title {
+        "Daylight Drive" => lrc(include_str!("testdata/daylight-drive.lrc")),
+        "Night Loop" => lrc(include_str!("testdata/night-loop.lrc")),
+        "Static Bloom" => Some(Lyrics { lines: Vec::new(), plain: None, instrumental: true, source: "OmniHub test lyrics".into() }),
+        _ => None,
+    }
 }
 
 impl FakeBackend {
@@ -278,7 +297,7 @@ impl MediaBackend for FakeBackend {
     }
 
     fn art(&mut self) -> Option<(Vec<u8>, String)> {
-        let hue = if self.index == 0 { [255u8, 120, 60] } else { [70, 90, 255] };
+        let hue = [[255u8, 120, 60], [70, 90, 255], [40, 200, 150], [230, 60, 140]][self.index % 4];
         let img = image::RgbImage::from_fn(300, 300, |x, y| {
             let k = (x + y) as f32 / 600.0;
             image::Rgb([(hue[0] as f32 * (1.0 - k) + 30.0 * k) as u8, (hue[1] as f32 * (1.0 - k) + 20.0 * k) as u8, (hue[2] as f32 * (1.0 - k) + 60.0 * k) as u8])
@@ -342,6 +361,10 @@ pub struct MediaHub {
     cache: LyricsCache,
     lyrics: Mutex<HashMap<String, LyricsStatus>>,
     fake: bool,
+    /// The user's .lrc files.
+    lrc_folder: Mutex<Option<PathBuf>>,
+    /// Look the current track's lyrics up again (the folder changed).
+    refetch: AtomicBool,
 }
 
 impl MediaHub {
@@ -359,7 +382,7 @@ impl MediaHub {
                 Box::new(NoBackend)
             }
         };
-        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake })
+        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false) })
     }
 
     /// Whether this is the pretend player (the mixer and open apps pretend too).
@@ -405,7 +428,7 @@ impl MediaHub {
         let new_track = state.as_ref().map(|s| &s.key) != g.state.as_ref().map(|s| &s.key);
         g.state = state.clone();
         drop(g);
-        if new_track {
+        if new_track || self.refetch.swap(false, Ordering::Relaxed) {
             if let Some(s) = &state {
                 self.fetch_lyrics(s.clone(), lyrics_online());
             }
@@ -444,46 +467,74 @@ impl MediaHub {
         self.lyrics.lock().get(&s.key).cloned().unwrap_or(LyricsStatus::Searching)
     }
 
+    /// Where the user keeps .lrc files (checked before anything else).
+    pub fn set_lrc_folder(&self, dir: Option<PathBuf>) {
+        let mut g = self.lrc_folder.lock();
+        if *g != dir {
+            *g = dir;
+            self.lyrics.lock().clear();
+            self.refetch.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Store a track's lyrics status and tell the views.
+    fn put_lyrics(&self, key: &str, st: LyricsStatus) {
+        let mut g = self.lyrics.lock();
+        if g.len() > 200 {
+            g.clear();
+        }
+        g.insert(key.to_string(), st);
+        drop(g);
+        self.events.emit("media:lyrics", serde_json::json!({ "key": key }));
+    }
+
     fn fetch_lyrics(self: &Arc<Self>, s: MediaState, online: bool) {
         if self.lyrics.lock().contains_key(&s.key) {
             return;
         }
-        let set = |hub: &MediaHub, st: LyricsStatus| {
-            let mut g = hub.lyrics.lock();
-            if g.len() > 200 {
-                g.clear();
+        let Some(dir) = self.lrc_folder.lock().clone() else { return self.fetch_elsewhere(s, online) };
+        // The user's files first, off the polling thread.
+        self.put_lyrics(&s.key, LyricsStatus::Searching);
+        let hub = self.clone();
+        std::thread::spawn(move || {
+            let found = lyrics::find_local(&dir, &s.title, &s.artist, s.duration_ms);
+            if hub.lrc_folder.lock().as_ref() != Some(&dir) {
+                return; // the folder changed meanwhile; that lookup wins
             }
-            g.insert(s.key.clone(), st);
-        };
+            match found {
+                Some(lyrics) => hub.put_lyrics(&s.key, LyricsStatus::Ready { lyrics }),
+                None => hub.fetch_elsewhere(s, online),
+            }
+        });
+    }
+
+    /// The test lyrics, the cache, then LRCLIB.
+    fn fetch_elsewhere(self: &Arc<Self>, s: MediaState, online: bool) {
+        let ready = |found: Option<Lyrics>| found.map_or(LyricsStatus::None, |lyrics| LyricsStatus::Ready { lyrics });
         if self.fake {
-            set(self, fake_lyrics(&s.title).map_or(LyricsStatus::None, |lyrics| LyricsStatus::Ready { lyrics }));
-            return;
+            return self.put_lyrics(&s.key, ready(fake_lyrics(&s.title)));
         }
         let cache_key = format!("{}\u{1f}{}\u{1f}{}", s.title.to_lowercase(), s.artist.to_lowercase(), s.duration_ms / 2000);
         if let Some(cached) = self.cache.get(&cache_key) {
-            set(self, cached.map_or(LyricsStatus::None, |lyrics| LyricsStatus::Ready { lyrics }));
-            return;
+            return self.put_lyrics(&s.key, ready(cached));
         }
         if !online {
-            set(self, LyricsStatus::Off);
-            return;
+            return self.put_lyrics(&s.key, LyricsStatus::Off);
         }
-        set(self, LyricsStatus::Searching);
+        self.put_lyrics(&s.key, LyricsStatus::Searching);
         let hub = self.clone();
         std::thread::spawn(move || {
-            let res = lyrics::lookup(&s.title, &s.artist, &s.album, s.duration_ms, &lyrics::http_get);
-            let st = match res {
+            let st = match lyrics::lookup(&s.title, &s.artist, &s.album, s.duration_ms, &lyrics::http_get) {
                 Ok(found) => {
                     hub.cache.put(&cache_key, &found);
-                    found.map_or(LyricsStatus::None, |lyrics| LyricsStatus::Ready { lyrics })
+                    ready(found)
                 }
                 Err(e) => {
                     tracing::info!("lyrics lookup failed: {e}");
                     LyricsStatus::None
                 }
             };
-            hub.lyrics.lock().insert(s.key.clone(), st);
-            hub.events.emit("media:lyrics", serde_json::json!({ "key": s.key }));
+            hub.put_lyrics(&s.key, st);
         });
     }
 }
@@ -646,6 +697,44 @@ mod tests {
     }
 
     #[test]
+    fn own_lrc_files_come_first_and_never_go_stale() {
+        let data = tempfile::tempdir().unwrap();
+        let hub = MediaHub::new(data.path(), EventBus::new(), true);
+        let wait_ready = |hub: &Arc<MediaHub>| {
+            let t0 = std::time::Instant::now();
+            loop {
+                hub.poll(&|| false);
+                if let LyricsStatus::Ready { lyrics } = hub.lyrics() {
+                    return lyrics;
+                }
+                assert!(t0.elapsed() < Duration::from_secs(5), "{:?}", hub.lyrics());
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        };
+        assert_eq!(wait_ready(&hub).source, "OmniHub test lyrics");
+        let lrc = tempfile::tempdir().unwrap();
+        std::fs::write(lrc.path().join("The Test Signals - Daylight Drive.lrc"), "[length:03:20]\n[00:01.00]mine").unwrap();
+        hub.set_lrc_folder(Some(lrc.path().to_path_buf()));
+        let l = wait_ready(&hub);
+        assert_eq!((l.lines[0].text.as_str(), l.source.contains("Daylight Drive.lrc")), ("mine", true));
+        // The next track has no file: its own lyrics, never the last track's.
+        hub.control(Action::Next, 0).unwrap();
+        let l = wait_ready(&hub);
+        assert_eq!(hub.state().unwrap().title, "Night Loop");
+        assert!(l.lines.iter().all(|x| x.text != "mine"));
+        // An instrumental, then a track without lyrics.
+        hub.control(Action::Next, 0).unwrap();
+        assert!(wait_ready(&hub).instrumental);
+        hub.control(Action::Next, 0).unwrap();
+        let t0 = std::time::Instant::now();
+        while !matches!(hub.lyrics(), LyricsStatus::None) {
+            hub.poll(&|| false);
+            assert!(t0.elapsed() < Duration::from_secs(5));
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[test]
     fn fake_player_and_hub() {
         let mut f = FakeBackend::default();
         let s = f.snapshot().unwrap();
@@ -657,7 +746,10 @@ mod tests {
         f.control(Action::Next, 0).unwrap();
         assert_eq!(f.snapshot().unwrap().title, "Night Loop");
         assert!(f.art().unwrap().0.starts_with(b"\x89PNG"));
-        assert_eq!(fake_lyrics("X").unwrap().lines.len(), 40);
+        assert!(fake_lyrics("Daylight Drive").unwrap().lines.iter().any(|l| !l.words.is_empty()));
+        assert!(fake_lyrics("Night Loop").unwrap().lines.iter().all(|l| l.words.is_empty()));
+        assert!(fake_lyrics("Static Bloom").unwrap().instrumental);
+        assert!(fake_lyrics("Unwritten Demo").is_none());
         assert_eq!(friendly_app("AppleInc.AppleMusicWin_nzyj5cx40ttqa!App"), "Apple Music");
         assert_eq!(friendly_app("C:\\Tools\\player.exe"), "player");
     }

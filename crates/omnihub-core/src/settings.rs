@@ -25,6 +25,7 @@ pub struct Settings {
     pub apps: AppsSettings,
     pub media: MediaSettings,
     pub updates: UpdateSettings,
+    pub visuals: VisualSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -53,11 +54,291 @@ pub struct MediaSettings {
     pub eq_enabled: bool,
     pub bass_db: f32,
     pub treble_db: f32,
+    /// A folder of your own .lrc files, checked before looking online.
+    pub lrc_folder: Option<String>,
 }
 
 impl Default for MediaSettings {
     fn default() -> Self {
-        MediaSettings { allow_phone: true, lyrics_online: true, eq_enabled: false, bass_db: 0.0, treble_db: 0.0 }
+        MediaSettings { allow_phone: true, lyrics_online: true, eq_enabled: false, bass_db: 0.0, treble_db: 0.0, lrc_folder: None }
+    }
+}
+
+/// How the music player shows a song.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum PlayerView {
+    /// Light around the screen, a music-reactive scene and floating lyrics.
+    #[default]
+    Aurora,
+    /// The cover and controls with scrolling lyrics (Apple Music style).
+    Lyrics,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum ColorMode {
+    /// From the cover art (the saved colours when there is none).
+    #[default]
+    Album,
+    /// Two colours.
+    Duo,
+    /// Several colours.
+    Multi,
+    /// One colour.
+    Single,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ColorSettings {
+    pub mode: ColorMode,
+    pub primary: String,
+    pub secondary: String,
+    /// For the multi-colour gradient.
+    pub colors: Vec<String>,
+    /// 0–1.5: saturation of everything drawn.
+    pub vividness: f32,
+}
+
+impl Default for ColorSettings {
+    fn default() -> Self {
+        ColorSettings { mode: ColorMode::Album, primary: "#a855f7".into(), secondary: "#ec4899".into(), colors: ["#8b5cf6", "#ec4899", "#3b82f6", "#22d3ee"].map(String::from).to_vec(), vividness: 1.0 }
+    }
+}
+
+/// How the light around the screen moves.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum GlowAnimation {
+    /// With the music (bass, beats, highs).
+    #[default]
+    Music,
+    /// Colours drift slowly, whatever plays.
+    Idle,
+    /// Still.
+    None,
+}
+
+/// The light around the screen: a crisp edge, an inner highlight, a glow
+/// and a wide bloom, each with its own strength and size.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GlowSettings {
+    pub enabled: bool,
+    pub animation: GlowAnimation,
+    /// Edge width, pixels.
+    pub thickness: f32,
+    /// 0–1.5 overall.
+    pub intensity: f32,
+    pub edge: f32,
+    pub highlight: f32,
+    pub glow: f32,
+    /// Glow reach, pixels.
+    pub glow_size: f32,
+    pub bloom: f32,
+    pub bloom_size: f32,
+    /// Corner rounding, pixels.
+    pub radius: f32,
+}
+
+impl Default for GlowSettings {
+    fn default() -> Self {
+        GlowSettings { enabled: true, animation: GlowAnimation::Music, thickness: 2.5, intensity: 1.0, edge: 1.0, highlight: 0.6, glow: 0.85, glow_size: 12.0, bloom: 0.3, bloom_size: 48.0, radius: 12.0 }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum LyricTiming {
+    /// Word by word when the lyrics time each word, else line by line.
+    #[default]
+    Auto,
+    Line,
+}
+
+/// Stack: what is being sung, huge, one word at a time when the lyrics time
+/// words (else one line), the previous above and the next below, small.
+/// Lines: the current line with the next lines under it.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum LyricLayout {
+    #[default]
+    Stack,
+    Lines,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum LyricEmphasis {
+    /// White with a glow in the accent colour.
+    #[default]
+    Glow,
+    /// White on a box of the accent colour.
+    Box,
+    /// In the accent colour.
+    Color,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum LyricPlace {
+    #[default]
+    Center,
+    Upper,
+    Lower,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AuroraLyricsSettings {
+    pub layout: LyricLayout,
+    /// How the word (or line) being sung stands out.
+    pub emphasis: LyricEmphasis,
+    /// "display", "condensed", "heavy", "serif" or "impact".
+    pub font: String,
+    pub visible: bool,
+    /// Show by themselves when a song has lyrics.
+    pub auto_show: bool,
+    /// Text size, × the default.
+    pub size: f32,
+    pub weight: u16,
+    /// Light up the word being sung.
+    pub word_highlight: bool,
+    pub timing: LyricTiming,
+    pub place: LyricPlace,
+    /// Moved by hand, percent of the width/height.
+    pub offset_x: f32,
+    pub offset_y: f32,
+    /// Lines shown: the current one and those after it.
+    pub lines: u8,
+    /// 0–1: dark backing behind the text.
+    pub backing: f32,
+    /// None: from the palette.
+    pub highlight_color: Option<String>,
+    pub glow: f32,
+    /// × the default speed of line changes.
+    pub transition: f32,
+}
+
+impl Default for AuroraLyricsSettings {
+    fn default() -> Self {
+        AuroraLyricsSettings { layout: LyricLayout::Stack, emphasis: LyricEmphasis::Glow, font: "display".into(), visible: true, auto_show: true, size: 1.0, weight: 800, word_highlight: true, timing: LyricTiming::Auto, place: LyricPlace::Center, offset_x: 0.0, offset_y: 0.0, lines: 3, backing: 0.0, highlight_color: None, glow: 0.6, transition: 1.0 }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SceneStyle {
+    /// The cover art, big, glitching and pulsing with the music.
+    #[default]
+    Visual,
+    /// The cover art through a lens that swells with the bass.
+    Fisheye,
+    /// Both.
+    FisheyeVisual,
+    /// Mostly dark: the cover small and dim, slow light.
+    Minimal,
+    /// Flowing colour fields from the palette, no cover.
+    Ambient,
+}
+
+/// The music-reactive scene behind the lyrics.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SceneSettings {
+    pub enabled: bool,
+    pub style: SceneStyle,
+    pub intensity: f32,
+    pub speed: f32,
+    /// 0–1: softness of the light shapes.
+    pub blur: f32,
+    pub saturation: f32,
+    /// 0–1: how much of the scene shows over the dark background.
+    pub opacity: f32,
+    /// A blurred copy of the cover art underneath.
+    pub artwork: bool,
+    /// A ring that follows the spectrum.
+    pub waveform: bool,
+}
+
+impl Default for SceneSettings {
+    fn default() -> Self {
+        SceneSettings { enabled: true, style: SceneStyle::Visual, intensity: 0.8, speed: 1.0, blur: 0.1, saturation: 1.1, opacity: 0.9, artwork: true, waveform: false }
+    }
+}
+
+/// The glow around a monitor, over every app (a click-through window).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DesktopGlowSettings {
+    pub enabled: bool,
+    /// Floating lyrics too.
+    pub lyrics: bool,
+    /// "primary", "all", or a monitor's name.
+    pub display: String,
+    /// Stay above the taskbar.
+    pub clear_taskbar: bool,
+    /// Step aside for full-screen apps and games (and boosted games).
+    pub hide_fullscreen: bool,
+    /// Turn the desktop glow on when OmniHub starts.
+    pub start_with_app: bool,
+}
+
+impl Default for DesktopGlowSettings {
+    fn default() -> Self {
+        DesktopGlowSettings { enabled: false, lyrics: false, display: "primary".into(), clear_taskbar: true, hide_fullscreen: true, start_with_app: false }
+    }
+}
+
+/// Aurora: the music-reactive light, scene and lyrics.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct VisualSettings {
+    pub view: PlayerView,
+    /// Everything Aurora draws (the lyrics stay).
+    pub enabled: bool,
+    /// Listen to what the PC plays so the light follows the music.
+    pub audio_reactive: bool,
+    /// 0.2–3.
+    pub sensitivity: f32,
+    /// 0–2.
+    pub bass: f32,
+    /// 0–1.
+    pub smoothing: f32,
+    pub reduced_motion: bool,
+    /// No bright pulses on beats.
+    pub no_flashes: bool,
+    /// × animation speed.
+    pub speed: f32,
+    /// Keep the screen on while the player shows Aurora and music plays.
+    pub keep_awake: bool,
+    pub color: ColorSettings,
+    pub glow: GlowSettings,
+    pub lyrics: AuroraLyricsSettings,
+    pub scene: SceneSettings,
+    pub desktop: DesktopGlowSettings,
+}
+
+impl Default for VisualSettings {
+    fn default() -> Self {
+        VisualSettings {
+            view: PlayerView::Aurora,
+            enabled: true,
+            audio_reactive: true,
+            sensitivity: 1.0,
+            bass: 1.0,
+            smoothing: 0.5,
+            reduced_motion: false,
+            no_flashes: false,
+            speed: 1.0,
+            keep_awake: true,
+            color: ColorSettings::default(),
+            glow: GlowSettings::default(),
+            lyrics: AuroraLyricsSettings::default(),
+            scene: SceneSettings::default(),
+            desktop: DesktopGlowSettings::default(),
+        }
     }
 }
 
@@ -445,5 +726,28 @@ mod tests {
         // Unknown/old files still load.
         std::fs::write(&path, br#"{"general":{"theme":"light","removedField":1}}"#).unwrap();
         assert_eq!(SettingsStore::load(&path).get().general.theme, Theme::Light);
+    }
+
+    #[test]
+    fn aurora_settings_persist_and_reset() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let store = SettingsStore::load(&path);
+        let d = Settings::default().visuals;
+        assert_eq!((d.view, d.scene.style, d.lyrics.layout, d.glow.animation), (PlayerView::Aurora, SceneStyle::Visual, LyricLayout::Stack, GlowAnimation::Music));
+        let s = store
+            .update(&serde_json::json!({ "visuals": { "view": "lyrics", "sensitivity": 2.0, "color": { "mode": "duo", "primary": "#ff0000", "colors": ["#000000"] }, "glow": { "thickness": 6.0, "animation": "idle" }, "lyrics": { "font": "condensed", "emphasis": "box", "highlightColor": "#00ff00", "place": "lower" }, "scene": { "style": "fisheyeVisual" }, "desktop": { "enabled": true, "display": "all" } } }))
+            .unwrap();
+        // After a restart.
+        let again = SettingsStore::load(&path).get().visuals;
+        assert_eq!(again, s.visuals);
+        assert_eq!((again.view, again.color.mode, again.color.colors.len(), again.scene.style, again.lyrics.highlight_color.as_deref()), (PlayerView::Lyrics, ColorMode::Duo, 1, SceneStyle::FisheyeVisual, Some("#00ff00")));
+        assert!((again.sensitivity - 2.0).abs() < 1e-6 && again.desktop.enabled);
+        // "Reset to defaults" sends every default (null clears the highlight colour).
+        let mut reset = serde_json::to_value(Settings::default().visuals).unwrap();
+        reset["view"] = serde_json::json!("lyrics");
+        reset["lyrics"]["highlightColor"] = serde_json::Value::Null;
+        let back = store.update(&serde_json::json!({ "visuals": reset })).unwrap().visuals;
+        assert_eq!(back, VisualSettings { view: PlayerView::Lyrics, ..Default::default() });
     }
 }

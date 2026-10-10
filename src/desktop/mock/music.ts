@@ -1,29 +1,45 @@
 // A pretend music player for the mock backend (same tracks as the Rust
 // test player), so Now Playing and lyrics can be developed without Windows.
 
-import type { LyricsStatus, MediaAction, MediaState } from '@shared/types';
+import type { LyricLine, LyricsStatus, MediaAction, MediaState } from '@shared/types';
 import { emit } from './bus';
 
-// Made-up songs with original lyrics, for the demo only.
-const LYRICS = [
-  'City lights are fading into blue',
-  'I keep the engine running just for you',
-  'Every mile a little closer to the sun',
-  'We were never made to be the only one',
-  'Turn it up, the night is ours to keep',
-  "Echoes on the highway, we don't sleep",
-  'Hold the moment, let the chorus fall',
-  "Daylight's coming, but we've got it all",
-  'Paper planes above the parking lot',
-  'Every promise that we never bought',
-  'Radio is singing what we mean',
-  'Somewhere in the static, in between',
-];
+// The core's test lyrics (original, made up for testing): words timed with
+// instrumental breaks, lines only, an instrumental, and a song without lyrics.
+import daylight from '../../../crates/omnihub-core/src/media/testdata/daylight-drive.lrc?raw';
+import nightLoop from '../../../crates/omnihub-core/src/media/testdata/night-loop.lrc?raw';
 
 const TRACKS = [
-  { title: 'Neon Afterglow', artist: 'Midnight Atlas', album: 'Open Roads', durationMs: 200_000, hue: ['#ff7a3c', '#2a1440'] },
-  { title: 'Night Loop', artist: 'Midnight Atlas', album: 'Open Roads', durationMs: 180_000, hue: ['#465aff', '#140a28'] },
+  { title: 'Daylight Drive', artist: 'Midnight Atlas', album: 'Open Roads', durationMs: 200_000, hue: ['#ff7a3c', '#2a1440'], bpm: 118, lrc: daylight as string | null, instrumental: false },
+  { title: 'Night Loop', artist: 'Midnight Atlas', album: 'Open Roads', durationMs: 180_000, hue: ['#465aff', '#140a28'], bpm: 96, lrc: nightLoop as string | null, instrumental: false },
+  { title: 'Static Bloom', artist: 'Midnight Atlas', album: 'Open Roads', durationMs: 150_000, hue: ['#22c79a', '#081c2a'], bpm: 84, lrc: null, instrumental: true },
+  { title: 'Unwritten Demo', artist: 'Midnight Atlas', album: 'Open Roads', durationMs: 120_000, hue: ['#ec4899', '#2a0a1e'], bpm: 108, lrc: null, instrumental: false },
 ];
+
+/** The LRC subset the core reads: line stamps and `<mm:ss.xx>` word stamps. */
+function parseLrc(src: string): LyricLine[] {
+  const time = (t: string) => {
+    const m = /^(\d+):(\d+)(?:[.:](\d+))?$/.exec(t.trim());
+    return m ? Number(m[1]) * 60_000 + Number(m[2]) * 1000 + Number((m[3] ?? '0').padEnd(3, '0').slice(0, 3)) : null;
+  };
+  const out: LyricLine[] = [];
+  for (const raw of src.split('\n')) {
+    const m = /^\[([^\]]+)\](.*)$/.exec(raw.trim());
+    const ms = m ? time(m[1]) : null;
+    if (!m || ms == null) continue;
+    const words: { ms: number; text: string }[] = [];
+    const re = /<([^>]+)>([^<]*)/g;
+    let w: RegExpExecArray | null;
+    while ((w = re.exec(m[2]))) {
+      const t = time(w[1]);
+      if (t != null && w[2].trim()) words.push({ ms: t, text: w[2] });
+    }
+    const text = m[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    out.push(words.length ? { ms, text, words } : { ms, text });
+  }
+  return out;
+}
+
 let index = 0;
 let base = 0;
 let at = Date.now();
@@ -91,21 +107,41 @@ export function mediaControl(action: MediaAction, positionMs: number): void {
 
 export function mediaLyrics(): { key: string; lyrics: LyricsStatus } {
   const s = state();
-  // Words timed through each line, and an instrumental break after the
-  // first verse (so the dots show).
-  const starts = Array.from({ length: 40 }, (_, i) => i * 4000 + 6000 + (i >= 8 ? 9000 : 0));
-  const lines = starts.map((ms, i) => {
-    const text = LYRICS[i % LYRICS.length];
-    const parts = text.split(/(?<= )/);
-    const step = 3200 / parts.length;
-    return { ms, text, words: parts.map((w, k) => ({ ms: Math.round(ms + k * step), text: w })) };
-  });
-  return { key: s.key, lyrics: { status: 'ready', lyrics: { lines, plain: null, instrumental: false, source: 'mock' } } };
+  const t = TRACKS[index];
+  if (t.instrumental) return { key: s.key, lyrics: { status: 'ready', lyrics: { lines: [], plain: null, instrumental: true, source: 'OmniHub test lyrics' } } };
+  if (!t.lrc) return { key: s.key, lyrics: { status: 'none' } };
+  return { key: s.key, lyrics: { status: 'ready', lyrics: { lines: parseLrc(t.lrc), plain: null, instrumental: false, source: 'OmniHub test lyrics' } } };
 }
 
+/** For the pretend sound: the track, where it is and whether it plays. */
+export function playback() {
+  return { track: index, bpm: TRACKS[index].bpm, positionMs: position(), playing };
+}
+
+/** Original neon covers on black, one design per test track. */
 export function mediaArt(id: string): string {
-  const t = TRACKS[Number(id.split('-')[1]) || 0];
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${t.hue[0]}"/><stop offset="1" stop-color="${t.hue[1]}"/></linearGradient></defs><rect width="300" height="300" fill="url(#g)"/><circle cx="210" cy="90" r="46" fill="rgba(255,255,255,.18)"/></svg>`;
+  const i = Number(id.split('-')[1]) || 0;
+  const t = TRACKS[i];
+  const [a, b] = t.hue;
+  const rays = (n: number, colors: string[], inner: number, outer: number, width: number) =>
+    Array.from({ length: n }, (_, k) => {
+      const ang = (k / n) * Math.PI * 2;
+      const [c, s] = [Math.cos(ang), Math.sin(ang)];
+      const len = outer * (0.75 + 0.25 * Math.sin(k * 2.3));
+      return `<line x1="${150 + c * inner}" y1="${150 + s * inner}" x2="${150 + c * len}" y2="${150 + s * len}" stroke="${colors[k % colors.length]}" stroke-width="${width}" stroke-linecap="round"/>`;
+    }).join('');
+  const dots = Array.from({ length: 12 }, (_, y) => Array.from({ length: 12 }, (_, x) => `<circle cx="${96 + x * 10}" cy="${96 + y * 10}" r="${1.2 + ((x + y) % 3)}" fill="#fff" opacity=".55"/>`).join('')).join('');
+  const designs = [
+    // A sunburst in orange, pink and yellow with a halftone heart.
+    `${rays(22, ['#ff5ea8', '#ff9a3c', '#ffe14d', '#c13cff'], 34, 150, 9)}<circle cx="150" cy="150" r="46" fill="${a}"/><g clip-path="url(#c)">${dots}</g><circle cx="150" cy="150" r="20" fill="#120616"/>`,
+    // Neon rings.
+    [0, 1, 2, 3, 4].map((k) => `<circle cx="${150 + k * 6}" cy="${150 - k * 4}" r="${28 + k * 22}" fill="none" stroke="${['#3b82f6', '#22d3ee', '#a855f7', '#ec4899', '#60a5fa'][k]}" stroke-width="${7 - k}"/>`).join('') + `<circle cx="150" cy="150" r="18" fill="${a}"/>`,
+    // Petals.
+    Array.from({ length: 8 }, (_, k) => `<ellipse cx="150" cy="88" rx="22" ry="62" fill="${['#22c79a', '#a3e635', '#22d3ee', '#10b981'][k % 4]}" opacity=".85" transform="rotate(${k * 45} 150 150)"/>`).join('') + `<circle cx="150" cy="150" r="26" fill="#fde047"/>`,
+    // Zigzags.
+    Array.from({ length: 7 }, (_, k) => `<polyline points="${Array.from({ length: 9 }, (_, x) => `${20 + x * 32},${60 + k * 30 + (x % 2 ? -14 : 14)}`).join(' ')}" fill="none" stroke="${['#ec4899', '#f472b6', '#a855f7', '#fb7185'][k % 4]}" stroke-width="8" stroke-linejoin="round"/>`).join(''),
+  ];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><defs><radialGradient id="g"><stop offset="0" stop-color="${b}"/><stop offset="1" stop-color="#050307"/></radialGradient><clipPath id="c"><circle cx="150" cy="150" r="46"/></clipPath></defs><rect width="300" height="300" fill="url(#g)"/>${designs[i % designs.length]}</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 

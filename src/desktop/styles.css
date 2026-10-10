@@ -335,6 +335,14 @@ html.overlay-route body {
   background: #000;
 }
 
+/* The screen glow's windows are see-through (and click-through). */
+html.ambient-route,
+html.ambient-route body,
+html.ambient-route #root {
+  background: transparent !important;
+  overflow: hidden;
+}
+
 /* Text fields draw their own focus state (border + glow); keep the accent
    outline from the shared tokens for buttons and other controls. */
 input:focus-visible,

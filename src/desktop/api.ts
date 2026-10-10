@@ -207,6 +207,21 @@ export const api = {
     setVolume: (level: number | null, muted: boolean | null = null) => call<{ level: number; muted: boolean }>('media_set_volume', { level, muted }),
   },
 
+  /** Aurora: the PC's sound, analysed for the music visuals. */
+  visual: {
+    /** Listen while a view shows the visuals (call every few seconds); `audio:frame` events follow. */
+    hold: (who: string) => call<T.VisualStatus>('visual_hold', { who }),
+    release: (who: string) => call<void>('visual_release', { who }),
+    status: () => call<T.VisualStatus>('visual_status'),
+    /** Keep the screen on (while the player shows Aurora and music plays). */
+    keepAwake: (on: boolean) => call<void>('visual_keep_awake', { on }),
+  },
+
+  /** The glow around the screen (click-through windows over every app). */
+  ambient: {
+    displays: () => call<T.AmbientDisplay[]>('ambient_displays'),
+  },
+
   browser: {
     status: () => call<T.BrowserStatus>('browser_status'),
     repair: () => call<T.BrowserRegistration[]>('browser_repair'),

@@ -33,7 +33,7 @@ import { VaultPage } from './pages/vault/VaultPage';
 import { usePalette } from './state/dialogs';
 import { useSettings } from './state/settings';
 
-const PAGES: Record<Exclude<RouteId, 'overlay'>, ComponentType> = {
+const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient'>, ComponentType> = {
   home: HomePage,
   storage: StoragePage,
   apps: AppsPage,
@@ -103,7 +103,7 @@ export function App() {
 
   if (!settings) return <Splash error={error} onRetry={() => void load()} />;
 
-  const pageId = route.id === 'overlay' ? 'home' : route.id;
+  const pageId = route.id === 'overlay' || route.id === 'ambient' ? 'home' : route.id;
   const PageComp = PAGES[pageId];
   const showOnboarding = onboardingForced || !settings.general.onboarded;
 

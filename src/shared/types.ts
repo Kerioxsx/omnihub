@@ -836,11 +836,109 @@ export interface Settings {
     eqEnabled: boolean;
     bassDb: number;
     trebleDb: number;
+    /** A folder of your own .lrc files, checked before looking online. */
+    lrcFolder: string | null;
   };
+  visuals: VisualSettings;
   updates: {
     check: boolean;
     autoInstall: boolean;
   };
+}
+
+// ---------- Aurora: music-reactive light, scene and lyrics ----------
+
+/** `aurora`: light, scene and floating lyrics; `lyrics`: the Apple Music–style view. */
+export type PlayerView = 'aurora' | 'lyrics';
+export type ColorMode = 'album' | 'duo' | 'multi' | 'single';
+
+export type SceneStyle = 'visual' | 'fisheye' | 'fisheyeVisual' | 'minimal' | 'ambient';
+export type LyricFont = 'display' | 'condensed' | 'heavy' | 'serif' | 'impact';
+
+export interface VisualSettings {
+  view: PlayerView;
+  /** Everything Aurora draws (the lyrics stay). */
+  enabled: boolean;
+  /** Listen to what the PC plays so the light follows the music. */
+  audioReactive: boolean;
+  /** 0.2–3 */
+  sensitivity: number;
+  /** 0–2 */
+  bass: number;
+  /** 0–1 */
+  smoothing: number;
+  reducedMotion: boolean;
+  /** No bright pulses on beats. */
+  noFlashes: boolean;
+  /** × animation speed */
+  speed: number;
+  /** keep the screen on while the player shows Aurora and music plays */
+  keepAwake: boolean;
+  color: { mode: ColorMode; primary: string; secondary: string; colors: string[]; vividness: number };
+  glow: { enabled: boolean; animation: 'music' | 'idle' | 'none'; thickness: number; intensity: number; edge: number; highlight: number; glow: number; glowSize: number; bloom: number; bloomSize: number; radius: number };
+  lyrics: {
+    /** stack: one word (or line) at a time, huge; lines: the current line and the next ones */
+    layout: 'stack' | 'lines';
+    emphasis: 'glow' | 'box' | 'color';
+    font: LyricFont;
+    visible: boolean;
+    autoShow: boolean;
+    size: number;
+    weight: number;
+    wordHighlight: boolean;
+    timing: 'auto' | 'line';
+    place: 'center' | 'upper' | 'lower';
+    offsetX: number;
+    offsetY: number;
+    lines: number;
+    backing: number;
+    highlightColor: string | null;
+    glow: number;
+    transition: number;
+  };
+  scene: { enabled: boolean; style: SceneStyle; intensity: number; speed: number; blur: number; saturation: number; opacity: number; artwork: boolean; waveform: boolean };
+  desktop: { enabled: boolean; lyrics: boolean; display: string; clearTaskbar: boolean; hideFullscreen: boolean; startWithApp: boolean };
+}
+
+export interface VisualStatus {
+  state: 'off' | 'disabled' | 'starting' | 'listening' | 'unavailable';
+  /** What is listened to. */
+  source: string | null;
+  sampleRate: number;
+  error: string | null;
+}
+
+/** A monitor the desktop glow can light. */
+export interface AmbientDisplay {
+  /** Windows' device name (\\.\DISPLAY1) */
+  name: string;
+  /** "Display 1 · 2560×1440 (main)" */
+  label: string;
+  width: number;
+  height: number;
+  scale: number;
+  primary: boolean;
+}
+
+/** One analysis frame of the PC's sound (`audio:frame`, 60 a second while there is sound). */
+export interface AudioFrame {
+  /** PC time, Unix ms */
+  t: number;
+  /** 0–1 loudness (adaptive) */
+  level: number;
+  low: number;
+  mid: number;
+  high: number;
+  /** 1 on a beat, decaying */
+  beat: number;
+  flux: number;
+  /** 16 log-spaced bands, 40 Hz–16 kHz */
+  bands: number[];
+  /** sound is playing */
+  active: boolean;
+  /** beats counted since the track began */
+  beats: number;
+  bpm: number | null;
 }
 
 /** Deep partial used for settings patches (JSON merge patch). */
