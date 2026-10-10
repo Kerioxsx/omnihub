@@ -148,7 +148,10 @@ or the UI:
   from the cover with k-means in OKLab and eased between songs in OKLab.
   The lyrics overlay follows the player's clock (`useNowPlaying`), steps
   word by word only with word timestamps, and renders only when the line or
-  word changes.
+  word changes. Words leaving the stack fade where they stood, each on its
+  own timer and at most three at once (motion's AnimatePresence removes
+  leaving children only when all have finished, which never happens while
+  words keep coming).
 - **Cinema backdrop** (`components/aurora/AuroraBackdrop.tsx`,
   `lib/aurora/cinema.ts`, `youtube.ts`, `coverLook.ts`): behind the lyrics,
   in order, the music video, the visualizer, the full-size cover, or the

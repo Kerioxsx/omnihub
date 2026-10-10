@@ -1,6 +1,8 @@
 ## New in this version
 
-**Aurora goes cinema.** The song now fills the screen, behind short lyrics in the cover's own colours:
+**0.6.1 — smoother lyrics.** In Aurora's big word-by-word lyrics, words that had been sung were meant to fade away and be removed, but while someone kept singing they stayed on the page, invisible and blurred — a dozen or more per line. That cost the graphics card more with every word, and on a slower PC the fading words could pile up on top of each other. Now each word fades on its own and is gone a third of a second later, with at most three fading at once.
+
+**From 0.6.0 — Aurora goes cinema.** The song now fills the screen, behind short lyrics in the cover's own colours:
 
 - **The music video as the background.** When the artist has an official music video, Aurora plays it full screen behind the lyrics — muted (your music app is still the sound), in YouTube's own player, **up to 4K** when the artist uploaded it in 4K, and kept **in step with the song** (it seeks when the song jumps and eases its speed for small drifts). Only the artist's own uploads count (their official channel or VEVO), not lyric videos or fan uploads. Videos with a story before the song can be moved with **Video timing**, remembered per video.
 - **Else the animated cover**, when the artist has a visualizer for the song.

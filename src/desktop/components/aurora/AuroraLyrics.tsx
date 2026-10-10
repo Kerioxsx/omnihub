@@ -272,6 +272,10 @@ interface LayoutProps {
   full: boolean;
 }
 
+type Row = { key: string; role: 'prev' | 'cur' | 'next'; node: ReactNode; size: number };
+/** A row on its way out: where it last stood, fading on its own clock. */
+type Leaving = Row & { id: string; x: number; y: number; w: number; opacity: number; fontSize: string; born: number };
+
 /** The reference look: the step being sung, huge, between its neighbours. */
 function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
   const wordMode = s.timing === 'auto' && s.wordHighlight;
@@ -296,6 +300,32 @@ function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
     );
   };
   const { value: at, jump } = useFollow(time, (t) => stackAt(items, lines, t), [items, lines]);
+  // Words that leave fade out where they were, each on its own clock, at
+  // most three at a time. (AnimatePresence removes leaving children only once
+  // all of them have finished; words leave faster than they fade, so a whole
+  // line of invisible, blurred words used to pile up.)
+  const els = useRef(new Map<string, HTMLDivElement>());
+  const shown = useRef(new Map<string, Row>());
+  const leaving = useRef<Leaving[]>([]);
+  const seq = useRef(0);
+  const [, redraw] = useState(0);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+  }, []);
+  // A safety net, should a fade never report its end.
+  useEffect(() => {
+    if (!leaving.current.length) return;
+    const t = setTimeout(() => {
+      const now = performance.now();
+      const keep = leaving.current.filter((g) => now - g.born < 900);
+      if (keep.length !== leaving.current.length) {
+        leaving.current = keep;
+        redraw((n) => n + 1);
+      }
+    }, 950);
+    return () => clearTimeout(t);
+  });
   if (!at) return null;
 
   const base = Math.min(full ? 230 : 150, Math.max(full ? 56 : 38, width * 0.115)) * s.size;
@@ -317,12 +347,29 @@ function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
   const shade = '0 0.035em 0.32em rgb(0 0 0 / calc(0.32 + var(--aurora-glare, 0.45) * 0.45)), 0 0.01em 0.06em rgb(0 0 0 / 0.25)';
   const glowShadow = s.glow > 0 ? `0 0 ${0.12 + 0.1 * s.glow}em color-mix(in oklab, var(--aurora-glow) ${Math.round(70 * g)}%, transparent), 0 0 ${0.5 * s.glow}em color-mix(in oklab, var(--aurora-glow) ${Math.round(35 * g)}%, transparent), ${shade}` : shade;
 
-  type Row = { key: string; role: 'prev' | 'cur' | 'next'; node: ReactNode; size: number };
   const rows: Row[] = [];
   if (s.lines >= 3 && at.prev >= 0 && items[at.prev]) rows.push({ key: `i${at.prev}`, role: 'prev', node: withEmoji(at.prev, false), size: small(items[at.prev]) });
   if (at.dots) rows.push({ key: `gap${at.dots.from}`, role: 'cur', node: <BreakDots from={at.dots.from} to={at.dots.to} time={time} reduced={reduced} />, size: base * 0.55 });
   else if (items[at.cur]) rows.push({ key: `i${at.cur}`, role: 'cur', node: withEmoji(at.cur, true), size: sizeOf(items[at.cur]) });
   if (s.lines >= 2 && at.next >= 0 && items[at.next]) rows.push({ key: `i${at.next}`, role: 'next', node: withEmoji(at.next, false), size: small(items[at.next]) });
+
+  // Rows gone since the last render start leaving from where they stand now
+  // (they are still on the page while this render runs); a seek just cuts.
+  const present = new Set(rows.map((r) => r.key));
+  if (jump || reduced) leaving.current = [];
+  for (const [key, r] of shown.current) {
+    if (present.has(key)) continue;
+    const el = els.current.get(key);
+    els.current.delete(key);
+    if (jump || reduced || !el?.isConnected) continue;
+    const g: Leaving = { ...r, id: `${key}.${++seq.current}`, x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, opacity: Number(el.style.opacity || 1), fontSize: getComputedStyle(el).fontSize, born: performance.now() };
+    leaving.current = [...leaving.current, g].slice(-3);
+  }
+  shown.current = new Map(rows.map((r) => [r.key, r]));
+  const drop = (id: string) => {
+    leaving.current = leaving.current.filter((g) => g.id !== id);
+    redraw((n) => n + 1);
+  };
 
   const look = (role: Row['role'], dots: boolean): CSSProperties => {
     if (role === 'cur' && !dots) {
@@ -348,35 +395,52 @@ function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
     // Sizes animate and the column re-centres every frame, so words glide
     // between places; a step leaving fades where it was.
     <div className="relative flex flex-col items-center justify-center text-center">
-      <AnimatePresence initial={false} mode="popLayout">
-        {rows.map((r) => (
-          <motion.div
-            key={r.key}
-            initial={reduced ? { opacity: 0, fontSize: r.size } : { opacity: 0, y: `${0.4 + 0.5 * mv}em`, scale: 1 - 0.35 * mv, rotate: tiltOf(r.key) * 2, filter: 'blur(6px)', fontSize: r.size }}
-            animate={{ opacity: r.role === 'prev' ? 0.6 : 1, y: 0, scale: 1, rotate: r.role === 'cur' ? tiltOf(r.key) * 0.5 : 0, filter: 'blur(0px)', fontSize: r.size }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0, y: `-${0.4 + 0.4 * mv}em`, scale: 1 - 0.2 * mv, rotate: -tiltOf(r.key), filter: 'blur(6px)' }}
-            // With movement, words pop in with a little overshoot.
-            transition={
-              mv > 0.02 && !jump
-                ? {
-                    default: { duration: dur, ease },
-                    scale: { type: 'spring', stiffness: 520, damping: 12 + (1.5 - mv) * 9 },
-                    y: { type: 'spring', stiffness: 380, damping: 14 + (1.5 - mv) * 8 },
-                    rotate: { type: 'spring', stiffness: 300, damping: 16 },
-                  }
-                : { duration: dur, ease }
-            }
-            className="max-w-full leading-[1.08] tracking-[-0.02em] [text-wrap:balance]"
-            style={{ fontWeight: r.role === 'cur' ? s.weight : Math.max(600, s.weight - 100), marginTop: r.role === 'next' ? '0.35em' : r.role === 'cur' ? '0.04em' : 0 }}
-            data-lyric-role={r.role}
-            {...(r.role === 'cur' ? { 'data-lyric-current': '' } : r.role === 'next' ? { 'data-lyric-next': '' } : {})}
-          >
-            <span className="inline-block transition-[background-color,color,padding,border-radius] duration-300 [box-decoration-break:clone]" style={look(r.role, r.key.startsWith('gap'))}>
-              {r.node}
-            </span>
-          </motion.div>
-        ))}
-      </AnimatePresence>
+      {rows.map((r) => (
+        <motion.div
+          key={r.key}
+          ref={(el: HTMLDivElement | null) => {
+            if (el) els.current.set(r.key, el);
+          }}
+          initial={!mounted.current ? false : reduced ? { opacity: 0, fontSize: r.size } : { opacity: 0, y: `${0.4 + 0.5 * mv}em`, scale: 1 - 0.35 * mv, rotate: tiltOf(r.key) * 2, filter: 'blur(6px)', fontSize: r.size }}
+          animate={{ opacity: r.role === 'prev' ? 0.6 : 1, y: 0, scale: 1, rotate: r.role === 'cur' ? tiltOf(r.key) * 0.5 : 0, filter: 'blur(0px)', fontSize: r.size }}
+          // With movement, words pop in with a little overshoot.
+          transition={
+            mv > 0.02 && !jump
+              ? {
+                  default: { duration: dur, ease },
+                  scale: { type: 'spring', stiffness: 520, damping: 12 + (1.5 - mv) * 9 },
+                  y: { type: 'spring', stiffness: 380, damping: 14 + (1.5 - mv) * 8 },
+                  rotate: { type: 'spring', stiffness: 300, damping: 16 },
+                }
+              : { duration: dur, ease }
+          }
+          className="max-w-full leading-[1.08] tracking-[-0.02em] [text-wrap:balance]"
+          style={{ fontWeight: r.role === 'cur' ? s.weight : Math.max(600, s.weight - 100), marginTop: r.role === 'next' ? '0.35em' : r.role === 'cur' ? '0.04em' : 0 }}
+          data-lyric-role={r.role}
+          {...(r.role === 'cur' ? { 'data-lyric-current': '' } : r.role === 'next' ? { 'data-lyric-next': '' } : {})}
+        >
+          <span className="inline-block transition-[background-color,color,padding,border-radius] duration-300 [box-decoration-break:clone]" style={look(r.role, r.key.startsWith('gap'))}>
+            {r.node}
+          </span>
+        </motion.div>
+      ))}
+      {leaving.current.map((g) => (
+        <motion.div
+          key={g.id}
+          aria-hidden
+          data-lyric-leaving=""
+          initial={{ opacity: g.opacity, y: 0, scale: 1, rotate: 0, filter: 'blur(0px)' }}
+          animate={{ opacity: 0, y: `-${0.4 + 0.4 * mv}em`, scale: 1 - 0.2 * mv, rotate: -tiltOf(g.key), filter: 'blur(6px)' }}
+          transition={{ duration: dur, ease }}
+          onAnimationComplete={() => drop(g.id)}
+          className="pointer-events-none absolute leading-[1.08] tracking-[-0.02em] [text-wrap:balance]"
+          style={{ left: g.x, top: g.y, width: g.w, fontSize: g.fontSize, fontWeight: g.role === 'cur' ? s.weight : Math.max(600, s.weight - 100) }}
+        >
+          <span className="inline-block [box-decoration-break:clone]" style={look(g.role, g.key.startsWith('gap'))}>
+            {g.node}
+          </span>
+        </motion.div>
+      ))}
     </div>
   );
 }
