@@ -298,7 +298,8 @@
     { id: 'apps', icon: 'apps', label: 'Apps', title: 'Apps', heading: 'Every program, with its real size', text: 'Desktop programs, Store apps and Start menu entries with their icons and the size from your last scan. Launch, uninstall, manage startup apps, or see the screenshots you took in each.', tags: ['Store apps', 'Uninstall', 'Startup apps', 'Favourites'] },
     { id: 'tasks', icon: 'tasks', label: 'Tasks', title: 'Tasks', heading: 'What each program really uses', text: 'CPU, memory, GPU, video memory and disk for every program, live — with End task, priority and file location. Same view on your phone.', tags: ['GPU per app', 'Video memory', 'Priority', 'End task'] },
     { id: 'games', icon: 'game', label: 'Games', title: 'Games', heading: 'Max FPS where it counts — and every frame measured', text: 'Competitive mode sets Fortnite, VALORANT, CS2, Apex, Overwatch 2, Roblox or Minecraft to their fastest settings, closes background junk, gives the game the processor and a 0.5 ms timer; Quality mode does the same for Windows but never touches the game’s graphics. The FPS meter shows live FPS and 1% lows — and everything comes back when you quit.', tags: ['Competitive & Quality', '7 games tuned', 'FPS meter', 'Lag under load'] },
-    { id: 'music', icon: 'music', label: 'Music', title: 'Music', heading: 'Lyrics, Apple Music style — full screen', text: 'Whatever the PC plays, with its cover art blurred into drifting light, big lyrics that glide up line by line and fill word by word, and three dots through the breaks. Click any line to jump there.', tags: ['Full screen', 'Word by word', 'Click to seek', 'Spotify & more'] },
+    { id: 'aurora', icon: 'music', label: 'Aurora', title: 'Music — Aurora', heading: 'Aurora: the song becomes the show', text: 'The playing song’s cover, big and alive on black — swelling with the bass and glitching on the beats — inside a thin neon light in its colours, with huge lyrics one word at a time. It follows the real sound through Windows’ loopback, never the microphone.', tags: ['Cover visual', 'Neon edge light', 'Word by word', 'Follows the beat'] },
+    { id: 'music', icon: 'music', label: 'Lyrics', title: 'Music — Lyrics', heading: 'Or lyrics, Apple Music style', text: 'Prefer reading along? Switch to Lyrics: the cover art blurred into drifting light, big lyrics that glide up line by line and fill word by word, and three dots through the breaks. Click any line to jump there.', tags: ['Aurora or Lyrics', 'Word by word', 'Click to seek', 'Spotify & more'] },
     { id: 'vault', icon: 'lock', label: 'Vault', title: 'Vault', heading: 'Passwords, properly locked', text: 'Argon2id and AES-256-GCM, bound to your Windows account. Two-factor codes, a password health report, an optional breach check — and autofill in Brave, Chrome and Edge.', tags: ['Windows Hello', '2FA codes', 'Autofill', 'Breach check'] },
     { id: 'notes', icon: 'idea', label: 'Notes', title: 'Notes', heading: 'Notes, and ideas for Claude', text: 'Markdown notes with templates and reminders. Ideas are written as .md files into a folder Claude can read — and replies Claude writes there show up next to your note.', tags: ['Markdown', 'Templates', 'Reminders', 'Claude folder'] },
     { id: 'screenshots', icon: 'camera', label: 'Screenshots', title: 'Screenshots', heading: 'Capture it, mark it up, find it again', text: 'Region, window or every screen with global hotkeys. A searchable library with tags and favourites, markup and text recognition — saved as normal files in your Pictures.', tags: ['Hotkeys', 'Markup', 'Text recognition', 'Tags'] },
@@ -430,6 +431,8 @@
     ['send', 'Lag under load', 'Pings while the line is busy, grades it A+ to F and tells you what fixes it — usually the router, a cable, or a paused download.'],
     ['tasks', 'Optimize this PC', 'Monitor at its full refresh rate, Ultimate power plan, no background game recording, GPU scheduling and more — each one checked and undoable.'],
     ['apps', 'Finds your games', 'Epic, Steam, Riot, Roblox and Minecraft games on this PC, ready to add with one click.'],
+    ['music', 'Aurora', 'The song’s cover as a music-reactive visual, a neon edge light in its colours, and huge lyrics word by word — full screen or on the Music page.'],
+    ['screen', 'Glow around your screen', 'The same neon light around your monitor over every app — click-through, and out of the way of full-screen games.'],
     ['music', 'Full-screen lyrics', 'Apple Music–style lyrics on the PC: drifting cover-art light, lines that glide up and fill word by word.'],
     ['music', 'Music with lyrics', 'Spotify, Apple Music or a browser — controls, cover art, volume, bass and synced lyrics on your phone, upright or sideways.'],
     ['volume', 'Volume mixer', 'Every app’s volume and mute from your phone — turn the game down, Spotify up.'],
@@ -564,6 +567,145 @@
   new IntersectionObserver(([e]) => (carouselVisible = e.isIntersecting), { threshold: 0.4 }).observe(carousel);
   layoutPhones();
   restartAuto();
+
+  /* ---------------- Aurora demo ---------------- */
+
+  const aurora = $('[data-aurora]');
+  if (aurora) {
+    const stage = $('[data-aurora-stage]', aurora);
+    const coverBox = $('[data-aurora-cover]', aurora);
+    const wordsBox = $('[data-aurora-words]', aurora);
+    const playBtn = $('[data-aurora-play]', aurora);
+    // One colour channel each, recombined with "screen" so they can split apart.
+    const m = (r, g, b) => `<feColorMatrix values="${r} 0 0 0 0  0 ${g} 0 0 0  0 0 ${b} 0 0  0 0 0 1 0"/>`;
+    document.body.insertAdjacentHTML('beforeend', `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="aurora-r">${m(1, 0, 0)}</filter><filter id="aurora-g">${m(0, 1, 0)}</filter><filter id="aurora-b">${m(0, 0, 1)}</filter></svg>`);
+
+    // Made-up covers for the demo, neon on black.
+    const rays = (n, colors, inner, outer, width) =>
+      Array.from({ length: n }, (_, k) => {
+        const a = (k / n) * Math.PI * 2;
+        const len = outer * (0.75 + 0.25 * Math.sin(k * 2.3));
+        return `<line x1="${150 + Math.cos(a) * inner}" y1="${150 + Math.sin(a) * inner}" x2="${150 + Math.cos(a) * len}" y2="${150 + Math.sin(a) * len}" stroke="${colors[k % colors.length]}" stroke-width="${width}" stroke-linecap="round"/>`;
+      }).join('');
+    const COVERS = [
+      { name: 'Sunburst', c1: '#ff4fa3', c2: '#ff9a3c', body: `${rays(22, ['#ff5ea8', '#ff9a3c', '#ffe14d', '#c13cff'], 34, 150, 9)}<circle cx="150" cy="150" r="46" fill="#ff7a3c"/><circle cx="150" cy="150" r="20" fill="#120616"/>` },
+      { name: 'Rings', c1: '#a855f7', c2: '#3b82f6', body: [0, 1, 2, 3, 4].map((k) => `<circle cx="${150 + k * 6}" cy="${150 - k * 4}" r="${28 + k * 22}" fill="none" stroke="${['#3b82f6', '#22d3ee', '#a855f7', '#ec4899', '#60a5fa'][k]}" stroke-width="${7 - k}"/>`).join('') + '<circle cx="150" cy="150" r="18" fill="#465aff"/>' },
+      { name: 'Petals', c1: '#22d3a0', c2: '#a3e635', body: Array.from({ length: 8 }, (_, k) => `<ellipse cx="150" cy="88" rx="22" ry="62" fill="${['#22c79a', '#a3e635', '#22d3ee', '#10b981'][k % 4]}" opacity=".85" transform="rotate(${k * 45} 150 150)"/>`).join('') + '<circle cx="150" cy="150" r="26" fill="#fde047"/>' },
+    ].map((c) => ({ ...c, url: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><rect width="300" height="300" fill="#050307"/>${c.body}</svg>`)}` }));
+
+    const art = document.createElement('div');
+    art.className = 'art';
+    art.innerHTML = '<div class="layer r"></div><div class="layer g"></div><div class="layer b"></div>' + '<div class="slice"></div>'.repeat(5);
+    coverBox.append(art);
+    const layers = $$('.layer', art);
+    const slices = $$('.slice', art);
+    const pickers = $('[data-aurora-covers]', aurora);
+    let cover = COVERS[0];
+    function setCover(c) {
+      cover = c;
+      layers.forEach((l) => (l.style.backgroundImage = `url("${c.url}")`));
+      slices.forEach((s) => (s.style.backgroundImage = `url("${c.url}")`));
+      stage.style.setProperty('--c1', c.c1);
+      stage.style.setProperty('--c2', c.c2);
+      $$('button', pickers).forEach((b) => b.setAttribute('aria-checked', String(b.dataset.v === c.name)));
+    }
+    pickers.innerHTML = COVERS.map((c) => `<button role="radio" aria-checked="false" data-v="${c.name}"><img src="${c.url}" alt="" />${c.name}</button>`).join('');
+    pickers.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      const c = b && COVERS.find((x) => x.name === b.dataset.v);
+      if (c) setCover(c);
+    });
+    for (const [attr, key] of [['data-aurora-style', 'style'], ['data-aurora-emphasis', 'emphasis']]) {
+      const group = $(`[${attr}]`, aurora);
+      group.addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        $$('button', group).forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+        stage.dataset[key] = b.dataset.v;
+      });
+    }
+    stage.dataset.style = 'visual';
+    stage.dataset.emphasis = 'glow';
+    setCover(cover);
+
+    // A made-up song, word by word (half a beat each, a beat between lines).
+    const BPM = 112;
+    const BEAT = 60 / BPM;
+    const LINES = ['Turn it up, the night is ours to keep', 'Echoes on the highway, we don’t sleep', 'Hold the moment, let the chorus fall', 'Daylight’s coming, but we’ve got it all'];
+    const WORDS = [];
+    let at = BEAT * 2;
+    for (const line of LINES) {
+      for (const w of line.split(' ')) {
+        WORDS.push({ t: at, w });
+        at += BEAT / 2;
+      }
+      at += BEAT;
+    }
+    const LOOP = at + BEAT;
+    let shown = -2;
+    function showWord(i) {
+      if (i === shown) return;
+      shown = i;
+      const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      const prev = WORDS[i - 1];
+      const next = WORDS[i + 1];
+      wordsBox.innerHTML = i < 0 ? '' : `${prev ? `<span class="prev">${esc(prev.w)}</span>` : ''}<span class="cur${reduced ? '' : ' enter'}">${esc(WORDS[i].w)}</span>${next ? `<span class="next">${esc(next.w)}</span>` : ''}`;
+    }
+
+    let playing = false;
+    let start = 0;
+    let lastBeat = -1;
+    let glitchUntil = 0;
+    function glitch(now) {
+      const h = art.clientHeight || 1;
+      slices.forEach((s) => {
+        if (Math.random() < 0.55) {
+          s.style.display = 'none';
+          return;
+        }
+        const top = Math.random() * 0.85;
+        const height = 0.03 + Math.random() * 0.12;
+        const shift = (Math.random() - 0.5) * h * 0.18;
+        Object.assign(s.style, { display: 'block', top: `${top * 100}%`, height: `${height * 100}%`, backgroundPosition: `${shift}px ${-top * h}px`, transform: `translateX(${shift * 0.3}px)` });
+      });
+      glitchUntil = now + 90 + Math.random() * 90;
+    }
+    function frame(now) {
+      if (!playing) return;
+      const t = ((now - start) / 1000) % LOOP;
+      const phase = (t % BEAT) / BEAT;
+      const beatN = Math.floor(t / BEAT);
+      const kick = reduced ? 0 : Math.exp(-phase * 6);
+      stage.style.setProperty('--kick', kick.toFixed(3));
+      stage.style.setProperty('--split', `${(2 + kick * 7).toFixed(1)}px`);
+      stage.style.setProperty('--a', `${((now / 60) % 360).toFixed(1)}deg`);
+      if (beatN !== lastBeat) {
+        lastBeat = beatN;
+        if (!reduced && stage.dataset.style === 'visual' && Math.random() < 0.6) glitch(now);
+      }
+      if (now > glitchUntil) slices.forEach((s) => (s.style.display = 'none'));
+      let i = -1;
+      for (let k = 0; k < WORDS.length && WORDS[k].t <= t; k++) i = k;
+      showWord(i);
+      requestAnimationFrame(frame);
+    }
+    function play(on) {
+      if (on === playing) return;
+      playing = on;
+      stage.classList.toggle('playing', on);
+      playBtn.textContent = on ? '❚❚' : '▶';
+      playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play');
+      if (on) {
+        start = performance.now() - Math.max(0, WORDS[Math.max(0, shown)]?.t ?? 0) * 1000;
+        requestAnimationFrame(frame);
+      }
+    }
+    playBtn.addEventListener('click', () => play(!playing));
+    showWord(0);
+    if (!reduced) {
+      new IntersectionObserver((entries) => entries.forEach((e) => play(e.isIntersecting)), { threshold: 0.35 }).observe(stage);
+    }
+  }
 
   /* ---------------- Lyrics demo ---------------- */
 
