@@ -73,7 +73,7 @@ export function AmbientOverlay() {
           time={time}
           trackKey={np.state.key}
           // Over other apps: smaller, low on the screen, on a dark backing so it reads on anything.
-          settings={{ ...visuals.lyrics, place: 'lower', offsetY: visuals.lyrics.offsetY + 10, size: visuals.lyrics.size * 0.5, backing: Math.max(0.45, visuals.lyrics.backing) }}
+          settings={{ ...visuals.lyrics, place: 'lower', offsetY: visuals.lyrics.offsetY + 10, size: visuals.lyrics.size * 0.5, backing: Math.max(0.8, visuals.lyrics.backing) }}
           reduced={visuals.reducedMotion}
           full={false}
           shown={playing}

@@ -31,6 +31,7 @@
     <nav class="links" aria-label="Sections">
       <a href="#features">Features</a>
       <a href="#phone">Phone</a>
+      <a href="#aurora">Aurora</a>
       <a href="#lyrics">Music</a>
       <a href="#games">Games</a>
       <a href="#privacy">Privacy</a>
@@ -153,6 +154,40 @@
         <button class="arrow next" aria-label="Next screen">›</button>
         <p class="phones-caption" aria-live="polite"></p>
         <div class="dots" role="tablist" aria-label="Phone screens"></div>
+      </div>
+    </section>
+
+    <!-- Aurora -->
+    <section class="section" id="aurora">
+      <div class="section-head reveal">
+        <span class="eyebrow">New in 0.5 · Aurora</span>
+        <h2>Your song becomes <span class="gradient-text">the show</span></h2>
+        <p>The cover of whatever is playing, big and alive on black — swelling with the bass, glitching on the beats — inside a thin neon light in the cover's own colours, with the lyrics floating over it one word at a time. Pick a cover and press play.</p>
+      </div>
+      <div class="aurora-demo reveal" data-aurora>
+        <div class="aurora-stage" data-aurora-stage>
+          <div class="aurora-cover" data-aurora-cover aria-hidden="true"></div>
+          <div class="aurora-words" data-aurora-words aria-live="off"></div>
+          <div class="aurora-edge" aria-hidden="true"></div>
+          <button class="aurora-play" data-aurora-play aria-label="Play">▶</button>
+        </div>
+        <div class="aurora-controls">
+          <div class="seg" role="radiogroup" aria-label="Cover" data-aurora-covers></div>
+          <div class="seg" role="radiogroup" aria-label="Style" data-aurora-style>
+            <button role="radio" aria-checked="true" data-v="visual">Visual</button>
+            <button role="radio" aria-checked="false" data-v="minimal">Minimal</button>
+          </div>
+          <div class="seg" role="radiogroup" aria-label="Lyric emphasis" data-aurora-emphasis>
+            <button role="radio" aria-checked="true" data-v="glow">Glow</button>
+            <button role="radio" aria-checked="false" data-v="box">Colour box</button>
+          </div>
+        </div>
+        <p class="aurora-note">A sketch of the effect in your browser. In OmniHub it follows the real sound (Windows' loopback, never the microphone) and the song's real lyrics: word by word when they time each word, a line at a time when they don't.</p>
+      </div>
+      <div class="aurora-shots">
+        <figure class="reveal"><div class="window"><img src="assets/shots/aurora-panel.webp" alt="Aurora with its glass settings panel: gradient, animation, thickness, glow, colours, style and lyric options" loading="lazy" width="2880" height="1800" /></div><figcaption><b>Every part adjustable</b> — colours from the cover or your own, edge thickness and glow, five styles, lyric font, size and highlight. Saved, with Reset to defaults.</figcaption></figure>
+        <figure class="reveal"><div class="window"><img src="assets/shots/aurora-lines.webp" alt="Aurora showing a whole lyric line for a song whose lyrics only time lines, over a neon ring cover" loading="lazy" width="2880" height="1800" /></div><figcaption><b>Honest timing</b> — lyrics that only time lines light a whole line; word by word only when every word is timed.</figcaption></figure>
+        <figure class="reveal"><div class="window"><img src="assets/shots/desktop-glow.webp" alt="The neon glow around the whole screen over OmniHub's Home page, with floating lyrics low on the screen" loading="lazy" width="2880" height="1800" /></div><figcaption><b>Around your screen</b> — the same light around your monitor over every app, clicks pass straight through, and it steps aside for full-screen games.</figcaption></figure>
       </div>
     </section>
 
