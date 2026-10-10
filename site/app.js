@@ -298,7 +298,7 @@
     { id: 'apps', icon: 'apps', label: 'Apps', title: 'Apps', heading: 'Every program, with its real size', text: 'Desktop programs, Store apps and Start menu entries with their icons and the size from your last scan. Launch, uninstall, manage startup apps, or see the screenshots you took in each.', tags: ['Store apps', 'Uninstall', 'Startup apps', 'Favourites'] },
     { id: 'tasks', icon: 'tasks', label: 'Tasks', title: 'Tasks', heading: 'What each program really uses', text: 'CPU, memory, GPU, video memory and disk for every program, live — with End task, priority and file location. Same view on your phone.', tags: ['GPU per app', 'Video memory', 'Priority', 'End task'] },
     { id: 'games', icon: 'game', label: 'Games', title: 'Games', heading: 'Max FPS where it counts — and every frame measured', text: 'Competitive mode sets Fortnite, VALORANT, CS2, Apex, Overwatch 2, Roblox or Minecraft to their fastest settings, closes background junk, gives the game the processor and a 0.5 ms timer; Quality mode does the same for Windows but never touches the game’s graphics. The FPS meter shows live FPS and 1% lows — and everything comes back when you quit.', tags: ['Competitive & Quality', '7 games tuned', 'FPS meter', 'Lag under load'] },
-    { id: 'aurora', icon: 'music', label: 'Aurora', title: 'Music — Aurora', heading: 'Aurora: the song becomes the show', text: 'The playing song’s cover, sharp and alive on black — swelling with the bass, rippling and glowing on the beats, with 14 effects to mix — inside a thin neon light in its colours, and huge lyrics that bounce in one word at a time. It follows the real sound through Windows’ loopback, never the microphone.', tags: ['Sharp covers', '14 effects', 'Word by word', 'Follows the beat'] },
+    { id: 'aurora', icon: 'music', label: 'Aurora', title: 'Music — Aurora', heading: 'Aurora: the song becomes the show', text: 'The song’s official music video behind the lyrics, in step and up to 4K — or its whole cover at full size, slowly moving. Short lyrics in the cover’s colours, a 3D emoji when a word calls for one, light in the corners. Or the light show: the cover swelling with the bass, with 14 effects to mix.', tags: ['Music videos', 'Full-size covers', '3D emojis', 'Word by word'] },
     { id: 'music', icon: 'music', label: 'Lyrics', title: 'Music — Lyrics', heading: 'Or lyrics, Apple Music style', text: 'Prefer reading along? Switch to Lyrics: the cover art blurred into drifting light, big lyrics that glide up line by line and fill word by word, and three dots through the breaks. Click any line to jump there.', tags: ['Aurora or Lyrics', 'Word by word', 'Click to seek', 'Spotify & more'] },
     { id: 'vault', icon: 'lock', label: 'Vault', title: 'Vault', heading: 'Passwords, properly locked', text: 'Argon2id and AES-256-GCM, bound to your Windows account. Two-factor codes, a password health report, an optional breach check — and autofill in Brave, Chrome and Edge.', tags: ['Windows Hello', '2FA codes', 'Autofill', 'Breach check'] },
     { id: 'notes', icon: 'idea', label: 'Notes', title: 'Notes', heading: 'Notes, and ideas for Claude', text: 'Markdown notes with templates and reminders. Ideas are written as .md files into a folder Claude can read — and replies Claude writes there show up next to your note.', tags: ['Markdown', 'Templates', 'Reminders', 'Claude folder'] },
@@ -576,6 +576,7 @@
     const coverBox = $('[data-aurora-cover]', aurora);
     const wordsBox = $('[data-aurora-words]', aurora);
     const playBtn = $('[data-aurora-play]', aurora);
+    const backdropPic = $('[data-aurora-backdrop] .pic', aurora);
     // One colour channel each, recombined with "screen" so they can split apart.
     const m = (r, g, b) => `<feColorMatrix values="${r} 0 0 0 0  0 ${g} 0 0 0  0 0 ${b} 0 0  0 0 0 1 0"/>`;
     document.body.insertAdjacentHTML('beforeend', `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="aurora-r">${m(1, 0, 0)}</filter><filter id="aurora-g">${m(0, 1, 0)}</filter><filter id="aurora-b">${m(0, 0, 1)}</filter></svg>`);
@@ -587,10 +588,17 @@
         const len = outer * (0.75 + 0.25 * Math.sin(k * 2.3));
         return `<line x1="${150 + Math.cos(a) * inner}" y1="${150 + Math.sin(a) * inner}" x2="${150 + Math.cos(a) * len}" y2="${150 + Math.sin(a) * len}" stroke="${colors[k % colors.length]}" stroke-width="${width}" stroke-linecap="round"/>`;
       }).join('');
+    // A sunset with a sliced sun over a neon grid (drawn here, like the others).
+    const sunset =
+      '<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b0420"/><stop offset=".38" stop-color="#3a0d5c"/><stop offset=".58" stop-color="#b3246f"/><stop offset=".66" stop-color="#ff7a59"/></linearGradient><linearGradient id="u" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3a8"/><stop offset=".5" stop-color="#ffb347"/><stop offset="1" stop-color="#ff3d7f"/></linearGradient><radialGradient id="h" cx=".5" cy=".56" r=".42"><stop offset="0" stop-color="#ff9a6b" stop-opacity=".75"/><stop offset="1" stop-color="#ff9a6b" stop-opacity="0"/></radialGradient><clipPath id="c"><rect width="300" height="168"/><rect y="170.4" width="300" height="3"/><rect y="176.4" width="300" height="2.4"/><rect y="181.8" width="300" height="1.8"/><rect y="186.3" width="300" height="1.2"/></clipPath></defs>' +
+      '<rect width="300" height="198" fill="url(#s)"/><rect width="300" height="300" fill="url(#h)"/><circle cx="150" cy="156" r="57" fill="url(#u)" clip-path="url(#c)"/>' +
+      '<path d="M0 192 27 168 48 180 75 150 99 177 120 163 141 192ZM159 192 183 168 204 178 231 147 258 175 279 162 300 180 300 192Z" fill="#1b0630"/>' +
+      '<rect y="192" width="300" height="108" fill="#16061f"/><g stroke="#ff4fa3" stroke-opacity=".4" fill="none"><path d="M150 192-120 300M150 192-30 300M150 192 60 300M150 192 120 300M150 192 180 300M150 192 240 300M150 192 330 300M150 192 420 300M0 210H300M0 228H300M0 249H300M0 273H300"/></g>';
     const COVERS = [
-      { name: 'Sunburst', c1: '#ff4fa3', c2: '#ff9a3c', body: `${rays(22, ['#ff5ea8', '#ff9a3c', '#ffe14d', '#c13cff'], 34, 150, 9)}<circle cx="150" cy="150" r="46" fill="#ff7a3c"/><circle cx="150" cy="150" r="20" fill="#120616"/>` },
-      { name: 'Rings', c1: '#a855f7', c2: '#3b82f6', body: [0, 1, 2, 3, 4].map((k) => `<circle cx="${150 + k * 6}" cy="${150 - k * 4}" r="${28 + k * 22}" fill="none" stroke="${['#3b82f6', '#22d3ee', '#a855f7', '#ec4899', '#60a5fa'][k]}" stroke-width="${7 - k}"/>`).join('') + '<circle cx="150" cy="150" r="18" fill="#465aff"/>' },
-      { name: 'Petals', c1: '#22d3a0', c2: '#a3e635', body: Array.from({ length: 8 }, (_, k) => `<ellipse cx="150" cy="88" rx="22" ry="62" fill="${['#22c79a', '#a3e635', '#22d3ee', '#10b981'][k % 4]}" opacity=".85" transform="rotate(${k * 45} 150 150)"/>`).join('') + '<circle cx="150" cy="150" r="26" fill="#fde047"/>' },
+      { name: 'Sunset', c1: '#ff7a59', c2: '#b3246f', ink: '#ffd9c7', deep: '#3a0d3f', body: sunset },
+      { name: 'Sunburst', c1: '#ff4fa3', c2: '#ff9a3c', ink: '#ffd3e6', deep: '#4a0f2c', body: `${rays(22, ['#ff5ea8', '#ff9a3c', '#ffe14d', '#c13cff'], 34, 150, 9)}<circle cx="150" cy="150" r="46" fill="#ff7a3c"/><circle cx="150" cy="150" r="20" fill="#120616"/>` },
+      { name: 'Rings', c1: '#a855f7', c2: '#3b82f6', ink: '#ddd3ff', deep: '#1c1446', body: [0, 1, 2, 3, 4].map((k) => `<circle cx="${150 + k * 6}" cy="${150 - k * 4}" r="${28 + k * 22}" fill="none" stroke="${['#3b82f6', '#22d3ee', '#a855f7', '#ec4899', '#60a5fa'][k]}" stroke-width="${7 - k}"/>`).join('') + '<circle cx="150" cy="150" r="18" fill="#465aff"/>' },
+      { name: 'Petals', c1: '#22d3a0', c2: '#a3e635', ink: '#d6ffe9', deep: '#06301f', body: Array.from({ length: 8 }, (_, k) => `<ellipse cx="150" cy="88" rx="22" ry="62" fill="${['#22c79a', '#a3e635', '#22d3ee', '#10b981'][k % 4]}" opacity=".85" transform="rotate(${k * 45} 150 150)"/>`).join('') + '<circle cx="150" cy="150" r="26" fill="#fde047"/>' },
     ].map((c) => ({ ...c, url: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><rect width="300" height="300" fill="#050307"/>${c.body}</svg>`)}` }));
 
     const art = document.createElement('div');
@@ -605,8 +613,11 @@
       cover = c;
       layers.forEach((l) => (l.style.backgroundImage = `url("${c.url}")`));
       slices.forEach((s) => (s.style.backgroundImage = `url("${c.url}")`));
+      backdropPic.style.backgroundImage = `url("${c.url}")`;
       stage.style.setProperty('--c1', c.c1);
       stage.style.setProperty('--c2', c.c2);
+      stage.style.setProperty('--ink', c.ink);
+      stage.style.setProperty('--deep', c.deep);
       $$('button', pickers).forEach((b) => b.setAttribute('aria-checked', String(b.dataset.v === c.name)));
     }
     pickers.innerHTML = COVERS.map((c) => `<button role="radio" aria-checked="false" data-v="${c.name}"><img src="${c.url}" alt="" />${c.name}</button>`).join('');
@@ -624,7 +635,7 @@
         stage.dataset[key] = b.dataset.v;
       });
     }
-    stage.dataset.style = 'visual';
+    stage.dataset.style = 'cinema';
     stage.dataset.emphasis = 'glow';
     setCover(cover);
 
@@ -632,11 +643,13 @@
     const BPM = 112;
     const BEAT = 60 / BPM;
     const LINES = ['Turn it up, the night is ours to keep', 'Echoes on the highway, we don’t sleep', 'Hold the moment, let the chorus fall', 'Daylight’s coming, but we’ve got it all'];
+    // Now and then, an emoji beside a word you can picture (Fluent Emoji, MIT).
+    const EMOJI = { night: '1f319', daylight: '1f305' };
     const WORDS = [];
     let at = BEAT * 2;
     for (const line of LINES) {
       for (const w of line.split(' ')) {
-        WORDS.push({ t: at, w });
+        WORDS.push({ t: at, w, emoji: EMOJI[w.toLowerCase().replace(/’s$|[^a-z]/g, '')] });
         at += BEAT / 2;
       }
       at += BEAT;
@@ -647,9 +660,10 @@
       if (i === shown) return;
       shown = i;
       const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      const word = (x) => esc(x.w) + (x.emoji ? `<img class="emo" src="assets/emoji/${x.emoji}.webp" alt="" width="80" height="80" />` : '');
       const prev = WORDS[i - 1];
       const next = WORDS[i + 1];
-      wordsBox.innerHTML = i < 0 ? '' : `${prev ? `<span class="prev">${esc(prev.w)}</span>` : ''}<span class="cur${reduced ? '' : ' enter'}">${esc(WORDS[i].w)}</span>${next ? `<span class="next">${esc(next.w)}</span>` : ''}`;
+      wordsBox.innerHTML = i < 0 ? '' : `${prev ? `<span class="prev">${word(prev)}</span>` : ''}<span class="cur${reduced ? '' : ' enter'}">${word(WORDS[i])}</span>${next ? `<span class="next">${esc(next.w)}</span>` : ''}`;
     }
 
     let playing = false;

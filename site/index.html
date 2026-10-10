@@ -160,12 +160,13 @@
     <!-- Aurora -->
     <section class="section" id="aurora">
       <div class="section-head reveal">
-        <span class="eyebrow">New in 0.5 · Aurora</span>
+        <span class="eyebrow">New in 0.6 · Aurora</span>
         <h2>Your song becomes <span class="gradient-text">the show</span></h2>
-        <p>The cover of whatever is playing, sharp and alive on black — swelling with the bass, rippling and glowing on the beats — inside a thin neon light in the cover's own colours, with the lyrics bouncing over it one word at a time. Pick a cover and press play.</p>
+        <p>The song's official music video fills your screen — in step with the music, up to 4K. No video? Its whole cover, full size and sharp on any monitor, slowly moving. Over it, short lyrics in the cover's own colours, a 3D emoji now and then when a word calls for one, and soft light in the corners. Pick a cover and press play.</p>
       </div>
       <div class="aurora-demo reveal" data-aurora>
         <div class="aurora-stage" data-aurora-stage>
+          <div class="aurora-backdrop" data-aurora-backdrop aria-hidden="true"><div class="pic"></div><div class="corners"></div></div>
           <div class="aurora-cover" data-aurora-cover aria-hidden="true"></div>
           <div class="aurora-words" data-aurora-words aria-live="off"></div>
           <div class="aurora-edge" aria-hidden="true"></div>
@@ -174,7 +175,8 @@
         <div class="aurora-controls">
           <div class="seg" role="radiogroup" aria-label="Cover" data-aurora-covers></div>
           <div class="seg" role="radiogroup" aria-label="Style" data-aurora-style>
-            <button role="radio" aria-checked="true" data-v="visual">Visual</button>
+            <button role="radio" aria-checked="true" data-v="cinema">Cinema</button>
+            <button role="radio" aria-checked="false" data-v="visual">Light show</button>
             <button role="radio" aria-checked="false" data-v="minimal">Minimal</button>
           </div>
           <div class="seg" role="radiogroup" aria-label="Lyric emphasis" data-aurora-emphasis>
@@ -182,10 +184,11 @@
             <button role="radio" aria-checked="false" data-v="box">Colour box</button>
           </div>
         </div>
-        <p class="aurora-note">A sketch of the effect in your browser. In OmniHub it follows the real sound (Windows' loopback, never the microphone) and the song's real lyrics, word by word — exact when the lyrics time each word, estimated from the line's timing when they don't (you can turn that off).</p>
+        <p class="aurora-note">A sketch in your browser. In OmniHub, Cinema plays the artist's own music video when there is one (muted — your music app stays the sound — in YouTube's player, kept in time with the song), else their animated cover, else the cover at its original size. The lyrics follow the song word by word, and the light follows the real sound (Windows' loopback, never the microphone).</p>
       </div>
       <div class="aurora-shots">
-        <figure class="reveal"><div class="window"><img src="assets/shots/aurora-panel.webp" alt="Aurora with its glass settings panel: gradient, animation, thickness, glow, colours, style and lyric options" loading="lazy" width="2880" height="1800" /></div><figcaption><b>Every part adjustable</b> — colours from the cover or your own, edge thickness and glow, five styles, lyric font, size and highlight. Saved, with Reset to defaults.</figcaption></figure>
+        <figure class="reveal"><div class="window"><img src="assets/shots/aurora-cinema.webp" alt="Aurora in Cinema: a sunset cover filling the screen, with the lyric &quot;till morning comes&quot; in the cover's pink and a 3D sunrise emoji beside &quot;morning&quot;" loading="lazy" width="1440" height="900" /></div><figcaption><b>The whole cover, full size</b> — the original from Apple's catalogue (usually 3000×3000), so it stays sharp even on a 4K monitor, with lyrics in its colours placed where the picture is calm.</figcaption></figure>
+        <figure class="reveal"><div class="window"><img src="assets/shots/aurora-background.webp" alt="Aurora's settings at Background: video else cover, music videos from YouTube, cover motion, darkening and corner light" loading="lazy" width="1440" height="900" /></div><figcaption><b>You choose what plays</b> — music video, cover or light show; video quality, fit and crop, cover motion, darkening, corner light, emojis now and then or more often. It tells you what is really playing.</figcaption></figure>
         <figure class="reveal"><div class="window"><img src="assets/shots/aurora-effects.webp" alt="Aurora's Effects settings: beat zoom, glow, echo, ripples and more over a cover with halftone dots" loading="lazy" width="2880" height="1800" /></div><figcaption><b>14 effects, your mix</b> — beat zoom, ripples, twist, glitch, halftone, kaleidoscope and more, each on its own slider, with Calm, Wild and Shuffle presets.</figcaption></figure>
         <figure class="reveal"><div class="window"><img src="assets/shots/desktop-glow.webp" alt="The neon glow around the whole screen over OmniHub's Home page, with floating lyrics low on the screen" loading="lazy" width="2880" height="1800" /></div><figcaption><b>Around your screen</b> — the same light around your monitor over every app, clicks pass straight through, and it steps aside for full-screen games.</figcaption></figure>
       </div>
@@ -321,7 +324,7 @@
       </div>
       <div class="faq">
         <details class="reveal"><summary>Is OmniHub free?</summary><p>Yes — free and open source, with no ads, no account and no paid tier.</p></details>
-        <details class="reveal"><summary>Does it send my data anywhere?</summary><p>No. There is no OmniHub server. The only internet requests are optional: song lyrics from LRCLIB, the password breach check (only the first 5 characters of a hash), update checks on GitHub, and pings you start yourself.</p></details>
+        <details class="reveal"><summary>Does it send my data anywhere?</summary><p>No. There is no OmniHub server. The only internet requests are optional: song lyrics from LRCLIB, sharper covers from Apple's iTunes catalogue, music videos from YouTube (only the song's title and artist are searched), the password breach check (only the first 5 characters of a hash), update checks on GitHub, and pings you start yourself.</p></details>
         <details class="reveal"><summary>Why does Windows warn when I install it?</summary><p>The installer isn't code-signed yet, so SmartScreen hasn't seen it before. Choose <i>More info → Run anyway</i>. Updates after that install from inside the app.</p></details>
         <details class="reveal"><summary>Does the phone part work with iPhone and Android?</summary><p>Both. The phone app runs in the browser (Safari, Chrome…) and can be added to the home screen. iPhones can also mirror their screen to the PC with AirPlay.</p></details>
         <details class="reveal"><summary>Is the game boost safe with anti-cheat?</summary><p>It only changes Windows settings — power plan, notifications, priority, GPU choice, Wi-Fi — and never touches a game's memory or files. Roblox flags go in Roblox's own settings file.</p></details>

@@ -2342,6 +2342,55 @@ h2 {
   transform: scale(0.55);
 }
 
+.aurora-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease);
+}
+
+.aurora-backdrop .pic {
+  position: absolute;
+  inset: -6%;
+  background-size: cover;
+  background-position: center 55%;
+  animation: aurora-drift 26s ease-in-out infinite alternate;
+}
+
+/* A soft shade where the lyrics sit, and a vignette. */
+.aurora-backdrop::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 58% 42% at 50% 50%, rgb(0 0 0 / 0.34), transparent 78%),
+    radial-gradient(ellipse at center, transparent 52%, rgb(0 0 0 / 0.55));
+}
+
+/* Light in the corners, in the cover's colours, breathing with the beat. */
+.aurora-backdrop .corners {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  mix-blend-mode: screen;
+  opacity: calc(0.5 + var(--kick) * 0.5);
+  background:
+    radial-gradient(circle at 0 0, color-mix(in oklab, var(--c1) 62%, transparent), transparent 36%),
+    radial-gradient(circle at 100% 0, color-mix(in oklab, var(--c2) 55%, transparent), transparent 34%),
+    radial-gradient(circle at 0 100%, color-mix(in oklab, var(--c2) 55%, transparent), transparent 34%),
+    radial-gradient(circle at 100% 100%, color-mix(in oklab, var(--c1) 62%, transparent), transparent 36%);
+}
+
+@keyframes aurora-drift {
+  from { transform: scale(1.02) translate(-1%, 0.6%); }
+  to { transform: scale(1.09) translate(1.2%, -0.8%); }
+}
+
+.aurora-stage[data-style='cinema'] .aurora-backdrop { opacity: 1; }
+.aurora-stage[data-style='cinema'] .aurora-cover { opacity: 0; }
+.aurora-stage[data-style='cinema'] .aurora-edge { opacity: 0.5; }
+
 .aurora-edge {
   position: absolute;
   inset: 0;
@@ -2392,6 +2441,15 @@ h2 {
 .aurora-words .next { margin-top: 0.4em; font-size: 3.6cqw; font-weight: 700; color: #fff; padding: 0.1em 0.55em 0.14em; border-radius: 999px; background: color-mix(in oklab, var(--c1) 72%, transparent); }
 .aurora-stage[data-emphasis='box'] .aurora-words .cur { padding: 0.02em 0.22em 0.06em; border-radius: 0.14em; background: color-mix(in oklab, var(--c1) 88%, black); text-shadow: none; }
 .aurora-words .enter { animation: aurora-in 0.32s var(--ease); }
+.aurora-stage[data-style='cinema'] .aurora-words .cur { font-size: 9.5cqw; color: var(--ink); text-shadow: 0 0.04em 0.12em color-mix(in oklab, var(--deep) 85%, transparent), 0 0 0.5em color-mix(in oklab, var(--deep) 60%, transparent); }
+.aurora-stage[data-style='cinema'] .aurora-words .prev,
+.aurora-stage[data-style='cinema'] .aurora-words .next { color: var(--ink); opacity: 0.62; background: none; padding: 0; text-shadow: 0 0.05em 0.2em color-mix(in oklab, var(--deep) 75%, transparent); }
+.aurora-stage[data-style='cinema'][data-emphasis='box'] .aurora-words .cur { background: color-mix(in oklab, var(--deep) 78%, transparent); }
+.aurora-words .emo { display: inline-block; width: 0.92em; height: 0.92em; margin-left: 0.16em; vertical-align: -0.12em; filter: drop-shadow(0 0.06em 0.12em rgb(0 0 0 / 0.4)); animation: aurora-bob 2.6s ease-in-out infinite; }
+
+@keyframes aurora-bob {
+  50% { transform: translateY(-0.07em) rotate(-5deg); }
+}
 
 @keyframes aurora-in {
   from { opacity: 0; transform: translateY(0.4em); filter: blur(6px); }
@@ -2463,7 +2521,7 @@ h2 {
 
 .aurora-shots {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px;
   margin-top: 48px;
 }
