@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Camera, CornerDownLeft, Crop, HardDrive, Lightbulb, LockKeyhole, Moon, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, Sun } from 'lucide-react';
+import { Camera, CornerDownLeft, Crop, Gauge, HardDrive, Lightbulb, LockKeyhole, Moon, Music2, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, Sun } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../api';
@@ -13,6 +13,7 @@ import { useStorage } from '../state/storage';
 import { toast } from '../state/toasts';
 import { formatBytes } from '@shared/format';
 import { NAV } from './nav';
+import { usePlayer } from '../lib/nowPlaying';
 import { Kbd } from './ui/Card';
 import { Modal } from './ui/Overlay';
 
@@ -51,7 +52,7 @@ function useCommands(): Cmd[] {
   const settings = useSettings((s) => s.settings);
   const remote = useLive((s) => s.remote);
   return useMemo(() => {
-    const pages: Cmd[] = NAV.map((n, i) => ({ id: `page-${n.id}`, label: n.label, hint: n.description, icon: n.icon, group: 'Pages', shortcut: `${MOD_LABEL} ${i + 1}`, run: () => navigate(n.id) }));
+    const pages: Cmd[] = NAV.map((n, i) => ({ id: `page-${n.id}`, label: n.label, hint: n.description, icon: n.icon, group: 'Pages', shortcut: i < 9 ? `${MOD_LABEL} ${i + 1}` : undefined, run: () => navigate(n.id) }));
     const light = settings?.general.theme === 'light';
     const actions: Cmd[] = [
       { id: 'shot-region', label: 'Capture a region', hint: 'Freeze the screen and drag a rectangle', icon: Crop, group: 'Actions', keywords: 'screenshot snip', run: () => attempt('Could not start the capture', () => api.shots.regionBegin()) },
@@ -64,6 +65,8 @@ function useCommands(): Cmd[] {
         keywords: 'capture',
         run: () => attempt('Screenshot failed', () => api.shots.capture('screen', 0)),
       },
+      { id: 'player', label: 'Full-screen lyrics', hint: 'What the PC plays, Apple Music style', icon: Music2, group: 'Actions', keywords: 'music song player now playing', run: () => usePlayer.getState().show() },
+      { id: 'optimize-pc', label: 'Optimize this PC for games', hint: 'Refresh rate, power plan, Game DVR and more', icon: Gauge, group: 'Actions', keywords: 'fps boost performance', run: () => navigate('games', { tab: 'pc' }) },
       { id: 'new-note', label: 'New note', icon: NotebookPen, group: 'Actions', keywords: 'write', run: () => navigate('notes', { new: 'note' }) },
       { id: 'new-idea', label: 'New idea for Claude', icon: Lightbulb, group: 'Actions', keywords: 'claude prompt', run: () => navigate('notes', { new: 'idea' }) },
       { id: 'pair', label: 'Pair a phone', hint: remote?.running ? 'Show the QR code and PIN' : 'Turns on the companion first', icon: QrCode, group: 'Actions', keywords: 'qr connect', run: () => navigate('phone', { pair: '1' }) },

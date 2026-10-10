@@ -28,11 +28,16 @@ pub struct CoreOptions {
     pub vault_kdf: Option<KdfParams>,
     /// Override DPAPI use for the vault (tests on Windows).
     pub vault_dpapi: Option<bool>,
+    /// Register with the browsers and listen for the extension when browser
+    /// autofill is on (tests turn this off: no real browser config is touched).
+    pub browser_integration: bool,
+    /// Use the pretend music player (tests; also `OMNIHUB_FAKE_MEDIA=1`).
+    pub fake_media: bool,
 }
 
 impl Default for CoreOptions {
     fn default() -> Self {
-        CoreOptions { dry_run_power: false, runner: Arc::new(SelfElevated), vault_kdf: None, vault_dpapi: None }
+        CoreOptions { dry_run_power: false, runner: Arc::new(SelfElevated), vault_kdf: None, vault_dpapi: None, browser_integration: true, fake_media: false }
     }
 }
 
@@ -50,6 +55,18 @@ pub struct AppCore {
     pub power: PowerScheduler,
     pub bridges: Bridges,
     pub remote: RemoteServer,
+    pub thumbs: crate::thumbs::Thumbs,
+    pub airplay: crate::capture::airplay::AirPlay,
+    pub browser: crate::browser::BrowserBridge,
+    pub procs: Arc<crate::system::procs::ProcessMonitor>,
+    pub games: Arc<crate::games::GameHub>,
+    pub updater: Arc<crate::update::Updater>,
+    pub media: Arc<crate::media::MediaHub>,
+    /// Listens to the PC's sound for the music visuals (only while one is shown).
+    pub visual: Arc<crate::media::visual::VisualHub>,
+    browser_integration: bool,
+    /// Drives already warned about (root → when), so each warns once a day.
+    low_space_warned: parking_lot::Mutex<std::collections::HashMap<String, i64>>,
 }
 
 impl AppCore {
@@ -67,6 +84,7 @@ impl AppCore {
         );
         let s = settings.get();
         vault.set_auto_lock(s.vault.auto_lock_minutes);
+        let procs = Arc::new(crate::system::procs::ProcessMonitor::new());
         let core = Arc::new(AppCore {
             notes: Notes::new(db.clone(), events.clone()),
             screenshots: ScreenshotLibrary::new(db.clone(), events.clone(), &paths.cache),
@@ -74,6 +92,16 @@ impl AppCore {
             power: PowerScheduler::new(events.clone(), audit.clone(), opts.dry_run_power),
             bridges: Bridges::new(),
             remote: RemoteServer::new(db.clone(), events.clone()),
+            thumbs: crate::thumbs::Thumbs::default(),
+            browser: crate::browser::BrowserBridge::new(db.clone(), events.clone()),
+            browser_integration: opts.browser_integration,
+            games: crate::games::GameHub::new(&paths.data, events.clone(), procs.clone()),
+            updater: Arc::new(crate::update::Updater::new(&paths.cache, &paths.data, events.clone())),
+            procs,
+            media: crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media),
+            visual: crate::media::visual::VisualHub::new(events.clone(), opts.fake_media || std::env::var("OMNIHUB_FAKE_MEDIA").is_ok_and(|v| v == "1")),
+            low_space_warned: Default::default(),
+            airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
             paths,
             settings,
             events,
@@ -82,6 +110,9 @@ impl AppCore {
             storage,
             vault,
         });
+        core.apply_visuals(&s.visuals);
+        core.media.set_lrc_folder(s.media.lrc_folder.as_ref().map(std::path::PathBuf::from));
+        core.media.set_hires_art(s.media.hires_art);
         Ok(core)
     }
 
@@ -112,6 +143,159 @@ impl AppCore {
                 tracing::error!("companion server failed to start: {e}");
             }
         }
+        if s.screen.airplay_auto_start && self.airplay.find(s.screen.uxplay_path.as_deref()).is_some() {
+            if let Err(e) = self.airplay.start(s.screen.uxplay_path.as_deref(), &s.screen.airplay, s.screen.airplay_keep_on_top, s.screen.airplay_pip) {
+                tracing::warn!("AirPlay receiver failed to start: {e}");
+            }
+        }
+        if s.vault.browser_autofill {
+            self.enable_browser_autofill(true);
+        }
+        self.start_watchers();
+        let games = self.games.clone();
+        std::thread::spawn(move || games.recover());
+        self.start_update_checks();
+        let weak = Arc::downgrade(self);
+        self.media.start(move || weak.upgrade().is_some_and(|c| c.settings.get().media.lyrics_online));
+        let send_to = s.remote.send_to_menu;
+        let core = self.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = crate::system::shell::set_send_to_shortcut(send_to) {
+                tracing::warn!("could not update the Send to shortcut: {e}");
+            }
+            core.clean_outbox();
+        });
+    }
+
+    /// Register the native-messaging host and listen for the extension (or stop).
+    pub fn enable_browser_autofill(self: &Arc<Self>, on: bool) {
+        if !self.browser_integration {
+            return;
+        }
+        if on {
+            if let Err(e) = crate::browser::register::register(&self.paths.data) {
+                tracing::warn!("could not register the browser host: {e}");
+            }
+        } else {
+            crate::browser::register::unregister();
+        }
+        if let Err(e) = self.browser.set_listening(self, on) {
+            tracing::warn!("browser autofill pipe: {e}");
+        }
+    }
+
+    /// Half a minute after start, then every six hours: look for a new
+    /// version, and install it when that's allowed and nothing is going on.
+    fn start_update_checks(self: &Arc<Self>) {
+        self.updater.clean();
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("updates".into())
+            .spawn(move || {
+                std::thread::sleep(Duration::from_secs(30));
+                loop {
+                    let Some(core) = weak.upgrade() else { return };
+                    let s = core.settings.get().updates;
+                    let mut pending = None;
+                    if s.check {
+                        if let crate::update::UpdateState::Available { release } = core.updater.check() {
+                            // No surprise Windows prompt from the tray: an
+                            // install that needs approval waits for a click.
+                            if s.auto_install && !core.updater.needs_approval() {
+                                pending = Some(release);
+                            }
+                        }
+                    }
+                    drop(core);
+                    // An automatic update closes and reopens the app, so it
+                    // waits until OmniHub is in the tray and nothing would be
+                    // interrupted. Meanwhile the sidebar offers it in one click.
+                    let next_check = std::time::Instant::now() + Duration::from_secs(6 * 3600);
+                    while std::time::Instant::now() < next_check {
+                        if let Some(release) = &pending {
+                            let Some(core) = weak.upgrade() else { return };
+                            let still = matches!(core.updater.state(), crate::update::UpdateState::Available { .. });
+                            if !still {
+                                pending = None;
+                            } else if core.idle_for_update() {
+                                tracing::info!("installing OmniHub {}", release.version);
+                                core.audit.record("app", "update.install", &release.version, true);
+                                let _ = core.updater.install(release);
+                                pending = None;
+                            }
+                        }
+                        std::thread::sleep(Duration::from_secs(if pending.is_some() { 60 } else { 600 }));
+                    }
+                }
+            })
+            .ok();
+    }
+
+    /// Nothing an automatic update would interrupt: the window is not open
+    /// in front of someone, no game boost, nobody watching the screen, no
+    /// iPhone mirroring receiver, no phone transfer.
+    pub fn idle_for_update(&self) -> bool {
+        let boosting = self.games.session().is_some_and(|s| s.active());
+        let watching = !self.remote.status().viewers.is_empty();
+        !self.updater.app_in_use() && !boosting && !watching && !self.airplay.is_running() && !self.remote.transfers_active()
+    }
+
+    /// Every 20 seconds: due note reminders; every five minutes: drive space.
+    fn start_watchers(self: &Arc<Self>) {
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("watchers".into())
+            .spawn(move || {
+                let mut tick: u64 = 0;
+                loop {
+                    let Some(core) = weak.upgrade() else { return };
+                    match core.notes.take_due_reminders(crate::db::now()) {
+                        Ok(due) => {
+                            for n in due {
+                                let snippet: String = n.body.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#')).unwrap_or_default().chars().take(140).collect();
+                                core.events.emit("notes:reminder", serde_json::json!({ "id": n.id, "title": n.title, "snippet": snippet, "kind": n.kind }));
+                            }
+                        }
+                        Err(e) => tracing::warn!("reminders: {e}"),
+                    }
+                    if tick.is_multiple_of(15) {
+                        core.check_low_space();
+                    }
+                    drop(core);
+                    tick += 1;
+                    std::thread::sleep(Duration::from_secs(20));
+                }
+            })
+            .ok();
+    }
+
+    /// Emit `storage:low-space` for drives that just ran low.
+    pub fn check_low_space(&self) {
+        let s = self.settings.get().storage;
+        if !s.low_space_alert {
+            return;
+        }
+        let vols = crate::storage::volumes::list();
+        let due = low_space_due(&vols, s.low_space_percent, &mut self.low_space_warned.lock(), crate::db::now());
+        for v in due {
+            self.events.emit("storage:low-space", serde_json::json!({ "root": v.root, "label": v.label, "free": v.free, "total": v.total }));
+        }
+    }
+
+    /// Where zips of folders sent to phones are made.
+    pub fn outbox_dir(&self) -> PathBuf {
+        self.paths.cache.join(crate::remote::transfer::OUTBOX_DIR)
+    }
+
+    /// Delete zips no offer refers to any more.
+    fn clean_outbox(&self) {
+        let used: std::collections::HashSet<PathBuf> = self.remote.inbox.all().into_iter().map(|i| i.path).collect();
+        let Ok(rd) = std::fs::read_dir(self.outbox_dir()) else { return };
+        for e in rd.flatten() {
+            if !used.contains(&e.path()) {
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
     }
 
     pub fn screenshot_dir(&self) -> PathBuf {
@@ -132,6 +316,12 @@ impl AppCore {
         ExportOptions { sidecar_json: n.sidecar_json, index_file: n.index_file }
     }
 
+    /// Audio capture on or off, and how the analysis reacts.
+    fn apply_visuals(&self, v: &crate::settings::VisualSettings) {
+        self.visual.set_enabled(v.enabled && v.audio_reactive);
+        self.visual.set_tuning(crate::media::visual::analyzer::Tuning { sensitivity: v.sensitivity, bass: v.bass, smoothing: v.smoothing });
+    }
+
     /// Apply a settings patch and react to what changed.
     pub fn update_settings(self: &Arc<Self>, patch: &serde_json::Value) -> anyhow::Result<Settings> {
         let before = self.settings.get();
@@ -142,8 +332,39 @@ impl AppCore {
         if before.notes.claude_folder != after.notes.claude_folder {
             self.notes.watch_folder(after.notes.claude_folder.as_deref().map(std::path::Path::new));
         }
+        if (before.screen.airplay != after.screen.airplay || before.screen.uxplay_path != after.screen.uxplay_path) && self.airplay.is_running() {
+            let sc = &after.screen;
+            if let Err(e) = self.airplay.start(sc.uxplay_path.as_deref(), &sc.airplay, sc.airplay_keep_on_top, sc.airplay_pip) {
+                tracing::warn!("could not restart the AirPlay receiver: {e}");
+            }
+        }
+        if (before.media.eq_enabled, before.media.bass_db, before.media.treble_db) != (after.media.eq_enabled, after.media.bass_db, after.media.treble_db) {
+            let m = after.media.clone();
+            std::thread::spawn(move || {
+                if let Err(e) = crate::media::eq::apply(m.bass_db, m.treble_db, m.eq_enabled) {
+                    tracing::warn!("equaliser: {e}");
+                }
+            });
+        }
+        if before.media.hires_art != after.media.hires_art {
+            self.media.set_hires_art(after.media.hires_art);
+        }
+        if before.media.lrc_folder != after.media.lrc_folder {
+            self.media.set_lrc_folder(after.media.lrc_folder.as_ref().map(std::path::PathBuf::from));
+        }
+        if before.visuals != after.visuals {
+            self.apply_visuals(&after.visuals);
+        }
+        if before.vault.browser_autofill != after.vault.browser_autofill {
+            self.enable_browser_autofill(after.vault.browser_autofill);
+        }
         let r0 = &before.remote;
         let r1 = &after.remote;
+        if r0.send_to_menu != r1.send_to_menu {
+            if let Err(e) = crate::system::shell::set_send_to_shortcut(r1.send_to_menu) {
+                tracing::warn!("could not update the Send to shortcut: {e}");
+            }
+        }
         let needs_restart = r0.port != r1.port || r0.bind != r1.bind || r0.tls != r1.tls || r0.enabled != r1.enabled;
         if needs_restart {
             self.remote.stop();
@@ -153,5 +374,46 @@ impl AppCore {
         }
         self.events.emit("settings:changed", &after);
         Ok(after)
+    }
+}
+
+/// Fixed drives below `percent` free that were not warned about in the last
+/// day; drives that recovered are forgotten, so they warn again next time.
+pub fn low_space_due(vols: &[crate::storage::volumes::VolumeInfo], percent: u8, warned: &mut std::collections::HashMap<String, i64>, now: i64) -> Vec<crate::storage::volumes::VolumeInfo> {
+    let mut due = Vec::new();
+    for v in vols.iter().filter(|v| v.kind == crate::storage::volumes::DriveKind::Fixed && v.total > 0) {
+        let low = (v.free as u128) * 100 < (v.total as u128) * percent as u128;
+        if !low {
+            warned.remove(&v.root);
+            continue;
+        }
+        if warned.get(&v.root).is_none_or(|t| now - t >= 24 * 3600) {
+            warned.insert(v.root.clone(), now);
+            due.push(v.clone());
+        }
+    }
+    due
+}
+
+#[cfg(test)]
+mod low_space_tests {
+    use super::*;
+    use crate::storage::volumes::{DriveKind, VolumeInfo};
+
+    fn vol(root: &str, free: u64, kind: DriveKind) -> VolumeInfo {
+        VolumeInfo { root: root.into(), label: String::new(), file_system: "NTFS".into(), kind, total: 1000, free, cluster_size: 4096, serial: None, mft_capable: false }
+    }
+
+    #[test]
+    fn warns_once_a_day_and_again_after_recovering() {
+        let mut warned = std::collections::HashMap::new();
+        let vols = vec![vol("C:\\", 50, DriveKind::Fixed), vol("D:\\", 500, DriveKind::Fixed), vol("E:\\", 10, DriveKind::Removable)];
+        let due = low_space_due(&vols, 10, &mut warned, 1000);
+        assert_eq!(due.iter().map(|v| v.root.as_str()).collect::<Vec<_>>(), ["C:\\"]);
+        assert!(low_space_due(&vols, 10, &mut warned, 1000 + 3600).is_empty());
+        assert_eq!(low_space_due(&vols, 10, &mut warned, 1000 + 25 * 3600).len(), 1);
+        // Freed up, then low again: warns at once.
+        low_space_due(&[vol("C:\\", 400, DriveKind::Fixed)], 10, &mut warned, 1000 + 26 * 3600);
+        assert_eq!(low_space_due(&vols, 10, &mut warned, 1000 + 26 * 3600 + 60).len(), 1);
     }
 }

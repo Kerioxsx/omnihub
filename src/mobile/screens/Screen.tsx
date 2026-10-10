@@ -6,6 +6,7 @@
 // flight, so slow links drop frames instead of piling up delay.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   MonitorPlay,
@@ -37,7 +38,7 @@ import {
 } from 'lucide-react';
 import type { MonitorInfo, Preset } from '@shared/types';
 import { client, openScreen, parseFrame, type FrameHeader, type ScreenStats, type ViewerMessage } from '../client';
-import { useApp } from '../state';
+import { toast, useApp } from '../state';
 import { Button, Empty, ErrorState, PageHeader, Skeleton } from '../ui/common';
 import { Sheet } from '../ui/Sheet';
 import { useBackHandler } from '../lib/back';
@@ -169,19 +170,23 @@ export function ScreenScreen({ active }: { active: boolean }) {
           </>
         )}
       </div>
-      <AnimatePresence>
-        {viewing && si && (
-          <Viewer
-            key="viewer"
-            monitor={si.monitors.find((m) => m.index === monitor) ?? si.monitors[0]}
-            presets={si.presets}
-            preset={preset}
-            onPreset={choosePreset}
-            allowControl={control}
-            onExit={() => setViewing(false)}
-          />
-        )}
-      </AnimatePresence>
+      {/* On top of the whole app (tab bar included), not inside this tab's layer. */}
+      {createPortal(
+        <AnimatePresence>
+          {viewing && si && (
+            <Viewer
+              key="viewer"
+              monitor={si.monitors.find((m) => m.index === monitor) ?? si.monitors[0]}
+              presets={si.presets}
+              preset={preset}
+              onPreset={choosePreset}
+              allowControl={control}
+              onExit={() => setViewing(false)}
+            />
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }
@@ -263,6 +268,10 @@ async function decodeJpeg(jpeg: Uint8Array): Promise<CanvasImageSource & { close
   }
 }
 
+/** iPhone Safari has no Fullscreen API for pages; a Home Screen app has no browser bars. */
+const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
+let fsTipShown = false;
+
 const fsEnabled = () => !!(document.fullscreenEnabled || (document as unknown as { webkitFullscreenEnabled?: boolean }).webkitFullscreenEnabled);
 const fsElement = () => document.fullscreenElement ?? (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement ?? null;
 
@@ -300,6 +309,7 @@ function Viewer({
   const [frame, setFrame] = useState<{ w: number; h: number } | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [hud, setHud] = useState(true);
+  const [showStats, setShowStats] = useState(false);
   const [mode, setModeState] = useState<Mode>(() => {
     try {
       const m = localStorage.getItem(MODE_KEY) as Mode | null;
@@ -756,6 +766,16 @@ function Viewer({
   // ----- HUD values -----
   const latency = stats ? Math.round(stats.rtt / 2 + stats.encodeMs + decodeMs.current) : null;
   const toggleFs = async () => {
+    if (!fsEnabled()) {
+      // No Fullscreen API (iPhone): hide every control so the picture has the whole screen.
+      setHud(false);
+      setShowStats(false);
+      if (!isStandalone() && !fsTipShown) {
+        fsTipShown = true;
+        toast.info('Full screen on iPhone', 'Turn the phone sideways for the biggest picture. To hide Safari’s bars too: Share → Add to Home Screen, then open OmniHub from there. Tap the eye to bring the controls back.');
+      }
+      return;
+    }
     try {
       if (fsElement()) await document.exitFullscreen?.();
       else {
@@ -836,6 +856,13 @@ function Viewer({
         </AnimatePresence>
       </div>
 
+      {/* The PC paused sharing: cover the last frame. */}
+      {conn === 'live' && stats?.paused && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black px-8 text-center">
+          <div className="text-[17px] font-semibold text-white">Sharing paused on the PC</div>
+          <div className="text-[13px] text-white/60">The picture comes back when it is resumed. Control is off meanwhile.</div>
+        </div>
+      )}
       {/* Connection overlays */}
       {conn !== 'live' && (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center p-6">
@@ -871,33 +898,34 @@ function Viewer({
               <HudButton label="Exit viewer" onClick={onExit}>
                 <X size={20} />
               </HudButton>
-              <div className="hud-glass flex min-w-0 flex-1 items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-semibold">
+              <button type="button" onClick={() => setShowStats((v) => !v)} aria-pressed={showStats} aria-label={showStats ? 'Hide stream stats' : 'Show stream stats'} className="hud-glass flex min-w-0 flex-1 items-center gap-2 rounded-full px-3.5 py-2 text-left text-[13px] font-semibold">
                 <span className={cx('h-2 w-2 shrink-0 rounded-full', conn === 'live' ? 'dot-live bg-emerald-400' : conn === 'connecting' || conn === 'paused' ? 'bg-amber-400' : 'bg-rose-400')} />
                 <span className="truncate">
                   {conn === 'live' ? 'Live' : conn === 'connecting' ? 'Connecting' : conn === 'paused' ? 'Paused' : 'Offline'} · {monitor.name}
                 </span>
-              </div>
-              {fsEnabled() && (
-                <HudButton label={isFs ? 'Exit full screen' : 'Full screen'} onClick={toggleFs}>
-                  {isFs ? <Minimize size={18} /> : <Maximize size={18} />}
-                </HudButton>
-              )}
+                {stats && conn === 'live' && <span className="ml-auto shrink-0 font-mono text-[11.5px] font-medium text-white/60">{stats.fps} fps</span>}
+              </button>
+              <HudButton label={isFs ? 'Exit full screen' : 'Full screen'} onClick={toggleFs}>
+                {isFs ? <Minimize size={18} /> : <Maximize size={18} />}
+              </HudButton>
               <HudButton label="Hide controls" onClick={() => setHud(false)}>
                 <EyeOff size={18} />
               </HudButton>
             </div>
 
-            <div className="pointer-events-auto hud-glass absolute left-[max(12px,var(--safe-left))] top-[calc(var(--safe-top)+64px)] rounded-2xl px-3.5 py-2.5" data-testid="hud-stats">
-              <div className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5 font-mono text-[11.5px] leading-[1.55]">
-                <Stat k="fps" v={stats ? `${stats.fps}` : '—'} />
-                <Stat k="rtt" v={stats ? `${stats.rtt} ms` : '—'} />
-                <Stat k="latency" v={latency != null ? `≈${latency} ms` : '—'} hl />
-                <Stat k="rate" v={stats ? (stats.kbps >= 1000 ? `${(stats.kbps / 1000).toFixed(1)} Mbps` : `${stats.kbps} kbps`) : '—'} />
-                <Stat k="quality" v={stats ? `${stats.quality}` : '—'} />
-                <Stat k="size" v={frame ? `${frame.w}×${frame.h}` : '—'} />
-                <Stat k="decode" v={decodeMs.current ? `${decodeMs.current.toFixed(1)} ms` : '—'} />
+            {showStats && (
+              <div className="pointer-events-auto hud-glass absolute left-[max(12px,var(--safe-left))] top-[calc(var(--safe-top)+64px)] rounded-2xl px-3.5 py-2.5" data-testid="hud-stats">
+                <div className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5 font-mono text-[11.5px] leading-[1.55]">
+                  <Stat k="fps" v={stats ? `${stats.fps}` : '—'} />
+                  <Stat k="rtt" v={stats ? `${stats.rtt} ms` : '—'} />
+                  <Stat k="latency" v={latency != null ? `≈${latency} ms` : '—'} hl />
+                  <Stat k="rate" v={stats ? (stats.kbps >= 1000 ? `${(stats.kbps / 1000).toFixed(1)} Mbps` : `${stats.kbps} kbps`) : '—'} />
+                  <Stat k="quality" v={stats ? `${stats.quality}` : '—'} />
+                  <Stat k="size" v={frame ? `${frame.w}×${frame.h}` : '—'} />
+                  <Stat k="decode" v={decodeMs.current ? `${decodeMs.current.toFixed(1)} ms` : '—'} />
+                </div>
               </div>
-            </div>
+            )}
 
             {portraitForLandscape && rotateHint && !isFs && !kbOpen && (
               <div className="pointer-events-auto absolute inset-x-0 bottom-[calc(var(--safe-bottom)+112px)] flex justify-center px-4">

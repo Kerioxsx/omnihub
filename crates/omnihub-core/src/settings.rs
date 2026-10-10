@@ -22,6 +22,496 @@ pub struct Settings {
     pub remote: RemoteSettings,
     pub screenshots: ScreenshotSettings,
     pub screen: ScreenShareSettings,
+    pub apps: AppsSettings,
+    pub media: MediaSettings,
+    pub updates: UpdateSettings,
+    pub visuals: VisualSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct UpdateSettings {
+    /// Look for a new version at start and every few hours.
+    pub check: bool,
+    /// Install it without asking (when nothing important is going on).
+    pub auto_install: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        UpdateSettings { check: true, auto_install: true }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MediaSettings {
+    /// Paired phones may see what is playing and control it.
+    pub allow_phone: bool,
+    /// Look lyrics up online (LRCLIB).
+    pub lyrics_online: bool,
+    /// Bass and treble through Equalizer APO.
+    pub eq_enabled: bool,
+    pub bass_db: f32,
+    pub treble_db: f32,
+    /// A folder of your own .lrc files, checked before looking online.
+    pub lrc_folder: Option<String>,
+    /// Sharper covers from the iTunes catalogue (the player's are small).
+    pub hires_art: bool,
+}
+
+impl Default for MediaSettings {
+    fn default() -> Self {
+        MediaSettings { allow_phone: true, lyrics_online: true, eq_enabled: false, bass_db: 0.0, treble_db: 0.0, lrc_folder: None, hires_art: true }
+    }
+}
+
+/// How the music player shows a song.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum PlayerView {
+    /// Light around the screen, a music-reactive scene and floating lyrics.
+    #[default]
+    Aurora,
+    /// The cover and controls with scrolling lyrics (Apple Music style).
+    Lyrics,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum ColorMode {
+    /// From the cover art (the saved colours when there is none).
+    #[default]
+    Album,
+    /// Two colours.
+    Duo,
+    /// Several colours.
+    Multi,
+    /// One colour.
+    Single,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ColorSettings {
+    pub mode: ColorMode,
+    pub primary: String,
+    pub secondary: String,
+    /// For the multi-colour gradient.
+    pub colors: Vec<String>,
+    /// 0–1.5: saturation of everything drawn.
+    pub vividness: f32,
+}
+
+impl Default for ColorSettings {
+    fn default() -> Self {
+        ColorSettings { mode: ColorMode::Album, primary: "#a855f7".into(), secondary: "#ec4899".into(), colors: ["#8b5cf6", "#ec4899", "#3b82f6", "#22d3ee"].map(String::from).to_vec(), vividness: 1.0 }
+    }
+}
+
+/// How the light around the screen moves.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum GlowAnimation {
+    /// With the music (bass, beats, highs).
+    #[default]
+    Music,
+    /// Colours drift slowly, whatever plays.
+    Idle,
+    /// Still.
+    None,
+}
+
+/// The light around the screen: a crisp edge, an inner highlight, a glow
+/// and a wide bloom, each with its own strength and size.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GlowSettings {
+    pub enabled: bool,
+    pub animation: GlowAnimation,
+    /// Edge width, pixels.
+    pub thickness: f32,
+    /// 0–1.5 overall.
+    pub intensity: f32,
+    pub edge: f32,
+    pub highlight: f32,
+    pub glow: f32,
+    /// Glow reach, pixels.
+    pub glow_size: f32,
+    pub bloom: f32,
+    pub bloom_size: f32,
+    /// Corner rounding, pixels.
+    pub radius: f32,
+}
+
+impl Default for GlowSettings {
+    fn default() -> Self {
+        GlowSettings { enabled: true, animation: GlowAnimation::Music, thickness: 2.5, intensity: 1.0, edge: 1.0, highlight: 0.6, glow: 0.85, glow_size: 12.0, bloom: 0.3, bloom_size: 48.0, radius: 12.0 }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum LyricTiming {
+    /// Word by word when the lyrics time each word, else line by line.
+    #[default]
+    Auto,
+    Line,
+}
+
+/// Stack: what is being sung, huge, one word at a time when the lyrics time
+/// words (else one line), the previous above and the next below, small.
+/// Lines: the current line with the next lines under it.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum LyricLayout {
+    #[default]
+    Stack,
+    Lines,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum LyricEmphasis {
+    /// White with a glow in the accent colour.
+    #[default]
+    Glow,
+    /// White on a box of the accent colour.
+    Box,
+    /// In the accent colour.
+    Color,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum LyricPlace {
+    /// Where the picture behind is calmest (the middle for a music video).
+    #[default]
+    Auto,
+    Center,
+    Upper,
+    Lower,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AuroraLyricsSettings {
+    pub layout: LyricLayout,
+    /// How the word (or line) being sung stands out.
+    pub emphasis: LyricEmphasis,
+    /// "display", "condensed", "heavy", "serif" or "impact".
+    pub font: String,
+    pub visible: bool,
+    /// Show by themselves when a song has lyrics.
+    pub auto_show: bool,
+    /// Text size, × the default.
+    pub size: f32,
+    pub weight: u16,
+    /// Light up the word being sung.
+    pub word_highlight: bool,
+    /// Lyrics that only time lines (most): spread the words over the line by
+    /// their syllables, so the highlight moves word by word (close, not exact).
+    pub estimate_words: bool,
+    pub timing: LyricTiming,
+    pub place: LyricPlace,
+    /// Moved by hand, percent of the width/height.
+    pub offset_x: f32,
+    pub offset_y: f32,
+    /// Lines shown: the current one and those after it.
+    pub lines: u8,
+    /// 0–1: dark backing behind the text.
+    pub backing: f32,
+    /// None: from the palette.
+    pub highlight_color: Option<String>,
+    pub glow: f32,
+    /// × the default speed of line changes.
+    pub transition: f32,
+    /// 0–1.5: how much the lyrics move with the music (bounce, sway, pop).
+    pub motion: f32,
+    /// Emojis beside words they match ("saw 👁", "city 🏙").
+    pub emoji: EmojiAmount,
+    pub emoji_style: EmojiStyle,
+}
+
+impl Default for AuroraLyricsSettings {
+    fn default() -> Self {
+        AuroraLyricsSettings {
+            layout: LyricLayout::Stack,
+            emphasis: LyricEmphasis::Glow,
+            font: "display".into(),
+            visible: true,
+            auto_show: true,
+            size: 1.0,
+            weight: 800,
+            word_highlight: true,
+            estimate_words: true,
+            timing: LyricTiming::Auto,
+            place: LyricPlace::Auto,
+            offset_x: 0.0,
+            offset_y: 0.0,
+            lines: 3,
+            backing: 0.0,
+            highlight_color: None,
+            glow: 0.6,
+            transition: 1.0,
+            motion: 0.6,
+            emoji: EmojiAmount::Some,
+            emoji_style: EmojiStyle::ThreeD,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum EmojiAmount {
+    Off,
+    /// Now and then: a word that clearly means something you can picture.
+    #[default]
+    Some,
+    /// Most words that have one.
+    More,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum EmojiStyle {
+    /// Glossy 3D emojis that come with OmniHub, close to the iPhone's look
+    /// (Microsoft's Fluent Emoji, MIT licence).
+    #[default]
+    #[serde(rename = "3d")]
+    ThreeD,
+    /// Windows' own emoji font.
+    #[serde(rename = "system")]
+    System,
+}
+
+/// How the music video fills the screen.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum VideoFit {
+    /// Edge to edge, cropping what does not fit.
+    #[default]
+    Fill,
+    /// All of the picture, the cover filling the rest.
+    Fit,
+}
+
+/// The most the music video may stream at (YouTube picks within it).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum VideoQuality {
+    /// As sharp as the screen and the connection allow (4K when uploaded in 4K).
+    #[default]
+    #[serde(rename = "best")]
+    Best,
+    #[serde(rename = "1080")]
+    Hd1080,
+    #[serde(rename = "720")]
+    Hd720,
+}
+
+/// What fills the screen behind the lyrics.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum Backdrop {
+    /// The song's music video when it has one, else the cover, filling the screen.
+    #[default]
+    Auto,
+    /// The music video (the cover until one is found).
+    Video,
+    /// The cover, full screen, slowly moving.
+    Cover,
+    /// The light show built from the cover (styles and effects below).
+    Visual,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SceneStyle {
+    /// The cover art, big, glitching and pulsing with the music.
+    #[default]
+    Visual,
+    /// The cover art through a lens that swells with the bass.
+    Fisheye,
+    /// Both.
+    FisheyeVisual,
+    /// Mostly dark: the cover small and dim, slow light.
+    Minimal,
+    /// Flowing colour fields from the palette, no cover.
+    Ambient,
+}
+
+/// How strongly each effect plays on the cover, 0–1 (0 = off).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct EffectSettings {
+    /// Swells with the bass and beats.
+    pub zoom: f32,
+    /// Rows slipping and blocks jumping on beats.
+    pub glitch: f32,
+    /// Colour channels splitting apart.
+    pub split: f32,
+    pub fisheye: f32,
+    /// Rings rippling out from the middle.
+    pub ripple: f32,
+    pub kaleidoscope: f32,
+    /// Printed dots.
+    pub halftone: f32,
+    /// Blocks on beats.
+    pub pixelate: f32,
+    pub shake: f32,
+    /// A larger ghost of the cover behind it.
+    pub echo: f32,
+    pub scanlines: f32,
+    /// The cover recoloured in the palette.
+    pub duotone: f32,
+    /// A swirl from the middle.
+    pub twist: f32,
+    /// Bright parts glowing.
+    pub bloom: f32,
+}
+
+impl Default for EffectSettings {
+    fn default() -> Self {
+        EffectSettings { zoom: 0.5, glitch: 0.3, split: 0.35, fisheye: 0.0, ripple: 0.25, kaleidoscope: 0.0, halftone: 0.0, pixelate: 0.0, shake: 0.15, echo: 0.4, scanlines: 0.0, duotone: 0.0, twist: 0.15, bloom: 0.4 }
+    }
+}
+
+/// The music-reactive scene behind the lyrics.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SceneSettings {
+    pub enabled: bool,
+    pub style: SceneStyle,
+    pub intensity: f32,
+    pub speed: f32,
+    /// 0–1: softness of the light shapes.
+    pub blur: f32,
+    pub saturation: f32,
+    /// 0–1: how much of the scene shows over the dark background.
+    pub opacity: f32,
+    /// A blurred copy of the cover art underneath.
+    pub artwork: bool,
+    /// A ring that follows the spectrum.
+    pub waveform: bool,
+    pub effects: EffectSettings,
+    pub backdrop: Backdrop,
+    /// Look the song's music video up on YouTube (only the title and artist are sent).
+    pub music_videos: bool,
+    /// 0–1: how much the full-screen cover drifts and breathes with the beat.
+    pub cover_motion: f32,
+    /// 0–1: how much the cover or video is darkened behind the lyrics.
+    pub dim: f32,
+    /// 0–1: soft light in the song's colours from the corners of the screen.
+    pub corners: f32,
+    pub video_fit: VideoFit,
+    /// 0 (top) – 1 (bottom): which part of the video stays when it is cropped.
+    pub video_focus: f32,
+    pub video_quality: VideoQuality,
+}
+
+impl Default for SceneSettings {
+    fn default() -> Self {
+        SceneSettings {
+            enabled: true,
+            style: SceneStyle::Visual,
+            intensity: 0.8,
+            speed: 1.0,
+            blur: 0.1,
+            saturation: 1.1,
+            opacity: 0.9,
+            artwork: true,
+            waveform: false,
+            effects: EffectSettings::default(),
+            backdrop: Backdrop::Auto,
+            music_videos: true,
+            cover_motion: 0.5,
+            dim: 0.3,
+            corners: 0.5,
+            video_fit: VideoFit::Fill,
+            video_focus: 0.5,
+            video_quality: VideoQuality::Best,
+        }
+    }
+}
+
+/// The glow around a monitor, over every app (a click-through window).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DesktopGlowSettings {
+    pub enabled: bool,
+    /// Floating lyrics too.
+    pub lyrics: bool,
+    /// "primary", "all", or a monitor's name.
+    pub display: String,
+    /// Stay above the taskbar.
+    pub clear_taskbar: bool,
+    /// Step aside for full-screen apps and games (and boosted games).
+    pub hide_fullscreen: bool,
+    /// Turn the desktop glow on when OmniHub starts.
+    pub start_with_app: bool,
+}
+
+impl Default for DesktopGlowSettings {
+    fn default() -> Self {
+        DesktopGlowSettings { enabled: false, lyrics: false, display: "primary".into(), clear_taskbar: true, hide_fullscreen: true, start_with_app: false }
+    }
+}
+
+/// Aurora: the music-reactive light, scene and lyrics.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct VisualSettings {
+    pub view: PlayerView,
+    /// Everything Aurora draws (the lyrics stay).
+    pub enabled: bool,
+    /// Listen to what the PC plays so the light follows the music.
+    pub audio_reactive: bool,
+    /// 0.2–3.
+    pub sensitivity: f32,
+    /// 0–2.
+    pub bass: f32,
+    /// 0–1.
+    pub smoothing: f32,
+    pub reduced_motion: bool,
+    /// No bright pulses on beats.
+    pub no_flashes: bool,
+    /// × animation speed.
+    pub speed: f32,
+    /// Keep the screen on while the player shows Aurora and music plays.
+    pub keep_awake: bool,
+    pub color: ColorSettings,
+    pub glow: GlowSettings,
+    pub lyrics: AuroraLyricsSettings,
+    pub scene: SceneSettings,
+    pub desktop: DesktopGlowSettings,
+}
+
+impl Default for VisualSettings {
+    fn default() -> Self {
+        VisualSettings {
+            view: PlayerView::Aurora,
+            enabled: true,
+            audio_reactive: true,
+            sensitivity: 1.0,
+            bass: 1.0,
+            smoothing: 0.5,
+            reduced_motion: false,
+            no_flashes: false,
+            speed: 1.0,
+            keep_awake: true,
+            color: ColorSettings::default(),
+            glow: GlowSettings::default(),
+            lyrics: AuroraLyricsSettings::default(),
+            scene: SceneSettings::default(),
+            desktop: DesktopGlowSettings::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AppsSettings {
+    /// IDs of apps pinned as favourites.
+    pub favorites: Vec<String>,
 }
 
 
@@ -44,6 +534,10 @@ pub struct GeneralSettings {
     pub start_minimized: bool,
     pub close_to_tray: bool,
     pub onboarded: bool,
+    /// Name used in greetings; empty = the Windows account's first name.
+    pub display_name: String,
+    /// Interface size in percent (80–150).
+    pub ui_scale: u16,
 }
 
 impl Default for GeneralSettings {
@@ -56,6 +550,8 @@ impl Default for GeneralSettings {
             start_minimized: false,
             close_to_tray: true,
             onboarded: false,
+            display_name: String::new(),
+            ui_scale: 100,
         }
     }
 }
@@ -68,6 +564,16 @@ pub struct StorageSettings {
     pub cleanup: CleanupOptions,
     pub show_hidden: bool,
     pub size_metric: SizeMetric,
+    /// How the Explorer tab shows a folder.
+    pub explorer_view: ExplorerView,
+    /// Tile size of the grid view: "sm", "md" or "lg".
+    pub grid_size: String,
+    /// Show previews of images in the grid view.
+    pub grid_previews: bool,
+    /// Warn when a drive runs low on space.
+    pub low_space_alert: bool,
+    /// "Low" means less than this share of the drive free.
+    pub low_space_percent: u8,
 }
 
 impl Default for StorageSettings {
@@ -78,8 +584,29 @@ impl Default for StorageSettings {
             cleanup: CleanupOptions::default(),
             show_hidden: true,
             size_metric: SizeMetric::Size,
+            explorer_view: ExplorerView::Split,
+            grid_size: "md".into(),
+            grid_previews: true,
+            low_space_alert: true,
+            low_space_percent: 10,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum ExplorerView {
+    /// Treemap next to the details list.
+    #[default]
+    Split,
+    /// Details list across the whole width.
+    List,
+    /// Tiles with icons or image previews.
+    Grid,
+    /// The treemap alone.
+    Treemap,
+    /// Rings: each folder's share of its parent.
+    Sunburst,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -118,11 +645,15 @@ pub struct VaultSettings {
     /// Let paired phones list and reveal entries (needs HTTPS and the master password).
     pub allow_phone: bool,
     pub hello_enabled: bool,
+    /// Let the OmniHub browser extension (Brave, Chrome, Edge) fill logins.
+    pub browser_autofill: bool,
+    /// The extension offers to save logins typed on websites.
+    pub browser_offer_save: bool,
 }
 
 impl Default for VaultSettings {
     fn default() -> Self {
-        VaultSettings { auto_lock_minutes: 5, clipboard_clear_seconds: 20, lock_on_session_lock: true, allow_phone: false, hello_enabled: false }
+        VaultSettings { auto_lock_minutes: 5, clipboard_clear_seconds: 20, lock_on_session_lock: true, allow_phone: false, hello_enabled: false, browser_autofill: false, browser_offer_save: true }
     }
 }
 
@@ -169,6 +700,12 @@ pub struct RemoteSettings {
     /// Where files sent from phones land (default: Downloads\OmniHub).
     pub incoming_dir: Option<String>,
     pub device_name: String,
+    /// Paired phones may put text on this PC's clipboard.
+    pub allow_clipboard: bool,
+    /// Paired phones may see what's running and end tasks.
+    pub allow_tasks: bool,
+    /// "Send to → OmniHub (phone)" in Explorer's right-click menu.
+    pub send_to_menu: bool,
 }
 
 impl Default for RemoteSettings {
@@ -190,6 +727,9 @@ impl Default for RemoteSettings {
             allow_notes: true,
             incoming_dir: None,
             device_name: gethostname::gethostname().to_string_lossy().to_string(),
+            allow_clipboard: true,
+            allow_tasks: true,
+            send_to_menu: true,
         }
     }
 }
@@ -233,11 +773,31 @@ pub struct ScreenShareSettings {
     pub max_fps: u32,
     pub scrcpy_path: Option<String>,
     pub sunshine_path: Option<String>,
+    /// iPhone → PC mirroring (AirPlay receiver).
+    pub airplay: crate::capture::airplay::AirPlayOptions,
+    /// Keep the iPhone window above other windows.
+    pub airplay_keep_on_top: bool,
+    /// Put the iPhone window small in the bottom-right corner when it opens.
+    pub airplay_pip: bool,
+    /// Start the receiver whenever OmniHub starts.
+    pub airplay_auto_start: bool,
+    /// Use this uxplay instead of the add-on.
+    pub uxplay_path: Option<String>,
 }
 
 impl Default for ScreenShareSettings {
     fn default() -> Self {
-        ScreenShareSettings { preset: "balanced".into(), max_fps: 60, scrcpy_path: None, sunshine_path: None }
+        ScreenShareSettings {
+            preset: "balanced".into(),
+            max_fps: 60,
+            scrcpy_path: None,
+            sunshine_path: None,
+            airplay: crate::capture::airplay::AirPlayOptions { name: format!("{} (OmniHub)", gethostname::gethostname().to_string_lossy()), ..Default::default() },
+            airplay_keep_on_top: false,
+            airplay_pip: false,
+            airplay_auto_start: false,
+            uxplay_path: None,
+        }
     }
 }
 
@@ -331,5 +891,32 @@ mod tests {
         // Unknown/old files still load.
         std::fs::write(&path, br#"{"general":{"theme":"light","removedField":1}}"#).unwrap();
         assert_eq!(SettingsStore::load(&path).get().general.theme, Theme::Light);
+    }
+
+    #[test]
+    fn aurora_settings_persist_and_reset() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let store = SettingsStore::load(&path);
+        let d = Settings::default().visuals;
+        assert_eq!((d.view, d.scene.style, d.lyrics.layout, d.glow.animation), (PlayerView::Aurora, SceneStyle::Visual, LyricLayout::Stack, GlowAnimation::Music));
+        assert_eq!((d.scene.backdrop, d.scene.music_videos, d.lyrics.emoji, d.lyrics.emoji_style, d.lyrics.place), (Backdrop::Auto, true, EmojiAmount::Some, EmojiStyle::ThreeD, LyricPlace::Auto));
+        assert_eq!(serde_json::to_value(EmojiStyle::ThreeD).unwrap(), "3d");
+        assert_eq!(serde_json::to_value(VideoQuality::Hd1080).unwrap(), "1080");
+        let s = store
+            .update(&serde_json::json!({ "visuals": { "view": "lyrics", "sensitivity": 2.0, "color": { "mode": "duo", "primary": "#ff0000", "colors": ["#000000"] }, "glow": { "thickness": 6.0, "animation": "idle" }, "lyrics": { "font": "condensed", "emphasis": "box", "highlightColor": "#00ff00", "place": "lower", "emoji": "more", "emojiStyle": "system" }, "scene": { "style": "fisheyeVisual", "backdrop": "video", "musicVideos": false, "dim": 0.5 }, "desktop": { "enabled": true, "display": "all" } } }))
+            .unwrap();
+        // After a restart.
+        let again = SettingsStore::load(&path).get().visuals;
+        assert_eq!(again, s.visuals);
+        assert_eq!((again.view, again.color.mode, again.color.colors.len(), again.scene.style, again.lyrics.highlight_color.as_deref()), (PlayerView::Lyrics, ColorMode::Duo, 1, SceneStyle::FisheyeVisual, Some("#00ff00")));
+        assert!((again.sensitivity - 2.0).abs() < 1e-6 && again.desktop.enabled);
+        assert_eq!((again.scene.backdrop, again.scene.music_videos, again.lyrics.emoji, again.lyrics.emoji_style), (Backdrop::Video, false, EmojiAmount::More, EmojiStyle::System));
+        // "Reset to defaults" sends every default (null clears the highlight colour).
+        let mut reset = serde_json::to_value(Settings::default().visuals).unwrap();
+        reset["view"] = serde_json::json!("lyrics");
+        reset["lyrics"]["highlightColor"] = serde_json::Value::Null;
+        let back = store.update(&serde_json::json!({ "visuals": reset })).unwrap().visuals;
+        assert_eq!(back, VisualSettings { view: PlayerView::Lyrics, ..Default::default() });
     }
 }

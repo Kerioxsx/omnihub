@@ -1,6 +1,6 @@
 // Phone companion server, power actions and screen-sharing bridges.
 
-import type { AdbDevice, Device, InboxItem, MonitorInfo, PairingInfo, PendingPower, PowerAction, Preset, ScrcpyOptions, ScrcpyStatus, ServerStatus, SunshineStatus, ViewerInfo } from '@shared/types';
+import type { AdbDevice, AirPlayStatus, Device, FirewallReport, InboxItem, LanAddress, MonitorInfo, NetworkInfo, PairingInfo, PendingPower, PowerAction, Preset, RemoteDiagnostics, ScrcpyOptions, ScrcpyStatus, ServerStatus, SunshineStatus, ViewerInfo, Visit } from '@shared/types';
 import { emit } from './bus';
 import { audit, flags, onSettingsChange, settings } from './core';
 import { fakeQr } from './art';
@@ -32,18 +32,74 @@ export const presets: Preset[] = [
   { id: 'max', label: 'Maximum · up to 4K', maxWidth: 3840, quality: 85, fps: 60 },
 ];
 
+function addresses(): LanAddress[] {
+  const out: LanAddress[] = [
+    { interface: 'Wi-Fi', ip: '192.168.1.42', primary: true, virtualAdapter: false },
+    { interface: 'vEthernet (WSL)', ip: '172.24.208.1', primary: false, virtualAdapter: true },
+  ];
+  if (settings.remote.allowTailscale) out.splice(1, 0, { interface: 'Tailscale', ip: '100.101.7.12', primary: false, virtualAdapter: true });
+  return out;
+}
+
 function urls(): string[] {
   const r = settings.remote;
   const scheme = r.tls ? 'https' : 'http';
   if (r.bind === 'localhost') return [`${scheme}://localhost:${r.port}`];
-  const out = [`${scheme}://192.168.1.42:${r.port}`];
-  if (r.allowTailscale) out.push(`${scheme}://100.101.7.12:${r.port}`);
-  return out;
+  return addresses().map((a) => `${scheme}://${a.ip}:${r.port}`);
+}
+
+// The common first-run situation: Windows put the new Wi-Fi on "Public" and
+// the firewall has no rule for OmniHub, so phones time out.
+const network: NetworkInfo = { id: '{6B2C1E54-3A9D-4F1B-9C6E-2D8A7F0B4E31}', name: 'Home Wi-Fi', category: 'public' };
+let firewallAllowed: 0 | 2 | 6 = 0;
+const visitors: Visit[] = [];
+
+function firewallReport(): FirewallReport {
+  const profile = network.category === 'public' ? 4 : 2;
+  const allowed = (firewallAllowed & profile) !== 0;
+  const verdict = allowed ? 'allowed' : 'noRule';
+  const message = allowed
+    ? 'Windows Firewall lets phones reach OmniHub.'
+    : network.category === 'public'
+      ? 'This network is marked Public, and Windows Firewall has no rule allowing OmniHub on it.'
+      : 'Windows Firewall has no rule allowing OmniHub, so it blocks phones by default.';
+  const rules = firewallAllowed ? [{ name: 'OmniHub phone companion', allow: true, enabled: true, profiles: firewallAllowed | 1, protocol: 'Any', ports: '*' }] : [];
+  return { supported: true, program: 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\omnihub.exe', networks: [{ ...network }], activeProfiles: profile, verdict, rules, message };
+}
+
+function simulateVisit() {
+  if (!running) return;
+  const reachable = (firewallAllowed & (network.category === 'public' ? 4 : 2)) !== 0;
+  if (!reachable) return;
+  setTimeout(() => {
+    const v: Visit = { ip: '192.168.1.63', at: Math.floor(Date.now() / 1000), userAgent: devices[1].userAgent, allowed: true };
+    visitors.splice(0, visitors.length, v);
+    emit('remote:visit', v);
+    pushStatus();
+  }, 2500);
+}
+
+export function diagnostics(): RemoteDiagnostics {
+  return { running, port: settings.remote.port, tls: settings.remote.tls, addresses: addresses(), firewall: firewallReport(), visitors: visitors.map((v) => ({ ...v })), selfTest: running ? addresses().filter((a) => !a.virtualAdapter).map((a) => ({ ip: a.ip, ok: true, error: null })) : [] };
+}
+
+export function fixFirewall(includePublic: boolean): FirewallReport {
+  firewallAllowed = includePublic ? 6 : 2;
+  audit('desktop', 'firewall.allow', includePublic ? 'domain, private, public' : 'domain, private');
+  simulateVisit();
+  return firewallReport();
+}
+
+export function makeNetworkPrivate(id: string): void {
+  if (id !== network.id) throw new Error('That network is not connected.');
+  network.category = 'private';
+  audit('desktop', 'network.private', network.name);
+  simulateVisit();
 }
 
 export function status(): ServerStatus {
-  if (!running) return { running: false, port: 0, tls: false, bind: 'lan', urls: [], fingerprint: null, error: null, viewers: [], pairingOpen: false };
-  return { running: true, port: settings.remote.port, tls: settings.remote.tls, bind: settings.remote.bind, urls: urls(), fingerprint: settings.remote.tls ? FINGERPRINT : null, error: null, viewers: viewers.map((v) => ({ ...v })), pairingOpen };
+  if (!running) return { running: false, port: 0, tls: false, bind: 'lan', urls: [], fingerprint: null, error: null, viewers: [], pairingOpen: false, visitors: [] };
+  return { running: true, port: settings.remote.port, tls: settings.remote.tls, bind: settings.remote.bind, urls: urls(), fingerprint: settings.remote.tls ? FINGERPRINT : null, error: null, viewers: viewers.map((v) => ({ ...v })), pairingOpen, visitors: visitors.map((v) => ({ ...v })) };
 }
 
 const pushStatus = () => emit('remote:status', status());
@@ -67,7 +123,7 @@ function simulateUpload(name: string, size: number, device: string, delay: numbe
         done = Math.min(size, done + step * (0.7 + Math.random() * 0.6));
         if (done >= size) {
           clearInterval(t);
-          const path = `${settings.remote.incomingDir ?? 'C:\\Users\\Alex\\Downloads\\OmniHub'}\\${name}`;
+          const path = `${settings.remote.incomingDir ?? 'C:\\Users\\Player\\Downloads\\OmniHub'}\\${name}`;
           emit('transfer:done', { id, direction: 'upload', name, path, size, sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', device });
           audit(device, 'files.upload', `${name} → ${path}`);
         } else emit('transfer:progress', { id, direction: 'upload', name, done: Math.round(done), size, device });
@@ -170,7 +226,8 @@ export function pairBegin(): PairingInfo {
     pushStatus();
     audit(dev.name, 'pair', `Paired from ${dev.lastIp}`);
   }, 6500);
-  return { pin, secret, expiresAt: Math.floor(Date.now() / 1000) + 300, urls: list, qrSvg: fakeQr(list[0]), fingerprint: settings.remote.tls ? FINGERPRINT : null };
+  const qrs = list.map((u) => fakeQr(u));
+  return { pin, secret, expiresAt: Math.floor(Date.now() / 1000) + 300, urls: list, qrSvg: qrs[0], qrSvgs: qrs, addresses: settings.remote.bind === 'localhost' ? [] : addresses(), fingerprint: settings.remote.tls ? FINGERPRINT : null };
 }
 
 export function pairCancel(): void {
@@ -209,7 +266,17 @@ export function send(paths: string[], deviceId: string | null): InboxItem[] {
   if (!paths.length) return [];
   const target = deviceId ? findDevice(deviceId) : null;
   const items = paths.map((p, i) => {
-    const item: InboxItem = { id: `inbox-${Date.now().toString(36)}-${i}`, name: p.split('\\').pop() ?? p, size: Math.round((p.endsWith('.mp4') ? 640 : 2.4) * MB), created: Math.floor(Date.now() / 1000), deviceId };
+    const base = p.split('\\').pop() ?? p;
+    const isFolder = !/\.[a-z0-9]{1,5}$/i.test(base);
+    const item: InboxItem = {
+      id: `inbox-${Date.now().toString(36)}-${i}`,
+      name: isFolder ? `${base}.zip` : base,
+      size: Math.round((p.endsWith('.mp4') ? 640 : isFolder ? 86 : 2.4) * MB),
+      created: Math.floor(Date.now() / 1000),
+      deviceId,
+      kind: 'file',
+      folder: isFolder ? base : undefined,
+    };
     inbox.unshift(item);
     emit('inbox:new', { item, deviceId });
     if (running) simulateDownload(item, target?.name ?? 'Pixel 8 Pro', 900 + i * 400);
@@ -217,6 +284,22 @@ export function send(paths: string[], deviceId: string | null): InboxItem[] {
   });
   audit('desktop', 'files.send', `${items.length} file(s) offered to ${target?.name ?? 'all phones'}`);
   return items;
+}
+
+export function sendText(text: string, deviceId: string | null): InboxItem {
+  const t = text.trim();
+  if (!t) throw new Error('There is no text to send.');
+  const item: InboxItem = { id: `inbox-${Date.now().toString(36)}-t`, name: t.split('\n')[0].slice(0, 80), size: t.length, created: Math.floor(Date.now() / 1000), deviceId, kind: 'text', text: t };
+  inbox.unshift(item);
+  emit('inbox:new', { item, deviceId });
+  audit('desktop', 'text.offer', `${t.length} characters`);
+  return item;
+}
+
+export function inboxRemove(id: string): void {
+  const i = inbox.findIndex((x) => x.id === id);
+  if (i >= 0) inbox.splice(i, 1);
+  emit('inbox:removed', { id });
 }
 
 export function inboxList(): InboxItem[] {
@@ -280,7 +363,7 @@ const adbDevices: AdbDevice[] = [
 ];
 
 export function scrcpyStatus(): ScrcpyStatus {
-  const dir = 'C:\\Users\\Alex\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Genymobile.scrcpy_Microsoft.Winget.Source_8wekyb3d8bbwe\\scrcpy-win64-v3.1';
+  const dir = 'C:\\Users\\Player\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Genymobile.scrcpy_Microsoft.Winget.Source_8wekyb3d8bbwe\\scrcpy-win64-v3.1';
   return { found: true, path: `${dir}\\scrcpy.exe`, version: '3.1', adb: `${dir}\\adb.exe`, devices: adbDevices.map((d) => ({ ...d })), running: scrcpyRunning, installHint: 'winget install --id Genymobile.scrcpy' };
 }
 
@@ -318,4 +401,127 @@ export function scrcpyPair(addr: string, code: string): string {
 
 export function sunshineStatus(): SunshineStatus {
   return { installed: true, path: 'C:\\Program Files\\Sunshine\\sunshine.exe', running: false, webUi: 'https://localhost:47990' };
+}
+
+// ---------- iPhone mirroring (AirPlay) ----------
+
+const airplay: AirPlayStatus = {
+  supported: true,
+  installed: ['installed', 'running', 'outdated', 'hidden'].includes(query().get('airplay') ?? ''),
+  source: null,
+  path: null,
+  version: null,
+  running: false,
+  mirroring: false,
+  name: '',
+  pin: null,
+  client: null,
+  error: null,
+  log: [],
+  install: null,
+  downloadUrl: 'https://github.com/Kerioxsx/omnihub/releases/download/v0.2.3/OmniHub-AirPlay-addon-x64.zip',
+  outdated: query().get('airplay') === 'outdated',
+  address: null,
+  check: null,
+};
+function query() {
+  return typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+}
+function markInstalled() {
+  airplay.installed = true;
+  airplay.source = 'addon';
+  airplay.path = 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\addons\\airplay\\bin\\uxplay.exe';
+  airplay.version = 'UxPlay 1.74';
+}
+if (airplay.installed) markInstalled();
+let airplayFirewallOk = false;
+
+export function airplayStatus(): AirPlayStatus {
+  return structuredClone(airplay);
+}
+
+export function airplayInstall(): void {
+  const total = 69_668_591;
+  let done = 0;
+  airplay.install = { phase: 'download', done, total };
+  const t = setInterval(() => {
+    done = Math.min(total, done + total / 14);
+    airplay.install = { phase: done < total ? 'download' : 'unpack', done, total };
+    emit('airplay:install', airplay.install);
+    if (done >= total) {
+      clearInterval(t);
+      setTimeout(() => {
+        airplay.install = null;
+        markInstalled();
+        emit('airplay:install', { phase: 'done' });
+        emit('airplay:changed', {});
+        audit('desktop', 'airplay.install', airplay.downloadUrl);
+      }, 700);
+    }
+  }, 260);
+}
+
+export function airplayUninstall(): void {
+  airplayStop();
+  airplay.installed = false;
+  airplay.source = airplay.path = airplay.version = null;
+  emit('airplay:changed', {});
+}
+
+export function airplayStart(): string | null {
+  if (!airplay.installed) throw new Error('The AirPlay receiver is not installed.');
+  const o = settings.screen.airplay;
+  airplay.running = true;
+  airplay.name = o.name;
+  airplay.pin = o.requirePin ? String(1000 + Math.floor(Math.random() * 9000)) : null;
+  airplay.log = ['UxPlay 1.74: An Open-Source AirPlay mirroring and audio-streaming server.', 'using network ports UDP 7011 6001 6000 TCP 7100 7000 7001', 'Initialized server socket(s)'];
+  airplay.address = '192.168.1.24';
+  airplay.check = null;
+  emit('airplay:changed', {});
+  demoTimers.push(
+    setTimeout(() => {
+      if (!airplay.running) return;
+      const hidden = query().get('airplay') === 'hidden';
+      airplay.check = { ip: '192.168.1.24', announced: !hidden, rightAddress: !hidden };
+      emit('airplay:changed', {});
+    }, 1500),
+  );
+  if (!['idle', 'hidden'].includes(query().get('airplay') ?? '')) {
+    demoTimers.push(
+      setTimeout(() => {
+        if (!airplay.running) return;
+        airplay.client = { name: "My iPhone", model: 'iPhone16,2', deviceId: '5E:12:AB:CD:00:01' };
+        airplay.mirroring = true;
+        airplay.log.push("connection request from My iPhone (iPhone16,2) with deviceID = 5E:12:AB:CD:00:01");
+        emit('airplay:client', airplay.client);
+        emit('airplay:changed', { mirroring: true });
+      }, 3500),
+    );
+  }
+  return airplay.pin;
+}
+
+export function airplayStop(): void {
+  airplay.running = false;
+  airplay.mirroring = false;
+  airplay.client = null;
+  airplay.pin = null;
+  emit('airplay:changed', {});
+}
+
+export function airplayFirewall(): FirewallReport {
+  return {
+    supported: true,
+    program: airplay.path ?? '',
+    networks: [{ id: '{6B2C1E54-3A9D-4F1B-9C6E-2D8A7F0B4E31}', name: 'Home Wi-Fi', category: 'private' }],
+    activeProfiles: 2,
+    verdict: airplayFirewallOk ? 'allowed' : 'noRule',
+    rules: [],
+    message: airplayFirewallOk ? 'Windows Firewall lets phones reach the AirPlay receiver.' : 'Windows Firewall has no rule allowing the AirPlay receiver, so it blocks phones by default.',
+  };
+}
+
+export function airplayFixFirewall(): FirewallReport {
+  airplayFirewallOk = true;
+  return airplayFirewall();
 }

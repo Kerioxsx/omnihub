@@ -146,6 +146,10 @@ pub struct PairingInfo {
     pub expires_at: i64,
     pub urls: Vec<String>,
     pub qr_svg: String,
+    /// One QR code per address in `urls`, for PCs with several networks.
+    pub qr_svgs: Vec<String>,
+    /// The adapters behind `urls` (empty when only localhost is offered).
+    pub addresses: Vec<super::net::LanAddress>,
     pub fingerprint: Option<String>,
 }
 

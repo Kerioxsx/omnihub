@@ -1,11 +1,13 @@
 # OmniHub
 
 A Windows companion for your PC: see what fills your drives in seconds, keep
-notes and ideas for Claude, store passwords in a local encrypted vault, and
-use your phone to move files, shut the PC down or watch its screen.
+notes and ideas for Claude, store passwords in a local encrypted vault (with
+autofill in Brave, Chrome and Edge), boost the PC for games, see what every
+program uses, and use your phone to move files, control the music with
+synced lyrics, start a game or watch the PC's screen.
 
 **[Download the latest release](https://github.com/Kerioxsx/omnihub/releases/latest)**
-(Windows 10/11, 64-bit)
+(Windows 10/11, 64-bit) · **[Website and tour](https://kerioxsx.github.io/omnihub/)**
 
 Built from [`docs/PLAN.md`](docs/PLAN.md). Desktop app: Tauri 2 (Rust) +
 React. Phone: a web app served by the PC itself — nothing to install from a
@@ -17,9 +19,97 @@ store, no cloud.
 | **Apps** | Desktop programs, Store apps and Start menu entries with icons, size (from the latest scan), launch, uninstall, and the screenshots you took in each. |
 | **Screenshots** | Region (frozen-screen overlay), screen, window, all screens; global hotkeys; a searchable library with tags, notes and favourites. Files stay normal PNG/JPEG files in *Pictures\OmniHub Screenshots*. |
 | **Notes & ideas** | Markdown notes. "Ideas for Claude" are written as `.md` files (YAML front matter, optional JSON sidecar, an `INDEX.md`) into a folder you choose; the folder is watched so replies Claude writes there show up. |
-| **Vault** | Passwords, logins, Wi-Fi keys and secure notes, encrypted with Argon2id + AES-256-GCM and bound to your Windows account with DPAPI. Auto-lock, lock with Windows, Windows Hello unlock, clipboard that clears itself and stays out of clipboard history. |
-| **Phone** | Pair by QR code or PIN. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, launch apps, jot ideas, read the vault (opt-in, HTTPS only). |
-| **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, which OmniHub finds, configures and launches. |
+| **Vault** | Passwords, logins, Wi-Fi keys and secure notes, encrypted with Argon2id + AES-256-GCM and bound to your Windows account with DPAPI. Auto-lock, lock with Windows, Windows Hello unlock, clipboard that clears itself and stays out of clipboard history. Two-factor codes (TOTP), a password health report with an optional breach check, and **autofill in Brave, Chrome and Edge** through a small extension that talks only to the app on your PC. |
+| **Tasks** | CPU, memory, **GPU**, video memory and disk use of every program, live, like Task Manager — with End task, priority and file location. Also on the phone. |
+| **Games** | A boost profile per game (Fortnite, Roblox, VALORANT, CS2, Apex, Overwatch 2, Rocket League, League, GTA V, Call of Duty, Minecraft, Cyberpunk 2077 or any program), found on your PC from Epic, Steam, Riot, Roblox and Minecraft, in **Competitive**, **Quality** (never touches the game's graphics) or **Custom** mode: power plan, background junk closed, background apps at lower priority, a 0.5 ms timer, notifications, GPU choice, game priority, Wi-Fi low-latency mode and network priority — applied when you press Play and put back when the game closes. Max-FPS settings for seven games, an **FPS meter** (PresentMon: live FPS, 1% lows, stutters — also on the phone), **Optimize PC**, a ping helper with a lag-under-load test, and Roblox Fast Flag presets. |
+| **Music** | What the PC plays (Spotify, Apple Music, browsers…). **Aurora**: the song's official music video (up to 4K, in step) or its full-size cover behind short lyrics in the cover's colours with sparing 3D emojis, or a music-reactive light show, a neon edge light, and lyrics word by word — full screen, on the Music page, or as a glow around your monitor over every app. Or the Apple Music–style **Lyrics** view. On your phone: cover, play/pause/skip/seek, volume, bass and treble (with Equalizer APO), and time-synced lyrics. |
+| **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only). |
+| **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
+
+## New in 0.6.1
+
+- **Smoother lyrics in Aurora**: sung words now fade and leave on their own (at most three at a time) instead of collecting, invisible, for a whole line — less work for the graphics card and no words piling up on slower PCs.
+
+## New in 0.6.0
+
+- **Aurora goes cinema**: the song's **official music video** fills the screen behind the lyrics (muted, up to 4K, kept in step with the song); else the artist's **animated cover**; else the **whole cover at full size** (the 3000×3000 original from Apple's catalogue, sharp on any monitor) drifting slowly; else the light show.
+- **Short lyrics in the cover's colours**, with adaptive shadow and darkening so they stay readable on bright pictures, placed where the cover is calm.
+- **3D emojis** (Microsoft Fluent Emoji) beside words you can picture or feel — sparingly, never on every line.
+- **Corner light** in the cover's colours, and a *Background* section for all of it: what plays, music videos on/off, fill or whole picture, crop, video quality, cover motion, darkening, corner light, video timing.
+
+## New in 0.5.1
+
+- **Sharper covers**: the same cover at 1200×1200 from Apple's iTunes catalogue when it matches (players give Windows a small one), and crisp bicubic scaling for the rest.
+- **14 effects** for the cover, each with its own slider (beat zoom, glow, echo, ripples, twist, shake, glitch, colour split, pixelate, fisheye, kaleidoscope, halftone, scanlines, duotone), with Calm, Default, Wild and Shuffle presets; glitch is now subtle by default.
+- **Lyrics word by word for every song**: when the lyrics only time lines, the words are spread over each line by syllables (an estimate; can be turned off). Only the word being sung is highlighted.
+- **Lyrics that move** with the music — bounce on beats, sway, pop in — with a Movement slider.
+
+## New in 0.5.0
+
+- **Aurora**, a new music view (the Apple Music–style **Lyrics** view stays; switch at the top left or with V):
+  - the playing song's **cover art** as the visual, on black: it swells with the bass, glitches and splits on beats, with Visual, Fisheye, Fisheye Visual, Minimal and Ambient styles;
+  - a thin **neon edge light** (edge, inner highlight, glow and bloom) in the cover's colours, pulsing with the music;
+  - **lyrics, huge and floating**: one word at a time when the lyrics time words, else one line, with the next in a pill; instrumental breaks, songs without lyrics and instrumentals each handled;
+  - follows the music through **WASAPI loopback** (what Windows plays — never the microphone, nothing recorded or sent), with sensitivity, bass, smoothing, reduced motion and no-flash settings;
+  - a glass **settings panel** for every part, saved and with Reset to defaults;
+  - optional **glow around your screen** over every app (each monitor or one), click-through, stepping aside for full-screen games.
+- **Your own .lrc files** for lyrics (checked before LRCLIB, matched by tags or name and length).
+
+## New in 0.4.0
+
+- **Boost modes**: Competitive (most FPS, also the game's own graphics), Quality (nothing that changes the picture — 4K Ultra stays 4K Ultra) or Custom, per game.
+- **Max-FPS settings for VALORANT, Counter-Strike 2, Apex Legends, Overwatch 2 and Roblox**, next to Fortnite and Minecraft, with **Optimize all** in Optimize PC.
+- **Less delay while playing**: background junk closed (and sync apps reopened), browsers and launchers at lower priority, a 0.5 ms timer, no power throttling for the game.
+- **FPS meter** with live FPS, 1% lows and stutters, on the PC and the phone, and results to compare boosts.
+- **Lag under load** test with a grade and advice; a precise timer, no network throttling and no Sticky Keys pop-up in Optimize PC.
+
+## New in 0.3.0
+
+- **Fortnite at max FPS**: unlimited frame rate, Performance mode, lowest settings, VSync off and the FPS counter, written into Fortnite's own settings (yours kept to put back), before every launch.
+- **Optimize PC**: full monitor refresh rate, Ultimate Performance, no Game DVR, Game Mode, windowed-game optimizations, GPU scheduling, no mouse acceleration — checked, one click each, undoable.
+- **Finds your games** from Epic, Steam, Riot, Roblox and Minecraft, and a Minecraft optimizer.
+- **Full-screen lyrics** on the PC, Apple Music style, and a Music page.
+
+## New in 0.2.6
+
+- No more "Error writing to file … omnihub.exe" when installing: the installers close every running OmniHub first (also the browser extension's hidden helper, which now runs from a copy in the data folder), and OmniHub closes when Windows or an installer asks.
+
+## New in 0.2.5
+
+- The setup and automatic updates work when OmniHub is in Program Files: they ask for administrator approval instead of failing with "Error writing to file" (automatic updates wait for your click there).
+
+## New in 0.2.4
+
+- The AirPlay receiver uses the video and sound outputs it is tested with. It says how it ended if it closes, and offers a safe mode (software video).
+- Automatic updates wait until OmniHub is in the tray and say "Updated to …" afterwards.
+- After an unexpected close, the next start offers "Copy details" (OmniHub's log plus Windows' crash summaries), and a page error no longer blanks the window.
+
+## New in 0.2.3
+
+- iPhone → PC mirroring announces the PC's Wi-Fi address (it could pick a VPN or virtual adapter before) and checks that iPhones can find it.
+- Calls are only calling apps recording from the microphone right now — no more "in a call" for a game's voice chat or a call that already ended.
+- The phone's screen viewer covers the whole screen and has a working full-screen button on iPhone.
+
+## New in 0.2.2
+
+- **Volume & calls** on the phone: each app's volume and mute, the PC's volume, mute the microphone in every app, and Mute mic / Deafen for a call in Discord, WhatsApp, Nyxen, Teams or a browser.
+- **Open apps** on the phone: close any program (like clicking ×) or quit it.
+- **Music in landscape**, and play/pause, skip and volume in the full-screen lyrics.
+
+## New in 0.2.1
+
+- Phones on Wi-Fi could not reach the PC on Windows ("site can't be reached"): fixed, plus a self-test in Phone → Connection check.
+- **Updates install from inside the app** (Settings → About), automatically by default.
+- **Approve fast scans once** instead of a Windows prompt every time (Settings → Storage).
+
+## New in 0.2.0
+
+- **Games** page: boost profiles, Play/Boost from the PC or the phone, ping helper, Roblox Fast Flags.
+- **Tasks** page: per-program CPU, memory, GPU, video memory and disk; priority and End task; on the phone too.
+- **Music** on the phone: synced lyrics, cover art, controls, volume, bass/treble.
+- **Browser autofill** for the vault (Brave, Chrome, Edge), TOTP codes, password health.
+- **iPhone mirroring** to the PC over AirPlay; screen-share privacy (pause, one window).
+- PC → phone sending, storage view modes, storage growth report, startup apps, screenshot markup and text recognition, note reminders and templates, settings backup — and the greeting uses *your* name (from Windows, or Settings → General → Your name).
 
 ## Screenshots
 
@@ -30,12 +120,18 @@ The desktop app (shown with its built-in demo data) and the phone app (talking t
 | ![Storage: treemap and folder list](docs/screenshots/desktop-storage-explorer.jpg) | ![Home](docs/screenshots/desktop-home.jpg) |
 | ![Notes and the Claude folder](docs/screenshots/desktop-notes-sent-reply.jpg) | ![Vault with a primary-account warning](docs/screenshots/desktop-vault-unlocked.jpg) |
 | ![Pairing a phone](docs/screenshots/desktop-phone-pair.jpg) | ![Screen sharing options](docs/screenshots/desktop-screen-share.jpg) |
+| ![Tasks: CPU, memory, GPU and disk per program](docs/screenshots/desktop-tasks.jpg) | ![Games: a boost running for Fortnite](docs/screenshots/desktop-games.jpg) |
 
 <p>
 <img src="docs/screenshots/phone-home.png" width="195" alt="Phone: home">
 <img src="docs/screenshots/phone-files-grid.png" width="195" alt="Phone: photo folder">
 <img src="docs/screenshots/phone-screen-viewer.png" width="195" alt="Phone: screen viewer with live stats">
 <img src="docs/screenshots/phone-power-countdown.png" width="195" alt="Phone: shutdown countdown">
+</p>
+<p>
+<img src="docs/screenshots/phone-music.png" width="195" alt="Phone: music from the PC">
+<img src="docs/screenshots/phone-lyrics.png" width="195" alt="Phone: time-synced lyrics">
+<img src="docs/screenshots/phone-games.png" width="195" alt="Phone: start a game with its boost">
 </p>
 
 ## How fast is the storage scan?
@@ -55,7 +151,7 @@ system drive. See [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
 3. **Screen sharing** — both: a built-in stream that needs nothing installed, plus bridges to Sunshine/Moonlight (PC → phone, 4K60, hardware encode) and scrcpy (Android → PC). See [`docs/SCREEN_SHARE.md`](docs/SCREEN_SHARE.md).
 4. **Claude ideas folder** — Markdown with YAML front matter by default; JSON sidecars and `INDEX.md` are options.
 5. **Name** — OmniHub (working title kept).
-6. **Network** — LAN only in v1 (private addresses; Tailscale's range can be allowed in settings). No cloud relay.
+6. **Network** — LAN only (private addresses; Tailscale's range can be allowed in settings). No cloud relay. The few internet requests are listed in [`docs/SECURITY.md`](docs/SECURITY.md#internet).
 
 ## Security in one paragraph
 
@@ -115,7 +211,8 @@ More in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md); the code layout is in
 
 ```
 omnihub/
-├── crates/omnihub-core/   Rust: storage engine, vault, notes, apps, capture, phone server
+├── crates/omnihub-core/   Rust: storage, vault, notes, apps, capture, music, tasks, games, phone server
+├── browser-extension/     Brave/Chrome/Edge autofill extension (talks to the app over native messaging)
 ├── src-tauri/             Tauri shell: window, tray, hotkeys, region overlay, commands
 ├── src/desktop/           Desktop UI (React)
 ├── src/mobile/            Phone web app (React)

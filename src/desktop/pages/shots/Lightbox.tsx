@@ -1,7 +1,7 @@
 import { formatBytes, formatDateTime } from '@shared/format';
 import type { Screenshot } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Clipboard, ExternalLink, FolderSearch, Star, Tag, Trash, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clipboard, ExternalLink, FolderSearch, PenTool, ScanText, Smartphone, Star, Tag, Trash, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { type PointerEvent, type WheelEvent, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -12,7 +12,10 @@ import { cx } from '../../lib/cx';
 import { forgetThumb } from '../../lib/media';
 import { clamp } from '../../lib/util';
 import { confirm } from '../../state/dialogs';
+import { useSend } from '../../state/send';
+import { copyText } from '../../lib/util';
 import { toast } from '../../state/toasts';
+import { MarkupEditor } from './MarkupEditor';
 
 const images = new Map<string, string>();
 
@@ -98,9 +101,69 @@ function Viewer({ shot }: { shot: Screenshot }) {
   );
 }
 
-function Details({ shot, onChange, onDeleted }: { shot: Screenshot; onChange: (s: Screenshot) => void; onDeleted: () => void }) {
+/** "Copy text": the words Windows' OCR finds in the screenshot. */
+function TextDialog({ shot, open, onClose, onRead }: { shot: Screenshot; open: boolean; onClose: () => void; onRead: () => void }) {
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    setText(null);
+    setError(null);
+    api.shots.text(shot.id).then(
+      (t) => {
+        if (!alive) return;
+        setText(t);
+        onRead();
+      },
+      (e: unknown) => alive && setError(errorText(e)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [open, shot.id]);
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Text in this screenshot"
+      description="Read on this PC with the text recognition built into Windows."
+      icon={ScanText}
+      size="lg"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+          <Button variant="primary" icon={Clipboard} disabled={!text} onClick={() => text && void copyText(text).then(() => toast.success('Text copied'))}>
+            Copy all
+          </Button>
+        </>
+      }
+    >
+      <div className="pb-2">
+        {error ? (
+          <div className="rounded-xl border border-bad/30 bg-bad/8 px-4 py-3 text-[13px] text-bad">{error}</div>
+        ) : text == null ? (
+          <div className="flex items-center gap-2 py-8 text-[13px] text-dim">
+            <Spinner /> Reading the text…
+          </div>
+        ) : text.trim() ? (
+          <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={12} className="font-mono text-[13px]" aria-label="Recognised text" />
+        ) : (
+          <div className="py-6 text-[13px] text-faint">No text found in this screenshot.</div>
+        )}
+        {text?.trim() && <p className="mt-2 text-[12px] text-faint">You can now find this screenshot by searching for any of these words.</p>}
+      </div>
+    </Modal>
+  );
+}
+
+function Details({ shot, onChange, onDeleted, onCreated }: { shot: Screenshot; onChange: (s: Screenshot) => void; onDeleted: () => void; onCreated: (s: Screenshot) => void }) {
   const [note, setNote] = useState(shot.note);
   const [tagInput, setTagInput] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [reading, setReading] = useState(false);
   useEffect(() => setNote(shot.note), [shot.id, shot.note]);
 
   const patch = async (p: { tags?: string[]; note?: string; favorite?: boolean }) => {
@@ -183,8 +246,17 @@ function Details({ shot, onChange, onDeleted }: { shot: Screenshot; onChange: (s
         <div className="break-all rounded-xl border border-line bg-surface px-3 py-2 font-mono text-[11px] text-faint">{shot.path}</div>
       </div>
       <div className="grid grid-cols-2 gap-2 border-t border-line p-4">
+        <Button size="sm" variant="primary" icon={PenTool} onClick={() => setEditing(true)}>
+          Mark up
+        </Button>
+        <Button size="sm" icon={ScanText} onClick={() => setReading(true)}>
+          Copy text
+        </Button>
         <Button size="sm" icon={Clipboard} onClick={act('Could not copy', () => api.shots.copy(shot.id), 'Copied to the clipboard')}>
           Copy
+        </Button>
+        <Button size="sm" icon={Smartphone} onClick={() => useSend.getState().openFiles([shot.path])}>
+          Send to phone
         </Button>
         <Button size="sm" icon={FolderSearch} onClick={act('Could not open Explorer', () => api.app.revealPath(shot.path))}>
           Show in folder
@@ -196,11 +268,21 @@ function Details({ shot, onChange, onDeleted }: { shot: Screenshot; onChange: (s
           Delete
         </Button>
       </div>
+      <MarkupEditor
+        shot={shot}
+        open={editing}
+        onClose={() => setEditing(false)}
+        onSaved={(s) => {
+          setEditing(false);
+          onCreated(s);
+        }}
+      />
+      <TextDialog shot={shot} open={reading} onClose={() => setReading(false)} onRead={() => !shot.hasText && onChange({ ...shot, hasText: true })} />
     </aside>
   );
 }
 
-export function Lightbox({ shots, openId, onClose, onNavigate, onChange }: { shots: Screenshot[]; openId: string | null; onClose: () => void; onNavigate: (id: string) => void; onChange: (s: Screenshot) => void }) {
+export function Lightbox({ shots, openId, onClose, onNavigate, onChange, onCreated }: { shots: Screenshot[]; openId: string | null; onClose: () => void; onNavigate: (id: string) => void; onChange: (s: Screenshot) => void; onCreated?: (s: Screenshot) => void }) {
   const idx = openId ? shots.findIndex((s) => s.id === openId) : -1;
   const shot = idx >= 0 ? shots[idx] : null;
   const prev = idx > 0 ? shots[idx - 1] : null;
@@ -248,6 +330,7 @@ export function Lightbox({ shots, openId, onClose, onNavigate, onChange }: { sho
           <Details
             shot={shot}
             onChange={onChange}
+            onCreated={(s) => (onCreated ? onCreated(s) : onNavigate(s.id))}
             onDeleted={() => {
               if (next) onNavigate(next.id);
               else if (prev) onNavigate(prev.id);

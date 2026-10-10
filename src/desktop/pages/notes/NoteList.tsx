@@ -1,7 +1,7 @@
 import { formatRelative } from '@shared/format';
 import type { Note, NoteKind } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { Lightbulb, Pin, Send, StickyNote } from 'lucide-react';
+import { Bell, Lightbulb, Pin, Send, StickyNote } from 'lucide-react';
 import { Skeleton } from '../../components/ui/Card';
 import { SearchInput, Segmented } from '../../components/ui/Form';
 import { EmptyState } from '../../components/ui/States';
@@ -85,6 +85,7 @@ export function NoteList({
                   {color && <span className="absolute inset-y-2.5 left-0 w-[3px] rounded-r-full" style={{ background: color }} />}
                   <div className="flex items-center gap-1.5">
                     {n.pinned && <Pin size={12} className="shrink-0 text-accent" aria-label="Pinned" />}
+                    {n.remindAt != null && !n.reminded && <Bell size={12} className="shrink-0 text-warn" aria-label="Has a reminder" />}
                     <span className={cx('truncate text-[13.5px] font-medium', n.title ? 'text-fg' : 'text-faint')}>{n.title || 'Untitled'}</span>
                     {n.exportedAt && <Send size={11} className="ml-auto shrink-0 text-accent" aria-label="Sent to Claude" />}
                   </div>

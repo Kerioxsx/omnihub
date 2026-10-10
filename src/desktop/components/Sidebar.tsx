@@ -10,11 +10,13 @@ import { useSettings } from '../state/settings';
 import { jobFraction, useStorage } from '../state/storage';
 import { Logo } from './Logo';
 import { NAV, type NavItem } from './nav';
+import { UpdateCard } from './UpdateCard';
 import { Dot, Kbd } from './ui/Card';
 import { ProgressRing } from './ui/Progress';
 
 const GROUPS: { id: NavItem['group']; label: string | null }[] = [
   { id: 'workspace', label: null },
+  { id: 'performance', label: 'Performance' },
   { id: 'security', label: 'Security' },
   { id: 'devices', label: 'Devices' },
 ];
@@ -72,7 +74,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         type="button"
         onClick={() => navigate(n.id)}
         aria-current={active ? 'page' : undefined}
-        title={collapsed ? `${n.label} (${MOD_LABEL}+${index + 1})` : undefined}
+        title={collapsed ? (index < 9 ? `${n.label} (${MOD_LABEL}+${index + 1})` : n.label) : undefined}
         className={cx('group relative flex h-9 w-full items-center gap-3 rounded-[10px] px-2.5 text-[13.5px] font-medium transition-colors', active ? 'text-fg' : 'text-dim hover:bg-surface hover:text-fg', collapsed && 'justify-center px-0')}
       >
         {active && <motion.span layoutId="nav-active" transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="absolute inset-0 rounded-[10px] border border-line bg-surface-2 shadow-[inset_0_1px_0_var(--card-hi)]" />}
@@ -134,6 +136,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       </div>
 
       <div className="border-t border-line p-3">
+        <UpdateCard collapsed={collapsed} />
         {!collapsed && (
           <button type="button" onClick={() => navigate('phone')} className="mb-2 flex w-full items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-line-strong">
             <Dot tone={remote?.running ? (phones ? 'good' : 'accent') : 'neutral'} pulse={!!remote?.running && phones > 0} />

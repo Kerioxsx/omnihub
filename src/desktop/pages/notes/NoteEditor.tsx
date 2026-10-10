@@ -2,7 +2,7 @@ import { formatDateTime, formatRelative } from '@shared/format';
 import type { Note } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
-import { Bold, Check, CircleAlert, Code, Columns2, Eye, FolderOpen, Heading, Italic, Link, List, ListChecks, LoaderCircle, Palette, PenLine, Pin, PinOff, Send, Sparkles, Tag, Trash, X } from 'lucide-react';
+import { Bell, BellOff, Bold, Check, CircleAlert, Code, Columns2, Eye, FolderOpen, Heading, Italic, LayoutTemplate, Link, List, ListChecks, LoaderCircle, Palette, PenLine, Pin, PinOff, Send, Sparkles, Tag, Trash, X } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -44,6 +44,8 @@ export function NoteEditor({
   saveError,
   onDelete,
   onExported,
+  onUpdated,
+  onSaveTemplate,
 }: {
   note: Note;
   draft: Draft;
@@ -52,6 +54,9 @@ export function NoteEditor({
   saveError: string | null;
   onDelete: () => void;
   onExported: (n: Note) => void;
+  /** A change made on the server side (reminder). */
+  onUpdated?: (n: Note) => void;
+  onSaveTemplate?: () => void;
 }) {
   const [mode, setMode] = useStoredState<Mode>('omnihub.notes.mode', 'split');
   const [tagInput, setTagInput] = useState('');
@@ -145,8 +150,17 @@ export function NoteEditor({
             )}
           </AnimatePresence>
         </div>
+        <ReminderButton note={note} onUpdated={onUpdated ?? onExported} />
+        {onSaveTemplate && <IconButton icon={LayoutTemplate} label="Save as template" onClick={onSaveTemplate} />}
         <IconButton icon={Trash} label="Delete" variant="danger" onClick={onDelete} />
       </div>
+      {note.remindAt != null && (
+        <div className="-mt-1 flex items-center gap-1.5 px-5 pb-2 text-[12px]">
+          <span className={cx('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5', note.reminded ? 'border-line text-faint' : 'border-warn/40 bg-warn/10 text-warn')}>
+            <Bell size={12} /> {note.reminded ? 'Reminded' : 'Reminder'} {formatWhen(note.remindAt)}
+          </span>
+        </div>
+      )}
         <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-5 pb-3">
           {draft.tags.map((t) => (
             <span key={t} className="inline-flex h-6 items-center gap-0.5 rounded-full bg-surface-3 pl-2 pr-0.5 text-[11.5px] text-dim">
@@ -269,5 +283,78 @@ function SaveState({ state, error }: { state: 'idle' | 'pending' | 'saving' | 's
         </motion.span>
       ) : null}
     </AnimatePresence>
+  );
+}
+
+function formatWhen(t: number): string {
+  const d = new Date(t * 1000);
+  const today = new Date();
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === today.toDateString()) return `today ${time}`;
+  if (d.toDateString() === tomorrow.toDateString()) return `tomorrow ${time}`;
+  return d.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function toLocalInput(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** "Remind me": quick choices or a date and time; a Windows notification fires then. */
+function ReminderButton({ note, onUpdated }: { note: Note; onUpdated: (n: Note) => void }) {
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState('');
+  const set = async (at: Date | null) => {
+    setOpen(false);
+    try {
+      const n = await api.notes.remind(note.id, at ? Math.floor(at.getTime() / 1000) : null);
+      onUpdated(n);
+      toast.success(at ? `I'll remind you ${formatWhen(Math.floor(at.getTime() / 1000))}` : 'Reminder removed', at ? 'A Windows notification appears then, even with OmniHub in the tray.' : undefined);
+    } catch (e) {
+      toast.error('Could not set the reminder', errorText(e));
+    }
+  };
+  const now = new Date();
+  const at = (days: number, h: number, m = 0) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + days, h, m);
+  const evening = at(0, 18);
+  const nextMonday = at(((8 - now.getDay()) % 7 || 7), 9);
+  const choices: [string, Date][] = [
+    ['In 1 hour', new Date(now.getTime() + 3600_000)],
+    ...(evening > now ? ([['This evening (18:00)', evening]] as [string, Date][]) : []),
+    ['Tomorrow morning (9:00)', at(1, 9)],
+    ['Next Monday (9:00)', nextMonday],
+  ];
+  const pending = note.remindAt != null && !note.reminded;
+  return (
+    <div className="relative">
+      <IconButton icon={Bell} label={pending ? 'Change reminder' : 'Remind me'} active={open || pending} onClick={() => setOpen(!open)} className={pending ? 'text-warn' : undefined} />
+      <AnimatePresence>
+        {open && (
+          <motion.div initial={{ opacity: 0, y: -4, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} className="glass absolute right-0 top-10 z-20 w-[250px] rounded-xl border border-line-strong p-1.5 shadow-xl" role="menu">
+            {choices.map(([label, d]) => (
+              <button key={label} type="button" role="menuitem" onClick={() => void set(d)} className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-[13px] text-fg hover:bg-surface-2">
+                {label}
+                <span className="text-[11.5px] text-faint">{d.toLocaleDateString(undefined, { weekday: 'short' })}</span>
+              </button>
+            ))}
+            <div className="mt-1 border-t border-line px-1.5 pb-1 pt-2">
+              <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-faint">Pick a time</div>
+              <div className="flex gap-1.5">
+                <input type="datetime-local" value={custom || toLocalInput(new Date(now.getTime() + 2 * 3600_000))} min={toLocalInput(now)} onChange={(e) => setCustom(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 py-1 text-[12.5px] text-fg outline-none focus:border-accent" aria-label="Reminder date and time" />
+                <Button size="sm" variant="primary" onClick={() => void set(new Date(custom || toLocalInput(new Date(now.getTime() + 2 * 3600_000))))}>
+                  Set
+                </Button>
+              </div>
+            </div>
+            {note.remindAt != null && (
+              <button type="button" role="menuitem" onClick={() => void set(null)} className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-bad hover:bg-bad/10">
+                <BellOff size={14} /> Remove reminder
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

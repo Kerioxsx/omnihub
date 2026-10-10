@@ -41,7 +41,23 @@ pub struct ServerStatus {
     pub error: Option<String>,
     pub viewers: Vec<ViewerInfo>,
     pub pairing_open: bool,
+    /// Devices that reached the server recently (newest first), so the PC
+    /// can tell "the phone gets through" apart from "nothing arrives".
+    pub visitors: Vec<Visit>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Visit {
+    pub ip: String,
+    pub at: i64,
+    pub user_agent: String,
+    /// False when the address was refused (not a private network address).
+    pub allowed: bool,
+}
+
+/// How long a visit stays in the status.
+const VISIT_TTL_SECS: i64 = 15 * 60;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -88,6 +104,7 @@ pub struct RemoteServer {
     pub(crate) vault_limiter: RateLimiter,
     pub(crate) viewers: Mutex<HashMap<String, Viewer>>,
     pub(crate) vault_sessions: Mutex<HashMap<String, VaultSession>>,
+    visits: Mutex<Vec<Visit>>,
     events: EventBus,
 }
 
@@ -103,15 +120,16 @@ impl RemoteServer {
             rt,
             running: Mutex::new(None),
             last_error: Mutex::new(None),
-            devices: Devices::new(db),
+            devices: Devices::new(db.clone()),
             pairing: Pairing::default(),
             tickets: Tickets::default(),
-            inbox: Inbox::default(),
+            inbox: Inbox::with_db(db.clone()),
             uploads: Mutex::new(None),
             pair_limiter: RateLimiter::new(10, Duration::from_secs(60)),
             vault_limiter: RateLimiter::new(5, Duration::from_secs(60)),
             viewers: Mutex::new(HashMap::new()),
             vault_sessions: Mutex::new(HashMap::new()),
+            visits: Mutex::new(Vec::new()),
             events,
         }
     }
@@ -123,6 +141,36 @@ impl RemoteServer {
     pub(crate) fn uploads(&self, core: &AppCore) -> Arc<Uploads> {
         let mut g = self.uploads.lock();
         g.get_or_insert_with(|| Arc::new(Uploads::new(&core.incoming_dir(), self.events.clone()))).clone()
+    }
+
+    /// Remember that `ip` reached the server; announces new visitors.
+    pub(crate) fn record_visit(&self, ip: &str, user_agent: &str, allowed: bool) {
+        let now = crate::db::now();
+        let fresh = {
+            let mut v = self.visits.lock();
+            let prev = v.iter().position(|x| x.ip == ip);
+            let fresh = prev.is_none_or(|i| now - v[i].at > 30);
+            if let Some(i) = prev {
+                v.remove(i);
+            }
+            v.insert(0, Visit { ip: ip.to_string(), at: now, user_agent: user_agent.chars().take(200).collect(), allowed });
+            v.retain(|x| now - x.at < VISIT_TTL_SECS);
+            v.truncate(10);
+            fresh
+        };
+        if fresh {
+            self.events.emit("remote:visit", self.visits.lock().first().cloned());
+        }
+    }
+
+    pub fn visitors(&self) -> Vec<Visit> {
+        let now = crate::db::now();
+        self.visits.lock().iter().filter(|x| now - x.at < VISIT_TTL_SECS).cloned().collect()
+    }
+
+    /// A phone is sending files right now.
+    pub fn transfers_active(&self) -> bool {
+        self.uploads.lock().as_ref().is_some_and(|u| u.recently_active(Duration::from_secs(60)))
     }
 
     pub fn is_running(&self) -> bool {
@@ -137,20 +185,10 @@ impl RemoteServer {
             Bind::Lan => net::unspecified(),
             Bind::Localhost => net::localhost(),
         };
-        let addr = SocketAddr::new(ip, s.port);
         // Bind synchronously so "port in use" is reported to the caller. A
         // server stopped a moment ago may still hold the port while its
         // graceful shutdown finishes, so retry briefly.
-        let bind = || {
-            std::net::TcpListener::bind(addr).or_else(|e| {
-                // Dual-stack [::] may be unavailable; fall back to IPv4.
-                if s.bind == Bind::Lan && e.kind() != std::io::ErrorKind::AddrInUse {
-                    std::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], s.port)))
-                } else {
-                    Err(e)
-                }
-            })
-        };
+        let bind = || net::listen(ip, s.port);
         let mut attempt = bind();
         for _ in 0..30 {
             match &attempt {
@@ -239,9 +277,9 @@ impl RemoteServer {
                 if urls.is_empty() {
                     urls.push(format!("{scheme}://localhost:{}", r.port));
                 }
-                ServerStatus { running: true, port: r.port, tls: r.tls, bind: r.bind, urls, fingerprint: r.fingerprint.clone(), error: None, viewers, pairing_open: self.pairing.is_open() }
+                ServerStatus { running: true, port: r.port, tls: r.tls, bind: r.bind, urls, fingerprint: r.fingerprint.clone(), error: None, viewers, pairing_open: self.pairing.is_open(), visitors: self.visitors() }
             }
-            None => ServerStatus { running: false, port: 0, tls: false, bind: Bind::Lan, urls: vec![], fingerprint: None, error: self.last_error.lock().clone(), viewers, pairing_open: false },
+            None => ServerStatus { running: false, port: 0, tls: false, bind: Bind::Lan, urls: vec![], fingerprint: None, error: self.last_error.lock().clone(), viewers, pairing_open: false, visitors: vec![] },
         }
     }
 
@@ -253,23 +291,42 @@ impl RemoteServer {
         }
         let (secret, pin, expires) = self.pairing.open();
         let urls: Vec<String> = status.urls.iter().map(|u| format!("{u}/#pair={secret}")).collect();
-        let qr = urls.first().map(|u| net::qr_svg(u)).unwrap_or_default();
+        let qrs: Vec<String> = urls.iter().map(|u| net::qr_svg(u)).collect();
+        let qr = qrs.first().cloned().unwrap_or_default();
         let expires_at = crate::db::now() + expires.saturating_duration_since(Instant::now()).as_secs() as i64;
-        Ok(PairingInfo { pin, secret, expires_at, urls, qr_svg: qr, fingerprint: status.fingerprint })
+        let addresses = match status.bind {
+            Bind::Lan => net::lan_addresses(),
+            Bind::Localhost => vec![],
+        };
+        Ok(PairingInfo { pin, secret, expires_at, urls, qr_svg: qr, qr_svgs: qrs, addresses, fingerprint: status.fingerprint })
     }
 
     pub fn cancel_pairing(&self) {
         self.pairing.close();
     }
 
-    pub fn send_to_phone(&self, paths: &[String], device_id: Option<String>) -> anyhow::Result<Vec<InboxItem>> {
+    /// Offer files (and folders, zipped into `outbox`) to one phone or all.
+    pub fn send_to_phone(&self, paths: &[String], device_id: Option<String>, outbox: &std::path::Path) -> anyhow::Result<Vec<InboxItem>> {
         let mut out = Vec::new();
         for p in paths {
-            let item = self.inbox.offer(std::path::Path::new(p), device_id.clone())?;
+            let path = std::path::Path::new(p);
+            let item = if path.is_dir() { self.inbox.offer_folder(path, outbox, device_id.clone())? } else { self.inbox.offer(path, device_id.clone())? };
             self.events.emit("inbox:new", serde_json::json!({ "item": &item, "deviceId": &item.device_id }));
             out.push(item);
         }
         Ok(out)
+    }
+
+    /// Offer text or a link to one phone or all.
+    pub fn send_text(&self, text: &str, device_id: Option<String>) -> anyhow::Result<InboxItem> {
+        let item = self.inbox.offer_text(text, device_id)?;
+        self.events.emit("inbox:new", serde_json::json!({ "item": &item, "deviceId": &item.device_id }));
+        Ok(item)
+    }
+
+    pub fn unsend(&self, id: &str) {
+        self.inbox.remove(id);
+        self.events.emit("inbox:removed", serde_json::json!({ "id": id }));
     }
 
     pub fn stop_viewer(&self, id: &str) {

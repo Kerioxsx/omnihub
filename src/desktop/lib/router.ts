@@ -2,9 +2,9 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type RouteId = 'home' | 'storage' | 'apps' | 'screenshots' | 'notes' | 'vault' | 'phone' | 'screen' | 'settings' | 'overlay';
+export type RouteId = 'home' | 'storage' | 'apps' | 'screenshots' | 'notes' | 'music' | 'tasks' | 'games' | 'vault' | 'phone' | 'screen' | 'settings' | 'overlay' | 'ambient';
 
-export const PAGE_IDS: readonly RouteId[] = ['home', 'storage', 'apps', 'screenshots', 'notes', 'vault', 'phone', 'screen', 'settings'];
+export const PAGE_IDS: readonly RouteId[] = ['home', 'storage', 'apps', 'screenshots', 'notes', 'music', 'tasks', 'games', 'vault', 'phone', 'screen', 'settings'];
 
 export interface Route {
   id: RouteId;
@@ -15,7 +15,7 @@ function parse(hash: string): Route {
   const raw = hash.replace(/^#/, '').replace(/^\/+/, '');
   const [path, query = ''] = raw.split('?');
   const seg = (path.split('/')[0] || 'home').toLowerCase();
-  const id = (seg === 'overlay' || PAGE_IDS.includes(seg as RouteId) ? seg : 'home') as RouteId;
+  const id = (seg === 'overlay' || seg === 'ambient' || PAGE_IDS.includes(seg as RouteId) ? seg : 'home') as RouteId;
   return { id, params: new URLSearchParams(query) };
 }
 

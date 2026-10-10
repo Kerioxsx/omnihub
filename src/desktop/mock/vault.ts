@@ -1,13 +1,13 @@
+import { primaryProvider } from '@shared/accounts';
 // Password vault for the mock backend. No real crypto — the point is the
 // state machine (none → unlocked ⇄ locked), throttling and auto-lock.
 
-import type { Entry, EntryInput, EntrySummary, GeneratorOptions, Strength, VaultStatus } from '@shared/types';
+import type { BrowserClient, BrowserPairRequest, BrowserStatus, Entry, HealthItem, HealthReport, EntryInput, EntrySummary, GeneratorOptions, Strength, VaultStatus } from '@shared/types';
 import { emit } from './bus';
 import { audit, onSettingsChange, settings } from './core';
 import { DAY, NOW } from './rng';
 
 const DEMO_PASSWORD = 'correct horse battery';
-const PRIMARY = ['google.com', 'gmail.com', 'googlemail.com', 'accounts.google', 'microsoft.com', 'live.com', 'outlook.com', 'hotmail.com', 'msn.com', 'apple.com', 'icloud.com', 'me.com', 'appleid', 'yahoo.com', 'proton.me', 'protonmail.com'];
 
 let exists = false;
 let unlocked = false;
@@ -32,24 +32,24 @@ function seedEntries(): Entry[] {
     created: Math.floor(NOW - (ageDays + 30) * DAY),
     updated: Math.floor(NOW - ageDays * DAY),
     passwordChanged: Math.floor(NOW - ageDays * DAY),
+    totp: id === 'v-gmail' || id === 'v-github' ? 'JBSWY3DPEHPK3PXP' : '',
   });
   return [
-    e('v-gmail', 'email', 'Gmail (personal)', 'alex.morgan', 'alex.morgan@gmail.com', 'Tr0ub4dor&3-sunrise', 'https://accounts.google.com', 'Recovery phone ends in 42. 2-Step Verification is on.', ['personal'], true, 40),
-    e('v-github', 'login', 'GitHub', 'alexm-dev', 'alex.morgan@gmail.com', 'vX7#qL2!pN9@wR4$zK', 'https://github.com/login', 'Recovery codes are in the safe.', ['dev'], true, 12),
-    e('v-steam', 'login', 'Steam', 'alexplays', 'alex.morgan@gmail.com', 'steamPass2021!', 'https://store.steampowered.com/login', 'Steam Guard on phone.', ['games'], false, 220),
-    e('v-discord', 'login', 'Discord', 'alex#0420', 'alex.morgan@gmail.com', 'q8Kc-2vRm-Lz7X-pT4w', 'https://discord.com/login', '', ['social'], false, 60),
-    e('v-netflix', 'login', 'Netflix', '', 'alex.morgan@gmail.com', 'netflix123', 'https://www.netflix.com/login', 'Shared with the family profile.', ['streaming'], false, 410),
-    e('v-msa', 'email', 'Microsoft account', '', 'alex.morgan@outlook.com', 'Blue-Kettle-Orbit-73', 'https://login.live.com', 'Used for Windows sign-in and Xbox.', ['personal'], false, 95),
-    e('v-wifi', 'wifi', 'Home Wi-Fi (Morgan-5G)', 'Morgan-5G', '', 'lantern-cobalt-meadow-91', '', 'WPA3-Personal. Guest network: Morgan-Guest / see below.', ['home'], false, 300),
-    e('v-visa', 'card', 'Visa ending 4242', 'ALEX MORGAN', '', '7391', '', 'Number: 4242 4242 4242 4242\nExpires: 09/29\nCVC: 314', ['finance'], false, 150),
+    e('v-gmail', 'email', 'Gmail (personal)', 'demo.user', 'demo.user@gmail.com', 'Tr0ub4dor&3-sunrise', 'https://accounts.google.com', 'Recovery phone ends in 42. 2-Step Verification is on.', ['personal'], true, 40),
+    e('v-github', 'login', 'GitHub', 'demo-dev', 'demo.user@gmail.com', 'vX7#qL2!pN9@wR4$zK', 'https://github.com/login', 'Recovery codes are in the safe.', ['dev'], true, 12),
+    e('v-steam', 'login', 'Steam', 'demoplays', 'demo.user@gmail.com', 'steamPass2021!', 'https://store.steampowered.com/login', 'Steam Guard on phone.', ['games'], false, 220),
+    e('v-discord', 'login', 'Discord', 'demo#0420', 'demo.user@gmail.com', 'q8Kc-2vRm-Lz7X-pT4w', 'https://discord.com/login', '', ['social'], false, 60),
+    e('v-netflix', 'login', 'Netflix', '', 'demo.user@gmail.com', 'netflix123', 'https://www.netflix.com/login', 'Shared with the family profile.', ['streaming'], false, 410),
+    e('v-msa', 'email', 'Microsoft account', '', 'demo.user@outlook.com', 'Blue-Kettle-Orbit-73', 'https://login.live.com', 'Used for Windows sign-in and Xbox.', ['personal'], false, 95),
+    e('v-wifi', 'wifi', 'Home Wi-Fi (Home-5G)', 'Home-5G', '', 'lantern-cobalt-meadow-91', '', 'WPA3-Personal. Guest network: Home-Guest / see below.', ['home'], false, 300),
+    e('v-visa', 'card', 'Visa ending 4242', 'DEMO USER', '', '7391', '', 'Number: 4242 4242 4242 4242\nExpires: 09/29\nCVC: 314', ['finance'], false, 150),
     e('v-router', 'other', 'Router admin', 'admin', '', 'R0uter!Adm1n#2024', 'http://192.168.1.1', 'ASUS RT-AX86U, firmware 3.0.0.6', ['home'], false, 400),
-    e('v-ssh', 'note', 'Homelab SSH', 'alex', '', '', '', 'Host nas.local\n  User alex\n  Port 2222\n  IdentityFile ~/.ssh/id_ed25519', ['homelab'], false, 25),
+    e('v-ssh', 'note', 'Homelab SSH', 'demo', '', '', '', 'Host nas.local\n  User demo\n  Port 2222\n  IdentityFile ~/.ssh/id_ed25519', ['homelab'], false, 25),
   ];
 }
 
 function isPrimary(e: Pick<Entry, 'url' | 'username' | 'email'>): boolean {
-  const hay = `${e.url} ${e.username} ${e.email}`.toLowerCase();
-  return PRIMARY.some((d) => hay.includes(d));
+  return primaryProvider(e) !== null;
 }
 
 function summary(e: Entry): EntrySummary {
@@ -67,6 +67,7 @@ function summary(e: Entry): EntrySummary {
     hasNotes: e.notes.length > 0,
     primaryAccount: isPrimary(e),
     passwordScore: e.password ? strength(e.password).score : 0,
+    hasTotp: e.totp.length > 0,
   };
 }
 
@@ -169,13 +170,14 @@ export function save(input: EntryInput): EntrySummary {
     const pwChanged = input.password != null && input.password !== e.password;
     Object.assign(e, { kind: input.kind, title: input.title, username: input.username, email: input.email, url: input.url, tags: [...input.tags], favorite: input.favorite, updated: now });
     if (input.notes != null) e.notes = input.notes;
+    if (input.totp != null) e.totp = input.totp.trim();
     if (pwChanged) {
       e.password = input.password ?? '';
       e.passwordChanged = now;
     }
     return summary(e);
   }
-  const e: Entry = { id: `v-${Date.now().toString(36)}`, kind: input.kind, title: input.title, username: input.username, email: input.email, password: input.password ?? '', url: input.url, notes: input.notes ?? '', tags: [...input.tags], favorite: input.favorite, created: now, updated: now, passwordChanged: now };
+  const e: Entry = { id: `v-${Date.now().toString(36)}`, kind: input.kind, title: input.title, username: input.username, email: input.email, password: input.password ?? '', url: input.url, notes: input.notes ?? '', tags: [...input.tags], favorite: input.favorite, created: now, updated: now, passwordChanged: now, totp: input.totp?.trim() ?? '' };
   entries.push(e);
   return summary(e);
 }
@@ -187,7 +189,7 @@ export function remove(id: string): void {
 
 export function copy(id: string, field: string): void {
   const e = get(id);
-  const value = field === 'password' ? e.password : field === 'username' ? e.username : field === 'email' ? e.email : field === 'url' ? e.url : e.notes;
+  const value = field === 'password' ? e.password : field === 'username' ? e.username : field === 'email' ? e.email : field === 'url' ? e.url : field === 'totp' ? e.totp : e.notes;
   if (!value) throw new Error(`This entry has no ${field}.`);
   if (field === 'password') audit('desktop', 'vault.copy', `Copied the password of “${e.title}”`);
 }
@@ -274,4 +276,92 @@ export function strength(pw: string): Strength {
   if (/\b(19|20)\d{2}\b/.test(pw)) feedback.push('Years are easy to guess.');
   const score = (bits < 28 ? 0 : bits < 36 ? 1 : bits < 60 ? 2 : bits < 80 ? 3 : 4) as Strength['score'];
   return { score, bits: Math.round(bits), label: ['Very weak', 'Weak', 'Fair', 'Strong', 'Very strong'][score], feedback };
+}
+
+/** A stand-in 2FA code (not real TOTP) that changes every 30 seconds. */
+export function totp(id: string): { code: string; remaining: number } {
+  const e = get(id);
+  if (!e.totp) throw new Error('This entry has no 2FA secret.');
+  const t = Math.floor(Date.now() / 1000);
+  const step = Math.floor(t / 30);
+  let h = 2166136261;
+  for (const c of `${e.totp}:${step}`) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return { code: String(Math.abs(h) % 1_000_000).padStart(6, '0'), remaining: 30 - (t % 30) };
+}
+
+// ---------- browser autofill ----------
+
+const browserClients: BrowserClient[] = [{ id: 'b-1', name: 'Brave on Windows', created: Math.floor(NOW - 9 * DAY), lastSeen: Math.floor(NOW - 3600) }];
+let pendingPair: BrowserPairRequest | null = null;
+
+export function browserStatus(): BrowserStatus {
+  const on = settings.vault.browserAutofill;
+  return {
+    enabled: on,
+    listening: on,
+    host: 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\OmniHub.exe',
+    browsers: ['Brave', 'Chrome', 'Edge', 'Chromium'].map((browser) => ({ browser, registered: on && browser !== 'Chromium' })),
+    clients: browserClients.map((c) => ({ ...c })),
+    pending: pendingPair,
+    extensionDir: 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\browser-extension',
+    extensionId: 'hfkbdbcemgoondnmkeeoclpcmcjjbdeg',
+  };
+}
+
+/** Pretend a browser asked to pair (the mock's stand-in for the extension). */
+export function simulatePairRequest(name = 'Brave on Windows'): void {
+  pendingPair = { id: `p-${Date.now().toString(36)}`, name, code: String(Math.floor(1000 + Math.random() * 9000)), created: Math.floor(Date.now() / 1000) };
+  emit('browser:pair-request', pendingPair);
+}
+
+export function browserRespond(id: string, allow: boolean): boolean {
+  if (!pendingPair || pendingPair.id !== id) return false;
+  if (allow) {
+    browserClients.push({ id: `b-${Date.now().toString(36)}`, name: pendingPair.name, created: Math.floor(Date.now() / 1000), lastSeen: Math.floor(Date.now() / 1000) });
+    audit('desktop', 'browser.pair', `Paired ${pendingPair.name}`);
+  }
+  emit('browser:pair-done', { id, allowed: allow });
+  pendingPair = null;
+  emit('browser:clients', browserClients);
+  return true;
+}
+
+export function browserRevoke(id: string): boolean {
+  const i = browserClients.findIndex((c) => c.id === id);
+  if (i < 0) return false;
+  audit('desktop', 'browser.revoke', `Removed ${browserClients[i].name}`);
+  browserClients.splice(i, 1);
+  emit('browser:clients', browserClients);
+  return true;
+}
+
+// ?browserPair=1 shows a pairing request a moment after the app loads.
+if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('browserPair')) setTimeout(() => simulatePairRequest(), 1200);
+
+// ---------- health ----------
+
+function hItem(e: Entry, detail = 0): HealthItem {
+  return { id: e.id, title: e.title, username: e.username || e.email, url: e.url, detail };
+}
+
+export function health(): HealthReport {
+  requireOpen();
+  const now = Math.floor(Date.now() / 1000);
+  const withPw = entries.filter((e) => e.password && e.kind !== 'note' && e.kind !== 'card');
+  const weak = withPw.filter((e) => strength(e.password).score <= 1).map((e) => hItem(e, strength(e.password).score));
+  const groups = new Map<string, Entry[]>();
+  for (const e of withPw) groups.set(e.password, [...(groups.get(e.password) ?? []), e]);
+  const reused = [...groups.values()].filter((g) => g.length > 1).map((g) => g.map((e) => hItem(e)));
+  const old = withPw.filter((e) => now - e.passwordChanged > 365 * 86400).map((e) => hItem(e, Math.floor((now - e.passwordChanged) / 86400)));
+  const twoFactor = /(google|gmail|microsoft|live|outlook|github|discord|amazon|apple|steampowered|epicgames|paypal)\./;
+  const missingTwoFactor = withPw.filter((e) => !e.totp && twoFactor.test(e.url)).map((e) => hItem(e));
+  const flagged = new Set([...weak, ...reused.flat()].map((i) => i.id));
+  return { checked: withPw.length, score: withPw.length ? Math.round((100 * (withPw.length - flagged.size)) / withPw.length) : 100, weak, reused, old, missingTwoFactor };
+}
+
+export async function breachCheck(): Promise<HealthItem[]> {
+  requireOpen();
+  await new Promise((r) => setTimeout(r, 1200));
+  const known: Record<string, number> = { netflix123: 2417, steamPass2021: 38 };
+  return entries.filter((e) => e.password && known[e.password.replace(/!$/, '')]).map((e) => hItem(e, known[e.password.replace(/!$/, '')]));
 }

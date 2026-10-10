@@ -3,11 +3,19 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { CaptureKind, DeepPartial, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
+import type { CaptureKind, ConfigGame, ConfigOptions, DeepPartial, GameKind, GameProfile, RobloxFlags, TweakId, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
+import { scene } from './mock/art';
 import * as core from './mock/core';
+import * as games from './mock/games';
+import * as optimize from './mock/optimize';
+import * as updates from './mock/update';
+
+const mockScanTask = { on: false };
 import { volumes } from './mock/drives';
 import * as media from './mock/media';
+import * as music from './mock/music';
+import * as visual from './mock/visual';
 import * as notes from './mock/notes';
 import * as remote from './mock/remote';
 import { latency } from './mock/rng';
@@ -25,9 +33,67 @@ const sortKey = (args: Args): SortKey => {
 const handlers: Record<string, Handler> = {
   // app
   app_info: () => core.appInfo,
+  app_last_crash: () => (new URLSearchParams(window.location.search).get('crash') ? 'OmniHub 0.2.3 did not close normally last time.\n\nWindows crash reports (newest first):\n- uxplay.exe crashed in libgstd3d12.dll (exception c0000005)\n' : null),
+  app_log_error: (args) => console.error(args.message),
   system_stats: () => core.systemStats(),
+  storage_scan_task_status: () => mockScanTask.on,
+  storage_scan_task_set: (a) => ((mockScanTask.on = bool(a, 'on')), mockScanTask.on),
+  update_state: () => updates.info(),
+  update_check: () => updates.check(),
+  update_install: () => updates.install(),
+  games_list: () => games.list(),
+  games_create: (a) => games.create(str(a, 'kind') as GameKind),
+  games_save: (a) => games.save(obj<GameProfile>(a, 'profile')),
+  games_delete: (a) => games.remove(str(a, 'id')),
+  games_state: (a) => games.state(str(a, 'id')),
+  games_play: (a) => games.play(str(a, 'id'), bool(a, 'launch')),
+  games_stop: () => games.stop(),
+  games_ping: (a) => games.ping(optStr(a, 'id'), optStr(a, 'host')),
+  games_ping_targets: (a) => games.pingTargets(optStr(a, 'id')),
+  games_roblox_status: () => games.robloxStatus(),
+  games_roblox_write: (a) => games.robloxWrite(obj<RobloxFlags>(a, 'flags')),
+  games_roblox_preview: (a) => games.preview(obj<RobloxFlags>(a, 'flags')),
+  games_configs: () => optimize.configs(),
+  games_config_options: (a) => optimize.setOptions(obj<ConfigOptions>(a, 'options')),
+  games_config_apply: (a) => optimize.apply(str(a, 'game') as ConfigGame),
+  games_config_restore: (a) => optimize.restore(str(a, 'game') as ConfigGame),
+  games_library: () => optimize.library(),
+  games_add_installed: (a) => optimize.addInstalled(str(a, 'key')),
+  games_load_test: (a) => games.loadTest(optStr(a, 'id')),
+  games_fps: () => games.fpsOverview(),
+  games_fps_install: () => games.fpsInstall(),
+  games_fps_allow: () => games.fpsAllow(),
+  pc_status: () => optimize.pcStatus(),
+  pc_set: (a) => optimize.pcSet(str(a, 'id') as TweakId, bool(a, 'on')),
+  media_state: () => music.mediaState(),
+  media_control: (a) => music.mediaControl(str(a, 'action') as MediaAction, num(a, 'positionMs', 0)),
+  media_lyrics: () => music.mediaLyrics(),
+  media_video: () => music.mediaVideo(),
+  media_art: (a) => music.mediaArt(str(a, 'id')),
+  media_audio: () => music.mediaAudio(),
+  media_set_volume: (a) => music.mediaSetVolume(a.level == null ? null : num(a, 'level'), a.muted == null ? null : bool(a, 'muted')),
+  visual_hold: (a) => visual.visualHold(str(a, 'who')),
+  visual_release: (a) => visual.visualRelease(str(a, 'who')),
+  visual_status: () => visual.visualStatus(),
+  visual_keep_awake: () => undefined,
+  ambient_displays: () => [
+    { name: '\\\\.\\DISPLAY1', label: 'Display 1 · 2560×1440 (main)', width: 2560, height: 1440, scale: 1.25, primary: true },
+    { name: '\\\\.\\DISPLAY2', label: 'Display 2 · 1920×1080', width: 1920, height: 1080, scale: 1, primary: false },
+  ],
+  screen_share_state: () => core.shareState(),
+  screen_windows: () => core.shareWindows(),
+  screen_set_paused: (a) => core.setSharePaused(bool(a, 'on')),
+  screen_set_window: (a) => core.setShareWindow(a.id == null ? null : num(a, 'id')),
+  startup_list: () => core.startupList(),
+  startup_set: (a) => core.startupSet(str(a, 'id'), bool(a, 'enabled')),
+  system_processes: (a) => core.processes((optStr(a, 'sort') ?? 'cpu') as ProcessSort, num(a, 'limit') || 8),
+  system_end_process: (a) => core.endProcess(str(a, 'name')),
+  system_usage: (a) => core.usage((optStr(a, 'sort') ?? 'cpu') as ProcessSort, num(a, 'limit') || 200),
+  system_set_priority: (a) => core.setPriority(str(a, 'name'), str(a, 'priority') as Priority),
   settings_get: () => core.settings,
   settings_update: (a) => core.updateSettings(obj<DeepPartial<Settings>>(a, 'patch')),
+  settings_export: (a) => void str(a, 'path'),
+  settings_import: (a) => (void str(a, 'path'), core.settings),
   open_path: (a) => void str(a, 'path'),
   reveal_path: (a) => void str(a, 'path'),
   open_url: (a) => void str(a, 'url'),
@@ -40,7 +106,7 @@ const handlers: Record<string, Handler> = {
   },
   pick_folder: (a) => core.pickFolder(optStr(a, 'title')),
   pick_files: () => core.pickFiles(),
-  pick_save_file: (a) => `C:\\Users\\Alex\\Documents\\${str(a, 'defaultName')}`,
+  pick_save_file: (a) => `C:\\Users\\Player\\Documents\\${str(a, 'defaultName')}`,
   set_autostart: (a) => {
     core.updateSettings({ general: { launchAtLogin: bool(a, 'enabled') } });
   },
@@ -56,7 +122,13 @@ const handlers: Record<string, Handler> = {
   storage_open_cached: (a) => storage.openCached(str(a, 'root')),
   storage_children: (a) => storage.children(str(a, 'scanId'), num(a, 'node'), sortKey(a), bool(a, 'descending', true), num(a, 'offset', 0), num(a, 'limit', 500)),
   storage_treemap: (a) => storage.treemap(str(a, 'scanId'), num(a, 'node'), num(a, 'depth', 3), num(a, 'maxItems', 1500)),
+  storage_thumb: (a) => {
+    const path = str(a, 'path');
+    return /\.(jpe?g|png|gif|webp|bmp)$/i.test(path) ? scene(path, (['game', 'desktop', 'browser', 'code'] as const)[path.length % 4], 320, 200) : null;
+  },
   storage_top_files: (a) => storage.topFiles(str(a, 'scanId'), num(a, 'node'), num(a, 'n', 100)),
+  storage_growth: (a) => storage.growth(str(a, 'scanId'), num(a, 'limit', 15)),
+  storage_export_csv: (a) => storage.exportCsv(str(a, 'scanId'), num(a, 'node'), str(a, 'kind'), str(a, 'path')),
   storage_extensions: (a) => storage.extensions(str(a, 'scanId'), num(a, 'node')),
   storage_search: (a) => storage.search(str(a, 'scanId'), obj<SearchQuery>(a, 'query')),
   storage_path: (a) => storage.nodePath(str(a, 'scanId'), num(a, 'node')),
@@ -87,6 +159,8 @@ const handlers: Record<string, Handler> = {
   shots_update: (a) => media.shotUpdate(str(a, 'id'), { tags: Array.isArray(a.tags) ? strList(a, 'tags') : null, note: optStr(a, 'note'), favorite: typeof a.favorite === 'boolean' ? a.favorite : null }),
   shots_delete: (a) => media.shotDelete(str(a, 'id')),
   shots_copy: (a) => void str(a, 'id'),
+  shots_text: (a) => media.shotText(str(a, 'id')),
+  shots_save_edit: (a) => media.shotSaveEdit(str(a, 'id'), str(a, 'png')),
   shots_sync: () => media.shotsSync(),
 
   // notes
@@ -94,6 +168,7 @@ const handlers: Record<string, Handler> = {
   notes_get: (a) => notes.noteGet(str(a, 'id')),
   notes_save: (a) => notes.noteSave(obj<NoteInput>(a, 'input')),
   notes_delete: (a) => notes.noteDelete(str(a, 'id')),
+  notes_remind: (a) => notes.noteRemind(str(a, 'id'), a.at == null ? null : num(a, 'at')),
   notes_tags: () => notes.noteTags(),
   notes_export: (a) => notes.noteExport(str(a, 'id')),
   notes_folder_files: () => notes.folderFiles(),
@@ -118,6 +193,15 @@ const handlers: Record<string, Handler> = {
   vault_hello_unlock: () => vault.helloUnlock(),
   vault_export: (a) => void str(a, 'path'),
   vault_import: (a) => vault.importBackup(str(a, 'password')),
+  vault_totp: (a) => vault.totp(str(a, 'id')),
+  vault_health: () => vault.health(),
+  vault_breach_check: () => vault.breachCheck(),
+
+  // browser autofill
+  browser_status: () => vault.browserStatus(),
+  browser_repair: () => vault.browserStatus().browsers,
+  browser_pair_respond: (a) => vault.browserRespond(str(a, 'id'), bool(a, 'allow')),
+  browser_revoke: (a) => vault.browserRevoke(str(a, 'id')),
 
   // phone companion
   remote_status: () => remote.status(),
@@ -135,8 +219,15 @@ const handlers: Record<string, Handler> = {
   remote_device_revoke: (a) => remote.revokeDevice(str(a, 'id')),
   remote_send: (a) => remote.send(strList(a, 'paths'), optStr(a, 'deviceId')),
   remote_inbox: () => remote.inboxList(),
+  remote_send_text: (a) => remote.sendText(str(a, 'text'), optStr(a, 'deviceId')),
+  remote_inbox_remove: (a) => remote.inboxRemove(str(a, 'id')),
+  clipboard_text: () => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  take_pending_send: () => [],
   remote_stop_viewer: (a) => remote.stopViewer(str(a, 'id')),
   remote_stop_all_viewers: () => remote.stopAllViewers(),
+  remote_diagnostics: () => remote.diagnostics(),
+  remote_fix_firewall: (a) => remote.fixFirewall(bool(a, 'includePublic')),
+  network_make_private: (a) => remote.makeNetworkPrivate(str(a, 'id')),
 
   // power
   power_schedule: (a) => remote.powerSchedule(str(a, 'action') as PowerAction, num(a, 'delaySeconds', 10)),
@@ -153,6 +244,15 @@ const handlers: Record<string, Handler> = {
   scrcpy_connect: (a) => remote.scrcpyConnect(str(a, 'addr')),
   scrcpy_pair: (a) => remote.scrcpyPair(str(a, 'addr'), str(a, 'code')),
   sunshine_status: () => remote.sunshineStatus(),
+  airplay_status: () => remote.airplayStatus(),
+  airplay_install: () => remote.airplayInstall(),
+  airplay_uninstall: () => remote.airplayUninstall(),
+  airplay_start: () => remote.airplayStart(),
+  airplay_stop: () => remote.airplayStop(),
+  airplay_keep_on_top: (a) => void core.updateSettings({ screen: { airplayKeepOnTop: bool(a, 'on') } }),
+  airplay_place: () => undefined,
+  airplay_firewall: () => remote.airplayFirewall(),
+  airplay_fix_firewall: () => remote.airplayFixFirewall(),
 };
 
 const FAST = new Set(['vault_strength', 'vault_touch', 'vault_status', 'system_stats', 'vault_generate', 'storage_progress', 'storage_duplicates_progress', 'remote_status']);

@@ -2,7 +2,11 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permissions for the OmniHub windows. App features go through OmniHub's own commands; plugins are limited to what the UI needs.",
-  "windows": ["main", "overlay"],
+  "windows": [
+    "main",
+    "overlay",
+    "ambient-*"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-close",
@@ -10,6 +14,8 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "core:window:allow-start-dragging",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen",
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-message",

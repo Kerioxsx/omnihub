@@ -106,6 +106,8 @@ export interface ChildrenPage {
 
 export type SortKey = 'size' | 'alloc' | 'name' | 'modified' | 'files';
 
+export type ExplorerView = 'split' | 'list' | 'grid' | 'treemap' | 'sunburst';
+
 export interface TreemapItem {
   /** 4294967295 for the folded "N smaller items" entry */
   id: number;
@@ -240,6 +242,8 @@ export interface Screenshot {
   note: string;
   favorite: boolean;
   exists: boolean;
+  /** text was read from it (Copy text); it is then searchable */
+  hasText: boolean;
 }
 
 export type CaptureKind = 'screen' | 'allScreens' | 'window';
@@ -286,6 +290,10 @@ export interface Note {
   updated: number;
   exportedPath: string | null;
   exportedAt: number | null;
+  /** reminder time (Unix seconds), null = none */
+  remindAt: number | null;
+  /** the reminder was shown */
+  reminded: boolean;
 }
 
 export interface NoteInput {
@@ -345,6 +353,8 @@ export interface EntrySummary {
   hasNotes: boolean;
   primaryAccount: boolean;
   passwordScore: number;
+  /** A 2FA (TOTP) secret is stored. */
+  hasTotp: boolean;
 }
 
 export interface Entry {
@@ -361,6 +371,8 @@ export interface Entry {
   created: number;
   updated: number;
   passwordChanged: number;
+  /** 2FA secret (otpauth:// link or base32 key), empty when none. */
+  totp: string;
 }
 
 export interface EntryInput {
@@ -375,6 +387,65 @@ export interface EntryInput {
   notes?: string | null;
   tags: string[];
   favorite: boolean;
+  /** null/undefined keeps the current 2FA secret; "" removes it */
+  totp?: string | null;
+}
+
+export interface HealthItem {
+  id: string;
+  title: string;
+  username: string;
+  url: string;
+  /** strength 0–4 (weak), days since changed (old), or times seen in breaches */
+  detail: number;
+}
+
+export interface HealthReport {
+  checked: number;
+  /** 0–100 */
+  score: number;
+  weak: HealthItem[];
+  reused: HealthItem[][];
+  old: HealthItem[];
+  missingTwoFactor: HealthItem[];
+}
+
+export interface TotpCode {
+  code: string;
+  /** seconds until the code changes */
+  remaining: number;
+}
+
+// ---------- browser autofill ----------
+
+export interface BrowserClient {
+  id: string;
+  name: string;
+  created: number;
+  lastSeen: number;
+}
+
+export interface BrowserPairRequest {
+  id: string;
+  name: string;
+  code: string;
+  created: number;
+}
+
+export interface BrowserRegistration {
+  browser: string;
+  registered: boolean;
+}
+
+export interface BrowserStatus {
+  enabled: boolean;
+  listening: boolean;
+  host: string | null;
+  browsers: BrowserRegistration[];
+  clients: BrowserClient[];
+  pending: BrowserPairRequest | null;
+  extensionDir: string | null;
+  extensionId: string;
 }
 
 export interface GeneratorOptions {
@@ -426,6 +497,25 @@ export interface ServerStatus {
   error: string | null;
   viewers: ViewerInfo[];
   pairingOpen: boolean;
+  /** Devices that reached the server in the last 15 minutes, newest first. */
+  visitors: Visit[];
+}
+
+export interface Visit {
+  ip: string;
+  at: number;
+  userAgent: string;
+  /** False when refused because the address is not on the local network. */
+  allowed: boolean;
+}
+
+export interface LanAddress {
+  interface: string;
+  ip: string;
+  /** The Wi-Fi/Ethernet address Windows uses for its default route. */
+  primary: boolean;
+  /** Hyper-V, WSL, VirtualBox, VPN… — usually not reachable from a phone. */
+  virtualAdapter: boolean;
 }
 
 export interface PairingInfo {
@@ -435,7 +525,51 @@ export interface PairingInfo {
   urls: string[];
   /** SVG markup */
   qrSvg: string;
+  /** One QR code per entry in `urls`. */
+  qrSvgs: string[];
+  addresses: LanAddress[];
   fingerprint: string | null;
+}
+
+export type NetworkCategory = 'public' | 'private' | 'domain';
+
+export interface NetworkInfo {
+  id: string;
+  name: string;
+  category: NetworkCategory;
+}
+
+export type FirewallVerdict = 'allowed' | 'blocked' | 'noRule' | 'off' | 'unknown';
+
+export interface FirewallRuleInfo {
+  name: string;
+  allow: boolean;
+  enabled: boolean;
+  /** Bitmask: 1 domain, 2 private, 4 public. */
+  profiles: number;
+  protocol: string;
+  ports: string;
+}
+
+export interface FirewallReport {
+  supported: boolean;
+  program: string;
+  networks: NetworkInfo[];
+  activeProfiles: number;
+  verdict: FirewallVerdict;
+  rules: FirewallRuleInfo[];
+  message: string;
+}
+
+export interface RemoteDiagnostics {
+  running: boolean;
+  port: number;
+  tls: boolean;
+  addresses: LanAddress[];
+  firewall: FirewallReport;
+  visitors: Visit[];
+  /** This PC connecting to itself on each address (empty when off). */
+  selfTest: { ip: string; ok: boolean; error: string | null }[];
 }
 
 export interface Device {
@@ -448,12 +582,19 @@ export interface Device {
   revoked: boolean;
 }
 
+export type InboxKind = 'file' | 'text';
+
 export interface InboxItem {
   id: string;
   name: string;
   size: number;
   created: number;
   deviceId: string | null;
+  kind: InboxKind;
+  /** The text of a `text` item. */
+  text?: string;
+  /** Name of the folder a zip was made from. */
+  folder?: string;
 }
 
 export type PowerAction = 'shutdown' | 'restart' | 'sleep' | 'hibernate' | 'lock' | 'signOut' | 'displayOff';
@@ -531,6 +672,63 @@ export interface ScrcpyOptions {
   control: boolean;
 }
 
+export interface AirPlayOptions {
+  /** Name the iPhone shows in Screen Mirroring. */
+  name: string;
+  quality: '1080p' | '1440p' | '4k';
+  fps: number;
+  audio: boolean;
+  requirePin: boolean;
+  lowLatency: boolean;
+  fullscreen: boolean;
+  /** Software video decoding: slower, avoids graphics-driver crashes. */
+  safeMode?: boolean;
+}
+
+export interface AirPlayClient {
+  name: string;
+  model: string;
+  deviceId: string;
+}
+
+export interface InstallProgress {
+  phase: 'download' | 'verify' | 'unpack' | string;
+  done: number;
+  total: number;
+}
+
+export interface AirPlayStatus {
+  supported: boolean;
+  installed: boolean;
+  source: 'addon' | 'custom' | 'found' | null;
+  path: string | null;
+  version: string | null;
+  running: boolean;
+  /** An iPhone is mirroring right now (the video window is open). */
+  mirroring: boolean;
+  name: string;
+  pin: string | null;
+  client: AirPlayClient | null;
+  error: string | null;
+  log: string[];
+  install: InstallProgress | null;
+  downloadUrl: string;
+  /** The installed add-on predates a fix this version needs. */
+  outdated: boolean;
+  /** The Wi-Fi/Ethernet address the receiver announces to iPhones. */
+  address: string | null;
+  /** What OmniHub saw looking for the receiver the way an iPhone does. */
+  check: AirPlayCheck | null;
+}
+
+export interface AirPlayCheck {
+  ip: string;
+  /** It answered an mDNS search for AirPlay receivers on that network. */
+  announced: boolean;
+  /** The address in that answer is this one. */
+  rightAddress: boolean;
+}
+
 export interface SunshineStatus {
   installed: boolean;
   path: string | null;
@@ -551,6 +749,10 @@ export interface Settings {
     startMinimized: boolean;
     closeToTray: boolean;
     onboarded: boolean;
+    /** greeting name; empty = Windows account's first name */
+    displayName: string;
+    /** interface size in percent (80–150) */
+    uiScale: number;
   };
   storage: {
     defaultMode: ScanMode;
@@ -558,6 +760,12 @@ export interface Settings {
     cleanup: { largeFileMin: number; largeFileAgeDays: number; installerAgeDays: number };
     showHidden: boolean;
     sizeMetric: 'size' | 'alloc';
+    /** How the Explorer tab shows a folder. */
+    explorerView: ExplorerView;
+    gridSize: 'sm' | 'md' | 'lg';
+    gridPreviews: boolean;
+    lowSpaceAlert: boolean;
+    lowSpacePercent: number;
   };
   notes: {
     claudeFolder: string | null;
@@ -571,6 +779,10 @@ export interface Settings {
     lockOnSessionLock: boolean;
     allowPhone: boolean;
     helloEnabled: boolean;
+    /** Brave/Chrome/Edge extension may fill logins. */
+    browserAutofill: boolean;
+    /** Offer to save logins typed in the browser. */
+    browserOfferSave: boolean;
   };
   remote: {
     enabled: boolean;
@@ -589,6 +801,11 @@ export interface Settings {
     allowNotes: boolean;
     incomingDir: string | null;
     deviceName: string;
+    /** Paired phones may put text on this PC's clipboard. */
+    allowClipboard: boolean;
+    allowTasks: boolean;
+    /** “Send to → OmniHub (phone)” in Explorer. */
+    sendToMenu: boolean;
   };
   screenshots: {
     dir: string | null;
@@ -603,7 +820,177 @@ export interface Settings {
     maxFps: number;
     scrcpyPath: string | null;
     sunshinePath: string | null;
+    airplay: AirPlayOptions;
+    airplayKeepOnTop: boolean;
+    airplayPip: boolean;
+    airplayAutoStart: boolean;
+    uxplayPath: string | null;
   };
+  apps: {
+    /** IDs of apps pinned as favourites */
+    favorites: string[];
+  };
+  media: {
+    allowPhone: boolean;
+    lyricsOnline: boolean;
+    eqEnabled: boolean;
+    bassDb: number;
+    trebleDb: number;
+    /** A folder of your own .lrc files, checked before looking online. */
+    lrcFolder: string | null;
+    /** Sharper covers from the iTunes catalogue (the player's are small). */
+    hiresArt: boolean;
+  };
+  visuals: VisualSettings;
+  updates: {
+    check: boolean;
+    autoInstall: boolean;
+  };
+}
+
+// ---------- Aurora: music-reactive light, scene and lyrics ----------
+
+/** `aurora`: light, scene and floating lyrics; `lyrics`: the Apple Music–style view. */
+export type PlayerView = 'aurora' | 'lyrics';
+export type ColorMode = 'album' | 'duo' | 'multi' | 'single';
+
+/** How strongly each effect plays on the cover, 0–1 (0 = off). */
+export interface Effects {
+  zoom: number;
+  glitch: number;
+  split: number;
+  fisheye: number;
+  ripple: number;
+  kaleidoscope: number;
+  halftone: number;
+  pixelate: number;
+  shake: number;
+  echo: number;
+  scanlines: number;
+  duotone: number;
+  twist: number;
+  bloom: number;
+}
+
+export type SceneStyle = 'visual' | 'fisheye' | 'fisheyeVisual' | 'minimal' | 'ambient';
+export type LyricFont = 'display' | 'condensed' | 'heavy' | 'serif' | 'impact';
+
+export interface VisualSettings {
+  view: PlayerView;
+  /** Everything Aurora draws (the lyrics stay). */
+  enabled: boolean;
+  /** Listen to what the PC plays so the light follows the music. */
+  audioReactive: boolean;
+  /** 0.2–3 */
+  sensitivity: number;
+  /** 0–2 */
+  bass: number;
+  /** 0–1 */
+  smoothing: number;
+  reducedMotion: boolean;
+  /** No bright pulses on beats. */
+  noFlashes: boolean;
+  /** × animation speed */
+  speed: number;
+  /** keep the screen on while the player shows Aurora and music plays */
+  keepAwake: boolean;
+  color: { mode: ColorMode; primary: string; secondary: string; colors: string[]; vividness: number };
+  glow: { enabled: boolean; animation: 'music' | 'idle' | 'none'; thickness: number; intensity: number; edge: number; highlight: number; glow: number; glowSize: number; bloom: number; bloomSize: number; radius: number };
+  lyrics: {
+    /** stack: one word (or line) at a time, huge; lines: the current line and the next ones */
+    layout: 'stack' | 'lines';
+    emphasis: 'glow' | 'box' | 'color';
+    font: LyricFont;
+    visible: boolean;
+    autoShow: boolean;
+    size: number;
+    weight: number;
+    wordHighlight: boolean;
+    /** Lyrics that only time lines: spread the words over each line by syllables (close, not exact). */
+    estimateWords: boolean;
+    timing: 'auto' | 'line';
+    place: 'auto' | 'center' | 'upper' | 'lower';
+    offsetX: number;
+    offsetY: number;
+    lines: number;
+    backing: number;
+    highlightColor: string | null;
+    glow: number;
+    transition: number;
+    /** 0–1.5: how much the lyrics move with the music (bounce, sway, pop) */
+    motion: number;
+    /** Emojis beside words they match. */
+    emoji: EmojiAmount;
+    emojiStyle: EmojiStyle;
+  };
+  scene: {
+    enabled: boolean;
+    style: SceneStyle;
+    intensity: number;
+    speed: number;
+    blur: number;
+    saturation: number;
+    opacity: number;
+    artwork: boolean;
+    waveform: boolean;
+    effects: Effects;
+    /** What fills the screen: the music video or the cover (auto), one of them, or the light show. */
+    backdrop: Backdrop;
+    /** Look the song's music video up on YouTube. */
+    musicVideos: boolean;
+    /** 0–1: how much the full-screen cover drifts and breathes. */
+    coverMotion: number;
+    /** 0–1: how much the cover or video is darkened behind the lyrics. */
+    dim: number;
+    /** 0–1: soft light in the song's colours from the corners. */
+    corners: number;
+    videoFit: VideoFit;
+    /** 0 (top) – 1 (bottom): the part of a cropped video that stays. */
+    videoFocus: number;
+    videoQuality: VideoQuality;
+  };
+  desktop: { enabled: boolean; lyrics: boolean; display: string; clearTaskbar: boolean; hideFullscreen: boolean; startWithApp: boolean };
+}
+
+export interface VisualStatus {
+  state: 'off' | 'disabled' | 'starting' | 'listening' | 'unavailable';
+  /** What is listened to. */
+  source: string | null;
+  sampleRate: number;
+  error: string | null;
+}
+
+/** A monitor the desktop glow can light. */
+export interface AmbientDisplay {
+  /** Windows' device name (\\.\DISPLAY1) */
+  name: string;
+  /** "Display 1 · 2560×1440 (main)" */
+  label: string;
+  width: number;
+  height: number;
+  scale: number;
+  primary: boolean;
+}
+
+/** One analysis frame of the PC's sound (`audio:frame`, 60 a second while there is sound). */
+export interface AudioFrame {
+  /** PC time, Unix ms */
+  t: number;
+  /** 0–1 loudness (adaptive) */
+  level: number;
+  low: number;
+  mid: number;
+  high: number;
+  /** 1 on a beat, decaying */
+  beat: number;
+  flux: number;
+  /** 16 log-spaced bands, 40 Hz–16 kHz */
+  bands: number[];
+  /** sound is playing */
+  active: boolean;
+  /** beats counted since the track began */
+  beats: number;
+  bpm: number | null;
 }
 
 /** Deep partial used for settings patches (JSON merge patch). */
@@ -620,6 +1007,96 @@ export interface AppInfoDetails {
   cacheDir: string;
   screenshotDir: string;
   incomingDir: string;
+  /** First name of the signed-in user, for greetings. */
+  userName: string;
+}
+
+export interface GrowthItem {
+  path: string;
+  node: number | null;
+  before: number;
+  after: number;
+  delta: number;
+  isNew: boolean;
+}
+
+export interface GrowthReport {
+  /** when the previous scan was made; null = nothing to compare with yet */
+  since: number | null;
+  totalBefore: number;
+  totalAfter: number;
+  grew: GrowthItem[];
+  shrank: GrowthItem[];
+}
+
+export interface WindowInfo {
+  id: number;
+  title: string;
+  app: string;
+  width: number;
+  height: number;
+}
+
+export interface ShareState {
+  paused: boolean;
+  windowId: number | null;
+  /** the shared window, if it still exists */
+  window: WindowInfo | null;
+}
+
+export type StartupLocation = 'runUser' | 'runMachine' | 'runMachine32' | 'folderUser' | 'folderCommon';
+
+export interface StartupItem {
+  id: string;
+  name: string;
+  displayName: string;
+  command: string;
+  target: string | null;
+  location: StartupLocation;
+  enabled: boolean;
+  /** changing it asks for administrator approval */
+  needsAdmin: boolean;
+}
+
+export type ProcessSort = 'cpu' | 'memory' | 'gpu' | 'disk' | 'name';
+export type Priority = 'low' | 'belowNormal' | 'normal' | 'aboveNormal' | 'high';
+
+export interface ProcessGroup {
+  name: string;
+  count: number;
+  /** share of the whole CPU, 0–100 */
+  cpu: number;
+  memory: number;
+  /** busiest GPU engine, 0–100 */
+  gpu: number;
+  gpuMemory: number;
+  /** disk reads + writes, bytes/s */
+  disk: number;
+  exe: string | null;
+  pids: number[];
+  canEnd: boolean;
+  priority: Priority | null;
+}
+
+export interface GpuAdapter {
+  name: string;
+  percent: number;
+  memoryUsed: number;
+  memoryTotal: number;
+}
+
+/** The whole PC and the programs using it. */
+export interface Usage {
+  cpu: number;
+  cpuName: string;
+  cores: number;
+  memoryUsed: number;
+  memoryTotal: number;
+  gpuSupported: boolean;
+  gpus: GpuAdapter[];
+  disk: number;
+  processCount: number;
+  processes: ProcessGroup[];
 }
 
 export interface SystemStats {
@@ -627,4 +1104,420 @@ export interface SystemStats {
   memory: { used: number; total: number };
   uptime: number;
   os: string;
+}
+
+// ---------- music ----------
+
+export interface MediaState {
+  key: string;
+  app: string;
+  appName: string;
+  title: string;
+  artist: string;
+  album: string;
+  durationMs: number;
+  /** track position at `positionAt` (PC clock, Unix ms) */
+  positionMs: number;
+  positionAt: number;
+  playing: boolean;
+  rate: number;
+  positionSource: 'player' | 'estimated';
+  canPlayPause: boolean;
+  canNext: boolean;
+  canPrevious: boolean;
+  canSeek: boolean;
+  art: string | null;
+}
+
+export interface LyricWord {
+  ms: number;
+  text: string;
+}
+
+export interface LyricLine {
+  ms: number;
+  text: string;
+  words?: LyricWord[];
+  /** Word timings estimated here, not from the lyrics (desktop only). */
+  estimated?: boolean;
+}
+
+export type Backdrop = 'auto' | 'video' | 'cover' | 'visual';
+export type EmojiAmount = 'off' | 'some' | 'more';
+export type EmojiStyle = '3d' | 'system';
+export type VideoFit = 'fill' | 'fit';
+export type VideoQuality = 'best' | '1080' | '720';
+
+/** A song's music video on YouTube (the artist's own upload). */
+export interface MusicVideo {
+  id: string;
+  title: string;
+  channel: string;
+  durationMs: number;
+  /** "video", or "visualizer": the artist's animated cover. */
+  kind: 'video' | 'visualizer';
+  uhd: boolean;
+  /** As long as the song, so it plays in step with it. */
+  synced: boolean;
+}
+
+export type VideoStatus = { status: 'found'; videos: MusicVideo[] } | { status: 'searching' | 'none' | 'off' | 'nothingPlaying' };
+
+export type LyricsStatus =
+  | { status: 'ready'; lyrics: { lines: LyricLine[]; plain: string | null; instrumental: boolean; source: string } }
+  | { status: 'searching' | 'none' | 'off' | 'nothingPlaying' };
+
+export interface AudioInfo {
+  volume: { level: number; muted: boolean } | null;
+  eq: { status: { available: boolean; hooked: boolean; configDir: string | null }; enabled: boolean; bass: number; treble: number; maxDb: number };
+}
+
+export type MediaAction = 'play' | 'pause' | 'toggle' | 'next' | 'previous' | 'seek';
+
+export interface EqStatus {
+  /** Equalizer APO is installed */
+  available: boolean;
+  /** OmniHub's include line is in its config */
+  hooked: boolean;
+  configDir: string | null;
+}
+
+// ---------- games ----------
+
+export type GameKind = 'fortnite' | 'roblox' | 'valorant' | 'cs2' | 'apex' | 'overwatch' | 'rocketLeague' | 'gta5' | 'callOfDuty' | 'league' | 'minecraft' | 'cyberpunk' | 'custom';
+
+export type GameLaunch =
+  | { type: 'none' }
+  | { type: 'exe'; path: string; args: string }
+  | { type: 'url'; url: string }
+  | { type: 'steam'; appId: number }
+  | { type: 'epic'; app: string }
+  | { type: 'riot'; product: string }
+  | { type: 'roblox'; placeId: number | null };
+
+export type PowerPlanChoice = 'keep' | 'high' | 'ultimate';
+
+/** competitive: most FPS, also the game's own graphics · quality: nothing that changes the picture · custom: each switch as set. */
+export type BoostMode = 'competitive' | 'quality' | 'custom';
+
+export interface GameBoost {
+  mode: BoostMode;
+  powerPlan: PowerPlanChoice;
+  priority: Priority | null;
+  closeApps: string[];
+  reopenApps: boolean;
+  silenceNotifications: boolean;
+  gameMode: boolean;
+  gpuHighPerformance: boolean;
+  fullscreenOptimizationsOff: boolean;
+  wifiLowLatency: boolean;
+  networkPriority: boolean;
+  startHighPriority: boolean;
+  /** Games OmniHub knows the settings of: write the fastest in-game settings before each launch. */
+  gameSettings: boolean;
+  /** Close cloud sync, Windows extras and updaters for the session. */
+  closeJunk: boolean;
+  /** Browsers, launchers' web views and sync apps at Below normal while playing. */
+  lowerBackground: boolean;
+  /** Windows' finest timer (0.5 ms) while playing. */
+  preciseTimer: boolean;
+  /** Windows never slows the game down to save power. */
+  fullSpeed: boolean;
+  /** Measure FPS while playing (PresentMon). */
+  fpsMeter: boolean;
+}
+
+// ---------- the games' own settings, installed games, PC tweaks ----------
+
+export type ConfigGame = 'fortnite' | 'valorant' | 'cs2' | 'apex' | 'overwatch' | 'roblox' | 'minecraft';
+
+export interface FortniteOptions {
+  /** 0 = unlimited */
+  frameLimit: number;
+  performanceMode: boolean;
+  lowestQuality: boolean;
+  /** 0 near … 3 epic */
+  viewDistance: number;
+  resolutionScale: number;
+  showFps: boolean;
+  fullscreen: boolean;
+}
+
+export interface MinecraftOptions {
+  unlimitedFps: boolean;
+  fastGraphics: boolean;
+  minimalParticles: boolean;
+  noClouds: boolean;
+  renderDistance: number | null;
+  simulationDistance: number | null;
+}
+
+/** The switches for games without options of their own. */
+export interface ProOptions {
+  uncapped: boolean;
+  lowestQuality: boolean;
+  lowLatency: boolean;
+}
+
+export interface ConfigOptions {
+  fortnite: FortniteOptions;
+  minecraft: MinecraftOptions;
+  valorant: ProOptions;
+  cs2: ProOptions;
+  apex: ProOptions;
+  overwatch: ProOptions;
+  roblox: ProOptions;
+}
+
+export interface ConfigChange {
+  label: string;
+  key: string;
+  from: string | null;
+  to: string;
+}
+
+export interface ConfigSetting {
+  label: string;
+  value: string;
+  good: boolean;
+}
+
+export interface ConfigStatus {
+  game: ConfigGame;
+  label: string;
+  /** Several for games with one file per account. */
+  paths: string[];
+  found: boolean;
+  running: boolean;
+  settings: ConfigSetting[];
+  pending: ConfigChange[];
+  backupAt: number | null;
+  note: string | null;
+}
+
+export interface GameConfigs {
+  options: ConfigOptions;
+  games: ConfigStatus[];
+}
+
+export interface InstalledGame {
+  key: string;
+  name: string;
+  source: 'epic' | 'steam' | 'riot' | 'roblox' | 'minecraft';
+  kind: GameKind;
+  launch: GameLaunch;
+  process: string;
+  exePath: string | null;
+  installDir: string | null;
+  profileId: string | null;
+}
+
+export type TweakId = 'refreshRate' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'gpuScheduling' | 'preciseTimer' | 'networkThrottling' | 'mouseAcceleration' | 'stickyKeys' | 'memoryIntegrity';
+
+export interface PcTweak {
+  id: TweakId;
+  title: string;
+  description: string;
+  impact: 'high' | 'medium' | 'low';
+  available: boolean;
+  optimized: boolean;
+  current: string;
+  admin: boolean;
+  restart: boolean;
+  settingsLink: string | null;
+  canUndo: boolean;
+}
+
+export interface PcDisplay {
+  name: string;
+  width: number;
+  height: number;
+  hz: number;
+  maxHz: number;
+}
+
+export interface PcStatus {
+  tweaks: PcTweak[];
+  machine: { cpu: string; cores: number; threads: number; ramGb: number; gpus: string[]; displays: PcDisplay[] };
+}
+
+export type RobloxPreset = 'maxFps' | 'balanced' | 'quality' | 'custom';
+export type RobloxRenderer = 'auto' | 'd3d11' | 'vulkan' | 'openGl';
+
+export interface RobloxFlags {
+  enabled: boolean;
+  preset: RobloxPreset;
+  renderer: RobloxRenderer;
+  msaa: number | null;
+  textureQuality: number | null;
+  noGrass: boolean;
+  graySky: boolean;
+  lowDetailDistance: boolean;
+  qualityLevel: number | null;
+  exclusiveFullscreen: boolean;
+  ignoreDisplayScaling: boolean;
+  custom: Record<string, string | number | boolean>;
+}
+
+export interface GameProfile {
+  id: string;
+  name: string;
+  kind: GameKind;
+  launch: GameLaunch;
+  process: string;
+  exePath: string | null;
+  boost: GameBoost;
+  pingHost: string | null;
+  roblox: RobloxFlags;
+  lastPlayed: number | null;
+}
+
+export type GamePhase = 'starting' | 'waiting' | 'playing' | 'boosted' | 'restoring' | 'ended';
+
+export interface GameStep {
+  id: string;
+  label: string;
+  status: 'done' | 'skipped' | 'failed';
+  detail: string;
+}
+
+export interface GameSession {
+  profileId: string;
+  name: string;
+  mode: BoostMode;
+  phase: GamePhase;
+  startedAt: number;
+  endedAt: number | null;
+  launched: boolean;
+  steps: GameStep[];
+  restored: GameStep[];
+  message: string | null;
+  /** Frames per second over the session, when the FPS meter ran. */
+  fps: FpsSummary | null;
+}
+
+// ---------- FPS meter, lag under load ----------
+
+export interface FpsLive {
+  fps: number;
+  /** 1% low over the last ten seconds. */
+  low1: number;
+  frameMs: number;
+  worstMs: number;
+}
+
+export interface FpsSummary {
+  frames: number;
+  seconds: number;
+  avg: number;
+  low1: number;
+  low01: number;
+  /** Frames over 2.5× the average (and 8 ms). */
+  hitches: number;
+}
+
+export interface FpsStatus {
+  installed: boolean;
+  allowed: boolean;
+  signOutNeeded: boolean;
+  supported: boolean;
+}
+
+export interface FpsRecord {
+  profileId: string;
+  name: string;
+  mode: BoostMode;
+  at: number;
+  summary: FpsSummary;
+}
+
+export interface FpsOverview {
+  status: FpsStatus;
+  live: FpsLive | null;
+  history: FpsRecord[];
+}
+
+export interface LoadTest {
+  target: string;
+  idleMs: number | null;
+  downloadMs: number | null;
+  uploadMs: number | null;
+  downloadMbps: number | null;
+  uploadMbps: number | null;
+  extraMs: number | null;
+  grade: string | null;
+  advice: string[];
+  error: string | null;
+}
+
+export interface GameState {
+  networkPriority: boolean;
+  startHighPriority: boolean;
+  onWifi: boolean | null;
+  running: boolean;
+}
+
+export interface PingTarget {
+  id: string;
+  label: string;
+  host: string;
+}
+
+export interface PingResult {
+  id: string;
+  label: string;
+  host: string;
+  address: string | null;
+  sent: number;
+  received: number;
+  avgMs: number | null;
+  minMs: number | null;
+  maxMs: number | null;
+  jitterMs: number | null;
+  loss: number;
+  samples: (number | null)[];
+  error: string | null;
+}
+
+export interface RobloxInstall {
+  found: boolean;
+  player: string | null;
+  version: string | null;
+  versionDirs: string[];
+  bootstrapper: string | null;
+  running: boolean;
+}
+
+// ---------- updates ----------
+
+export interface ReleaseAsset {
+  name: string;
+  url: string;
+  size: number;
+}
+
+export interface Release {
+  version: string;
+  notes: string;
+  pageUrl: string;
+  publishedAt: string | null;
+  setup: ReleaseAsset | null;
+  msi: ReleaseAsset | null;
+  sumsUrl: string | null;
+}
+
+export type UpdateState =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'upToDate'; checkedAt: number }
+  | { state: 'available'; release: Release }
+  | { state: 'downloading'; version: string; done: number; total: number }
+  | { state: 'installing'; version: string }
+  | { state: 'failed'; message: string };
+
+export interface UpdateInfo {
+  current: string;
+  state: UpdateState;
+  /** The version that ran before, on the first start after an update. */
+  updatedFrom?: string | null;
 }

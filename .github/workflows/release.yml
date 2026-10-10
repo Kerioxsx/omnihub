@@ -3,7 +3,7 @@ name: Release
 # Publishes the Windows installers for the version in src-tauri/tauri.conf.json.
 # Either run this workflow from the Actions tab (it builds the chosen branch
 # and creates the tag v<version> on that commit), or push the tag yourself:
-#   git tag v0.1.0 && git push origin v0.1.0
+#   git tag v0.2.0 && git push origin v0.2.0
 # Running it again for a version that is already released rebuilds the same
 # commit and replaces the files; a new commit needs a new version.
 
@@ -24,11 +24,25 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
+  # UxPlay for iPhone mirroring, published next to the installer. Its
+  # SHA-256 is built into the app, which checks the download against it.
+  airplay-addon:
+    uses: ./.github/workflows/airplay-addon.yml
+
+  # PresentMon for the FPS meter, the same way: published next to the
+  # installer, its SHA-256 built into the app.
+  presentmon:
+    uses: ./.github/workflows/presentmon.yml
+
   windows:
     name: Build and publish the Windows installer
+    needs: [airplay-addon, presentmon]
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      OMNIHUB_AIRPLAY_ADDON_SHA256: ${{ needs.airplay-addon.outputs.sha256 }}
+      OMNIHUB_PRESENTMON_SHA256: ${{ needs.presentmon.outputs.sha256 }}
+      PRESENTMON_VERSION: ${{ needs.presentmon.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -62,15 +76,29 @@ jobs:
       - name: Build installer
         run: npx tauri build
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: omnihub-airplay-addon
+          path: addon
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: omnihub-presentmon
+          path: presentmon
+
       - name: Collect installer files and checksums
         shell: bash
         run: |
           mkdir release
           cp target/release/bundle/nsis/*.exe target/release/bundle/msi/*.msi release/
+          cp addon/OmniHub-AirPlay-addon-x64.zip addon/OmniHub-AirPlay-addon-sources.zip release/
+          cp presentmon/OmniHub-PresentMon-x64.exe presentmon/OmniHub-PresentMon-LICENSE.txt release/
+          (cd release && echo "$OMNIHUB_AIRPLAY_ADDON_SHA256  OmniHub-AirPlay-addon-x64.zip" | sha256sum -c -)
+          (cd release && echo "$OMNIHUB_PRESENTMON_SHA256  OmniHub-PresentMon-x64.exe" | sha256sum -c -)
           (cd release && sha256sum * > SHA256SUMS.txt)
           ls -l release
           cat release/SHA256SUMS.txt
-          sed "s/{{VERSION}}/$VERSION/g" .github/release-notes.md > release-notes.md
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{PRESENTMON}}/$PRESENTMON_VERSION/g" .github/release-notes.md > release-notes.md
 
       - name: Publish release
         shell: bash

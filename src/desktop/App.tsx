@@ -2,9 +2,13 @@ import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { type ComponentType, useEffect, useState } from 'react';
 import { CommandPalette } from './components/CommandPalette';
 import { ConfirmHost } from './components/ConfirmHost';
+import { BrowserPairDialog } from './components/BrowserPairDialog';
+import { DropOverlay } from './components/DropOverlay';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalEvents, ThemeController } from './components/GlobalEvents';
 import { Logo } from './components/Logo';
 import { PowerBanner } from './components/PowerBanner';
+import { SendDialog } from './components/SendDialog';
 import { Sidebar } from './components/Sidebar';
 import { Toaster } from './components/Toaster';
 import { MenuHost } from './components/ui/Menu';
@@ -13,6 +17,9 @@ import { ErrorState } from './components/ui/States';
 import { useMediaQuery, useStoredState } from './lib/hooks';
 import { PAGE_IDS, type RouteId, navigate, useRoute } from './lib/router';
 import { AppsPage } from './pages/apps/AppsPage';
+import { GamesPage } from './pages/games/GamesPage';
+import { MusicPage } from './pages/music/MusicPage';
+import { PlayerHost } from './components/music/PlayerHost';
 import { HomePage } from './pages/home/HomePage';
 import { NotesPage } from './pages/notes/NotesPage';
 import { Onboarding } from './pages/onboarding/Onboarding';
@@ -21,16 +28,20 @@ import { ScreenPage } from './pages/screen/ScreenPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { ScreenshotsPage } from './pages/shots/ScreenshotsPage';
 import { StoragePage } from './pages/storage/StoragePage';
+import { TasksPage } from './pages/tasks/TasksPage';
 import { VaultPage } from './pages/vault/VaultPage';
 import { usePalette } from './state/dialogs';
 import { useSettings } from './state/settings';
 
-const PAGES: Record<Exclude<RouteId, 'overlay'>, ComponentType> = {
+const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient'>, ComponentType> = {
   home: HomePage,
   storage: StoragePage,
   apps: AppsPage,
   screenshots: ScreenshotsPage,
   notes: NotesPage,
+  music: MusicPage,
+  tasks: TasksPage,
+  games: GamesPage,
   vault: VaultPage,
   phone: PhonePage,
   screen: ScreenPage,
@@ -92,7 +103,7 @@ export function App() {
 
   if (!settings) return <Splash error={error} onRetry={() => void load()} />;
 
-  const pageId = route.id === 'overlay' ? 'home' : route.id;
+  const pageId = route.id === 'overlay' || route.id === 'ambient' ? 'home' : route.id;
   const PageComp = PAGES[pageId];
   const showOnboarding = onboardingForced || !settings.general.onboarded;
 
@@ -112,7 +123,9 @@ export function App() {
               animate={{ opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }}
               exit={{ opacity: 0, y: -6, transition: { duration: 0.1 } }}
             >
-              <PageComp />
+              <ErrorBoundary name={pageId}>
+                <PageComp />
+              </ErrorBoundary>
             </motion.div>
           </AnimatePresence>
           {pageId !== 'home' && (
@@ -125,6 +138,10 @@ export function App() {
       <CommandPalette />
       <ConfirmHost />
       <MenuHost />
+      <PlayerHost />
+      <SendDialog />
+      <DropOverlay />
+      <BrowserPairDialog />
       <Toaster />
       <AnimatePresence>{showOnboarding && <Onboarding key="onboarding" onDone={() => setOnboardingForced(false)} />}</AnimatePresence>
     </MotionConfig>

@@ -6,7 +6,7 @@ import { api, errorText } from '../api';
 import { toast } from './toasts';
 import { formatBytes, formatDuration } from '@shared/format';
 
-export type StorageTab = 'explorer' | 'largest' | 'types' | 'cleanup' | 'duplicates' | 'search';
+export type StorageTab = 'explorer' | 'largest' | 'types' | 'growth' | 'cleanup' | 'duplicates' | 'search';
 export type ScanModeChoice = 'fast' | 'standard';
 
 export function rootKey(root: string): string {
