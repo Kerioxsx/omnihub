@@ -61,7 +61,13 @@ jobs:
             echo "$last does not have the add-on's files; building it"
             exit 0
           fi
-          (cd addon && grep -E '  OmniHub-AirPlay-addon-(x64|sources)\.zip$' SHA256SUMS.txt | sha256sum -c -)
+          # Written on Windows: "<hash> *<name>" (binary mode); both files must be listed.
+          sums=$(grep -E '^[0-9a-f]{64} [ *]OmniHub-AirPlay-addon-(x64|sources)\.zip$' addon/SHA256SUMS.txt || true)
+          if [ "$(printf '%s\n' "$sums" | grep -c .)" -ne 2 ]; then
+            echo "$last's SHA256SUMS.txt does not list both add-on files; building it"
+            exit 0
+          fi
+          (cd addon && printf '%s\n' "$sums" | sha256sum -c -)
           rm addon/SHA256SUMS.txt
           echo "sha256=$(sha256sum addon/OmniHub-AirPlay-addon-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           echo "Publishing the add-on from $last again"
