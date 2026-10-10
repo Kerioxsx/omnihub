@@ -9,20 +9,24 @@
 // screen); `mode="page"` fills the Music page.
 //
 // Two views, switched at the top left (or V) and remembered: **Aurora**
-// (components/aurora: music-reactive light around the frame, a scene behind
-// big floating lyrics, a small dock) and **Lyrics** (the Apple Music–style
-// layout described above).
+// (components/aurora: the song's music video or its cover filling the
+// screen, short lyrics in the cover's colours with an emoji now and then,
+// light around the frame, a small dock) and **Lyrics** (the Apple
+// Music–style layout described above).
 
 import type { LyricLine, LyricsStatus, MediaState, PlayerView, VisualStatus } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import { AlignLeft, ChevronDown, Maximize2, MicVocal, Minimize2, Minus, Music2, Pause, Play, Plus, SkipBack, SkipForward, SlidersHorizontal, Sparkles, Volume1, Volume2, VolumeX } from 'lucide-react';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
+import { useCoverLook, useMusicVideo, useVideoOffsets } from '../../lib/aurora/cinema';
+import { calmPlace, glareAt, PLACE_TOP, type Place } from '../../lib/aurora/coverLook';
 import { PaletteBlender } from '../../lib/aurora/palette';
 import { patchVisuals, useVisuals } from '../../lib/aurora/settings';
 import { cx } from '../../lib/cx';
 import { activeLine, fmtTime, setWindowFullscreen, useFrame, useNowPlaying } from '../../lib/nowPlaying';
 import { useSettings } from '../../state/settings';
+import type { BackdropInput, VideoNow } from '../aurora/AuroraBackdrop';
 import { AuroraLyrics, type LyricsState } from '../aurora/AuroraLyrics';
 import { AuroraPanel } from '../aurora/AuroraPanel';
 import { AuroraStage } from '../aurora/AuroraStage';
@@ -536,6 +540,34 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
   offsetRef.current = offset;
   // Lyrics time: the track position plus the user's timing nudge.
   const time = useCallback(() => positionRef.current() + offsetRef.current, []);
+  // The song's own time, for its music video.
+  const songTime = useCallback(() => positionRef.current(), []);
+
+  // Behind everything: the music video, else the cover (see AuroraBackdrop).
+  const scene = visuals.scene;
+  const look = useCoverLook(aurora ? art : null);
+  const wantVideo = aurora && scene.musicVideos && (scene.backdrop === 'auto' || scene.backdrop === 'video');
+  const videoStatus = useMusicVideo(state?.key, wantVideo);
+  const videos = videoStatus?.status === 'found' ? videoStatus.videos : null;
+  const [videoNow, setVideoNow] = useState<VideoNow | null>(null);
+  useEffect(() => setVideoNow(null), [state?.key]);
+  const [offsetFor, setVideoOffset] = useVideoOffsets();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [aspect, setAspect] = useState(16 / 9);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setAspect((el.clientWidth || 16) / Math.max(1, el.clientHeight || 9)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Lyrics where the picture is calmest (the middle over a video), with as
+  // much shadow as the picture behind them needs.
+  const videoShown = !!videoNow?.showing;
+  const place: Place = visuals.lyrics.place !== 'auto' ? visuals.lyrics.place : look && !videoShown && scene.backdrop !== 'visual' ? calmPlace(look, aspect) : 'center';
+  const glare = look && !videoShown && scene.backdrop !== 'visual' ? glareAt(look, aspect, place) : 0.45;
+  const lyricY = PLACE_TOP[place] + visuals.lyrics.offsetY / 100;
+  const backdrop = useMemo<BackdropInput>(() => ({ look, videos, time: songTime, playing: !!state?.playing, offsetFor, onVideo: setVideoNow, lyricY, glare }), [look, videos, songTime, state?.playing, offsetFor, lyricY, glare]);
   const pos = np.position();
   const active = useMemo(() => activeLine(lines, pos + offset), [lines, pos, offset]);
 
@@ -614,7 +646,14 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
   const fade = { opacity: hide ? 0 : 1, transition: 'opacity .6s ease' };
 
   return (
-    <div className={cx('relative isolate flex h-full w-full overflow-hidden text-white [container-type:size]', hide && 'cursor-none')} onMouseMove={wake} onPointerDown={wake}>
+    <div
+      ref={rootRef}
+      className={cx('relative isolate flex h-full w-full overflow-hidden text-white [container-type:size]', hide && 'cursor-none')}
+      onMouseMove={wake}
+      onPointerDown={wake}
+      // The lyrics' colours, from the cover.
+      style={{ '--aurora-ink': look?.ink ?? '#ffffff', '--aurora-ink-deep': look?.inkDeep ?? '#1a1030', '--aurora-glare': glare.toFixed(2) } as CSSProperties}
+    >
       {aurora ? (
         <AuroraStage
           visuals={visuals}
@@ -623,9 +662,11 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
           calmRef={lyricBox}
           framed={!full}
           who={full ? 'player' : 'music-page'}
-          waveY={visuals.lyrics.place === 'lower' ? 0.84 : full ? 0.17 : 0.27}
+          waveY={place === 'lower' ? 0.84 : full ? 0.17 : 0.27}
           onStatus={setCaptureStatus}
           blender={blender}
+          backdrop={backdrop}
+          reduced={reduced}
         />
       ) : (
         <Ambient url={art} />
@@ -687,6 +728,7 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
             time={time}
             trackKey={state.key}
             settings={visuals.lyrics}
+            place={place}
             reduced={reduced}
             full={full}
             shown={lyricsShown && !pausedCard}
@@ -758,7 +800,13 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
         </div>
       )}
 
-      <AuroraPanel open={aurora && panel} onClose={() => setPanel(false)} status={captureStatus} full={full} />
+      <AuroraPanel
+        open={aurora && panel}
+        onClose={() => setPanel(false)}
+        status={captureStatus}
+        full={full}
+        video={{ status: videoStatus, now: videoNow, offset: videoNow ? offsetFor(videoNow.video.id) : 0, setOffset: (ms) => videoNow && setVideoOffset(videoNow.video.id, ms), hasCover: !!art }}
+      />
     </div>
   );
 }

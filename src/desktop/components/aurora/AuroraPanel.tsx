@@ -3,7 +3,7 @@
 // glow, colours), then the visual, the lyrics and the rest. Every change
 // shows at once and is saved (lib/aurora/settings.ts).
 
-import type { AmbientDisplay, ColorMode, Effects, LyricFont, SceneStyle, VisualSettings, VisualStatus } from '@shared/types';
+import type { AmbientDisplay, Backdrop, ColorMode, Effects, LyricFont, SceneStyle, VideoStatus, VisualSettings, VisualStatus } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown, FolderOpen, RotateCcw, ShieldCheck, X } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useState } from 'react';
@@ -12,7 +12,18 @@ import { DEFAULT_EFFECTS } from '../../lib/aurora/defaults';
 import { patchVisuals, resetVisuals, useVisuals } from '../../lib/aurora/settings';
 import { cx } from '../../lib/cx';
 import { useSettings } from '../../state/settings';
+import type { VideoNow } from './AuroraBackdrop';
 import { FONTS } from './AuroraLyrics';
+
+/** The music video, as the player knows it (for the Background section). */
+export interface PanelVideo {
+  status: VideoStatus | null;
+  now: VideoNow | null;
+  /** The nudge for the video on screen, ms. */
+  offset: number;
+  setOffset: (ms: number) => void;
+  hasCover: boolean;
+}
 
 // ---------- small glass controls ----------
 
@@ -131,6 +142,107 @@ const px = (v: number) => `${Math.round(v * 10) / 10} px`;
 
 // ---------- sections ----------
 
+/** What fills the screen: the music video, the cover, or the light show. */
+function BackgroundSection({ v, video }: { v: VisualSettings; video?: PanelVideo }) {
+  const s = v.scene;
+  const set = (p: Partial<VisualSettings['scene']>) => patchVisuals({ scene: p });
+  const now = video?.now ?? null;
+  const st = video?.status ?? null;
+  const usesVideo = s.musicVideos && (s.backdrop === 'auto' || s.backdrop === 'video');
+  // Say plainly what is on screen and why.
+  const line =
+    s.backdrop === 'visual'
+      ? 'The light show built from the cover (Visual and Effects below).'
+      : s.backdrop === 'cover' || !s.musicVideos
+        ? video?.hasCover === false
+          ? 'This song has no cover, so the light show plays in its place.'
+          : 'The cover, full size, filling the screen.'
+        : now?.showing
+          ? `${now.video.kind === 'visualizer' ? 'The animated cover (the artist’s visualizer)' : 'The music video'} from ${now.video.channel}${now.quality ? ` · playing in ${now.quality}` : ''}.`
+          : now?.ended
+            ? 'The video has ended before the song; the cover shows until the next one.'
+            : now
+              ? 'Loading the music video… the cover shows until it plays in step.'
+              : st?.status === 'searching'
+                ? 'Looking for the music video…'
+                : st?.status === 'found'
+                  ? 'YouTube will not play this song’s video here; showing the cover.'
+                  : st?.status === 'none'
+                    ? 'No music video from the artist for this song — showing the cover.'
+                    : 'The cover fills the screen.';
+  const nudge = (d: number) => video?.setOffset(Math.max(-600_000, Math.min(600_000, (video?.offset ?? 0) + d)));
+  const fmt = (ms: number) => (ms === 0 ? 'in step' : `${ms > 0 ? '+' : '−'}${Math.abs(ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 1)}s`);
+  const choices: { value: Backdrop; label: string }[] = [
+    { value: 'auto', label: 'Video, else cover' },
+    { value: 'video', label: 'Music video' },
+    { value: 'cover', label: 'Cover' },
+    { value: 'visual', label: 'Light show' },
+  ];
+  return (
+    <Section title="Background">
+      <Dropdown label="Behind the lyrics" value={s.backdrop} options={choices} onChange={(backdrop) => set({ backdrop })} />
+      <p className="pb-1 text-[11px] leading-snug text-white/55" data-backdrop-status>
+        {line}
+      </p>
+      <Toggle
+        label="Music videos from YouTube"
+        hint="The artist's own video (or animated cover), muted, in YouTube's player, kept in time with the song. Only the song's title and artist are searched for."
+        checked={s.musicVideos}
+        disabled={s.backdrop === 'cover' || s.backdrop === 'visual'}
+        onChange={(musicVideos) => set({ musicVideos })}
+      />
+      {usesVideo && now && (
+        <div className="py-1.5">
+          <div className="mb-1 flex items-baseline justify-between text-[12px]">
+            <span className="font-medium text-white/85">Video timing</span>
+            <span className="font-mono text-[11px] tabular-nums text-white/50">{fmt(video?.offset ?? 0)}</span>
+          </div>
+          <div className="flex gap-1.5">
+            {[-5000, -1000, 1000, 5000].map((d) => (
+              <button key={d} type="button" onClick={() => nudge(d)} className="h-7 flex-1 rounded-[8px] bg-white/[0.08] text-[11.5px] font-semibold text-white/85 hover:bg-white/[0.14]">
+                {d > 0 ? '+' : '−'}
+                {Math.abs(d / 1000)}s
+              </button>
+            ))}
+            <button type="button" onClick={() => video?.setOffset(0)} className="h-7 rounded-[8px] bg-white/[0.08] px-2.5 text-[11.5px] font-semibold text-white/70 hover:bg-white/[0.14]">
+              Reset
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] leading-snug text-white/45">{now.video.synced ? 'This video is as long as the song and plays in step with it.' : 'This video is longer than the song (a story before or after). If it is out of step, move it here; it is remembered for this video.'}</p>
+        </div>
+      )}
+      {usesVideo && (
+        <>
+          <Dropdown
+            label="Video"
+            value={s.videoFit}
+            options={[
+              { value: 'fill', label: 'Fill the screen' },
+              { value: 'fit', label: 'Whole picture' },
+            ]}
+            onChange={(videoFit) => set({ videoFit })}
+          />
+          <Slider label="Keep in view (cropped)" value={s.videoFocus} min={0} max={1} onChange={(videoFocus) => set({ videoFocus })} format={(x) => (x < 0.34 ? 'top' : x > 0.66 ? 'bottom' : 'middle')} disabled={s.videoFit !== 'fill'} />
+          <Dropdown
+            label="Video quality"
+            value={s.videoQuality}
+            options={[
+              { value: 'best', label: 'Best (up to 4K)' },
+              { value: '1080', label: 'Up to 1080p' },
+              { value: '720', label: 'Up to 720p' },
+            ]}
+            onChange={(videoQuality) => set({ videoQuality })}
+          />
+          <p className="pb-1 text-[11px] leading-snug text-white/45">4K plays when the artist uploaded it in 4K and the screen and connection allow; the line above says what is really playing.</p>
+        </>
+      )}
+      <Slider label="Cover motion" value={s.coverMotion} min={0} max={1} onChange={(coverMotion) => set({ coverMotion })} format={(x) => (x < 0.005 ? 'still' : pct(x))} disabled={s.backdrop === 'visual'} />
+      <Slider label="Darken behind the lyrics" value={s.dim} min={0} max={1} onChange={(dim) => set({ dim })} format={pct} disabled={s.backdrop === 'visual'} />
+      <Slider label="Corner light" value={s.corners} min={0} max={1} onChange={(corners) => set({ corners })} format={(x) => (x < 0.005 ? 'off' : pct(x))} disabled={s.backdrop === 'visual'} />
+    </Section>
+  );
+}
+
 /** The reference's main block: the light around the screen and its colours. */
 function LightSection({ v }: { v: VisualSettings }) {
   const c = v.color;
@@ -198,8 +310,9 @@ function VisualSection({ v }: { v: VisualSettings }) {
     { value: 'ambient', label: 'Ambient' },
   ];
   return (
-    <Section title="Visual" right={<MiniSwitch label="Visual" checked={s.enabled} onChange={(enabled) => set({ enabled })} />}>
+    <Section title="Light show" right={<MiniSwitch label="Light show" checked={s.enabled} onChange={(enabled) => set({ enabled })} />}>
       <div className={cx(!s.enabled && 'pointer-events-none opacity-45')}>
+        {s.backdrop !== 'visual' && <p className="pb-1 text-[11px] leading-snug text-white/45">Shown when Background is “Light show”, and for songs without a cover.</p>}
         <Dropdown label="Style" value={s.style} options={styles} onChange={(style) => set({ style })} />
         <p className="pb-1 text-[11px] leading-snug text-white/45">
           {s.style === 'minimal' ? 'Mostly dark: the cover small and dim.' : s.style === 'ambient' ? 'Slow colour fields from the palette.' : 'The cover art, pulsing and glitching with the music.'}
@@ -245,6 +358,26 @@ function LyricsSection({ v }: { v: VisualSettings }) {
           ]}
           onChange={(weight) => set({ weight })}
         />
+        <Dropdown
+          label="Emojis"
+          value={l.emoji}
+          options={[
+            { value: 'some', label: 'Now and then' },
+            { value: 'more', label: 'More often' },
+            { value: 'off', label: 'Off' },
+          ]}
+          onChange={(emoji) => set({ emoji })}
+        />
+        <Dropdown
+          label="Emoji style"
+          value={l.emojiStyle}
+          options={[
+            { value: '3d', label: '3D (glossy)' },
+            { value: 'system', label: 'Windows' },
+          ]}
+          onChange={(emojiStyle) => set({ emojiStyle })}
+        />
+        <p className="pb-1 text-[11px] leading-snug text-white/45">An emoji beside a word that means something you can picture or feel — never one on every line.</p>
         <Dropdown
           label="Highlight"
           value={l.timing === 'line' || !l.wordHighlight ? 'line' : 'word'}
@@ -303,6 +436,7 @@ function LyricsSection({ v }: { v: VisualSettings }) {
           label="Position"
           value={l.place}
           options={[
+            { value: 'auto', label: 'Where it is calm' },
             { value: 'upper', label: 'Upper' },
             { value: 'center', label: 'Centre' },
             { value: 'lower', label: 'Lower' },
@@ -519,7 +653,7 @@ function SourcesSection() {
 
 // ---------- the panel ----------
 
-export function AuroraPanel({ open, onClose, status, full }: { open: boolean; onClose: () => void; status: VisualStatus | null; full: boolean }) {
+export function AuroraPanel({ open, onClose, status, full, video }: { open: boolean; onClose: () => void; status: VisualStatus | null; full: boolean; video?: PanelVideo }) {
   const v = useVisuals();
   const [confirm, setConfirm] = useState(false);
   useEffect(() => {
@@ -554,6 +688,7 @@ export function AuroraPanel({ open, onClose, status, full }: { open: boolean; on
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
             {!v.enabled && <p className="px-4 pt-3 text-[11.5px] leading-snug text-amber-200/80">Aurora is off: no sound is analysed and nothing is drawn. The lyrics still show.</p>}
+            <BackgroundSection v={v} video={video} />
             <LightSection v={v} />
             <VisualSection v={v} />
             <EffectsSection v={v} />

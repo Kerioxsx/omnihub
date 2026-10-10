@@ -120,10 +120,21 @@ or the UI:
   folder first (matched on tags or "Artist - Title" names, length within
   8 s, lines that fit the track), then the cache, then LRCLIB. Lyrics are
   stored per track key, so a new track never gets the last one's lines.
-- **Covers** (`media/artwork.rs`): the player's thumbnail is replaced by a
-  1200×1200 copy from the iTunes catalogue when the song matches (title,
-  artist, length) and the picture looks like the thumbnail (16×16
-  comparison); cached in `data/covers`. The art id changes, so views refetch.
+- **Covers** (`media/artwork.rs`): the player's thumbnail is replaced by
+  the original-size copy from the iTunes catalogue (asked for at
+  10000×10000, which returns the master, usually 3000×3000; at most 16 MB)
+  when the song matches (title, artist, length) and the picture looks like
+  the thumbnail (16×16 comparison); cached in `data/covers`. The art id
+  changes, so views refetch.
+- **Music videos** (`media/video.rs`): asked for by the player
+  (`media_video`), looked up once per song on YouTube's results page
+  (`ytInitialData` parsed, like a browser would get it) and kept only when
+  the channel is the artist's own (official artist badge, VEVO, or named
+  after the artist), the title names the song, and the upload is not a
+  lyric, audio, live, cover, remix, sped-up or vertical version. Music
+  videos rank before visualizers (the animated cover); each is marked
+  *synced* when its length is within a few seconds of the song's. Answers
+  are cached in `data/videos` and announced with `media:video`.
 - **Word timing** (`lib/aurora/timing.ts`): for lyrics that only time
   lines, words are spread over each line by syllables (opt-out); real word
   timestamps always win.
@@ -138,6 +149,30 @@ or the UI:
   The lyrics overlay follows the player's clock (`useNowPlaying`), steps
   word by word only with word timestamps, and renders only when the line or
   word changes.
+- **Cinema backdrop** (`components/aurora/AuroraBackdrop.tsx`,
+  `lib/aurora/cinema.ts`, `youtube.ts`, `coverLook.ts`): behind the lyrics,
+  in order, the music video, the visualizer, the full-size cover, or the
+  light show above. The video plays in the youtube-nocookie embed, muted,
+  steered with the IFrame API's postMessage protocol; a sync loop compares
+  the player's reported time with the song's (plus a per-video offset the
+  user can nudge, kept in local storage), seeks beyond 1 s of drift and
+  sets the rate to 0.94/1.06 between 0.12 s and 1 s. The quality cap is the
+  iframe's device-pixel size. When YouTube refuses a video (embedding off,
+  removed) the next candidate is tried, then the cover. The cover is drawn
+  full size with a slow drift, cropped around its detail (`coverLook`:
+  per-row detail and brightness from a 48×48 copy); the same study picks
+  the calmest band for the lyrics and how bright it is there, which sets
+  the scrim, the frosted patch and the text's shadow. Lyric ink is a light
+  tone of the most colourful palette colour (OKLab), its shadow a deep one.
+  Corner light is four radial gradients in the palette's colours, scaled by
+  the bass.
+- **Emojis** (`lib/aurora/emoji.ts`): a word list (with simple lemmas and
+  phrases) maps lyric words to emojis; a planner picks at most one per line
+  and spaces them out (*Now and then*: at least one line without between
+  them, two after a common word like "love"; *More often*: half that),
+  never the same twice running. The pictures are
+  Fluent Emoji 3D WebPs in `public/emoji/3d`, rebuilt by
+  `scripts/emoji-3d.py`.
 - **Screen glow** (`src-tauri/src/ambient.rs`, `pages/overlay/AmbientOverlay.tsx`):
   a transparent, click-through, always-on-top window per chosen monitor,
   placed in physical pixels on the monitor or its work area; a watcher

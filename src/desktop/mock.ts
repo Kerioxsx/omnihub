@@ -68,6 +68,7 @@ const handlers: Record<string, Handler> = {
   media_state: () => music.mediaState(),
   media_control: (a) => music.mediaControl(str(a, 'action') as MediaAction, num(a, 'positionMs', 0)),
   media_lyrics: () => music.mediaLyrics(),
+  media_video: () => music.mediaVideo(),
   media_art: (a) => music.mediaArt(str(a, 'id')),
   media_audio: () => music.mediaAudio(),
   media_set_volume: (a) => music.mediaSetVolume(a.level == null ? null : num(a, 'level'), a.muted == null ? null : bool(a, 'muted')),

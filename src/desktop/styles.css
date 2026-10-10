@@ -375,3 +375,9 @@ select:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .ambient-blob { animation: none !important; }
 }
+
+/* Aurora: an emoji beside the sung word floats a little. */
+@keyframes aurora-bob {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-0.07em) rotate(4deg); }
+}

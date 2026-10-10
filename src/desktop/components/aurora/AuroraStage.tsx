@@ -1,5 +1,6 @@
-// Aurora's light: the scene behind the lyrics and the glow around the frame,
-// driven by one animation loop. Sound comes from the core's analysis of
+// Aurora's light: what fills the screen behind the lyrics (the music video or
+// the cover, see AuroraBackdrop; or the light show built from the cover) and
+// the glow around the frame, driven by one animation loop. Sound comes from the core's analysis of
 // what the PC plays (see lib/aurora/audio.ts); colours from the cover art or
 // the user's palette (lib/aurora/palette.ts). Nothing here re-renders React
 // per frame. The loop drops to 30 fps while paused or with reduced motion,
@@ -11,7 +12,8 @@ import { LevelFollower, useAudioFeed } from '../../lib/aurora/audio';
 import { cx } from '../../lib/cx';
 import { DEFAULT_EFFECTS } from '../../lib/aurora/defaults';
 import { GlowRenderer, SceneRenderer } from '../../lib/aurora/gl';
-import { albumPalette, glowPalette, type Lab, PaletteBlender, targetPalette } from '../../lib/aurora/palette';
+import { albumPalette, glowPalette, type Lab, PaletteBlender, rgbToHex, targetPalette } from '../../lib/aurora/palette';
+import { AuroraBackdrop, type BackdropInput } from './AuroraBackdrop';
 
 export interface StageProps {
   visuals: VisualSettings;
@@ -30,9 +32,12 @@ export interface StageProps {
   blender: PaletteBlender;
   /** The screen glow's see-through window: the edge light only, nothing behind it. */
   overlay?: boolean;
+  /** The player: the music video or the cover behind everything (when the backdrop is not the light show). */
+  backdrop?: BackdropInput;
+  reduced?: boolean;
 }
 
-export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY, onStatus, blender, overlay = false }: StageProps) {
+export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY, onStatus, blender, overlay = false, backdrop, reduced: appReduced = false }: StageProps) {
   const root = useRef<HTMLDivElement>(null);
   const sceneCanvas = useRef<HTMLCanvasElement>(null);
   const glowCanvas = useRef<HTMLCanvasElement>(null);
@@ -42,9 +47,13 @@ export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY
   const status = useAudioFeed(on && visuals.audioReactive, who);
   useEffect(() => onStatus?.(status), [status, onStatus]);
 
+  // The cover or the music video fills the screen (the light show only when
+  // asked for, or when a song has no cover at all).
+  const cinema = !overlay && !!backdrop && visuals.scene.backdrop !== 'visual';
+  const lightShow = !cinema || !art;
   // Live values for the loop.
-  const live = useRef({ visuals, playing, waveY, framed });
-  live.current = { visuals, playing, waveY, framed };
+  const live = useRef({ visuals, playing, waveY, framed, cinema, lightShow });
+  live.current = { visuals, playing, waveY, framed, cinema, lightShow };
 
   // Palette target: cover art or the user's colours.
   const [album, setAlbum] = useState<Lab[] | null>(null);
@@ -105,7 +114,7 @@ export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY
     let vars = 0;
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
-      const { visuals: v, playing: isPlaying, waveY: wy, framed: inCard } = live.current;
+      const { visuals: v, playing: isPlaying, waveY: wy, framed: inCard, cinema: cin, lightShow: drawScene } = live.current;
       const reduced = v.reducedMotion;
       if ((reduced || !isPlaying) && now - last < 1000 / 30 - 2) return;
       const dt = Math.min(0.1, (now - last) / 1000);
@@ -141,12 +150,13 @@ export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY
         seeded = now;
         seed = Math.random() * 97;
       }
-      if (sc && !sc.lost && v.scene.enabled) {
+      if (sc && !sc.lost && v.scene.enabled && drawScene) {
         const w = sc.canvas.getBoundingClientRect().width || 1;
         sc.resize(Math.max(0.3, Math.min(dpr, 1920 / w)));
         const st = v.scene.style;
         const fx = { ...DEFAULT_EFFECTS, ...v.scene.effects };
-        const coverless = !v.scene.artwork || st === 'ambient';
+        // With no cover behind the lyrics: colour fields in the song's palette.
+        const coverless = !v.scene.artwork || st === 'ambient' || cin;
         sc.draw(time, colors, lv, flash, motion, {
           intensity: v.scene.intensity,
           blur: v.scene.blur,
@@ -187,9 +197,17 @@ export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY
           idle: anim === 'none' ? 0 : anim === 'idle' ? 1 : idle,
         });
       }
-      if (now - vars > 150 && root.current) {
+      // The beat for the cover's breathing and the corner light (cheap: one element).
+      if (cin && root.current) {
+        root.current.style.setProperty('--aurora-beat', lv.beat.toFixed(3));
+        root.current.style.setProperty('--aurora-low', lv.low.toFixed(3));
+      }
+      // The song's colours for everything around (lyrics, dock, corners).
+      const host = root.current?.parentElement;
+      if (now - vars > 150 && host) {
         vars = now;
-        root.current.style.setProperty('--aurora-accent', glowBlender.accent());
+        host.style.setProperty('--aurora-accent', glowBlender.accent());
+        for (let k = 0; k < 4; k++) host.style.setProperty(`--aurora-c${k + 1}`, rgbToHex([edgeColors[k * 3], edgeColors[k * 3 + 1], edgeColors[k * 3 + 2]]));
       }
     };
     raf = requestAnimationFrame(loop);
@@ -207,27 +225,29 @@ export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY
   useEffect(() => {
     const sc = scene.current;
     if (!sc) return;
-    if (!art || !visuals.scene.artwork) return sc.setArt(null);
+    // The light show only (the full-screen cover is drawn by the backdrop).
+    if (!art || !visuals.scene.artwork || !lightShow) return sc.setArt(null);
     const img = new Image();
     img.onload = () => scene.current?.setArt(img);
     img.src = art;
-  }, [art, visuals.scene.artwork, generation, on, failed]);
+  }, [art, visuals.scene.artwork, generation, on, failed, lightShow]);
 
   if (!on) return <div ref={root} className={cx('pointer-events-none absolute inset-0', !overlay && 'bg-black')} aria-hidden />;
   return (
     <div ref={root} className={cx('pointer-events-none absolute inset-0 overflow-hidden', !overlay && 'bg-black')} aria-hidden data-aurora-stage>
+      {cinema && backdrop && (art || !!backdrop.videos?.length) && <AuroraBackdrop scene={visuals.scene} art={art} reduced={visuals.reducedMotion || appReduced} {...backdrop} />}
       {failed ? (
         // No WebGL: a still gradient in the palette and a CSS glow.
         <div
           className="absolute inset-0"
           style={{
-            background: overlay ? undefined : 'radial-gradient(70% 60% at 30% 30%, color-mix(in oklab, var(--aurora-accent, #8b5cf6) 45%, transparent), transparent), #000',
+            background: overlay || !lightShow ? undefined : 'radial-gradient(70% 60% at 30% 30%, color-mix(in oklab, var(--aurora-accent, #8b5cf6) 45%, transparent), transparent), #000',
             boxShadow: visuals.glow.enabled ? 'inset 0 0 0 2px color-mix(in oklab, var(--aurora-accent, #8b5cf6) 80%, white), inset 0 0 40px color-mix(in oklab, var(--aurora-accent, #8b5cf6) 70%, transparent)' : undefined,
           }}
         />
       ) : (
         <>
-          {!overlay && <canvas key={`s${generation}`} ref={sceneCanvas} className="absolute inset-0 h-full w-full" style={{ opacity: visuals.scene.enabled ? 1 : 0, transition: 'opacity .6s ease' }} />}
+          {!overlay && <canvas key={`s${generation}`} ref={sceneCanvas} className="absolute inset-0 h-full w-full" style={{ opacity: visuals.scene.enabled && lightShow ? 1 : 0, transition: 'opacity .6s ease' }} />}
           <canvas key={`g${generation}`} ref={glowCanvas} className={cx('absolute inset-0 z-30 h-full w-full', !overlay && 'mix-blend-screen')} style={{ opacity: visuals.glow.enabled ? 1 : 0, transition: 'opacity .6s ease' }} />
         </>
       )}

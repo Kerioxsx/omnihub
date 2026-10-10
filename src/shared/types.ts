@@ -909,7 +909,7 @@ export interface VisualSettings {
     /** Lyrics that only time lines: spread the words over each line by syllables (close, not exact). */
     estimateWords: boolean;
     timing: 'auto' | 'line';
-    place: 'center' | 'upper' | 'lower';
+    place: 'auto' | 'center' | 'upper' | 'lower';
     offsetX: number;
     offsetY: number;
     lines: number;
@@ -919,8 +919,36 @@ export interface VisualSettings {
     transition: number;
     /** 0–1.5: how much the lyrics move with the music (bounce, sway, pop) */
     motion: number;
+    /** Emojis beside words they match. */
+    emoji: EmojiAmount;
+    emojiStyle: EmojiStyle;
   };
-  scene: { enabled: boolean; style: SceneStyle; intensity: number; speed: number; blur: number; saturation: number; opacity: number; artwork: boolean; waveform: boolean; effects: Effects };
+  scene: {
+    enabled: boolean;
+    style: SceneStyle;
+    intensity: number;
+    speed: number;
+    blur: number;
+    saturation: number;
+    opacity: number;
+    artwork: boolean;
+    waveform: boolean;
+    effects: Effects;
+    /** What fills the screen: the music video or the cover (auto), one of them, or the light show. */
+    backdrop: Backdrop;
+    /** Look the song's music video up on YouTube. */
+    musicVideos: boolean;
+    /** 0–1: how much the full-screen cover drifts and breathes. */
+    coverMotion: number;
+    /** 0–1: how much the cover or video is darkened behind the lyrics. */
+    dim: number;
+    /** 0–1: soft light in the song's colours from the corners. */
+    corners: number;
+    videoFit: VideoFit;
+    /** 0 (top) – 1 (bottom): the part of a cropped video that stays. */
+    videoFocus: number;
+    videoQuality: VideoQuality;
+  };
   desktop: { enabled: boolean; lyrics: boolean; display: string; clearTaskbar: boolean; hideFullscreen: boolean; startWithApp: boolean };
 }
 
@@ -1113,6 +1141,27 @@ export interface LyricLine {
   /** Word timings estimated here, not from the lyrics (desktop only). */
   estimated?: boolean;
 }
+
+export type Backdrop = 'auto' | 'video' | 'cover' | 'visual';
+export type EmojiAmount = 'off' | 'some' | 'more';
+export type EmojiStyle = '3d' | 'system';
+export type VideoFit = 'fill' | 'fit';
+export type VideoQuality = 'best' | '1080' | '720';
+
+/** A song's music video on YouTube (the artist's own upload). */
+export interface MusicVideo {
+  id: string;
+  title: string;
+  channel: string;
+  durationMs: number;
+  /** "video", or "visualizer": the artist's animated cover. */
+  kind: 'video' | 'visualizer';
+  uhd: boolean;
+  /** As long as the song, so it plays in step with it. */
+  synced: boolean;
+}
+
+export type VideoStatus = { status: 'found'; videos: MusicVideo[] } | { status: 'searching' | 'none' | 'off' | 'nothingPlaying' };
 
 export type LyricsStatus =
   | { status: 'ready'; lyrics: { lines: LyricLine[]; plain: string | null; instrumental: boolean; source: string } }

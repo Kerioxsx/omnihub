@@ -324,6 +324,7 @@ pub fn run(args: Vec<String>) {
             commands::media_state,
             commands::media_control,
             commands::media_lyrics,
+            commands::media_video,
             commands::media_art,
             commands::media_audio,
             commands::media_set_volume,

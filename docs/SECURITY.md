@@ -215,6 +215,22 @@ the PC plays. How that works, and what it never does:
   video or presentation is full screen and during game boosts.
 - **Keep the screen on** asks Windows not to turn the display off only while
   the player shows Aurora and music plays, and lets go when either stops.
+- **Music videos.** With *Music videos from YouTube* on (the default) and a
+  background that can show one, OmniHub looks the song up on YouTube: the
+  song's title and artist go to `www.youtube.com/results` as a search, sent
+  with a "reject all" consent cookie and no account. Only the answer page is
+  read (the video ids, titles, channels and lengths); only uploads by the
+  artist's own channel or VEVO are kept, and the answer is cached on the PC
+  (a month; three days when there is none). The video then plays in
+  YouTube's embedded player from `www.youtube-nocookie.com`, muted, in its
+  own frame: no YouTube script runs in OmniHub's page, the player keeps its
+  own cookies to its own frame, and the app's content security policy lets
+  frames come only from YouTube. OmniHub talks to the player only with the
+  player's own messages (play, pause, seek, speed, mute) and reads back its
+  time, state and quality. Turn the toggle off, or pick *Cover* or *Light
+  show*, and nothing is searched or played.
+- **3D emojis** beside lyrics are Microsoft's Fluent Emoji (MIT licence, in
+  `public/emoji/3d/LICENSE.txt`), shipped inside the app; none are fetched.
 
 ## Deleting files
 
@@ -236,7 +252,11 @@ internet only for:
   results are cached on the PC.
 - **Sharper covers** (Music, on by default, can be turned off): the title,
   artist and album of the playing song go to Apple's iTunes Search API, and
-  the matching 1200×1200 cover is downloaded; covers are cached on the PC.
+  the matching cover is downloaded at its original size (usually
+  3000×3000, at most 16 MB); covers are cached on the PC.
+- **Music videos** (Aurora, on by default, can be turned off): the title and
+  artist of the playing song go to YouTube's search page, and the artist's
+  video plays from youtube-nocookie.com (see Aurora above).
 - **Breach check** (Vault → Health, only when you run it): the first five
   characters of each password's SHA-1 go to Have I Been Pwned's range API
   (k-anonymity); passwords never leave the PC.

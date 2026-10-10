@@ -1,7 +1,7 @@
 // A pretend music player for the mock backend (same tracks as the Rust
 // test player), so Now Playing and lyrics can be developed without Windows.
 
-import type { LyricLine, LyricsStatus, MediaAction, MediaState } from '@shared/types';
+import type { LyricLine, LyricsStatus, MediaAction, MediaState, VideoStatus } from '@shared/types';
 import { emit } from './bus';
 
 // The core's test lyrics (original, made up for testing): words timed with
@@ -113,6 +113,26 @@ export function mediaLyrics(): { key: string; lyrics: LyricsStatus } {
   return { key: s.key, lyrics: { status: 'ready', lyrics: { lines: parseLrc(t.lrc), plain: null, instrumental: false, source: 'OmniHub test lyrics' } } };
 }
 
+/** The pretend songs have no music videos, unless a test names some
+ * (localStorage "omnihub.demo.video" = YouTube ids separated by "|"; ",free"
+ * after one for a video longer than the song). */
+export function mediaVideo(): { key: string; video: VideoStatus } {
+  const s = state();
+  let pick: string | null = null;
+  try {
+    pick = localStorage.getItem('omnihub.demo.video');
+  } catch {
+    /* no storage: no video */
+  }
+  if (!pick) return { key: s.key, video: { status: 'none' } };
+  const t = TRACKS[index];
+  const videos = pick.split('|').map((one) => {
+    const [id, how] = one.split(',');
+    return { id, title: `${t.artist} - ${t.title} (Official Video)`, channel: t.artist, durationMs: how === 'free' ? t.durationMs + 60_000 : t.durationMs, kind: 'video' as const, uhd: true, synced: how !== 'free' };
+  });
+  return { key: s.key, video: { status: 'found', videos } };
+}
+
 /** For the pretend sound: the track, where it is and whether it plays. */
 export function playback() {
   return { track: index, bpm: TRACKS[index].bpm, positionMs: position(), playing };
@@ -120,6 +140,13 @@ export function playback() {
 
 /** Original neon covers on black, one design per test track. */
 export function mediaArt(id: string): string {
+  // A test can show a real cover instead (localStorage "omnihub.demo.cover" = its URL).
+  try {
+    const own = localStorage.getItem('omnihub.demo.cover');
+    if (own) return own;
+  } catch {
+    /* the drawn covers then */
+  }
   const i = Number(id.split('-')[1]) || 0;
   const t = TRACKS[i];
   const [a, b] = t.hue;

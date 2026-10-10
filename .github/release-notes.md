@@ -1,14 +1,20 @@
 ## New in this version
 
-Aurora, after the first real-world try:
+**Aurora goes cinema.** The song now fills the screen, behind short lyrics in the cover's own colours:
 
-- **Sharper covers.** Music players give Windows a small cover (often 300×300), which looked soft stretched across the screen. OmniHub now finds the same cover at **1200×1200** in Apple's iTunes catalogue — only when the song and the picture match — and draws every cover with sharper scaling. Only the song's title, artist and album are sent; turn it off under *Lyrics and covers*.
-- **More effects, each on its own slider.** Beat zoom, glow on bright parts, echo, ripples, twist, shake, glitch, colour split, pixelate on beats, fisheye, kaleidoscope, halftone dots, scanlines and duotone, with **Calm**, **Default**, **Wild** and **Shuffle** presets. Glitch is subtle by default now.
-- **Lyrics word by word for every song.** Most lyrics online only time each line; Aurora now spreads a line's words over it by their syllables, so the highlight moves word by word (close, not exact — songs whose lyrics time each word still use those exact timings). Turn *Estimate words* off for whole lines.
-- **Only the word being sung is highlighted.** The next word below is now quiet instead of sitting in a coloured pill.
-- **Lyrics that move with the music.** Words pop in, bounce on beats and sway gently. A new **Movement** slider sets how much (Reduced motion keeps them still).
+- **The music video as the background.** When the artist has an official music video, Aurora plays it full screen behind the lyrics — muted (your music app is still the sound), in YouTube's own player, **up to 4K** when the artist uploaded it in 4K, and kept **in step with the song** (it seeks when the song jumps and eases its speed for small drifts). Only the artist's own uploads count (their official channel or VEVO), not lyric videos or fan uploads. Videos with a story before the song can be moved with **Video timing**, remembered per video.
+- **Else the animated cover**, when the artist has a visualizer for the song.
+- **Else the whole cover, full size.** OmniHub now fetches the original cover from Apple's catalogue (usually 3000×3000), so it stays sharp on any monitor — even 4K — and it drifts slowly so the screen never feels frozen. Wide screens crop around the cover's detail, never its middle at random.
+- **Else the light show** (the Visual styles and effects from 0.5).
+- **Lyrics in the cover's colours.** A light tone of the cover's own colour, with a matching glow; on bright covers or videos Aurora adds just enough shadow and darkening to keep every word readable.
+- **Lyrics where the picture is calm.** Aurora finds the quietest band of the cover (not a face, not the title) and puts the lyrics there; or pick top, middle or bottom.
+- **3D emojis, used sparingly.** A glossy emoji appears beside a word you can picture or feel — a heart, the moon, fire, tears — never on every line, and never twice in a row. *Now and then*, *More often* or *Off*; 3D or Windows style.
+- **Corner light** in the cover's colours, breathing with the bass.
+- **Settings** under *Background*: what plays behind the lyrics (video else cover, video, cover or light show), music videos on or off, fill the screen or whole picture, what to keep in view when cropped, video quality (best, 1080p, 720p), cover motion, darkening and corner light. The panel says honestly what is on screen ("The music video from … · playing in 4K (2160p)").
 
-**How Aurora hears the music:** it reads the sound Windows is already playing (the mix you hear, called loopback), only while Aurora is on screen. It never uses the microphone, never records and never sends sound anywhere. Turn off *Follow the music* to stop it; the light then moves on its own.
+**What goes to YouTube:** only the song's title and artist, to find the video, and the video itself plays from youtube-nocookie.com. Turn off *Music videos from YouTube* to stop both. The 3D emojis are Microsoft's Fluent Emoji (MIT licence), built into OmniHub — nothing is fetched for them.
+
+**How Aurora hears the music:** it reads the sound Windows is already playing (the mix you hear, called loopback), only while Aurora is on screen. It never uses the microphone, never records and never sends sound anywhere.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

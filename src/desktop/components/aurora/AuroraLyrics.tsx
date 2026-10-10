@@ -12,11 +12,16 @@
 // line, which appears a moment before it is sung. Seeking jumps straight to
 // the right place; a new track never shows the last one's lyrics; songs
 // without lyrics, instrumentals and unsynced lyrics each say so.
+//
+// The words take the cover's colours (--aurora-ink, set by the player), with
+// as much shadow as the picture behind needs (--aurora-glare), and an emoji
+// pops in beside a word now and then (lib/aurora/emoji.ts).
 
 import type { LyricLine, VisualSettings } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import { type CSSProperties, forwardRef, memo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { LevelFollower } from '../../lib/aurora/audio';
+import { emojiFile, planEmojis } from '../../lib/aurora/emoji';
 import { estimateWords } from '../../lib/aurora/timing';
 import { activeLine } from '../../lib/nowPlaying';
 
@@ -224,6 +229,37 @@ function BreakDots({ from, to, time, reduced }: { from: number; to: number; time
 
 const still = () => 0;
 
+// ---------- emojis ----------
+
+const EMOJI_FONT = '"Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+
+/** One emoji beside a word: it pops in, then floats gently. */
+function Emoji({ emoji, style, reduced, current }: { emoji: string; style: VisualSettings['lyrics']['emojiStyle']; reduced: boolean; current: boolean }) {
+  const [broken, setBroken] = useState(false);
+  const pop = reduced ? { initial: { opacity: 0 }, animate: { opacity: 1 } } : { initial: { opacity: 0, scale: 0.2, rotate: -24, y: '0.2em' }, animate: { opacity: 1, scale: 1, rotate: 0, y: 0 } };
+  const transition = reduced ? { duration: 0.2 } : { type: 'spring' as const, stiffness: 420, damping: 13, delay: 0.06 };
+  return (
+    <span className="mx-[0.16em] inline-block align-[-0.1em]" style={{ animation: reduced || !current ? undefined : 'aurora-bob 3.2s ease-in-out infinite' }} data-lyric-emoji={emoji}>
+      {style === '3d' && !broken ? (
+        <motion.img
+          src={emojiFile(emoji)}
+          alt={emoji}
+          draggable={false}
+          onError={() => setBroken(true)}
+          className="inline-block h-[0.86em] w-[0.86em] select-none"
+          style={{ filter: 'drop-shadow(0 0.05em 0.1em rgba(0,0,0,.45)) drop-shadow(0 0 0.18em color-mix(in oklab, var(--aurora-accent, #a855f7) 45%, transparent))' }}
+          {...pop}
+          transition={transition}
+        />
+      ) : (
+        <motion.span className="inline-block" style={{ fontFamily: EMOJI_FONT, fontSize: '0.84em', textShadow: 'none' }} {...pop} transition={transition}>
+          {emoji}
+        </motion.span>
+      )}
+    </span>
+  );
+}
+
 // ---------- layouts ----------
 
 interface LayoutProps {
@@ -240,6 +276,25 @@ interface LayoutProps {
 function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
   const wordMode = s.timing === 'auto' && s.wordHighlight;
   const items = useMemo(() => stackItems(lines, wordMode), [lines, wordMode]);
+  // Which steps get an emoji, worked out once per song.
+  const emojis = useMemo(() => planEmojis(items, s.emoji), [items, s.emoji]);
+  const withEmoji = (i: number, current: boolean): ReactNode => {
+    const it = items[i];
+    const p = emojis[i];
+    if (!p) return it.text;
+    const e = <Emoji key="e" emoji={p.emoji} style={s.emojiStyle} reduced={reduced} current={current} />;
+    return p.before ? (
+      <>
+        {e}
+        {it.text}
+      </>
+    ) : (
+      <>
+        {it.text}
+        {e}
+      </>
+    );
+  };
   const { value: at, jump } = useFollow(time, (t) => stackAt(items, lines, t), [items, lines]);
   if (!at) return null;
 
@@ -256,19 +311,18 @@ function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
     for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
     return (((h >>> 0) % 1000) / 1000 - 0.5) * 6 * mv;
   };
-  const hl = s.highlightColor ?? '#ffffff';
+  // The cover's colour (or the user's), on a shadow as deep as the picture needs.
+  const hl = s.highlightColor ?? 'var(--aurora-ink, #ffffff)';
   const g = Math.min(1, s.glow);
-  const glowShadow =
-    s.glow > 0
-      ? `0 0 ${0.12 + 0.1 * s.glow}em color-mix(in oklab, var(--aurora-glow) ${Math.round(75 * g)}%, transparent), 0 0 ${0.5 * s.glow}em color-mix(in oklab, var(--aurora-glow) ${Math.round(40 * g)}%, transparent), 0 0.04em 0.3em rgba(0,0,0,.45)`
-      : '0 0.04em 0.3em rgba(0,0,0,.5)';
+  const shade = '0 0.035em 0.32em rgb(0 0 0 / calc(0.32 + var(--aurora-glare, 0.45) * 0.45)), 0 0.01em 0.06em rgb(0 0 0 / 0.25)';
+  const glowShadow = s.glow > 0 ? `0 0 ${0.12 + 0.1 * s.glow}em color-mix(in oklab, var(--aurora-glow) ${Math.round(70 * g)}%, transparent), 0 0 ${0.5 * s.glow}em color-mix(in oklab, var(--aurora-glow) ${Math.round(35 * g)}%, transparent), ${shade}` : shade;
 
   type Row = { key: string; role: 'prev' | 'cur' | 'next'; node: ReactNode; size: number };
   const rows: Row[] = [];
-  if (s.lines >= 3 && at.prev >= 0 && items[at.prev]) rows.push({ key: `i${at.prev}`, role: 'prev', node: items[at.prev].text, size: small(items[at.prev]) });
+  if (s.lines >= 3 && at.prev >= 0 && items[at.prev]) rows.push({ key: `i${at.prev}`, role: 'prev', node: withEmoji(at.prev, false), size: small(items[at.prev]) });
   if (at.dots) rows.push({ key: `gap${at.dots.from}`, role: 'cur', node: <BreakDots from={at.dots.from} to={at.dots.to} time={time} reduced={reduced} />, size: base * 0.55 });
-  else if (items[at.cur]) rows.push({ key: `i${at.cur}`, role: 'cur', node: items[at.cur].text, size: sizeOf(items[at.cur]) });
-  if (s.lines >= 2 && at.next >= 0 && items[at.next]) rows.push({ key: `i${at.next}`, role: 'next', node: items[at.next].text, size: small(items[at.next]) });
+  else if (items[at.cur]) rows.push({ key: `i${at.cur}`, role: 'cur', node: withEmoji(at.cur, true), size: sizeOf(items[at.cur]) });
+  if (s.lines >= 2 && at.next >= 0 && items[at.next]) rows.push({ key: `i${at.next}`, role: 'next', node: withEmoji(at.next, false), size: small(items[at.next]) });
 
   const look = (role: Row['role'], dots: boolean): CSSProperties => {
     if (role === 'cur' && !dots) {
@@ -284,9 +338,10 @@ function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
       if (s.emphasis === 'color') return { color: 'var(--aurora-hl-accent)', textShadow: glowShadow };
       return { color: hl, textShadow: glowShadow };
     }
-    // Only what is being sung is highlighted; what comes next stays quiet.
-    if (role === 'next') return { color: 'rgba(255,255,255,.7)', textShadow: '0 0.04em 0.3em rgba(0,0,0,.55)' };
-    return { color: 'rgba(255,255,255,.55)', textShadow: '0 0.04em 0.3em rgba(0,0,0,.5)' };
+    // Only what is being sung is highlighted; what comes next stays quiet
+    // (the same colour, softer).
+    if (role === 'next') return { color: 'color-mix(in oklab, var(--aurora-ink, #fff) 74%, transparent)', textShadow: shade };
+    return { color: 'color-mix(in oklab, var(--aurora-ink, #fff) 58%, transparent)', textShadow: shade };
   };
 
   return (
@@ -330,7 +385,7 @@ function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
 function LinesLayout({ lines, time, s, reduced, full }: LayoutProps) {
   const { value: phase, jump } = useFollow(time, (t) => phaseAt(lines, t), [lines]);
   const wordMode = s.timing === 'auto' && s.wordHighlight;
-  const hl = s.highlightColor ?? '#ffffff';
+  const hl = s.highlightColor ?? 'var(--aurora-ink, #ffffff)';
   const dur = reduced ? 0.3 : jump ? 0.12 : 0.55 / Math.max(0.25, s.transition);
   const enter = reduced ? { opacity: 0 } : { opacity: 0, y: '0.6em', scale: 0.96, filter: 'blur(8px)' };
   const exit = reduced ? { opacity: 0 } : { opacity: 0, y: '-0.5em', scale: 0.98, filter: 'blur(6px)' };
@@ -411,6 +466,8 @@ export interface AuroraLyricsProps {
   time: () => number;
   trackKey: string;
   settings: VisualSettings['lyrics'];
+  /** Where they sit ("auto" resolved by the player: the calmest part of the picture). */
+  place?: 'upper' | 'center' | 'lower';
   reduced: boolean;
   full: boolean;
   shown: boolean;
@@ -418,7 +475,7 @@ export interface AuroraLyricsProps {
 }
 
 export const AuroraLyrics = memo(
-  forwardRef<HTMLDivElement, AuroraLyricsProps>(function AuroraLyrics({ lines, state, time, trackKey, settings: s, reduced, full, shown, onShowPlain }, boxRef) {
+  forwardRef<HTMLDivElement, AuroraLyricsProps>(function AuroraLyrics({ lines, state, time, trackKey, settings: s, place, reduced, full, shown, onShowPlain }, boxRef) {
     const root = useRef<HTMLDivElement>(null);
     const [width, setWidth] = useState(1200);
     // Movement with the music: a gentle sway, a lift with the bass and a
@@ -487,11 +544,12 @@ export const AuroraLyrics = memo(
     // Lyrics that only time lines: words spread over each line (an estimate, when allowed).
     const timed = useMemo(() => (s.estimateWords && s.timing === 'auto' && s.wordHighlight ? estimateWords(lines) : lines), [lines, s.estimateWords, s.timing, s.wordHighlight]);
     const ready = state === 'ready' && lines.length > 0;
-    const top = s.place === 'upper' ? 28 : s.place === 'lower' ? 70 : 48;
+    const where = place ?? (s.place === 'auto' ? 'center' : s.place);
+    const top = where === 'upper' ? 28 : where === 'lower' ? 70 : 48;
     const font = FONTS[s.font] ?? FONTS.display;
     const plate = s.backing > 0.02;
     const vars = {
-      '--aurora-hl': s.highlightColor ?? '#ffffff',
+      '--aurora-hl': s.highlightColor ?? 'var(--aurora-ink, #ffffff)',
       '--aurora-glow': s.highlightColor ?? 'color-mix(in oklab, var(--aurora-accent, #c026d3) 80%, white)',
       '--aurora-hl-accent': s.highlightColor ?? 'color-mix(in oklab, var(--aurora-accent, #c026d3) 70%, white)',
       '--aurora-box': s.highlightColor ?? 'color-mix(in oklab, var(--aurora-accent, #c026d3) 88%, black)',

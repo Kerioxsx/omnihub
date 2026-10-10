@@ -1181,6 +1181,15 @@ pub async fn media_lyrics(core: Core<'_>) -> Res<serde_json::Value> {
     Ok(serde_json::json!({ "key": core.media.state().map(|s| s.key), "lyrics": core.media.lyrics() }))
 }
 
+/// The playing song's music video for Aurora's background (looked up on first ask).
+#[tauri::command]
+pub async fn media_video(core: Core<'_>) -> Res<serde_json::Value> {
+    use omnihub_core::settings::Backdrop;
+    let scene = core.settings.get().visuals.scene;
+    let allowed = scene.music_videos && matches!(scene.backdrop, Backdrop::Auto | Backdrop::Video);
+    Ok(serde_json::json!({ "key": core.media.state().map(|s| s.key), "video": core.media.video(allowed) }))
+}
+
 /// Cover art as a data URL.
 #[tauri::command]
 pub async fn media_art(core: Core<'_>, id: String) -> Res<Option<String>> {

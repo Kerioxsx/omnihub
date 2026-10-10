@@ -12,6 +12,7 @@ pub mod audio;
 pub mod eq;
 pub mod lyrics;
 pub mod mixer;
+pub mod video;
 pub mod visual;
 
 use std::collections::HashMap;
@@ -383,6 +384,9 @@ pub struct MediaHub {
     /// Look sharper covers up online (settings).
     hires_art: AtomicBool,
     covers: artwork::ArtCache,
+    /// Music videos per track (looked up when Aurora asks).
+    videos: Mutex<HashMap<String, video::VideoStatus>>,
+    video_cache: video::VideoCache,
 }
 
 impl MediaHub {
@@ -400,7 +404,7 @@ impl MediaHub {
                 Box::new(NoBackend)
             }
         };
-        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")) })
+        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")) })
     }
 
     /// Whether this is the pretend player (the mixer and open apps pretend too).
@@ -487,17 +491,66 @@ impl MediaHub {
         self.lyrics.lock().get(&s.key).cloned().unwrap_or(LyricsStatus::Searching)
     }
 
+    /// The playing song's music video (see [`video`]): looked up the first time
+    /// Aurora asks, then announced with `media:video`. `allowed` is the setting.
+    pub fn video(self: &Arc<Self>, allowed: bool) -> video::VideoStatus {
+        let Some(s) = self.state() else { return video::VideoStatus::NothingPlaying };
+        if !allowed {
+            return video::VideoStatus::Off;
+        }
+        let mut g = self.videos.lock();
+        if let Some(st) = g.get(&s.key) {
+            return st.clone();
+        }
+        if self.fake {
+            // The pretend player's songs have no videos.
+            return video::VideoStatus::None;
+        }
+        if g.len() > 200 {
+            g.clear();
+        }
+        g.insert(s.key.clone(), video::VideoStatus::Searching);
+        drop(g);
+        let hub = self.clone();
+        std::thread::spawn(move || {
+            let cache_key = format!("{}\u{1f}{}\u{1f}{}", s.title.to_lowercase(), s.artist.to_lowercase(), s.duration_ms / 4000);
+            let now = now_ms().max(0) as u64;
+            let found = match hub.video_cache.get(&cache_key, now) {
+                Some(v) => Some(v),
+                None => match video::find(&s.title, &s.artist, s.duration_ms, &video::http_get) {
+                    Ok(v) => {
+                        hub.video_cache.put(&cache_key, &v, now);
+                        Some(v)
+                    }
+                    Err(e) => {
+                        // Offline: no video this time; the next song asks again.
+                        tracing::info!("music video lookup failed: {e}");
+                        None
+                    }
+                },
+            };
+            let st = match found {
+                Some(videos) if !videos.is_empty() => video::VideoStatus::Found { videos },
+                _ => video::VideoStatus::None,
+            };
+            hub.videos.lock().insert(s.key.clone(), st);
+            hub.events.emit("media:video", serde_json::json!({ "key": s.key }));
+        });
+        video::VideoStatus::Searching
+    }
+
     /// Look sharper covers up online (settings).
     pub fn set_hires_art(&self, on: bool) {
         self.hires_art.store(on, Ordering::Relaxed);
     }
 
-    /// Swap the player's small thumbnail for a 1200×1200 copy of the same
-    /// cover, from the cache or the iTunes catalogue (see [`artwork`]).
+    /// Swap the player's small thumbnail for the full-size cover (3000×3000 for
+    /// most songs), from the cache or the iTunes catalogue (see [`artwork`]).
     fn upgrade_art(self: &Arc<Self>, key: String, title: String, artist: String, album: String, duration_ms: u64, thumb: Arc<Vec<u8>>) {
         let hub = self.clone();
         std::thread::spawn(move || {
-            let cache_key = format!("{}\u{1f}{}\u{1f}{}\u{1f}{}", title.to_lowercase(), artist.to_lowercase(), album.to_lowercase(), duration_ms / 4000);
+            // "full": covers cached before 0.6 were 1200×1200; these are the originals.
+            let cache_key = format!("full\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}", title.to_lowercase(), artist.to_lowercase(), album.to_lowercase(), duration_ms / 4000);
             let bytes = match hub.covers.get(&cache_key) {
                 Some(found) => found,
                 None => {

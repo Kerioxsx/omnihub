@@ -1,7 +1,7 @@
 {
   "name": "omnihub",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.6.0",
   "type": "module",
   "description": "OmniHub: Windows PC companion — storage analysis, apps, screenshots, notes, vault, phone companion and screen sharing",
   "scripts": {

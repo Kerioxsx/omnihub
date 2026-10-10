@@ -1,11 +1,12 @@
 //! Sharper cover art. Windows hands apps the player's thumbnail, often
 //! 300×300 or smaller, and Aurora draws the cover across the screen. When
 //! allowed, OmniHub asks the iTunes Search API (Apple's public catalogue
-//! search: no account, no key) for the same song and uses its 1200×1200
-//! artwork. Only the title, artist and album are sent. A result is used only
+//! search: no account, no key) for the same song and uses its artwork at
+//! full size: as uploaded by the label, 3000×3000 for most songs (asking for
+//! more than there is returns the original). Only the title, artist and album are sent. A result is used only
 //! when the song matches (title, artist, length) and the picture looks like
 //! the player's own thumbnail, so a different song's cover never shows up.
-//! Covers are cached on disk, one small file per song.
+//! Covers are cached on disk, one file per song.
 
 use std::path::PathBuf;
 
@@ -13,10 +14,10 @@ use serde::Deserialize;
 
 use super::lyrics::clean_query;
 
-/// Edge of the picture asked for.
-const SIZE: u32 = 1200;
+/// Edge of the picture asked for: more than any cover has, so the original comes back.
+const SIZE: u32 = 10000;
 /// Covers bigger than this are not downloaded.
-const MAX_BYTES: u64 = 6 << 20;
+const MAX_BYTES: u64 = 16 << 20;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -109,7 +110,7 @@ pub fn mime_of(bytes: &[u8]) -> Option<&'static str> {
     }
 }
 
-/// Download a cover (at most 6 MB).
+/// Download a cover (at most 16 MB).
 pub fn download(url: &str) -> Result<Vec<u8>, String> {
     if !url.starts_with("https://") {
         return Err("only https covers are downloaded".into());
@@ -186,7 +187,7 @@ mod tests {
             ))
         };
         let url = find("Waves", "Joey Bada$$", "1999", 187_000, &get).unwrap().unwrap();
-        assert_eq!(url, "https://is1.example/1999/1200x1200bb.jpg");
+        assert_eq!(url, "https://is1.example/1999/10000x10000bb.jpg");
         assert!(calls.borrow()[0].starts_with("https://itunes.apple.com/search?term=Joey+Bada%24%24+Waves&media=music&entity=song"));
         // A different length (another version) or no match: nothing.
         assert!(find("Waves", "Joey Bada$$", "1999", 240_000, &get).unwrap().is_none());

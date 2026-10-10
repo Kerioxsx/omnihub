@@ -185,7 +185,9 @@ pub enum LyricEmphasis {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum LyricPlace {
+    /// Where the picture behind is calmest (the middle for a music video).
     #[default]
+    Auto,
     Center,
     Upper,
     Lower,
@@ -226,12 +228,99 @@ pub struct AuroraLyricsSettings {
     pub transition: f32,
     /// 0–1.5: how much the lyrics move with the music (bounce, sway, pop).
     pub motion: f32,
+    /// Emojis beside words they match ("saw 👁", "city 🏙").
+    pub emoji: EmojiAmount,
+    pub emoji_style: EmojiStyle,
 }
 
 impl Default for AuroraLyricsSettings {
     fn default() -> Self {
-        AuroraLyricsSettings { layout: LyricLayout::Stack, emphasis: LyricEmphasis::Glow, font: "display".into(), visible: true, auto_show: true, size: 1.0, weight: 800, word_highlight: true, estimate_words: true, timing: LyricTiming::Auto, place: LyricPlace::Center, offset_x: 0.0, offset_y: 0.0, lines: 3, backing: 0.0, highlight_color: None, glow: 0.6, transition: 1.0, motion: 0.6 }
+        AuroraLyricsSettings {
+            layout: LyricLayout::Stack,
+            emphasis: LyricEmphasis::Glow,
+            font: "display".into(),
+            visible: true,
+            auto_show: true,
+            size: 1.0,
+            weight: 800,
+            word_highlight: true,
+            estimate_words: true,
+            timing: LyricTiming::Auto,
+            place: LyricPlace::Auto,
+            offset_x: 0.0,
+            offset_y: 0.0,
+            lines: 3,
+            backing: 0.0,
+            highlight_color: None,
+            glow: 0.6,
+            transition: 1.0,
+            motion: 0.6,
+            emoji: EmojiAmount::Some,
+            emoji_style: EmojiStyle::ThreeD,
+        }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum EmojiAmount {
+    Off,
+    /// Now and then: a word that clearly means something you can picture.
+    #[default]
+    Some,
+    /// Most words that have one.
+    More,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum EmojiStyle {
+    /// Glossy 3D emojis that come with OmniHub, close to the iPhone's look
+    /// (Microsoft's Fluent Emoji, MIT licence).
+    #[default]
+    #[serde(rename = "3d")]
+    ThreeD,
+    /// Windows' own emoji font.
+    #[serde(rename = "system")]
+    System,
+}
+
+/// How the music video fills the screen.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum VideoFit {
+    /// Edge to edge, cropping what does not fit.
+    #[default]
+    Fill,
+    /// All of the picture, the cover filling the rest.
+    Fit,
+}
+
+/// The most the music video may stream at (YouTube picks within it).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum VideoQuality {
+    /// As sharp as the screen and the connection allow (4K when uploaded in 4K).
+    #[default]
+    #[serde(rename = "best")]
+    Best,
+    #[serde(rename = "1080")]
+    Hd1080,
+    #[serde(rename = "720")]
+    Hd720,
+}
+
+/// What fills the screen behind the lyrics.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum Backdrop {
+    /// The song's music video when it has one, else the cover, filling the screen.
+    #[default]
+    Auto,
+    /// The music video (the cover until one is found).
+    Video,
+    /// The cover, full screen, slowly moving.
+    Cover,
+    /// The light show built from the cover (styles and effects below).
+    Visual,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -304,11 +393,43 @@ pub struct SceneSettings {
     /// A ring that follows the spectrum.
     pub waveform: bool,
     pub effects: EffectSettings,
+    pub backdrop: Backdrop,
+    /// Look the song's music video up on YouTube (only the title and artist are sent).
+    pub music_videos: bool,
+    /// 0–1: how much the full-screen cover drifts and breathes with the beat.
+    pub cover_motion: f32,
+    /// 0–1: how much the cover or video is darkened behind the lyrics.
+    pub dim: f32,
+    /// 0–1: soft light in the song's colours from the corners of the screen.
+    pub corners: f32,
+    pub video_fit: VideoFit,
+    /// 0 (top) – 1 (bottom): which part of the video stays when it is cropped.
+    pub video_focus: f32,
+    pub video_quality: VideoQuality,
 }
 
 impl Default for SceneSettings {
     fn default() -> Self {
-        SceneSettings { enabled: true, style: SceneStyle::Visual, intensity: 0.8, speed: 1.0, blur: 0.1, saturation: 1.1, opacity: 0.9, artwork: true, waveform: false, effects: EffectSettings::default() }
+        SceneSettings {
+            enabled: true,
+            style: SceneStyle::Visual,
+            intensity: 0.8,
+            speed: 1.0,
+            blur: 0.1,
+            saturation: 1.1,
+            opacity: 0.9,
+            artwork: true,
+            waveform: false,
+            effects: EffectSettings::default(),
+            backdrop: Backdrop::Auto,
+            music_videos: true,
+            cover_motion: 0.5,
+            dim: 0.3,
+            corners: 0.5,
+            video_fit: VideoFit::Fill,
+            video_focus: 0.5,
+            video_quality: VideoQuality::Best,
+        }
     }
 }
 
@@ -779,14 +900,18 @@ mod tests {
         let store = SettingsStore::load(&path);
         let d = Settings::default().visuals;
         assert_eq!((d.view, d.scene.style, d.lyrics.layout, d.glow.animation), (PlayerView::Aurora, SceneStyle::Visual, LyricLayout::Stack, GlowAnimation::Music));
+        assert_eq!((d.scene.backdrop, d.scene.music_videos, d.lyrics.emoji, d.lyrics.emoji_style, d.lyrics.place), (Backdrop::Auto, true, EmojiAmount::Some, EmojiStyle::ThreeD, LyricPlace::Auto));
+        assert_eq!(serde_json::to_value(EmojiStyle::ThreeD).unwrap(), "3d");
+        assert_eq!(serde_json::to_value(VideoQuality::Hd1080).unwrap(), "1080");
         let s = store
-            .update(&serde_json::json!({ "visuals": { "view": "lyrics", "sensitivity": 2.0, "color": { "mode": "duo", "primary": "#ff0000", "colors": ["#000000"] }, "glow": { "thickness": 6.0, "animation": "idle" }, "lyrics": { "font": "condensed", "emphasis": "box", "highlightColor": "#00ff00", "place": "lower" }, "scene": { "style": "fisheyeVisual" }, "desktop": { "enabled": true, "display": "all" } } }))
+            .update(&serde_json::json!({ "visuals": { "view": "lyrics", "sensitivity": 2.0, "color": { "mode": "duo", "primary": "#ff0000", "colors": ["#000000"] }, "glow": { "thickness": 6.0, "animation": "idle" }, "lyrics": { "font": "condensed", "emphasis": "box", "highlightColor": "#00ff00", "place": "lower", "emoji": "more", "emojiStyle": "system" }, "scene": { "style": "fisheyeVisual", "backdrop": "video", "musicVideos": false, "dim": 0.5 }, "desktop": { "enabled": true, "display": "all" } } }))
             .unwrap();
         // After a restart.
         let again = SettingsStore::load(&path).get().visuals;
         assert_eq!(again, s.visuals);
         assert_eq!((again.view, again.color.mode, again.color.colors.len(), again.scene.style, again.lyrics.highlight_color.as_deref()), (PlayerView::Lyrics, ColorMode::Duo, 1, SceneStyle::FisheyeVisual, Some("#00ff00")));
         assert!((again.sensitivity - 2.0).abs() < 1e-6 && again.desktop.enabled);
+        assert_eq!((again.scene.backdrop, again.scene.music_videos, again.lyrics.emoji, again.lyrics.emoji_style), (Backdrop::Video, false, EmojiAmount::More, EmojiStyle::System));
         // "Reset to defaults" sends every default (null clears the highlight colour).
         let mut reset = serde_json::to_value(Settings::default().visuals).unwrap();
         reset["view"] = serde_json::json!("lyrics");
