@@ -7,10 +7,12 @@ import type { AmbientDisplay, Backdrop, ColorMode, Effects, LyricFont, SceneStyl
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown, FolderOpen, RotateCcw, ShieldCheck, X } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useState } from 'react';
-import { api } from '../../api';
+import { api, errorText } from '../../api';
 import { DEFAULT_EFFECTS } from '../../lib/aurora/defaults';
 import { patchVisuals, resetVisuals, useVisuals } from '../../lib/aurora/settings';
 import { cx } from '../../lib/cx';
+import { forgetPictures, LOOK_CHANGED, useAuroraLook } from '../../lib/aurora/textures';
+import { toast } from '../../state/toasts';
 import { useSettings } from '../../state/settings';
 import type { VideoNow } from './AuroraBackdrop';
 import { FONTS } from './AuroraLyrics';
@@ -166,7 +168,7 @@ function backgroundLine(v: VisualSettings, video?: PanelVideo): string {
               ? 'The video has ended before the song; the cover shows until the next one.'
               : now
                 ? 'Loading the music video… the cover shows until it plays in step.'
-                : st?.status === 'searching'
+                : !st || st.status === 'searching'
                   ? 'Looking for the music video…'
                   : st?.status === 'found'
                     ? `This song’s video couldn’t be played; showing ${video?.motion ? 'its animated cover' : 'the cover'}.`
@@ -217,8 +219,8 @@ function BackgroundSection({ v, video }: { v: VisualSettings; video?: PanelVideo
         label="Cover"
         value={s.coverFit}
         options={[
-          { value: 'whole', label: 'All of it' },
-          { value: 'fill', label: 'Fill the screen' },
+          { value: 'whole', label: 'Whole cover' },
+          { value: 'fill', label: 'Fill (cuts top and bottom)' },
         ]}
         onChange={(coverFit) => set({ coverFit })}
       />
@@ -325,8 +327,8 @@ function QuickSection({ v, video }: { v: VisualSettings; video?: PanelVideo }) {
         label="Cover"
         value={s.coverFit}
         options={[
-          { value: 'whole', label: 'All of it', hint: 'Nothing cut off: its sides blend into the light' },
-          { value: 'fill', label: 'Fill the screen', hint: 'Edge to edge (the top and bottom are cut on wide screens)' },
+          { value: 'whole', label: 'Whole', hint: 'Nothing cut off: its sides blend into the light' },
+          { value: 'fill', label: 'Fill (cut)', hint: 'Edge to edge (the top and bottom are cut on wide screens)' },
         ]}
         onChange={(coverFit) => scene({ coverFit })}
       />
@@ -348,9 +350,99 @@ function QuickSection({ v, video }: { v: VisualSettings; video?: PanelVideo }) {
           options={[
             { value: 'plain', label: 'Lyric colour', hint: 'One colour, the same as the lyrics' },
             { value: '3d', label: '3D', hint: 'Glossy, full colour' },
+            { value: 'textures', label: 'Textures', hint: 'Pictures from your own zip of textures (see “Your font & textures”)' },
           ]}
           onChange={(emojiStyle) => lyrics({ emojiStyle })}
         />
+      )}
+    </Section>
+  );
+}
+
+/**
+ * The user's own font and emoji pictures (a Minecraft look: its font file and
+ * a zip of item textures). Chosen once, kept on this PC, used right away.
+ */
+function YourLookSection({ v }: { v: VisualSettings }) {
+  const l = v.lyrics;
+  const { look } = useAuroraLook();
+  const [busy, setBusy] = useState<'font' | 'textures' | null>(null);
+  const lyrics = (p: Partial<VisualSettings['lyrics']>) => patchVisuals({ lyrics: p });
+  const changed = () => window.dispatchEvent(new Event(LOOK_CHANGED));
+  const chooseFont = async () => {
+    setBusy('font');
+    try {
+      const name = await api.media.chooseFont();
+      if (name) {
+        changed();
+        lyrics({ font: 'custom' });
+        toast.success('Lyrics now use your font', name);
+      }
+    } catch (e) {
+      toast.error('Could not use that font', errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const chooseTextures = async () => {
+    setBusy('textures');
+    try {
+      const count = await api.media.chooseTextures();
+      if (count) {
+        forgetPictures();
+        changed();
+        lyrics({ emojiStyle: 'textures', ...(l.emoji === 'off' ? { emoji: 'some' as const } : {}) });
+        toast.success('Emojis now use your textures', `${count.toLocaleString()} pictures`);
+      }
+    } catch (e) {
+      toast.error('Could not use that zip', errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const forget = async (font: boolean) => {
+    await api.media.forgetLook(font, !font).catch(() => undefined);
+    if (!font) forgetPictures();
+    changed();
+    if (font && l.font === 'custom') lyrics({ font: 'display' });
+    if (!font && l.emojiStyle === 'textures') lyrics({ emojiStyle: 'plain' });
+  };
+  const textures = look?.textures.length ?? 0;
+  const row = (label: string, detail: string, on: boolean, choose: () => void, chooseLabel: string, kind: 'font' | 'textures', use: () => void) => (
+    <div className="flex items-center gap-2 py-1.5">
+      <div className="min-w-0 flex-1">
+        <div className="text-[12px] font-medium text-white/85">{label}</div>
+        <div className="truncate text-[11px] text-white/50">{detail}</div>
+      </div>
+      {detail !== 'None chosen' && !on && (
+        <button type="button" onClick={use} className="h-7 rounded-full bg-white/10 px-2.5 text-[11px] font-semibold text-white/85 hover:bg-white/15">
+          Use
+        </button>
+      )}
+      <button type="button" disabled={busy !== null} onClick={choose} className="h-7 rounded-full bg-white px-3 text-[11px] font-semibold text-black shadow disabled:opacity-60" data-aurora-choose={kind}>
+        {busy === kind ? 'Adding…' : chooseLabel}
+      </button>
+      {detail !== 'None chosen' && (
+        <button type="button" onClick={() => void forget(kind === 'font')} className="grid h-7 w-7 place-items-center rounded-full text-white/50 hover:bg-white/10 hover:text-white" title="Remove" aria-label={`Remove ${label.toLowerCase()}`}>
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+  return (
+    <Section title="Your font & textures">
+      <p className="pb-1 text-[11px] leading-snug text-white/55">
+        For a Minecraft look: choose its font file (.ttf) and a zip of item textures. Words get the matching picture (“apple” → the apple, “diamonds” → a diamond, love → a heart). Your files stay on this PC.
+      </p>
+      {row('Lyrics font', look?.font ?? 'None chosen', l.font === 'custom', () => void chooseFont(), look?.font ? 'Change…' : 'Choose .ttf…', 'font', () => lyrics({ font: 'custom' }))}
+      {row(
+        'Emoji textures',
+        textures ? `${textures.toLocaleString()} pictures` : 'None chosen',
+        l.emojiStyle === 'textures',
+        () => void chooseTextures(),
+        textures ? 'Change…' : 'Choose .zip…',
+        'textures',
+        () => lyrics({ emojiStyle: 'textures', ...(l.emoji === 'off' ? { emoji: 'some' as const } : {}) }),
       )}
     </Section>
   );
@@ -490,6 +582,7 @@ function LyricsSection({ v }: { v: VisualSettings }) {
             { value: 'plain', label: 'In the lyrics’ colour' },
             { value: '3d', label: '3D (glossy)' },
             { value: 'system', label: 'Windows' },
+            { value: 'textures', label: 'Your textures' },
           ]}
           onChange={(emojiStyle) => set({ emojiStyle })}
         />
@@ -821,6 +914,7 @@ export function AuroraPanel({ open, onClose, status, full, video }: { open: bool
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
             {!v.enabled && <p className="px-4 pt-3 text-[11.5px] leading-snug text-amber-200/80">Aurora is off: no sound is analysed and nothing is drawn. The lyrics still show.</p>}
             <QuickSection v={v} video={video} />
+            <YourLookSection v={v} />
             <div className="border-t border-white/[0.08] px-4 py-2.5">
               <button
                 type="button"

@@ -1221,6 +1221,70 @@ pub async fn media_stream_status(core: Core<'_>) -> Res<omnihub_core::media::str
     Ok(core.media.stream_status())
 }
 
+/// The user's own lyric font and emoji textures (see media::look).
+#[tauri::command]
+pub async fn aurora_look(core: Core<'_>) -> Res<omnihub_core::media::look::LookStatus> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.media.look.status())).await
+}
+
+/// Pick a font file on this PC and use it for the lyrics.
+#[tauri::command]
+pub async fn aurora_choose_font(app: AppHandle, core: Core<'_>) -> Res<Option<String>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let picked = app.dialog().file().set_title("Choose a font for the lyrics").add_filter("Fonts", &["ttf", "otf", "woff", "woff2"]).blocking_pick_file();
+        let Some(path) = picked.and_then(|p| p.into_path().ok()) else { return Ok(None) };
+        let name = core.media.look.import_font(&path)?;
+        core.audit.record("desktop", "aurora.font", &name, true);
+        Ok(Some(name))
+    })
+    .await
+}
+
+/// Pick a zip of PNG pictures on this PC and use them for the emojis.
+#[tauri::command]
+pub async fn aurora_choose_textures(app: AppHandle, core: Core<'_>) -> Res<Option<usize>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let picked = app.dialog().file().set_title("Choose a zip of textures (PNG pictures)").add_filter("Zip", &["zip"]).blocking_pick_file();
+        let Some(path) = picked.and_then(|p| p.into_path().ok()) else { return Ok(None) };
+        let count = core.media.look.import_textures(&path)?;
+        core.audit.record("desktop", "aurora.textures", &format!("{count} pictures"), true);
+        Ok(Some(count))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn aurora_forget_look(core: Core<'_>, font: bool, textures: bool) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || {
+        if font {
+            core.media.look.forget_font();
+        }
+        if textures {
+            core.media.look.forget_textures();
+        }
+        Ok(())
+    })
+    .await
+}
+
+/// The chosen font as a data URL.
+#[tauri::command]
+pub async fn aurora_font(core: Core<'_>) -> Res<Option<String>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.media.look.font_data_url())).await
+}
+
+/// One texture as a data URL.
+#[tauri::command]
+pub async fn aurora_texture(core: Core<'_>, name: String) -> Res<Option<String>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.media.look.texture_data_url(&name))).await
+}
+
 /// Cover art as a data URL.
 #[tauri::command]
 pub async fn media_art(core: Core<'_>, id: String) -> Res<Option<String>> {

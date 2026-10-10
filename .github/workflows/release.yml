@@ -26,7 +26,55 @@ env:
 jobs:
   # UxPlay for iPhone mirroring, published next to the installer. Its
   # SHA-256 is built into the app, which checks the download against it.
+  # Building it takes about six minutes and it rarely changes, so when its
+  # sources are the same as at the last release, that release's files are
+  # published again (checked against that release's SHA256SUMS.txt first).
+  previous-addon:
+    name: Reuse the AirPlay add-on if unchanged
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.reuse.outputs.sha256 }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compare with the last release
+        id: reuse
+        shell: bash
+        run: |
+          set -euo pipefail
+          last=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[0].tagName // ""')
+          if [ -z "$last" ] || ! git rev-parse -q --verify "refs/tags/$last" > /dev/null; then
+            echo "No earlier release to take the add-on from; building it"
+            exit 0
+          fi
+          if ! git diff --quiet "$last" HEAD -- scripts/airplay-addon .github/workflows/airplay-addon.yml; then
+            echo "The add-on changed since $last; building it"
+            exit 0
+          fi
+          mkdir addon
+          gh release download "$last" --repo "$GITHUB_REPOSITORY" --dir addon \
+            --pattern OmniHub-AirPlay-addon-x64.zip --pattern OmniHub-AirPlay-addon-sources.zip --pattern SHA256SUMS.txt || true
+          if [ ! -f addon/OmniHub-AirPlay-addon-x64.zip ] || [ ! -f addon/OmniHub-AirPlay-addon-sources.zip ] || [ ! -f addon/SHA256SUMS.txt ]; then
+            echo "$last does not have the add-on's files; building it"
+            exit 0
+          fi
+          (cd addon && grep -E '  OmniHub-AirPlay-addon-(x64|sources)\.zip$' SHA256SUMS.txt | sha256sum -c -)
+          rm addon/SHA256SUMS.txt
+          echo "sha256=$(sha256sum addon/OmniHub-AirPlay-addon-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "Publishing the add-on from $last again"
+      - if: steps.reuse.outputs.sha256 != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnihub-airplay-addon
+          path: addon/*.zip
+          if-no-files-found: error
+
   airplay-addon:
+    needs: previous-addon
+    if: needs.previous-addon.outputs.sha256 == ''
     uses: ./.github/workflows/airplay-addon.yml
 
   # PresentMon for the FPS meter, the same way: published next to the
@@ -36,11 +84,14 @@ jobs:
 
   windows:
     name: Build and publish the Windows installer
-    needs: [airplay-addon, presentmon]
+    needs: [previous-addon, airplay-addon, presentmon]
+    # The add-on is either taken from the last release or built (one of the
+    # two is skipped).
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      OMNIHUB_AIRPLAY_ADDON_SHA256: ${{ needs.airplay-addon.outputs.sha256 }}
+      OMNIHUB_AIRPLAY_ADDON_SHA256: ${{ needs.previous-addon.outputs.sha256 || needs.airplay-addon.outputs.sha256 }}
       OMNIHUB_PRESENTMON_SHA256: ${{ needs.presentmon.outputs.sha256 }}
       PRESENTMON_VERSION: ${{ needs.presentmon.outputs.version }}
     steps:
@@ -66,6 +117,10 @@ jobs:
           if existing=$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha 2> /dev/null) \
               && [ -n "$existing" ] && [ "$existing" != "$GITHUB_SHA" ]; then
             echo "::error::$tag already points to ${existing:0:7}; bump the version to release ${GITHUB_SHA:0:7}"
+            exit 1
+          fi
+          if [ ${#OMNIHUB_AIRPLAY_ADDON_SHA256} -ne 64 ] || [ ${#OMNIHUB_PRESENTMON_SHA256} -ne 64 ]; then
+            echo "::error::The add-on or PresentMon checksum is missing"
             exit 1
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"

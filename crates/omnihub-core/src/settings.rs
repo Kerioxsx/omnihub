@@ -199,7 +199,8 @@ pub struct AuroraLyricsSettings {
     pub layout: LyricLayout,
     /// How the word (or line) being sung stands out.
     pub emphasis: LyricEmphasis,
-    /// "display", "condensed", "heavy", "serif" or "impact".
+    /// "display", "condensed", "heavy", "serif", "impact", or "custom" (the
+    /// user's own font file, see media::look).
     pub font: String,
     pub visible: bool,
     /// Show by themselves when a song has lyrics.
@@ -286,6 +287,10 @@ pub enum EmojiStyle {
     /// Windows' own emoji font.
     #[serde(rename = "system")]
     System,
+    /// Pictures from the user's own zip of textures (game item icons, say),
+    /// picked to match the words; plain emojis where none fits.
+    #[serde(rename = "textures")]
+    Textures,
 }
 
 /// How the music video fills the screen.
@@ -854,14 +859,17 @@ pub fn merge_patch(target: &mut serde_json::Value, patch: &serde_json::Value) {
 }
 
 /// Aurora's defaults that changed in a way saved settings should follow.
-pub const VISUALS_REVISION: u32 = 1;
+pub const VISUALS_REVISION: u32 = 2;
 
-/// Bring settings saved by an older release up to today's defaults where the
-/// user never chose (0.7: plain emojis in the lyrics' colour replaced 3D ones
-/// as the default).
+/// Bring settings saved by an older release up to today's defaults, once
+/// (0.7: plain emojis in the lyrics' colour replaced 3D ones as the default;
+/// 0.7.1: the cover is shown whole again, nothing cut off, for everyone).
 pub fn upgrade_visuals(v: &mut VisualSettings) {
     if v.revision < 1 && v.lyrics.emoji_style == EmojiStyle::ThreeD {
         v.lyrics.emoji_style = EmojiStyle::Plain;
+    }
+    if v.revision < 2 {
+        v.scene.cover_fit = CoverFit::Whole;
     }
     v.revision = VISUALS_REVISION;
 }
@@ -949,6 +957,11 @@ mod tests {
         // Chosen again after the upgrade: kept.
         std::fs::write(&path, r#"{"visuals":{"revision":1,"lyrics":{"emojiStyle":"3d"}}}"#).unwrap();
         assert_eq!(SettingsStore::load(&path).get().visuals.lyrics.emoji_style, EmojiStyle::ThreeD);
+        // 0.7.1: a filled cover goes back to whole once; filled again after that, kept.
+        std::fs::write(&path, r#"{"visuals":{"revision":1,"scene":{"coverFit":"fill"}}}"#).unwrap();
+        assert_eq!(SettingsStore::load(&path).get().visuals.scene.cover_fit, CoverFit::Whole);
+        std::fs::write(&path, r#"{"visuals":{"revision":2,"scene":{"coverFit":"fill"}}}"#).unwrap();
+        assert_eq!(SettingsStore::load(&path).get().visuals.scene.cover_fit, CoverFit::Fill);
         assert_eq!(serde_json::to_value(EmojiStyle::Plain).unwrap(), "plain");
     }
 

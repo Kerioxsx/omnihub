@@ -28,6 +28,7 @@ const WORDS: Record<string, string> = {
   // feelings
   smile: '😊', happy: '😊', laugh: '😂', joke: '😂', cry: '😢', tear: '😢', sad: '🥀', lonely: '🥀', alone: '🥀', lose: '🥀', loss: '🥀', gone: '🥀', fade: '🥀', blue: '💙', mad: '😤', angry: '😤', rage: '😤', crazy: '🤪', insane: '🤪', scared: '😨', afraid: '😨', fear: '😨', nervous: '😬', shy: '😳', cool: '😎', tired: '😴', sleep: '😴', bed: '🛏️', wake: '⏰', sick: '🤒', hurt: '🤕', pain: '🤕', bleed: '🩸', broken: '💔', heartbreak: '💔', heartbroken: '💔', miss: '🥺', sorry: '🥺', please: '🥺', dead: '💀', die: '💀', death: '💀', grave: '🪦', alive: '🌱', grow: '🌱', free: '🕊️', freedom: '🕊️', peace: '🕊️', fly: '🕊️', wing: '🪽', passion: '🔥', desire: '🔥', wild: '🔥',
   // going places
+  bye: '👋', goodbye: '👋', hello: '👋', farewell: '👋',
   left: '⬅️', leave: '🚪', door: '🚪', start: '▶️', begin: '▶️', stop: '🛑', end: '🔚', again: '🔁', forever: '♾️', run: '🏃', walk: '🚶', dance: '💃', jump: '🦘', ride: '🚗', drive: '🚗', car: '🚗', road: '🛣️', street: '🛣️', highway: '🛣️', train: '🚆', plane: '✈️', flight: '✈️', boat: '⛵', ship: '🚢', bike: '🚲', rocket: '🚀', space: '🚀', fast: '⚡', speed: '⚡', slow: '🐢', race: '🏁', map: '🗺️', travel: '🧳', away: '🧳', escape: '🏃',
   // places
   city: '🏙️', town: '🏘️', home: '🏠', house: '🏠', room: '🛋️', window: '🪟', wall: '🧱', church: '⛪', school: '🏫', hospital: '🏥', hotel: '🏨', club: '🪩', world: '🌍', earth: '🌍', globe: '🌍', planet: '🪐', mountain: '⛰️', hill: '⛰️', beach: '🏖️', island: '🏝️', desert: '🏜️', forest: '🌲', garden: '🌷', park: '🌳', tree: '🌳', bridge: '🌉', jail: '⛓️', prison: '⛓️', chain: '⛓️',
@@ -156,22 +157,32 @@ export function emojiFor(word: string): { emoji: string; lemma: string } | null 
   return null;
 }
 
-/** The best emoji for a line: a phrase in it, else its strongest word. `at` is the word it belongs to. */
-export function lineEmoji(words: string[]): { emoji: string; at: number; before: boolean; common: boolean } | null {
+type LineHit = { emoji: string; at: number; before: boolean; common: boolean; word?: string };
+
+/**
+ * The best emoji for a line: a phrase in it, else its strongest word. `at` is
+ * the word it belongs to. `extra` adds words (lemma → emoji), such as the
+ * names of the user's texture pictures.
+ */
+export function lineEmoji(words: string[], extra?: Record<string, { emoji: string }>): LineHit | null {
   const forms = words.map(lemmas);
   for (const p of PHRASES) {
     for (let i = 0; i + p.words.length <= words.length; i++) {
-      if (p.words.every((pw, k) => forms[i + k].includes(pw))) return { emoji: p.emoji, at: i + p.words.length - 1, before: false, common: false };
+      if (p.words.every((pw, k) => forms[i + k].includes(pw))) return { emoji: p.emoji, at: i + p.words.length - 1, before: false, common: false, word: p.words[p.words.length - 1] };
     }
   }
-  let best: { emoji: string; at: number; before: boolean; common: boolean } | null = null;
+  let best: LineHit | null = null;
   words.forEach((w, i) => {
-    const hit = emojiFor(w);
+    let hit = emojiFor(w);
+    if (!hit && extra) {
+      const l = forms[i].find((f) => extra[f]);
+      if (l) hit = { emoji: extra[l].emoji, lemma: l };
+    }
     if (!hit) return;
     const common = COMMON.has(hit.lemma);
     // A word you can picture beats a very common one; otherwise the later word
     // (lines tend to end on what they are about).
-    if (!best || (best.common && !common) || best.common === common) best = { emoji: hit.emoji, at: i, before: BEFORE.has(hit.lemma), common };
+    if (!best || (best.common && !common) || best.common === common) best = { emoji: hit.emoji, at: i, before: BEFORE.has(hit.lemma), common, word: hit.lemma };
   });
   return best;
 }
@@ -180,24 +191,35 @@ export interface EmojiPick {
   emoji: string;
   /** Shown before the word (else after). */
   before: boolean;
+  /** The word's plain form that earned it ("apple"), for pictures named after words. */
+  word?: string;
+  /** Set on a line with nothing to picture: which of the now-and-then ones (0, 1, 2…). */
+  filler?: number;
 }
+
+/** For lines with nothing to picture, so no two lines in a row go without (all bundled). */
+const FILLERS = ['✨', '🎶', '🔥', '🌙', '⚡', '💭', '⭐', '🌠'];
 
 /**
  * Where the emojis go in a song. `steps` are what the lyrics show one at a time
  * (words, or whole lines), each with the line it belongs to. At most one emoji
- * per line; "some" leaves at least one line between them (two after a very
- * common word), "more" may use every line; never the same emoji twice running.
+ * per line, and never two lines in a row without one: a line with a word you
+ * can picture gets its emoji ("some": a very common word like "love" every
+ * other line at most; "more": every one), and when the line before had none
+ * either, a line without such a word gets one anyway (a sparkle, a note…).
+ * Never the same emoji twice running. `extra`: more words (see lineEmoji).
  */
-export function planEmojis(steps: { text: string; line: number }[], amount: EmojiAmount): (EmojiPick | null)[] {
+export function planEmojis(steps: { text: string; line: number }[], amount: EmojiAmount, extra?: Record<string, { emoji: string }>): (EmojiPick | null)[] {
   const out: (EmojiPick | null)[] = steps.map(() => null);
   if (amount === 'off' || !steps.length) return out;
   const more = amount === 'more';
   // The steps of each line, in order.
   const lines = new Map<number, number[]>();
   steps.forEach((s, i) => lines.set(s.line, [...(lines.get(s.line) ?? []), i]));
-  let lastLine = -Infinity;
+  let lastLine = 0;
   let lastEmoji = '';
   let order = 0;
+  let fillers = 0;
   for (const [, idx] of [...lines.entries()].sort((a, b) => a[0] - b[0])) {
     order += 1;
     // The line's words, and which step each word is in.
@@ -208,17 +230,28 @@ export function planEmojis(steps: { text: string; line: number }[], amount: Emoj
         words.push(w);
         stepOf.push(i);
       }
-    const hit = lineEmoji(words);
-    if (!hit) continue;
+    if (!words.length) continue;
+    const hit = lineEmoji(words, extra);
+    // The line before had none: this one gets one whatever it says.
+    const due = order - lastLine >= 2;
     // "some": any line with a word you can picture, a very common one every
     // other line; "more": every line that has one.
-    const need = more ? 1 : hit.common ? 2 : 1;
-    if (order - lastLine < need || hit.emoji === lastEmoji) continue;
-    const step = stepOf[hit.at];
-    // A whole line shown at once gets its emoji at the end.
-    out[step] = { emoji: hit.emoji, before: idx.length > 1 && hit.before };
+    const need = more ? 1 : hit?.common ? 2 : 1;
+    let placed: EmojiPick | null = null;
+    if (hit && hit.emoji !== lastEmoji && (due || order - lastLine >= need)) {
+      // A whole line shown at once gets its emoji at the end.
+      placed = { emoji: hit.emoji, before: idx.length > 1 && hit.before, word: hit.word };
+      out[stepOf[hit.at]] = placed;
+    } else if (due) {
+      let f = fillers % FILLERS.length;
+      if (FILLERS[f] === lastEmoji) f = (f + 1) % FILLERS.length;
+      fillers = f + 1;
+      placed = { emoji: FILLERS[f], before: false, filler: f };
+      out[stepOf[stepOf.length - 1]] = placed;
+    }
+    if (!placed) continue;
     lastLine = order;
-    lastEmoji = hit.emoji;
+    lastEmoji = placed.emoji;
   }
   return out;
 }

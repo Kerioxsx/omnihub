@@ -22,6 +22,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { type CSSProperties, forwardRef, memo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { LevelFollower } from '../../lib/aurora/audio';
 import { emojiFile, planEmojis } from '../../lib/aurora/emoji';
+import { CUSTOM_FONT, TEXTURE_WORDS, type TextureSet, textureFor, useAuroraLook, useCustomFont, useTexture } from '../../lib/aurora/textures';
 import { estimateWords } from '../../lib/aurora/timing';
 import { activeLine } from '../../lib/nowPlaying';
 
@@ -151,6 +152,8 @@ export const FONTS: Record<VisualSettings['lyrics']['font'], { label: string; cs
   heavy: { label: 'Heavy', css: '"Arial Black", "Segoe UI Black", var(--font-display)' },
   serif: { label: 'Serif', css: 'Georgia, "Times New Roman", serif' },
   impact: { label: 'Impact', css: 'Impact, Haettenschweiler, var(--font-display)' },
+  // The user's own font file (see lib/aurora/textures.ts).
+  custom: { label: 'Your font', css: `"${CUSTOM_FONT}", var(--font-display)` },
 };
 
 // ---------- pieces ----------
@@ -234,13 +237,28 @@ const still = () => 0;
 const EMOJI_FONT = '"Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 
 /** One emoji beside a word: it pops in, then floats gently. */
-function Emoji({ emoji, style, reduced, current }: { emoji: string; style: VisualSettings['lyrics']['emojiStyle']; reduced: boolean; current: boolean }) {
+function Emoji({ emoji, style: chosen, texture, reduced, current }: { emoji: string; style: VisualSettings['lyrics']['emojiStyle']; texture?: string | null; reduced: boolean; current: boolean }) {
   const [broken, setBroken] = useState(false);
+  // The user's textures: the matching picture, else the plain emoji.
+  const picture = useTexture(chosen === 'textures' ? (texture ?? null) : null);
+  const style = chosen === 'textures' ? (picture ? 'textures' : 'plain') : chosen;
   const pop = reduced ? { initial: { opacity: 0 }, animate: { opacity: 1 } } : { initial: { opacity: 0, scale: 0.2, rotate: -24, y: '0.2em' }, animate: { opacity: 1, scale: 1, rotate: 0, y: 0 } };
   const transition = reduced ? { duration: 0.2 } : { type: 'spring' as const, stiffness: 420, damping: 13, delay: 0.06 };
   return (
     <span className="mx-[0.16em] inline-block align-[-0.1em]" style={{ animation: reduced || !current ? undefined : 'aurora-bob 3.2s ease-in-out infinite' }} data-lyric-emoji={emoji}>
-      {style === 'plain' && !broken ? (
+      {style === 'textures' && picture ? (
+        // Pixel art stays pixel art: no smoothing when it is drawn large.
+        <motion.img
+          src={picture}
+          alt={emoji}
+          draggable={false}
+          className="inline-block h-[0.9em] w-[0.9em] select-none"
+          style={{ imageRendering: 'pixelated', filter: 'drop-shadow(0 0.05em 0.08em rgba(0,0,0,.55))' }}
+          data-lyric-texture={texture ?? undefined}
+          {...pop}
+          transition={transition}
+        />
+      ) : style === 'plain' && !broken ? (
         // One colour, the lyrics' own: the drawing is a mask over the ink
         // (the glow sits on a wrapper, since a mask would cut it off).
         <motion.span
@@ -296,6 +314,8 @@ interface LayoutProps {
   /** Width of the overlay, px. */
   width: number;
   full: boolean;
+  /** The user's textures, when chosen (emoji look "Your textures"). */
+  textures: TextureSet | null;
 }
 
 type Row = { key: string; role: 'prev' | 'cur' | 'next'; node: ReactNode; size: number };
@@ -303,16 +323,19 @@ type Row = { key: string; role: 'prev' | 'cur' | 'next'; node: ReactNode; size: 
 type Leaving = Row & { id: string; x: number; y: number; w: number; opacity: number; fontSize: string; born: number };
 
 /** The reference look: the step being sung, huge, between its neighbours. */
-function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
+function StackLayout({ lines, time, s, reduced, width, full, textures }: LayoutProps) {
   const wordMode = s.timing === 'auto' && s.wordHighlight;
   const items = useMemo(() => stackItems(lines, wordMode), [lines, wordMode]);
-  // Which steps get an emoji, worked out once per song.
-  const emojis = useMemo(() => planEmojis(items, s.emoji), [items, s.emoji]);
+  // Which steps get an emoji, worked out once per song (with textures, words
+  // that are only a picture in the pack count too: "pluma", "sword").
+  const useTextures = s.emojiStyle === 'textures' && !!textures;
+  const emojis = useMemo(() => planEmojis(items, s.emoji, useTextures ? TEXTURE_WORDS : undefined), [items, s.emoji, useTextures]);
   const withEmoji = (i: number, current: boolean): ReactNode => {
     const it = items[i];
     const p = emojis[i];
     if (!p) return it.text;
-    const e = <Emoji key="e" emoji={p.emoji} style={s.emojiStyle} reduced={reduced} current={current} />;
+    const texture = useTextures && textures ? textureFor(textures, p.emoji, p.word, p.filler) : null;
+    const e = <Emoji key="e" emoji={p.emoji} style={s.emojiStyle} texture={texture} reduced={reduced} current={current} />;
     return p.before ? (
       <>
         {e}
@@ -568,6 +591,9 @@ export const AuroraLyrics = memo(
   forwardRef<HTMLDivElement, AuroraLyricsProps>(function AuroraLyrics({ lines, state, time, trackKey, settings: s, place, reduced, full, shown, onShowPlain }, boxRef) {
     const root = useRef<HTMLDivElement>(null);
     const [width, setWidth] = useState(1200);
+    // The user's own font and textures (chosen in Aurora's settings).
+    const { look, textures } = useAuroraLook();
+    useCustomFont(s.font === 'custom', look?.font);
     // Movement with the music: a gentle sway, a lift with the bass and a
     // bounce on beats, applied to the whole block on every frame.
     const [moveEl, setMoveEl] = useState<HTMLDivElement | null>(null);
@@ -647,7 +673,7 @@ export const AuroraLyrics = memo(
       fontFamily: font.css,
       fontStretch: font.stretch,
     } as CSSProperties;
-    const layout = { lines: timed, time, s, reduced, width, full };
+    const layout = { lines: timed, time, s, reduced, width, full, textures };
 
     return (
       <div ref={root} className="pointer-events-none absolute inset-0 z-[5] [container-type:size]" aria-live="off">

@@ -80,6 +80,24 @@ const handlers: Record<string, Handler> = {
     const url = localStorage.getItem('omnihub.demo.motion');
     return { key: music.mediaVideo().key, motion: url ? { status: 'found', url } : { status: 'none' } };
   },
+  // A test can hand the demo a font and textures (localStorage "omnihub.demo.font", a data URL,
+  // and "omnihub.demo.textures", a JSON map of name → data URL); nothing is shipped.
+  aurora_look: () => {
+    const textures = demoTextures();
+    return { font: localStorage.getItem('omnihub.demo.font') ? 'Demo font' : null, textures: Object.keys(textures).sort() };
+  },
+  aurora_choose_font: () => {
+    throw new Error('Choosing a font needs the Windows app.');
+  },
+  aurora_choose_textures: () => {
+    throw new Error('Choosing textures needs the Windows app.');
+  },
+  aurora_forget_look: (a) => {
+    if (bool(a, 'font')) localStorage.removeItem('omnihub.demo.font');
+    if (bool(a, 'textures')) localStorage.removeItem('omnihub.demo.textures');
+  },
+  aurora_font: () => localStorage.getItem('omnihub.demo.font'),
+  aurora_texture: (a) => demoTextures()[str(a, 'name')] ?? null,
   media_stream_status: () => ({ installed: !!localStorage.getItem('omnihub.demo.stream'), installing: false }),
   media_art: (a) => music.mediaArt(str(a, 'id')),
   media_audio: () => music.mediaAudio(),
@@ -268,6 +286,14 @@ const handlers: Record<string, Handler> = {
 };
 
 const FAST = new Set(['vault_strength', 'vault_touch', 'vault_status', 'system_stats', 'vault_generate', 'storage_progress', 'storage_duplicates_progress', 'remote_status']);
+
+function demoTextures(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem('omnihub.demo.textures') ?? '{}') ?? {};
+  } catch {
+    return {};
+  }
+}
 
 export async function mockInvoke(cmd: string, args: Record<string, unknown>): Promise<unknown> {
   const handler = handlers[cmd];

@@ -10,6 +10,7 @@
 pub mod artwork;
 pub mod audio;
 pub mod eq;
+pub mod look;
 pub mod lyrics;
 pub mod mixer;
 pub mod motion;
@@ -394,6 +395,8 @@ pub struct MediaHub {
     /// Animated album covers per track (looked up when Aurora asks).
     motions: Mutex<HashMap<String, motion::MotionStatus>>,
     motion: motion::MotionFinder,
+    /// The user's own lyric font and emoji textures.
+    pub look: look::LookFiles,
 }
 
 impl MediaHub {
@@ -411,7 +414,7 @@ impl MediaHub {
                 Box::new(NoBackend)
             }
         };
-        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")), stream: stream::StreamTool::new(data_dir.join("tools").join("video")), motions: Mutex::new(HashMap::new()), motion: motion::MotionFinder::new(data_dir.join("motion")) })
+        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")), stream: stream::StreamTool::new(data_dir.join("tools").join("video")), motions: Mutex::new(HashMap::new()), motion: motion::MotionFinder::new(data_dir.join("motion")), look: look::LookFiles::new(data_dir.join("aurora-look")) })
     }
 
     /// Whether this is the pretend player (the mixer and open apps pretend too).

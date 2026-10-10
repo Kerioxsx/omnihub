@@ -873,7 +873,7 @@ export interface Effects {
 }
 
 export type SceneStyle = 'visual' | 'fisheye' | 'fisheyeVisual' | 'minimal' | 'ambient';
-export type LyricFont = 'display' | 'condensed' | 'heavy' | 'serif' | 'impact';
+export type LyricFont = 'display' | 'condensed' | 'heavy' | 'serif' | 'impact' | 'custom';
 
 export interface VisualSettings {
   /** Which release's defaults these settings were last brought up to (the core upgrades them). */
@@ -1153,7 +1153,7 @@ export interface LyricLine {
 export type Backdrop = 'auto' | 'video' | 'cover' | 'visual';
 export type EmojiAmount = 'off' | 'some' | 'more';
 /** 'plain': one colour, the lyrics' own (default); '3d': glossy Fluent 3D; 'system': Windows' emoji font. */
-export type EmojiStyle = 'plain' | '3d' | 'system';
+export type EmojiStyle = 'plain' | '3d' | 'system' | 'textures';
 export type VideoFit = 'fill' | 'fit';
 export type VideoQuality = 'best' | '1080' | '720';
 
@@ -1538,4 +1538,12 @@ export interface UpdateInfo {
 export interface StreamToolStatus {
   installed: boolean;
   installing: boolean;
+}
+
+/** The user's own lyric font and emoji textures, kept on this PC. */
+export interface AuroraLook {
+  /** The font's name (its file name), if one was chosen. */
+  font: string | null;
+  /** The texture names (file names without ".png"). */
+  textures: string[];
 }

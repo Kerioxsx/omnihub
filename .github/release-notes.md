@@ -1,13 +1,14 @@
 ## New in this version
 
-**Aurora, take two** — after the first week with it:
+**A quick update to Aurora:**
 
-- **Music videos play.** YouTube refuses official music videos to players inside apps (that's why the video never showed), so OmniHub now plays them through a small page on its own website, the way any site embeds a video. When an artist allows their video *only* on YouTube itself, OmniHub plays its stream directly with **yt-dlp** (downloaded once, about 60 MB, checked against its published checksum; turn it off under More settings). Listening to the normal song still shows the official video, and when there are several official videos, the **most watched** one plays. Spanish titles like "Video Oficial" count too.
-- **Animated album covers.** When the album has a moving cover on Apple Music (up to 4K), it plays behind the lyrics — and the **light show** now runs its glitch, halftone and colour effects over the moving cover, like the Spider-Verse edits.
-- **The whole cover, sharp.** The cover now shows **all of it** (nothing cut off at the top or bottom), as tall as the screen, its sides blending into a soft glow of itself; "Fill the screen" is still there. Remixes, live and acoustic versions now get *their* cover, not the original's, and Deezer is a second source when Apple's catalogue has nothing (up to 1900×1900).
-- **Lyrics for more songs.** NetEase Cloud Music is a second source of time-synced lyrics (Latin and K-pop included) when LRCLIB has nothing, and songs that had no lyrics are looked up again every few days instead of never.
-- **More emojis, in Spanish too, in the lyrics' colour.** Emojis now understand Spanish ("corazón roto" 💔, "te extraño" 🥺, "esta noche" 🌙, "lágrimas" 😢…), show up on any line with a word you can picture, and by default are **plain, one colour — the same as the lyrics**, like the reference edits (3D is one click away).
-- **Simpler settings.** A short *Quick* section — what's behind the lyrics (Video, Cover, Light show), animated covers, the cover's fit, lyrics and emojis — with everything else under *More settings*. A line always says what is on screen and why.
+- **Your own font and emoji pictures.** Under *Your font & textures* in Aurora's settings, choose a font file (.ttf, .otf or .woff) for the lyrics and a zip of item textures for the emojis, for a Minecraft look: words get the matching picture ("apple" → the apple, "diamonds" → a diamond, "blue" → the heart of the sea, love → a heart), drawn pixel-sharp. Your files are copied into OmniHub's data folder and stay on your PC; nothing is uploaded or shipped with OmniHub.
+- **An emoji at least every two lines.** Lines with a word to picture get theirs as before; when two lines in a row have none, the second gets one anyway (a sparkle, a note, a star…). "Bye", "goodbye" and "hello" get 👋.
+- **The whole cover again.** Everyone is switched back to the whole cover once (nothing cut off at the top or bottom); "Fill" is still there and now says that it cuts.
+- **Music videos: clearer and more reliable.** If the app missed the moment a video was found, it now asks again until it knows, and when a video can't play, Aurora says why (the artist doesn't allow it in apps, YouTube blocked its player, the stream failed…) instead of quietly showing the cover.
+- **Faster releases.** Updates now build and publish in a fraction of the time.
+
+**Spotify's animated covers (Canvas):** Spotify doesn't let other apps read them (there is no public way), so OmniHub can't show them. Animated covers come from Apple Music when the album has one there.
 
 **What is sent where:** to find a video, only the song's title and artist go to YouTube; for animated covers, to Apple Music; for covers, to Apple and Deezer; for lyrics, to LRCLIB and NetEase. Every one can be turned off.
 

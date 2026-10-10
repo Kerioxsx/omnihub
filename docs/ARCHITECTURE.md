@@ -197,11 +197,20 @@ or the UI:
   phrases) maps lyric words to emojis; a planner picks at most one per line
   and spaces them out (*Some*: any line with a picturable word, a common
   one like "love" or "amor" every other line; *Lots*: every line that has
-  one), never the same twice running. English and Spanish (accents
-  dropped, plurals and the commonest verb forms). The pictures are Fluent
-  Emoji: plain one-colour SVGs in `public/emoji/plain`, drawn as a mask over
-  the lyric ink (the default), or 3D WebPs in `public/emoji/3d`; both
-  rebuilt by `scripts/emoji-3d.py`.
+  one), never the same twice running, and never two lines in a row
+  without one (a line with nothing to picture gets a sparkle, a note…).
+  English and Spanish (accents dropped, plurals and the commonest verb
+  forms). The pictures are Fluent Emoji: plain one-colour SVGs in
+  `public/emoji/plain`, drawn as a mask over the lyric ink (the default),
+  or 3D WebPs in `public/emoji/3d`; both rebuilt by `scripts/emoji-3d.py`.
+- **Your font & textures** (`media/look.rs`, `lib/aurora/textures.ts`): the
+  user's font file and zip of PNGs are copied into `data/aurora-look` and
+  read back as data URLs (the font as an `@font-face`). With *Textures* as
+  the emoji look, each emoji is drawn as the pack's picture for the word
+  ("apple" → `apple.png`) or for the emoji (❤️ → `heart_pottery_sherd`,
+  Minecraft's item names), pixelated; words that are only pictures
+  ("pluma", "sword") count as picturable too; the plain emoji when the pack
+  lacks every candidate.
 - **Screen glow** (`src-tauri/src/ambient.rs`, `pages/overlay/AmbientOverlay.tsx`):
   a transparent, click-through, always-on-top window per chosen monitor,
   placed in physical pixels on the monitor or its work area; a watcher

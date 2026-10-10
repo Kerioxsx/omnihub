@@ -33,7 +33,7 @@ export interface VideoNow {
   ended: boolean;
   /** YouTube's player, or the video's own stream (one YouTube will not embed). */
   via: 'youtube' | 'direct';
-  /** While the stream is being got: what is happening ("Downloading the video helper… 40%"). */
+  /** While the stream is being got: what is happening ("Downloading the video helper… 40%"); after giving up, why. */
   note?: string;
 }
 
@@ -89,7 +89,17 @@ function maxHeight(q: VisualSettings['scene']['videoQuality']): number {
   return q === '720' ? 720 : q === '1080' ? 1080 : 2160;
 }
 
-function VideoLayer({ video, scene, input, size, onFail, onShowing }: { video: MusicVideo; scene: Props['scene']; input: BackdropInput; size: { W: number; H: number }; onFail: () => void; onShowing: (on: boolean) => void }) {
+/** What YouTube's player error means, in words. */
+function youtubeWhy(code: number): string {
+  if (code === 101 || code === 150) return 'the artist doesn’t allow it in apps (error ' + code + ')';
+  if (code === 152 || code === 153) return 'YouTube blocked its player here (error ' + code + ')';
+  if (code === 100) return 'the video was removed or is private';
+  if (code === 2) return 'the video id was not accepted';
+  if (code === 5) return 'the player could not play it (error 5)';
+  return `error ${code}`;
+}
+
+function VideoLayer({ video, scene, input, size, onFail, onShowing }: { video: MusicVideo; scene: Props['scene']; input: BackdropInput; size: { W: number; H: number }; onFail: (why: string) => void; onShowing: (on: boolean) => void }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const player = useRef<HTMLVideoElement>(null);
   const [link, setLink] = useState<VideoControl | null>(null);
@@ -106,10 +116,15 @@ function VideoLayer({ video, scene, input, size, onFail, onShowing }: { video: M
   // The first frame starts where the song is, so it needs no seek.
   const [start] = useState(() => (input.time() + input.offsetFor(video.id)) / 1000);
 
-  const giveUp = useRef(onFail);
-  giveUp.current = () => {
-    if (mode === 'youtube' && allowDirect.current) setMode('fetching');
-    else onFail();
+  // Why YouTube's player could not play it (said again if the stream fails too).
+  const youtubeFailed = useRef('');
+  const giveUp = useRef((why: string) => onFail(why));
+  giveUp.current = (why: string) => {
+    if (mode === 'youtube') {
+      youtubeFailed.current = why;
+      if (allowDirect.current) setMode('fetching');
+      else onFail(`YouTube: ${why}`);
+    } else onFail(`${youtubeFailed.current ? `YouTube: ${youtubeFailed.current}; ` : ''}directly: ${why}`);
   };
 
   useEffect(() => {
@@ -134,15 +149,16 @@ function VideoLayer({ video, scene, input, size, onFail, onShowing }: { video: M
       })
       .catch((e: unknown) => {
         if (gone) return;
-        note(String(e));
+        const why = String(e).replace(/^Error: /, '');
+        note(why);
         // Leave the reason up a moment, then the next video or the cover.
-        setTimeout(() => !gone && onFail(), 2500);
+        setTimeout(() => !gone && giveUp.current(why), 2500);
       });
     return () => {
       gone = true;
       off?.();
     };
-  }, [mode, video, cap, onFail]);
+  }, [mode, video, cap]);
 
   // Say at once that a video is on its way (until it plays, the cover shows).
   useEffect(() => {
@@ -176,16 +192,25 @@ function VideoLayer({ video, scene, input, size, onFail, onShowing }: { video: M
       const now = performance.now();
       // YouTube says no, never answers, or loads and never starts ("Video
       // unavailable" sends no error): the next video, or the cover.
+      const direct = link instanceof DirectLink;
       if (i.error !== null || (!i.ready && now - born > 15000)) {
         clearInterval(timer);
-        giveUp.current();
+        giveUp.current(
+          i.error !== null
+            ? direct
+              ? `the stream stopped (media error ${i.error})`
+              : youtubeWhy(i.error)
+            : direct
+              ? 'the stream never loaded'
+              : 'YouTube’s player never loaded (is youtube.com reachable?)',
+        );
         return;
       }
       if (!i.ready) return;
       if (i.state === 1) everPlayed = true;
       if (!everPlayed && live.current.playing && now - born > 14000) {
         clearInterval(timer);
-        giveUp.current();
+        giveUp.current(direct ? 'the stream loaded but never started' : 'the player loaded but the video never started (“Video unavailable”?)');
         return;
       }
       const offsetMs = offsetFor(video.id);
@@ -325,15 +350,20 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
   // An animated cover from Apple beats the artist's YouTube visualizer.
   const list = scene.backdrop === 'cover' || !scene.musicVideos ? [] : (videos ?? []).filter((v) => !(motionUrl && v.kind === 'visualizer'));
   const listKey = list.map((v) => v.id).join(',');
-  const [failed, setFailed] = useState<string[]>([]);
+  const [failed, setFailed] = useState<{ id: string; why: string }[]>([]);
   useEffect(() => setFailed([]), [listKey]);
-  const video = list.find((v) => !failed.includes(v.id)) ?? null;
-  const fail = useRef<() => void>(() => undefined);
-  fail.current = () => video && setFailed((f) => [...f, video.id]);
-  const [onFail] = useState(() => () => fail.current());
+  const video = list.find((v) => !failed.some((f) => f.id === v.id)) ?? null;
+  const fail = useRef<(why: string) => void>(() => undefined);
+  fail.current = (why) => video && setFailed((f) => [...f, { id: video.id, why }]);
+  const [onFail] = useState(() => (why: string) => fail.current(why));
+  // None played: say why (the first one's reason; the rest are usually the same).
+  const gaveUp = !video && failed.length > 0 ? failed : null;
+  const lastFailed = gaveUp ? list.find((v) => v.id === gaveUp[gaveUp.length - 1].id) : undefined;
+  const whyNot = gaveUp ? `Couldn’t play ${gaveUp.length === 1 ? 'the music video' : `any of the ${gaveUp.length} videos`} — ${gaveUp[0].why}. Showing ${motionUrl ? 'the animated cover' : 'the cover'}.` : null;
   useEffect(() => {
-    if (!video) onVideo?.(null);
-  }, [video, onVideo]);
+    if (video) return;
+    onVideo?.(whyNot && lastFailed ? { video: lastFailed, quality: '', showing: false, offsetMs: 0, ended: false, via: 'youtube', note: whyNot } : null);
+  }, [video, onVideo, whyNot, lastFailed]);
 
   const m = reduced ? 0 : Math.max(0, Math.min(1, scene.coverMotion));
   const input: BackdropInput = { look, videos, motion: motionUrl, time, playing, offsetFor, onVideo, lyricY, glare };

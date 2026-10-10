@@ -208,6 +208,15 @@ export const api = {
     streamStatus: () => call<T.StreamToolStatus>('media_stream_status'),
     /** The playing song's animated album cover (looked up once per song). */
     motion: () => call<{ key: string | null; motion: T.MotionStatus }>('media_motion'),
+    /** The user's own lyric font and emoji textures. */
+    look: () => call<T.AuroraLook>('aurora_look'),
+    /** Pick a font file and use it for the lyrics (null when cancelled). */
+    chooseFont: () => call<string | null>('aurora_choose_font'),
+    /** Pick a zip of PNG textures and use them as emojis (how many; null when cancelled). */
+    chooseTextures: () => call<number | null>('aurora_choose_textures'),
+    forgetLook: (font: boolean, textures: boolean) => call<void>('aurora_forget_look', { font, textures }),
+    font: () => call<string | null>('aurora_font'),
+    texture: (name: string) => call<string | null>('aurora_texture', { name }),
     art: (id: string) => call<string | null>('media_art', { id }),
     audio: () => call<{ volume: { level: number; muted: boolean } | null; eq: T.EqStatus }>('media_audio'),
     setVolume: (level: number | null, muted: boolean | null = null) => call<{ level: number; muted: boolean }>('media_set_volume', { level, muted }),
