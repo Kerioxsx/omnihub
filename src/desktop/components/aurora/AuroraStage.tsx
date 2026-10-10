@@ -13,6 +13,7 @@ import { cx } from '../../lib/cx';
 import { DEFAULT_EFFECTS } from '../../lib/aurora/defaults';
 import { GlowRenderer, SceneRenderer } from '../../lib/aurora/gl';
 import { albumPalette, glowPalette, type Lab, PaletteBlender, rgbToHex, targetPalette } from '../../lib/aurora/palette';
+import { attachHls } from '../../lib/aurora/motion';
 import { AuroraBackdrop, type BackdropInput } from './AuroraBackdrop';
 
 export interface StageProps {
@@ -231,6 +232,30 @@ export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY
     img.onload = () => scene.current?.setArt(img);
     img.src = art;
   }, [art, visuals.scene.artwork, generation, on, failed, lightShow]);
+
+  // The album's animated cover, when it has one: the light show's effects
+  // play over it instead of the still picture (as in the reference clip).
+  const motionUrl = backdrop?.motion ?? null;
+  useEffect(() => {
+    const sc = scene.current;
+    if (!sc || !motionUrl || !art || !visuals.scene.artwork || !lightShow) return;
+    const v = document.createElement('video');
+    let stop: (() => void) | undefined;
+    let gone = false;
+    attachHls(v, motionUrl).then(
+      (s) => {
+        if (gone) return s();
+        stop = s;
+        scene.current?.setArtVideo(v);
+      },
+      () => undefined,
+    );
+    return () => {
+      gone = true;
+      scene.current?.setArtVideo(null);
+      stop?.();
+    };
+  }, [motionUrl, art, visuals.scene.artwork, generation, on, failed, lightShow]);
 
   if (!on) return <div ref={root} className={cx('pointer-events-none absolute inset-0', !overlay && 'bg-black')} aria-hidden />;
   return (

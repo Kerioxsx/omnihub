@@ -23,6 +23,8 @@ export interface PanelVideo {
   offset: number;
   setOffset: (ms: number) => void;
   hasCover: boolean;
+  /** The album has an animated cover (Apple Music), playing behind the lyrics. */
+  motion?: boolean;
 }
 
 // ---------- small glass controls ----------
@@ -142,34 +144,44 @@ const px = (v: number) => `${Math.round(v * 10) / 10} px`;
 
 // ---------- sections ----------
 
+/** What is behind the lyrics now, and why, in plain words. */
+function backgroundLine(v: VisualSettings, video?: PanelVideo): string {
+  const s = v.scene;
+  const now = video?.now ?? null;
+  const st = video?.status ?? null;
+  return (
+    s.backdrop === 'visual'
+      ? video?.motion
+        ? 'The light show, playing over the album’s animated cover.'
+        : 'The light show built from the cover (more under More settings).'
+      : s.backdrop === 'cover' || !s.musicVideos
+        ? video?.hasCover === false
+          ? 'This song has no cover, so the light show plays in its place.'
+          : video?.motion ? 'The album’s animated cover.' : 'The cover, full size.'
+        : now?.note
+          ? now.note
+          : now?.showing
+            ? `${now.video.kind === 'visualizer' ? 'The animated cover (the artist’s visualizer)' : 'The music video'} from ${now.video.channel}${now.quality ? ` · playing ${now.via === 'direct' ? 'directly ' : ''}in ${now.quality}` : ''}.`
+            : now?.ended
+              ? 'The video has ended before the song; the cover shows until the next one.'
+              : now
+                ? 'Loading the music video… the cover shows until it plays in step.'
+                : st?.status === 'searching'
+                  ? 'Looking for the music video…'
+                  : st?.status === 'found'
+                    ? `This song’s video couldn’t be played; showing ${video?.motion ? 'its animated cover' : 'the cover'}.`
+                    : st?.status === 'none'
+                      ? `No music video from the artist for this song — showing ${video?.motion ? 'its animated cover' : 'the cover'}.`
+                      : video?.motion ? 'The album’s animated cover.' : 'The cover.'
+  );
+}
+
 /** What fills the screen: the music video, the cover, or the light show. */
 function BackgroundSection({ v, video }: { v: VisualSettings; video?: PanelVideo }) {
   const s = v.scene;
   const set = (p: Partial<VisualSettings['scene']>) => patchVisuals({ scene: p });
   const now = video?.now ?? null;
-  const st = video?.status ?? null;
   const usesVideo = s.musicVideos && (s.backdrop === 'auto' || s.backdrop === 'video');
-  // Say plainly what is on screen and why.
-  const line =
-    s.backdrop === 'visual'
-      ? 'The light show built from the cover (Visual and Effects below).'
-      : s.backdrop === 'cover' || !s.musicVideos
-        ? video?.hasCover === false
-          ? 'This song has no cover, so the light show plays in its place.'
-          : 'The cover, full size, filling the screen.'
-        : now?.showing
-          ? `${now.video.kind === 'visualizer' ? 'The animated cover (the artist’s visualizer)' : 'The music video'} from ${now.video.channel}${now.quality ? ` · playing in ${now.quality}` : ''}.`
-          : now?.ended
-            ? 'The video has ended before the song; the cover shows until the next one.'
-            : now
-              ? 'Loading the music video… the cover shows until it plays in step.'
-              : st?.status === 'searching'
-                ? 'Looking for the music video…'
-                : st?.status === 'found'
-                  ? 'YouTube will not play this song’s video here; showing the cover.'
-                  : st?.status === 'none'
-                    ? 'No music video from the artist for this song — showing the cover.'
-                    : 'The cover fills the screen.';
   const nudge = (d: number) => video?.setOffset(Math.max(-600_000, Math.min(600_000, (video?.offset ?? 0) + d)));
   const fmt = (ms: number) => (ms === 0 ? 'in step' : `${ms > 0 ? '+' : '−'}${Math.abs(ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 1)}s`);
   const choices: { value: Backdrop; label: string }[] = [
@@ -181,15 +193,34 @@ function BackgroundSection({ v, video }: { v: VisualSettings; video?: PanelVideo
   return (
     <Section title="Background">
       <Dropdown label="Behind the lyrics" value={s.backdrop} options={choices} onChange={(backdrop) => set({ backdrop })} />
-      <p className="pb-1 text-[11px] leading-snug text-white/55" data-backdrop-status>
-        {line}
-      </p>
       <Toggle
         label="Music videos from YouTube"
         hint="The artist's own video (or animated cover), muted, in YouTube's player, kept in time with the song. Only the song's title and artist are searched for."
         checked={s.musicVideos}
         disabled={s.backdrop === 'cover' || s.backdrop === 'visual'}
         onChange={(musicVideos) => set({ musicVideos })}
+      />
+      <Toggle
+        label="Play videos YouTube won’t show in apps"
+        hint="Some artists only allow their video on YouTube itself. OmniHub then plays its stream directly with yt-dlp (downloaded once, about 60 MB, checked against its published checksum)."
+        checked={s.directVideos}
+        disabled={!s.musicVideos || s.backdrop === 'cover' || s.backdrop === 'visual'}
+        onChange={(directVideos) => set({ directVideos })}
+      />
+      <Toggle
+        label="Animated covers"
+        hint="When the album has a moving cover on Apple Music, it plays instead of the still one (in the light show too). Only the song's title and artist are searched for."
+        checked={s.animatedCovers}
+        onChange={(animatedCovers) => set({ animatedCovers })}
+      />
+      <Dropdown
+        label="Cover"
+        value={s.coverFit}
+        options={[
+          { value: 'whole', label: 'All of it' },
+          { value: 'fill', label: 'Fill the screen' },
+        ]}
+        onChange={(coverFit) => set({ coverFit })}
       />
       {usesVideo && now && (
         <div className="py-1.5">
@@ -242,6 +273,90 @@ function BackgroundSection({ v, video }: { v: VisualSettings; video?: PanelVideo
     </Section>
   );
 }
+
+/** A row of buttons, one chosen (big, plain choices for the Quick section). */
+function Choice<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string; hint?: string }[]; onChange: (v: T) => void }) {
+  return (
+    <div className="py-1.5">
+      <div className="mb-1.5 text-[12px] font-medium text-white/85">{label}</div>
+      <div className="flex gap-1 rounded-[11px] bg-white/[0.06] p-1" role="radiogroup" aria-label={label}>
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={value === o.value}
+            title={o.hint}
+            onClick={() => onChange(o.value)}
+            className={cx('h-8 flex-1 rounded-[8px] text-[12px] font-semibold transition-colors', value === o.value ? 'bg-white text-black shadow' : 'text-white/70 hover:bg-white/10 hover:text-white')}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The few choices most people want, in plain words; the rest is under More settings. */
+function QuickSection({ v, video }: { v: VisualSettings; video?: PanelVideo }) {
+  const s = v.scene;
+  const l = v.lyrics;
+  const scene = (p: Partial<VisualSettings['scene']>) => patchVisuals({ scene: p });
+  const lyrics = (p: Partial<VisualSettings['lyrics']>) => patchVisuals({ lyrics: p });
+  const behind = s.backdrop === 'visual' ? 'visual' : s.backdrop === 'cover' ? 'cover' : 'auto';
+  return (
+    <Section title="Quick">
+      <Choice
+        label="Behind the lyrics"
+        value={behind}
+        options={[
+          { value: 'auto', label: 'Video', hint: 'The music video when there is one, else the animated cover, else the cover' },
+          { value: 'cover', label: 'Cover', hint: 'The album cover (animated when it can be)' },
+          { value: 'visual', label: 'Light show', hint: 'The cover with effects that follow the beat' },
+        ]}
+        onChange={(b) => scene({ backdrop: b, ...(b === 'auto' ? { musicVideos: true } : {}) })}
+      />
+      <p className="pb-1 text-[11px] leading-snug text-white/55" data-backdrop-status>
+        {backgroundLine(v, video)}
+      </p>
+      <Toggle label="Animated covers" checked={s.animatedCovers} onChange={(animatedCovers) => scene({ animatedCovers })} />
+      <Choice
+        label="Cover"
+        value={s.coverFit}
+        options={[
+          { value: 'whole', label: 'All of it', hint: 'Nothing cut off: its sides blend into the light' },
+          { value: 'fill', label: 'Fill the screen', hint: 'Edge to edge (the top and bottom are cut on wide screens)' },
+        ]}
+        onChange={(coverFit) => scene({ coverFit })}
+      />
+      <Toggle label="Lyrics" checked={l.visible} onChange={(visible) => lyrics({ visible })} />
+      <Choice
+        label="Emojis"
+        value={l.emoji}
+        options={[
+          { value: 'off', label: 'Off' },
+          { value: 'some', label: 'Some' },
+          { value: 'more', label: 'Lots' },
+        ]}
+        onChange={(emoji) => lyrics({ emoji })}
+      />
+      {l.emoji !== 'off' && (
+        <Choice
+          label="Emoji look"
+          value={l.emojiStyle === 'system' ? '3d' : l.emojiStyle}
+          options={[
+            { value: 'plain', label: 'Lyric colour', hint: 'One colour, the same as the lyrics' },
+            { value: '3d', label: '3D', hint: 'Glossy, full colour' },
+          ]}
+          onChange={(emojiStyle) => lyrics({ emojiStyle })}
+        />
+      )}
+    </Section>
+  );
+}
+
+const MORE = 'omnihub.auroraMore';
 
 /** The reference's main block: the light around the screen and its colours. */
 function LightSection({ v }: { v: VisualSettings }) {
@@ -372,6 +487,7 @@ function LyricsSection({ v }: { v: VisualSettings }) {
           label="Emoji style"
           value={l.emojiStyle}
           options={[
+            { value: 'plain', label: 'In the lyrics’ colour' },
             { value: '3d', label: '3D (glossy)' },
             { value: 'system', label: 'Windows' },
           ]}
@@ -656,6 +772,22 @@ function SourcesSection() {
 export function AuroraPanel({ open, onClose, status, full, video }: { open: boolean; onClose: () => void; status: VisualStatus | null; full: boolean; video?: PanelVideo }) {
   const v = useVisuals();
   const [confirm, setConfirm] = useState(false);
+  // The detailed settings stay folded away unless the user opened them before.
+  const [more, setMoreState] = useState(() => {
+    try {
+      return localStorage.getItem(MORE) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const setMore = (on: boolean) => {
+    setMoreState(on);
+    try {
+      localStorage.setItem(MORE, on ? '1' : '0');
+    } catch {
+      /* this session only */
+    }
+  };
   useEffect(() => {
     if (!confirm) return;
     const t = setTimeout(() => setConfirm(false), 3500);
@@ -688,16 +820,33 @@ export function AuroraPanel({ open, onClose, status, full, video }: { open: bool
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
             {!v.enabled && <p className="px-4 pt-3 text-[11.5px] leading-snug text-amber-200/80">Aurora is off: no sound is analysed and nothing is drawn. The lyrics still show.</p>}
-            <BackgroundSection v={v} video={video} />
-            <LightSection v={v} />
-            <VisualSection v={v} />
-            <EffectsSection v={v} />
-            <LyricsSection v={v} />
-            <SoundSection v={v} status={status} />
-            <ComfortSection v={v} />
-            <EdgeSection v={v} />
-            <DesktopSection v={v} />
-            <SourcesSection />
+            <QuickSection v={v} video={video} />
+            <div className="border-t border-white/[0.08] px-4 py-2.5">
+              <button
+                type="button"
+                onClick={() => setMore(!more)}
+                className="flex h-8 w-full items-center justify-center gap-1.5 rounded-[10px] bg-white/[0.07] text-[12px] font-semibold text-white/80 hover:bg-white/[0.12]"
+                aria-expanded={more}
+                data-aurora-more
+              >
+                {more ? 'Fewer settings' : 'More settings'}
+                <ChevronDown size={14} className={cx('transition-transform', more && 'rotate-180')} />
+              </button>
+            </div>
+            {more && (
+              <>
+                <BackgroundSection v={v} video={video} />
+                <LightSection v={v} />
+                <VisualSection v={v} />
+                <EffectsSection v={v} />
+                <LyricsSection v={v} />
+                <SoundSection v={v} status={status} />
+                <ComfortSection v={v} />
+                <EdgeSection v={v} />
+                <DesktopSection v={v} />
+                <SourcesSection />
+              </>
+            )}
           </div>
           <div className="border-t border-white/[0.08] p-3">
             <button

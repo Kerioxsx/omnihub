@@ -69,6 +69,18 @@ const handlers: Record<string, Handler> = {
   media_control: (a) => music.mediaControl(str(a, 'action') as MediaAction, num(a, 'positionMs', 0)),
   media_lyrics: () => music.mediaLyrics(),
   media_video: () => music.mediaVideo(),
+  // The demo has no yt-dlp: a test can hand it a stream (localStorage "omnihub.demo.stream").
+  media_video_stream: () => {
+    const url = localStorage.getItem('omnihub.demo.stream');
+    if (!url) throw new Error('Playing videos directly needs the Windows app.');
+    return url;
+  },
+  // A test can hand the demo an animated cover (localStorage "omnihub.demo.motion").
+  media_motion: () => {
+    const url = localStorage.getItem('omnihub.demo.motion');
+    return { key: music.mediaVideo().key, motion: url ? { status: 'found', url } : { status: 'none' } };
+  },
+  media_stream_status: () => ({ installed: !!localStorage.getItem('omnihub.demo.stream'), installing: false }),
   media_art: (a) => music.mediaArt(str(a, 'id')),
   media_audio: () => music.mediaAudio(),
   media_set_volume: (a) => music.mediaSetVolume(a.level == null ? null : num(a, 'level'), a.muted == null ? null : bool(a, 'muted')),

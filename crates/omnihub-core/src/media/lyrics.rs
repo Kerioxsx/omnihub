@@ -337,6 +337,94 @@ pub fn lookup(title: &str, artist: &str, album: &str, duration_ms: u64, get: &dy
     Ok(found.into_iter().filter(|f| secs == 0 || (f.duration - secs as f64).abs() < 8.0).map(to_lyrics).find(|l| fits(&l.lines, duration_ms)))
 }
 
+/// Lines that are credits, not lyrics (NetEase starts its files with
+/// "作曲 : …" / "作词 : …", and notes like "原歌词有误").
+fn is_credit(text: &str, cjk_song: bool) -> bool {
+    let t = text.trim();
+    let cjk = |c: char| ('\u{3000}'..='\u{9fff}').contains(&c) || ('\u{ff00}'..='\u{ffef}').contains(&c);
+    const CREDITS: &[&str] = &["作曲", "作词", "编曲", "制作", "混音", "母带", "和声", "录音", "监制", "出品", "吉他", "贝斯", "鼓", "Producer", "Composer", "Lyricist", "Written by", "Produced by"];
+    let labelled = t.split_once([':', '：']).is_some_and(|(k, _)| CREDITS.iter().any(|c| k.trim().contains(c)));
+    labelled || (!cjk_song && t.chars().any(cjk))
+}
+
+#[derive(Deserialize)]
+struct NeArtist {
+    #[serde(default)]
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct NeSong {
+    id: u64,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    artists: Vec<NeArtist>,
+    /// ms.
+    #[serde(default)]
+    duration: u64,
+}
+
+#[derive(Deserialize, Default)]
+struct NeResult {
+    #[serde(default)]
+    songs: Vec<NeSong>,
+}
+
+#[derive(Deserialize)]
+struct NeSearch {
+    #[serde(default)]
+    result: Option<NeResult>,
+}
+
+#[derive(Deserialize)]
+struct NeLrc {
+    #[serde(default)]
+    lyric: String,
+}
+
+#[derive(Deserialize)]
+struct NeLyric {
+    lrc: Option<NeLrc>,
+}
+
+/// The second source: NetEase Cloud Music's public search and lyrics (no
+/// account), which has time-synced lyrics for many songs LRCLIB lacks, Latin
+/// and K-pop included. Only the title and artist are sent.
+pub fn netease(title: &str, artist: &str, duration_ms: u64, get: &dyn Fn(&str) -> Result<Option<String>, String>) -> Result<Option<Lyrics>, String> {
+    let (t, a) = clean_query(title, artist);
+    if t.is_empty() {
+        return Ok(None);
+    }
+    let Some(body) = get(&format!("https://music.163.com/api/search/get?s={}&type=1&limit=10", url_encode(&format!("{a} {t}"))))? else { return Ok(None) };
+    let found: NeSearch = serde_json::from_str(&body).map_err(|e| format!("unexpected NetEase answer: {e}"))?;
+    let (nt, na) = (norm(&t), norm(&a));
+    let version = super::artwork::version_of(title);
+    let song = found.result.unwrap_or_default().songs.into_iter().find(|s| {
+        let st = norm(&clean_query(&s.name, "\u{1}omnihub\u{1}").0);
+        let title_ok = st == nt || (nt.len() >= 4 && (st.starts_with(&nt) || nt.starts_with(&st)) && st.len().abs_diff(nt.len()) <= 10);
+        let artist_ok = na.is_empty() || s.artists.iter().any(|x| {
+            let n = norm(&x.name);
+            !n.is_empty() && (n.contains(&na) || na.contains(&n))
+        });
+        let length_ok = duration_ms == 0 || s.duration == 0 || s.duration.abs_diff(duration_ms) <= 8_000;
+        title_ok && artist_ok && length_ok && super::artwork::version_of(&s.name) == version
+    });
+    let Some(song) = song else { return Ok(None) };
+    let Some(body) = get(&format!("https://music.163.com/api/song/lyric?id={}&lv=1&kv=1&tv=-1", song.id))? else { return Ok(None) };
+    let lrc: NeLyric = serde_json::from_str(&body).map_err(|e| format!("unexpected NetEase answer: {e}"))?;
+    let src = lrc.lrc.map(|l| l.lyric).unwrap_or_default();
+    let mut lines = parse_lrc(&src);
+    let cjk = |c: char| ('\u{3000}'..='\u{9fff}').contains(&c);
+    let cjk_song = lines.iter().filter(|l| l.text.chars().any(cjk)).count() * 2 > lines.len().max(1);
+    lines.retain(|l| !is_credit(&l.text, cjk_song));
+    // Untimed text comes as lines all at 0: not synced lyrics.
+    if lines.iter().filter(|l| !l.text.trim().is_empty()).count() < 4 || lines.iter().all(|l| l.ms == 0) || !fits(&lines, duration_ms) {
+        return Ok(None);
+    }
+    Ok(Some(Lyrics { lines, plain: None, instrumental: false, source: "NetEase Cloud Music".into() }))
+}
+
 fn url_encode(s: &str) -> String {
     s.bytes()
         .map(|b| match b {
@@ -376,9 +464,18 @@ impl LyricsCache {
         self.dir.join(format!("{}.json", hex::encode(&sha2::Sha256::digest(key.as_bytes())[..12])))
     }
 
-    /// `Some(None)` = known to have no lyrics.
+    /// `Some(None)` = known to have no lyrics (for three days: lyrics get
+    /// added to the databases all the time, so a miss is asked again).
     pub fn get(&self, key: &str) -> Option<Option<Lyrics>> {
-        serde_json::from_slice(&std::fs::read(self.file(key)).ok()?).ok()
+        let path = self.file(key);
+        let found: Option<Lyrics> = serde_json::from_slice(&std::fs::read(&path).ok()?).ok()?;
+        if found.is_none() {
+            let age = std::fs::metadata(&path).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok());
+            if age.is_none_or(|a| a > std::time::Duration::from_secs(3 * 86_400)) {
+                return None;
+            }
+        }
+        Some(found)
     }
 
     pub fn put(&self, key: &str, lyrics: &Option<Lyrics>) {
@@ -391,6 +488,40 @@ impl LyricsCache {
 
 #[cfg(test)]
 mod tests {
+    /// Against the real NetEase (needs the internet): `cargo test -- --ignored live_netease`.
+    #[test]
+    #[ignore]
+    fn live_netease() {
+        for (t, a, ms) in [("MONACO", "Bad Bunny", 267_000), ("Dame Amor - Remix", "Officialalex425", 208_000), ("Blinding Lights", "The Weeknd", 200_000)] {
+            match netease(t, a, ms, &http_get).unwrap() {
+                Some(l) => println!("{a} - {t}: {} lines, first {:?}", l.lines.len(), l.lines.first().map(|x| (&x.text, x.ms))),
+                None => println!("{a} - {t}: not on NetEase"),
+            }
+        }
+        assert!(netease("MONACO", "Bad Bunny", 267_000, &http_get).unwrap().is_some());
+    }
+
+    #[test]
+    fn netease_fills_in_with_timed_lyrics_without_its_credits() {
+        let get = |url: &str| -> Result<Option<String>, String> {
+            if url.starts_with("https://music.163.com/api/search/get?s=Bad%20Bunny%20MONACO") {
+                return Ok(Some(r#"{"result":{"songs":[
+                    {"id":1,"name":"MONACO (Remix)","artists":[{"name":"Bad Bunny"}],"duration":267000},
+                    {"id":2,"name":"MONACO","artists":[{"name":"Bad Bunny"}],"duration":267100}
+                ]}}"#.into()));
+            }
+            if url == "https://music.163.com/api/song/lyric?id=2&lv=1&kv=1&tv=-1" {
+                return Ok(Some(r#"{"lrc":{"lyric":"[00:00.000] 作曲 : Benito A. Martínez Ocasio\n[00:00.000] 原歌词有误\n[00:21.178] Huh-huh-huh\n[00:30.000] Línea uno\n[00:34.000] Línea dos\n[00:38.000] Línea tres\n"}}"#.into()));
+            }
+            Ok(None)
+        };
+        let l = netease("MONACO", "Bad Bunny", 267_000, &get).unwrap().unwrap();
+        assert_eq!(l.lines.iter().map(|x| x.text.as_str()).collect::<Vec<_>>(), vec!["Huh-huh-huh", "Línea uno", "Línea dos", "Línea tres"]);
+        assert_eq!(l.source, "NetEase Cloud Music");
+        // Another length (another version): nothing.
+        assert!(netease("MONACO", "Bad Bunny", 210_000, &get).unwrap().is_none());
+    }
+
     use super::*;
 
     #[test]

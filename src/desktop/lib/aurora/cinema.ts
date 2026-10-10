@@ -2,7 +2,7 @@
 // the core, which looks it up on YouTube once per song), the user's timing
 // nudge per video (kept on this PC), and what the cover looks like.
 
-import type { VideoStatus } from '@shared/types';
+import type { MotionStatus, VideoStatus } from '@shared/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { useEvent } from '../hooks';
@@ -21,6 +21,21 @@ export function useMusicVideo(trackKey: string | undefined, wanted: boolean): Vi
   useEffect(() => load(), [trackKey, load]);
   useEvent<{ key: string }>('media:video', (p) => p.key === trackKey && load());
   return wanted && st && st.key === trackKey ? st.video : null;
+}
+
+/** The playing song's animated album cover (null until known, or when not wanted). */
+export function useMotionCover(trackKey: string | undefined, wanted: boolean): MotionStatus | null {
+  const [st, setSt] = useState<{ key: string; motion: MotionStatus } | null>(null);
+  const load = useCallback(() => {
+    if (!wanted) return;
+    void api.media.motion().then(
+      (r) => r.key && setSt({ key: r.key, motion: r.motion }),
+      () => undefined,
+    );
+  }, [wanted]);
+  useEffect(() => load(), [trackKey, load]);
+  useEvent<{ key: string }>('media:motion', (p) => p.key === trackKey && load());
+  return wanted && st && st.key === trackKey ? st.motion : null;
 }
 
 const OFFSETS = 'omnihub.videoOffsets';

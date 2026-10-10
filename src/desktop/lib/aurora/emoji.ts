@@ -3,16 +3,19 @@
 // picture or feel ("👁 saw", "city 🏙", "let go 🕊", "broken heart 💔"),
 // never one after every line.
 //
-// Each line is read once per song: a phrase ("let go", "fall apart") first,
+// Each line is read once per song: a phrase ("let go", "corazón roto") first,
 // then single words by their plain form ("eating" → eat, "goin'" → go,
-// "saw" → see). A planner spaces the picks over the song: by default about
-// one every two or three lines (very common words like "love" less often),
-// and never the same emoji twice in a row. In word-by-word lyrics the emoji
-// sits beside the word that earned it.
+// "saw" → see, "lágrimas" → lagrima), in English and Spanish. A planner
+// spaces the picks over the song: by default any line with a word you can
+// picture (very common words like "love" or "amor" every other line at
+// most), and never the same emoji twice in a row. In word-by-word lyrics the
+// emoji sits beside the word that earned it.
 //
-// They look glossy and 3D, close to the iPhone's: Microsoft's Fluent Emoji
-// (MIT licence), shipped in public/emoji/3d. Apple's own artwork cannot be
-// shipped (its licence does not allow it). "system" uses Windows' emoji font.
+// By default they are plain, one colour, painted in the lyrics' own colour
+// like the reference edits (Fluent Emoji's "High Contrast" drawings, in
+// public/emoji/plain); or glossy and 3D, close to the iPhone's (Fluent 3D, in
+// public/emoji/3d). Both are Microsoft's Fluent Emoji (MIT licence); Apple's
+// own artwork cannot be shipped. "system" uses Windows' emoji font.
 
 import type { EmojiAmount } from '@shared/types';
 
@@ -40,6 +43,34 @@ const WORDS: Record<string, string> = {
   cat: '🐱', dog: '🐶', puppy: '🐶', lion: '🦁', tiger: '🐯', wolf: '🐺', fox: '🦊', bear: '🐻', snake: '🐍', bird: '🐦', butterfly: '🦋', bee: '🐝', horse: '🐴', fish: '🐟', shark: '🦈', whale: '🐋', dolphin: '🐬', dragon: '🐉', unicorn: '🦄', monkey: '🐒', bunny: '🐰', rabbit: '🐰', owl: '🦉', dove: '🕊️', spider: '🕷️',
 };
 
+
+/**
+ * Spanish (accents dropped: "corazón" is "corazon"). Verbs are listed in the
+ * forms songs use most, since Spanish endings are too many to guess.
+ */
+const WORDS_ES: Record<string, string> = {
+  // el corazón y el amor
+  amor: '❤️', amores: '❤️', corazon: '❤️', corazones: '❤️', enamorado: '😍', enamorada: '😍', enamorarme: '😍', beso: '💋', besos: '💋', besame: '💋', besar: '💋', besarte: '💋', besito: '💋', labios: '👄', boca: '👄', abrazo: '🫂', abrazame: '🫂', abrazarte: '🫂', abrazos: '🫂', piel: '🤍', mano: '🤝', manos: '🤝', alma: '🤍', celos: '😤', celosa: '😤', celoso: '😤',
+  // mirar, oír, decir
+  ojos: '👀', ojitos: '👀', mirada: '👀', mirar: '👀', mira: '👀', mirame: '👀', miro: '👀', mirando: '👀', ver: '👁️', veo: '👁️', vi: '👁️', verte: '👁️', cara: '😶', oir: '👂', escucha: '🎧', escuchar: '🎧', llamar: '📞', llamame: '📞', llamada: '📞', llamo: '📞', llame: '📞', telefono: '📱', celular: '📱', cel: '📱', mensaje: '💬', mensajes: '💬', texto: '💬', textear: '💬', secreto: '🤫', mentira: '🤥', mentiras: '🤥', mentiste: '🤥', mientes: '🤥',
+  // la cabeza
+  mente: '🧠', cabeza: '🧠', pensar: '💭', pienso: '💭', pensando: '💭', recuerdo: '💭', recuerdos: '💭', recordar: '💭', sueno: '💭', suenos: '💭', sonar: '💭', sonando: '💭', dormir: '😴', duermo: '😴', cama: '🛏️', despertar: '⏰', tiempo: '⏳', hora: '⏰', horas: '⏰', reloj: '⏰',
+  // lo que se siente
+  feliz: '😊', sonrisa: '😊', sonreir: '😊', reir: '😂', risa: '😂', llorar: '😢', lloro: '😢', llora: '😢', llorando: '😢', llore: '😢', lagrima: '😢', lagrimas: '😢', triste: '🥀', tristeza: '🥀', sola: '🥀', soledad: '🥀', extrano: '🥺', extranas: '🥺', extranarte: '🥺', extranandote: '🥺', perdon: '🙏', loco: '🤪', loca: '🤪', locura: '🤪', miedo: '😨', odio: '😤', rabia: '😤', dolor: '💔', duele: '💔', herida: '💔', roto: '💔', rota: '💔',
+  // cielo y noche
+  cielo: '🌌', estrella: '⭐', estrellas: '⭐', luna: '🌙', noche: '🌙', noches: '🌙', madrugada: '🌙', sol: '☀️', verano: '☀️', manana: '🌅', amanecer: '🌅', atardecer: '🌇', luz: '💡', oscuro: '🌑', oscuridad: '🌑', lluvia: '🌧️', llueve: '🌧️', llover: '🌧️', tormenta: '⛈️', rayo: '⚡', nieve: '❄️', frio: '🥶', hielo: '🧊', fuego: '🔥', caliente: '🔥', candela: '🔥', calor: '🔥', quemar: '🔥', humo: '💨', fumar: '💨', viento: '🌬️', nube: '☁️', nubes: '☁️', mar: '🌊', ola: '🌊', olas: '🌊', playa: '🏖️', isla: '🏝️', flor: '🌹', flores: '💐', rosa: '🌹', rosas: '🌹',
+  // fiesta
+  fiesta: '🎉', party: '🎉', perreo: '💃', perrear: '💃', bailar: '💃', baila: '💃', bailando: '💃', baile: '💃', bailame: '💃', musica: '🎵', cancion: '🎶', canciones: '🎶', cantar: '🎤', canta: '🎤', dj: '🎧', trago: '🥂', tragos: '🥂', copa: '🥂', copas: '🥂', brindar: '🥂', botella: '🍾', champan: '🍾', tequila: '🥃', ron: '🥃', whisky: '🥃', cerveza: '🍺', borracho: '🥴', borracha: '🥴', comer: '🍴',
+  // cosas
+  dinero: '💸', plata: '💸', billete: '💵', billetes: '💵', chavos: '💸', millon: '💰', millones: '💰', oro: '🥇', diamante: '💎', diamantes: '💎', rey: '👑', reina: '👑', corona: '👑', anillo: '💍', boda: '💍', casarme: '💍', regalo: '🎁', llave: '🔑', espejo: '🪞', foto: '📸', fotos: '📸', camara: '📸', pelicula: '🎬', carta: '💌', ropa: '👕', vestido: '👗', tacones: '👠', tenis: '👟', gafas: '🕶️', perfume: '🌸', unas: '💅',
+  // ir y venir
+  carro: '🚗', auto: '🚗', coche: '🚗', manejar: '🚗', maquina: '🏎️', moto: '🏍️', avion: '✈️', volar: '🕊️', vuela: '🕊️', vuelo: '✈️', viaje: '✈️', viajar: '✈️', barco: '⛵', calle: '🛣️', camino: '🛣️', carretera: '🛣️', correr: '🏃', corre: '🏃', caminar: '🚶', puerta: '🚪', adios: '👋', chao: '👋', hola: '👋', mundo: '🌍', ciudad: '🏙️', casa: '🏠', hogar: '🏠', barrio: '🏘️', iglesia: '⛪', club: '🪩', disco: '🪩', monaco: '🏎️', paris: '🗼', miami: '🌴',
+  // el cielo y el infierno
+  dios: '🙏', rezar: '🙏', rezo: '🙏', angel: '😇', angelito: '😇', diablo: '😈', diabla: '😈', infierno: '😈', fantasma: '👻', muerte: '💀', morir: '💀', muero: '💀', muerto: '💀', sangre: '🩸', guerra: '⚔️', paz: '🕊️',
+  // animales
+  perro: '🐶', perra: '🐶', gato: '🐱', gata: '🐱', lobo: '🐺', leon: '🦁', tigre: '🐯', tiburon: '🦈', serpiente: '🐍', mariposa: '🦋', mariposas: '🦋', paloma: '🕊️', caballo: '🐴', pajaro: '🐦', conejo: '🐰',
+};
+
 /** Phrases that mean more than their words (checked first, by plain forms). */
 const PHRASES: { words: string[]; emoji: string }[] = [
   { words: ['let', 'go'], emoji: '🕊️' },
@@ -59,12 +90,24 @@ const PHRASES: { words: string[]; emoji: string }[] = [
   { words: ['miss', 'you'], emoji: '🥺' },
   { words: ['say', 'goodbye'], emoji: '👋' },
   { words: ['goodbye'], emoji: '👋' },
+  { words: ['corazon', 'roto'], emoji: '💔' },
+  { words: ['corazon', 'partido'], emoji: '💔' },
+  { words: ['te', 'amo'], emoji: '❤️' },
+  { words: ['te', 'quiero'], emoji: '❤️' },
+  { words: ['te', 'extrano'], emoji: '🥺' },
+  { words: ['me', 'haces', 'falta'], emoji: '🥺' },
+  { words: ['esta', 'noche'], emoji: '🌙' },
+  { words: ['toda', 'la', 'noche'], emoji: '🌙' },
+  { words: ['para', 'siempre'], emoji: '♾️' },
+  { words: ['pa', 'siempre'], emoji: '♾️' },
+  { words: ['otra', 'vez'], emoji: '🔁' },
+  { words: ['en', 'fuego'], emoji: '🔥' },
 ];
 
 /** Picture before the word ("👁 saw", "⬅️ left", "▶️ start"); the rest go after. */
 const BEFORE = new Set(['see', 'left', 'start', 'begin', 'face', 'stop', 'end', 'again', 'fast', 'ride', 'drive']);
 /** Very common in songs: only now and then, or every chorus would be full of hearts. */
-const COMMON = new Set(['love', 'lover', 'heart', 'time', 'night', 'tonight', 'world', 'light', 'dark', 'see', 'say', 'talk', 'call', 'home', 'run', 'change', 'wait', 'think', 'dream', 'remember', 'mind', 'hand', 'face', 'look', 'eye', 'sky', 'fire', 'hot', 'cold', 'sun', 'away', 'end', 'start', 'free', 'hear', 'die', 'dead', 'hold', 'gone', 'lose', 'touch', 'wish', 'hope', 'gold', 'alone']);
+const COMMON = new Set(['amor', 'corazon', 'noche', 'tiempo', 'mundo', 'ver', 'mira', 'ojos', 'sola', 'casa', 'love', 'lover', 'heart', 'time', 'night', 'tonight', 'world', 'light', 'dark', 'see', 'say', 'talk', 'call', 'home', 'run', 'change', 'wait', 'think', 'dream', 'remember', 'mind', 'hand', 'face', 'look', 'eye', 'sky', 'fire', 'hot', 'cold', 'sun', 'away', 'end', 'start', 'free', 'hear', 'die', 'dead', 'hold', 'gone', 'lose', 'touch', 'wish', 'hope', 'gold', 'alone']);
 
 const IRREGULAR: Record<string, string> = {
   saw: 'see', seen: 'see', ate: 'eat', eaten: 'eat', ran: 'run', flew: 'fly', flown: 'fly', drove: 'drive', driven: 'drive', rode: 'ride', ridden: 'ride', thought: 'think', told: 'tell', said: 'say', won: 'win', broke: 'broken', bought: 'buy', wrote: 'write', written: 'write', sang: 'sing', sung: 'sing', fell: 'fall', fallen: 'fall', woke: 'wake', slept: 'sleep', heard: 'hear', paid: 'pay', fought: 'fight', burnt: 'burn', froze: 'freeze', frozen: 'freeze', drank: 'drink', died: 'die', dying: 'die', lying: 'lie', lied: 'lie', cried: 'cry', eyes: 'eye', feet: 'shoe', wore: 'wear', worn: 'wear', glasses: 'glass', lives: 'alive', began: 'begin', begun: 'begin', grew: 'grow', grown: 'grow', held: 'hold', lost: 'lose', left: 'left', dreamt: 'dream', bled: 'bleed', knives: 'knife', leaves: 'leaf', wolves: 'wolf', jeans: 'jeans', shades: 'shades', sunglasses: 'sunglasses', lips: 'lips', news: 'news',
@@ -72,7 +115,8 @@ const IRREGULAR: Record<string, string> = {
 
 /** The plain forms a sung word may stand for ("Dancin'" → dancing → dance). */
 export function lemmas(raw: string): string[] {
-  let w = raw.toLowerCase().replace(/[’‘`]/g, "'").replace(/[^a-z0-9']/g, '');
+  // Accents off first, so "corazón" is "corazon" (and "ñ" is "n").
+  let w = raw.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[’‘`]/g, "'").replace(/[^a-z0-9']/g, '');
   w = w.replace(/^'+/, '');
   if (w.endsWith("in'")) w = `${w.slice(0, -1)}g`;
   w = w.replace(/'s$/, '').replace(/'/g, '');
@@ -98,8 +142,15 @@ export function lemmas(raw: string): string[] {
 
 /** The emoji for one word, with the plain form that matched. */
 export function emojiFor(word: string): { emoji: string; lemma: string } | null {
-  for (const l of lemmas(word)) {
-    const e = WORDS[l];
+  const forms = lemmas(word);
+  for (const l of forms) {
+    const e = WORDS[l] ?? WORDS_ES[l];
+    if (e) return { emoji: e, lemma: l };
+  }
+  // Spanish plurals ("lágrimas", "flores").
+  const w = forms[0] ?? '';
+  for (const l of [w.endsWith('es') ? w.slice(0, -2) : '', w.endsWith('s') ? w.slice(0, -1) : ''].filter((x) => x.length > 2)) {
+    const e = WORDS_ES[l];
     if (e) return { emoji: e, lemma: l };
   }
   return null;
@@ -159,7 +210,9 @@ export function planEmojis(steps: { text: string; line: number }[], amount: Emoj
       }
     const hit = lineEmoji(words);
     if (!hit) continue;
-    const need = more ? (hit.common ? 2 : 1) : hit.common ? 3 : 2;
+    // "some": any line with a word you can picture, a very common one every
+    // other line; "more": every line that has one.
+    const need = more ? 1 : hit.common ? 2 : 1;
     if (order - lastLine < need || hit.emoji === lastEmoji) continue;
     const step = stepOf[hit.at];
     // A whole line shown at once gets its emoji at the end.
@@ -170,11 +223,12 @@ export function planEmojis(steps: { text: string; line: number }[], amount: Emoj
   return out;
 }
 
-/** The bundled 3D picture: its code points without the variation selector. */
-export function emojiFile(emoji: string): string {
+/** The bundled picture: its code points without the variation selector (3D WebP, or the plain one-colour SVG). */
+export function emojiFile(emoji: string, kind: '3d' | 'plain' = '3d'): string {
   const cps = [...emoji].map((c) => c.codePointAt(0) ?? 0).filter((c) => c !== 0xfe0f);
-  return `/emoji/3d/${cps.map((c) => c.toString(16)).join('-')}.webp`;
+  const name = cps.map((c) => c.toString(16)).join('-');
+  return kind === 'plain' ? `/emoji/plain/${name}.svg` : `/emoji/3d/${name}.webp`;
 }
 
 /** Every emoji used (for the asset script and tests). */
-export const ALL_EMOJIS = [...new Set([...Object.values(WORDS), ...PHRASES.map((p) => p.emoji)])];
+export const ALL_EMOJIS = [...new Set([...Object.values(WORDS), ...Object.values(WORDS_ES), ...PHRASES.map((p) => p.emoji)])];

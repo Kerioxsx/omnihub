@@ -8,6 +8,9 @@
 //! out. The video plays muted in YouTube's own player, so what the user hears
 //! is still their music app.
 //!
+//! When the artist has more than one official video for the song, the most
+//! watched comes first.
+//!
 //! A video whose length matches the song's (within a few seconds) is played in
 //! step with the song. A longer one (a story before or after the song) plays
 //! from the same point and can be nudged in the settings.
@@ -48,6 +51,9 @@ pub struct MusicVideo {
     pub uhd: bool,
     /// As long as the song, so it can play in step with it.
     pub synced: bool,
+    /// Views on YouTube when it was found (0 when not shown).
+    #[serde(default)]
+    pub views: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -103,6 +109,7 @@ pub struct Result_ {
     pub badges: Vec<String>,
     /// "Official Artist Channel", "Verified"…
     pub owner_badges: Vec<String>,
+    pub views: u64,
 }
 
 fn text(v: &Value) -> String {
@@ -134,6 +141,8 @@ fn walk(v: &Value, out: &mut Vec<Result_>) {
                         duration_ms: r.get("lengthText").map(text).map(|s| length_ms(&s)).unwrap_or(0),
                         badges: labels("badges", "label"),
                         owner_badges: labels("ownerBadges", "tooltip"),
+                        // "12,345,678 views": the digits.
+                        views: r.get("viewCountText").map(text).map(|s| s.chars().filter(char::is_ascii_digit).collect::<String>()).and_then(|d| d.parse().ok()).unwrap_or(0),
                     });
                 }
                 return;
@@ -222,11 +231,12 @@ pub fn pick(results: &[Result_], title: &str, artist: &str, duration_ms: u64) ->
         if kind == VideoKind::Video && synced && !says_video && !vevo {
             continue;
         }
-        let score = u32::from(artist_badge) * 6 + u32::from(vevo) * 5 + u32::from(named) * 4 + u32::from(says_video) * 4 + u32::from(tw.iter().any(|w| w == "official")) + u32::from(synced) * 4 + u32::from(uhd) * 2;
-        scored.push((score, MusicVideo { id: r.id.clone(), title: r.title.clone(), channel: r.channel.clone(), duration_ms: d, kind, uhd, synced }));
+        let score = u32::from(artist_badge) * 6 + u32::from(vevo) * 5 + u32::from(named) * 4 + u32::from(says_video) * 4 + u32::from(tw.iter().any(|w| w == "official" || w == "oficial")) + u32::from(synced) * 4 + u32::from(uhd) * 2;
+        scored.push((score, MusicVideo { id: r.id.clone(), title: r.title.clone(), channel: r.channel.clone(), duration_ms: d, kind, uhd, synced, views: r.views }));
     }
-    // Music videos before visualizers, then the strongest signs.
-    scored.sort_by(|(sa, a), (sb, b)| (a.kind == VideoKind::Visualizer).cmp(&(b.kind == VideoKind::Visualizer)).then(sb.cmp(sa)));
+    // Music videos before visualizers; of those, the most watched (all of them
+    // are the artist's own), then the strongest signs.
+    scored.sort_by(|(sa, a), (sb, b)| (a.kind == VideoKind::Visualizer).cmp(&(b.kind == VideoKind::Visualizer)).then(b.views.cmp(&a.views)).then(sb.cmp(sa)));
     let mut seen = std::collections::HashSet::new();
     scored.into_iter().map(|(_, v)| v).filter(|v| seen.insert(v.id.clone())).take(4).collect()
 }
@@ -318,6 +328,27 @@ mod tests {
     fn page(items: Vec<Value>) -> String {
         let data = serde_json::json!({ "contents": { "twoColumnSearchResultsRenderer": { "primaryContents": { "sectionListRenderer": { "contents": [{ "itemSectionRenderer": { "contents": items } }] } } } } });
         format!("<html><script>var ytInitialData = {data};</script><script>var other = 1;</script></html>")
+    }
+
+    fn with_views(mut v: Value, views: &str) -> Value {
+        v["videoRenderer"]["viewCountText"] = serde_json::json!({ "simpleText": views });
+        v
+    }
+
+    #[test]
+    fn the_most_watched_official_video_comes_first() {
+        // Two official uploads of the same song (an old one on VEVO, a newer one
+        // on the artist's channel, in Spanish): the one more people watched.
+        let html = page(vec![
+            with_views(renderer("new", "ARTISTA - CANCIÓN (Video Oficial)", "Artista", "3:40", &["4K"], &["Official Artist Channel"]), "2,345,678 views"),
+            with_views(renderer("old", "Artista - Canción (Official Video)", "ArtistaVEVO", "3:41", &[], &[]), "310,456,789 views"),
+            with_views(renderer("lyr", "Artista - Canción (Letra)", "Letras", "3:40", &[], &[]), "999,999,999 views"),
+        ]);
+        let r = parse_results(&html);
+        assert_eq!(r[0].views, 2_345_678);
+        let got = pick(&r, "Canción", "Artista", 220_000);
+        assert_eq!(got.iter().map(|v| v.id.as_str()).collect::<Vec<_>>(), vec!["old", "new"]);
+        assert_eq!(got[0].views, 310_456_789);
     }
 
     #[test]
@@ -420,3 +451,4 @@ mod tests {
         assert!(http_get("https://example.com/").is_err());
     }
 }
+

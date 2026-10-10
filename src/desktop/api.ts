@@ -203,6 +203,11 @@ export const api = {
     control: (action: T.MediaAction, positionMs = 0) => call<void>('media_control', { action, positionMs: Math.max(0, Math.round(positionMs)) }),
     lyrics: () => call<{ key: string | null; lyrics: T.LyricsStatus }>('media_lyrics'),
     video: () => call<{ key: string | null; video: T.VideoStatus }>('media_video'),
+    /** The stream of a video YouTube will not embed (downloads yt-dlp and Deno the first time). */
+    videoStream: (id: string, maxHeight: number) => call<string>('media_video_stream', { id, maxHeight }),
+    streamStatus: () => call<T.StreamToolStatus>('media_stream_status'),
+    /** The playing song's animated album cover (looked up once per song). */
+    motion: () => call<{ key: string | null; motion: T.MotionStatus }>('media_motion'),
     art: (id: string) => call<string | null>('media_art', { id }),
     audio: () => call<{ volume: { level: number; muted: boolean } | null; eq: T.EqStatus }>('media_audio'),
     setVolume: (level: number | null, muted: boolean | null = null) => call<{ level: number; muted: boolean }>('media_set_volume', { level, muted }),

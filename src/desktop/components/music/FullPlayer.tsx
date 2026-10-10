@@ -19,7 +19,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { AlignLeft, ChevronDown, Maximize2, MicVocal, Minimize2, Minus, Music2, Pause, Play, Plus, SkipBack, SkipForward, SlidersHorizontal, Sparkles, Volume1, Volume2, VolumeX } from 'lucide-react';
 import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
-import { useCoverLook, useMusicVideo, useVideoOffsets } from '../../lib/aurora/cinema';
+import { useCoverLook, useMotionCover, useMusicVideo, useVideoOffsets } from '../../lib/aurora/cinema';
 import { calmPlace, glareAt, PLACE_TOP, type Place } from '../../lib/aurora/coverLook';
 import { PaletteBlender } from '../../lib/aurora/palette';
 import { patchVisuals, useVisuals } from '../../lib/aurora/settings';
@@ -564,10 +564,15 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
   // Lyrics where the picture is calmest (the middle over a video), with as
   // much shadow as the picture behind them needs.
   const videoShown = !!videoNow?.showing;
-  const place: Place = visuals.lyrics.place !== 'auto' ? visuals.lyrics.place : look && !videoShown && scene.backdrop !== 'visual' ? calmPlace(look, aspect) : 'center';
-  const glare = look && !videoShown && scene.backdrop !== 'visual' ? glareAt(look, aspect, place) : 0.45;
+  // The whole cover shows all of its height; a filled one, the band around its detail.
+  const shownAspect = scene.coverFit === 'whole' ? Math.min(1, aspect) : aspect;
+  const place: Place = visuals.lyrics.place !== 'auto' ? visuals.lyrics.place : look && !videoShown && scene.backdrop !== 'visual' ? calmPlace(look, shownAspect) : 'center';
+  const glare = look && !videoShown && scene.backdrop !== 'visual' ? glareAt(look, shownAspect, place) : 0.45;
   const lyricY = PLACE_TOP[place] + visuals.lyrics.offsetY / 100;
-  const backdrop = useMemo<BackdropInput>(() => ({ look, videos, time: songTime, playing: !!state?.playing, offsetFor, onVideo: setVideoNow, lyricY, glare }), [look, videos, songTime, state?.playing, offsetFor, lyricY, glare]);
+  // The album's animated cover (Apple Music), for the cover and the light show.
+  const motionStatus = useMotionCover(state?.key, aurora && scene.animatedCovers && !!art);
+  const motionUrl = motionStatus?.status === 'found' ? motionStatus.url : null;
+  const backdrop = useMemo<BackdropInput>(() => ({ look, videos, motion: motionUrl, time: songTime, playing: !!state?.playing, offsetFor, onVideo: setVideoNow, lyricY, glare }), [look, videos, motionUrl, songTime, state?.playing, offsetFor, lyricY, glare]);
   const pos = np.position();
   const active = useMemo(() => activeLine(lines, pos + offset), [lines, pos, offset]);
 
@@ -805,7 +810,7 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
         onClose={() => setPanel(false)}
         status={captureStatus}
         full={full}
-        video={{ status: videoStatus, now: videoNow, offset: videoNow ? offsetFor(videoNow.video.id) : 0, setOffset: (ms) => videoNow && setVideoOffset(videoNow.video.id, ms), hasCover: !!art }}
+        video={{ status: videoStatus, now: videoNow, offset: videoNow ? offsetFor(videoNow.video.id) : 0, setOffset: (ms) => videoNow && setVideoOffset(videoNow.video.id, ms), hasCover: !!art, motion: !!motionUrl }}
       />
     </div>
   );

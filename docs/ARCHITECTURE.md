@@ -122,19 +122,34 @@ or the UI:
   stored per track key, so a new track never gets the last one's lines.
 - **Covers** (`media/artwork.rs`): the player's thumbnail is replaced by
   the original-size copy from the iTunes catalogue (asked for at
-  10000×10000, which returns the master, usually 3000×3000; at most 16 MB)
-  when the song matches (title, artist, length) and the picture looks like
-  the thumbnail (16×16 comparison); cached in `data/covers`. The art id
-  changes, so views refetch.
+  10000×10000, which returns the master, usually 3000×3000) or Deezer
+  (1900×1900). Candidates from both are ranked by title, artist, length
+  and version words (a remix is not the original; "Dame Amor 2" is another
+  song), and the first whose picture looks like the thumbnail (16×16
+  comparison) is kept; cached in `data/covers` (key prefix `v3`). The art
+  id changes, so views refetch.
 - **Music videos** (`media/video.rs`): asked for by the player
   (`media_video`), looked up once per song on YouTube's results page
   (`ytInitialData` parsed, like a browser would get it) and kept only when
   the channel is the artist's own (official artist badge, VEVO, or named
   after the artist), the title names the song, and the upload is not a
   lyric, audio, live, cover, remix, sped-up or vertical version. Music
-  videos rank before visualizers (the animated cover); each is marked
+  videos rank before visualizers, the most viewed first; each is marked
   *synced* when its length is within a few seconds of the song's. Answers
   are cached in `data/videos` and announced with `media:video`.
+- **Video streams** (`media/stream.rs`, `media_video_stream`): for videos
+  YouTube will not embed, yt-dlp (`-g`, best video-only stream up to the
+  quality cap, AV1 avoided) with Deno as its JavaScript runtime; both
+  downloaded on first use and checked against their releases' SHA-256
+  lists; the address is cached for three hours.
+- **Animated covers** (`media/motion.rs`, `media_motion`): the web player's
+  key from music.apple.com's script (an `AMPWebPlay` JWT, kept until it
+  expires, renewed on 401), a catalogue search matched like covers, then
+  the album's `editorialVideo.motionDetailSquare` HLS playlist; cached in
+  `data/motion` and announced with `media:motion`.
+- **Lyrics sources** (`media/lyrics.rs`): LRCLIB (exact, then search), then
+  NetEase Cloud Music (search, matched by title, artist, length and
+  version; its credit lines dropped). Misses are cached for three days.
 - **Word timing** (`lib/aurora/timing.ts`): for lyrics that only time
   lines, words are spread over each line by syllables (opt-out); real word
   timestamps always win.
@@ -153,10 +168,19 @@ or the UI:
   leaving children only when all have finished, which never happens while
   words keep coming).
 - **Cinema backdrop** (`components/aurora/AuroraBackdrop.tsx`,
-  `lib/aurora/cinema.ts`, `youtube.ts`, `coverLook.ts`): behind the lyrics,
-  in order, the music video, the visualizer, the full-size cover, or the
-  light show above. The video plays in the youtube-nocookie embed, muted,
-  steered with the IFrame API's postMessage protocol; a sync loop compares
+  `lib/aurora/cinema.ts`, `youtube.ts`, `motion.ts`, `coverLook.ts`):
+  behind the lyrics, in order, the music video, the album's animated cover
+  (hls.js, over the still one; it rests while a video shows), the
+  visualizer (only without an animated cover), the full-size cover, or the
+  light show above (which then draws the animated cover's frames as its
+  texture). The cover shows whole (a square as big as the screen's shorter
+  side, its edges feathered into a blurred, enlarged copy) or fills the
+  screen. The video plays in the youtube-nocookie embed inside OmniHub's
+  relay page (`site/player.html` on GitHub Pages: YouTube answers error 150
+  to local origins), muted, steered with the IFrame API's postMessage
+  protocol, or, when YouTube still refuses (error, or never starts), as its
+  own stream in a `<video>` driven through the same interface
+  (`DirectLink`); a sync loop compares
   the player's reported time with the song's (plus a per-video offset the
   user can nudge, kept in local storage), seeks beyond 1 s of drift and
   sets the rate to 0.94/1.06 between 0.12 s and 1 s. The quality cap is the
@@ -171,11 +195,13 @@ or the UI:
   the bass.
 - **Emojis** (`lib/aurora/emoji.ts`): a word list (with simple lemmas and
   phrases) maps lyric words to emojis; a planner picks at most one per line
-  and spaces them out (*Now and then*: at least one line without between
-  them, two after a common word like "love"; *More often*: half that),
-  never the same twice running. The pictures are
-  Fluent Emoji 3D WebPs in `public/emoji/3d`, rebuilt by
-  `scripts/emoji-3d.py`.
+  and spaces them out (*Some*: any line with a picturable word, a common
+  one like "love" or "amor" every other line; *Lots*: every line that has
+  one), never the same twice running. English and Spanish (accents
+  dropped, plurals and the commonest verb forms). The pictures are Fluent
+  Emoji: plain one-colour SVGs in `public/emoji/plain`, drawn as a mask over
+  the lyric ink (the default), or 3D WebPs in `public/emoji/3d`; both
+  rebuilt by `scripts/emoji-3d.py`.
 - **Screen glow** (`src-tauri/src/ambient.rs`, `pages/overlay/AmbientOverlay.tsx`):
   a transparent, click-through, always-on-top window per chosen monitor,
   placed in physical pixels on the monitor or its work area; a watcher

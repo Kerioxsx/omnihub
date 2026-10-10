@@ -12,6 +12,8 @@ pub mod audio;
 pub mod eq;
 pub mod lyrics;
 pub mod mixer;
+pub mod motion;
+pub mod stream;
 pub mod video;
 pub mod visual;
 
@@ -387,6 +389,11 @@ pub struct MediaHub {
     /// Music videos per track (looked up when Aurora asks).
     videos: Mutex<HashMap<String, video::VideoStatus>>,
     video_cache: video::VideoCache,
+    /// yt-dlp, for videos YouTube will not embed (when allowed).
+    stream: stream::StreamTool,
+    /// Animated album covers per track (looked up when Aurora asks).
+    motions: Mutex<HashMap<String, motion::MotionStatus>>,
+    motion: motion::MotionFinder,
 }
 
 impl MediaHub {
@@ -404,7 +411,7 @@ impl MediaHub {
                 Box::new(NoBackend)
             }
         };
-        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")) })
+        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")), stream: stream::StreamTool::new(data_dir.join("tools").join("video")), motions: Mutex::new(HashMap::new()), motion: motion::MotionFinder::new(data_dir.join("motion")) })
     }
 
     /// Whether this is the pretend player (the mixer and open apps pretend too).
@@ -513,7 +520,8 @@ impl MediaHub {
         drop(g);
         let hub = self.clone();
         std::thread::spawn(move || {
-            let cache_key = format!("{}\u{1f}{}\u{1f}{}", s.title.to_lowercase(), s.artist.to_lowercase(), s.duration_ms / 4000);
+            // "2": answers since the most watched video comes first.
+            let cache_key = format!("2\u{1f}{}\u{1f}{}\u{1f}{}", s.title.to_lowercase(), s.artist.to_lowercase(), s.duration_ms / 4000);
             let now = now_ms().max(0) as u64;
             let found = match hub.video_cache.get(&cache_key, now) {
                 Some(v) => Some(v),
@@ -539,6 +547,66 @@ impl MediaHub {
         video::VideoStatus::Searching
     }
 
+    /// The playing song's animated album cover: looked up on first ask, then
+    /// announced with `media:motion`. `allowed` is the setting.
+    pub fn motion(self: &Arc<Self>, allowed: bool) -> motion::MotionStatus {
+        let Some(s) = self.state() else { return motion::MotionStatus::NothingPlaying };
+        if !allowed {
+            return motion::MotionStatus::Off;
+        }
+        let mut g = self.motions.lock();
+        if let Some(st) = g.get(&s.key) {
+            return st.clone();
+        }
+        if self.fake {
+            return motion::MotionStatus::None;
+        }
+        if g.len() > 200 {
+            g.clear();
+        }
+        g.insert(s.key.clone(), motion::MotionStatus::Searching);
+        drop(g);
+        let hub = self.clone();
+        std::thread::spawn(move || {
+            let key = format!("{}\u{1f}{}\u{1f}{}", s.title.to_lowercase(), s.artist.to_lowercase(), s.duration_ms / 4000);
+            let now = now_ms().max(0) as u64;
+            let url = match hub.motion.cached(&key, now) {
+                Some(u) => u,
+                None => match hub.motion.find(&s.title, &s.artist, s.duration_ms) {
+                    Ok(u) => {
+                        hub.motion.remember(&key, &u, now);
+                        u
+                    }
+                    Err(e) => {
+                        tracing::info!("animated cover lookup failed: {e}");
+                        None
+                    }
+                },
+            };
+            let st = match url {
+                Some(url) => motion::MotionStatus::Found { url },
+                None => motion::MotionStatus::None,
+            };
+            hub.motions.lock().insert(s.key.clone(), st);
+            hub.events.emit("media:motion", serde_json::json!({ "key": s.key }));
+        });
+        motion::MotionStatus::Searching
+    }
+
+    pub fn stream_status(&self) -> stream::StreamToolStatus {
+        self.stream.status()
+    }
+
+    /// A video's own stream (for one YouTube will not embed): downloads the
+    /// helper first if it is missing, with `media:streamInstall` progress.
+    pub fn stream_url(&self, id: &str, max_height: u32) -> Result<String, String> {
+        if !self.stream.status().installed {
+            let events = self.events.clone();
+            self.stream.install(&mut |done, total| events.emit("media:streamInstall", serde_json::json!({ "done": done, "total": total })))?;
+        }
+        self.stream.url(id, max_height)
+    }
+
     /// Look sharper covers up online (settings).
     pub fn set_hires_art(&self, on: bool) {
         self.hires_art.store(on, Ordering::Relaxed);
@@ -549,21 +617,37 @@ impl MediaHub {
     fn upgrade_art(self: &Arc<Self>, key: String, title: String, artist: String, album: String, duration_ms: u64, thumb: Arc<Vec<u8>>) {
         let hub = self.clone();
         std::thread::spawn(move || {
-            // "full": covers cached before 0.6 were 1200×1200; these are the originals.
-            let cache_key = format!("full\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}", title.to_lowercase(), artist.to_lowercase(), album.to_lowercase(), duration_ms / 4000);
+            // "v3": matched by version too (a remix is not the original), and
+            // Deezer as well; songs missed before are looked up again.
+            let cache_key = format!("v3\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}", title.to_lowercase(), artist.to_lowercase(), album.to_lowercase(), duration_ms / 4000);
             let bytes = match hub.covers.get(&cache_key) {
                 Some(found) => found,
                 None => {
-                    let found = match artwork::find(&title, &artist, &album, duration_ms, &lyrics::http_get).and_then(|u| u.map(|u| artwork::download(&u)).transpose()) {
-                        Ok(found) => found,
-                        Err(e) => {
-                            // Offline or refused: try again next time.
-                            tracing::info!("cover lookup failed: {e}");
-                            return;
+                    let mut candidates = Vec::new();
+                    let mut reached = false;
+                    for source in [artwork::itunes as artwork::Source, artwork::deezer] {
+                        match source(&title, &artist, &album, duration_ms, &lyrics::http_get) {
+                            Ok(c) => {
+                                reached = true;
+                                candidates.extend(c);
+                            }
+                            Err(e) => tracing::info!("cover lookup failed: {e}"),
                         }
-                    };
-                    // Only a picture of the same cover (when the player gave one to compare).
-                    let found = found.filter(|b| artwork::mime_of(b).is_some()).filter(|b| thumb.is_empty() || artwork::difference(&thumb, b).is_some_and(|d| d < 0.16));
+                    }
+                    if !reached {
+                        // Offline or refused: try again next time.
+                        return;
+                    }
+                    // The first that is a picture of the same cover (when the
+                    // player gave one to compare); without one, only a close match.
+                    let mut found = None;
+                    for c in candidates.iter().filter(|c| !thumb.is_empty() || c.score >= 10).take(5) {
+                        let Ok(b) = artwork::download(&c.url) else { continue };
+                        if artwork::mime_of(&b).is_some() && (thumb.is_empty() || artwork::difference(&thumb, &b).is_some_and(|d| d < 0.16)) {
+                            found = Some(b);
+                            break;
+                        }
+                    }
                     hub.covers.put(&cache_key, found.as_deref());
                     found
                 }
@@ -624,7 +708,8 @@ impl MediaHub {
         if self.fake {
             return self.put_lyrics(&s.key, ready(fake_lyrics(&s.title)));
         }
-        let cache_key = format!("{}\u{1f}{}\u{1f}{}", s.title.to_lowercase(), s.artist.to_lowercase(), s.duration_ms / 2000);
+        // "2": since 0.7 (two sources; misses before it are asked again).
+        let cache_key = format!("2\u{1f}{}\u{1f}{}\u{1f}{}", s.title.to_lowercase(), s.artist.to_lowercase(), s.duration_ms / 2000);
         if let Some(cached) = self.cache.get(&cache_key) {
             return self.put_lyrics(&s.key, ready(cached));
         }
@@ -634,7 +719,21 @@ impl MediaHub {
         self.put_lyrics(&s.key, LyricsStatus::Searching);
         let hub = self.clone();
         std::thread::spawn(move || {
-            let st = match lyrics::lookup(&s.title, &s.artist, &s.album, s.duration_ms, &lyrics::http_get) {
+            // LRCLIB first; NetEase when LRCLIB has nothing timed for it.
+            let first = lyrics::lookup(&s.title, &s.artist, &s.album, s.duration_ms, &lyrics::http_get);
+            let timed = |l: &Option<lyrics::Lyrics>| l.as_ref().is_some_and(|l| !l.lines.is_empty() || l.instrumental);
+            let found = match first {
+                Ok(f) if timed(&f) => Ok(f),
+                other => match lyrics::netease(&s.title, &s.artist, s.duration_ms, &lyrics::http_get) {
+                    Ok(Some(n)) => Ok(Some(n)),
+                    second => match other {
+                        // Plain (untimed) lyrics from LRCLIB beat nothing.
+                        Ok(f) => Ok(f),
+                        Err(e) => second.and(Err(e)),
+                    },
+                },
+            };
+            let st = match found {
                 Ok(found) => {
                     hub.cache.put(&cache_key, &found);
                     ready(found)

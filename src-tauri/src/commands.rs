@@ -1190,6 +1190,37 @@ pub async fn media_video(core: Core<'_>) -> Res<serde_json::Value> {
     Ok(serde_json::json!({ "key": core.media.state().map(|s| s.key), "video": core.media.video(allowed) }))
 }
 
+/// The playing song's animated album cover (Apple Music), looked up on first ask.
+#[tauri::command]
+pub async fn media_motion(core: Core<'_>) -> Res<serde_json::Value> {
+    let allowed = core.settings.get().visuals.scene.animated_covers;
+    Ok(serde_json::json!({ "key": core.media.state().map(|s| s.key), "motion": core.media.motion(allowed) }))
+}
+
+/// The stream of a video YouTube will not embed (yt-dlp), when the user allows it.
+#[tauri::command]
+pub async fn media_video_stream(core: Core<'_>, id: String, max_height: u32) -> Res<String> {
+    let scene = core.settings.get().visuals.scene;
+    if !(scene.music_videos && scene.direct_videos) {
+        return Err("Playing videos directly is turned off.".into());
+    }
+    let core = core.inner().clone();
+    blocking(move || {
+        let first = !core.media.stream_status().installed;
+        let r = core.media.stream_url(&id, max_height);
+        if first {
+            core.audit.record("desktop", "media.video-helper-install", "yt-dlp + Deno", core.media.stream_status().installed);
+        }
+        r
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn media_stream_status(core: Core<'_>) -> Res<omnihub_core::media::stream::StreamToolStatus> {
+    Ok(core.media.stream_status())
+}
+
 /// Cover art as a data URL.
 #[tauri::command]
 pub async fn media_art(core: Core<'_>, id: String) -> Res<Option<String>> {

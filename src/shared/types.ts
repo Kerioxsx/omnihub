@@ -876,6 +876,8 @@ export type SceneStyle = 'visual' | 'fisheye' | 'fisheyeVisual' | 'minimal' | 'a
 export type LyricFont = 'display' | 'condensed' | 'heavy' | 'serif' | 'impact';
 
 export interface VisualSettings {
+  /** Which release's defaults these settings were last brought up to (the core upgrades them). */
+  revision?: number;
   view: PlayerView;
   /** Everything Aurora draws (the lyrics stay). */
   enabled: boolean;
@@ -938,6 +940,12 @@ export interface VisualSettings {
     backdrop: Backdrop;
     /** Look the song's music video up on YouTube. */
     musicVideos: boolean;
+    /** When YouTube will not embed a video, play its stream directly (yt-dlp, downloaded once). */
+    directVideos: boolean;
+    /** The album's animated cover from Apple Music, when it has one. */
+    animatedCovers: boolean;
+    /** 'whole': all of the cover, its sides blending into a blurred extension; 'fill': edge to edge, cropped. */
+    coverFit: 'whole' | 'fill';
     /** 0–1: how much the full-screen cover drifts and breathes. */
     coverMotion: number;
     /** 0–1: how much the cover or video is darkened behind the lyrics. */
@@ -1144,7 +1152,8 @@ export interface LyricLine {
 
 export type Backdrop = 'auto' | 'video' | 'cover' | 'visual';
 export type EmojiAmount = 'off' | 'some' | 'more';
-export type EmojiStyle = '3d' | 'system';
+/** 'plain': one colour, the lyrics' own (default); '3d': glossy Fluent 3D; 'system': Windows' emoji font. */
+export type EmojiStyle = 'plain' | '3d' | 'system';
 export type VideoFit = 'fill' | 'fit';
 export type VideoQuality = 'best' | '1080' | '720';
 
@@ -1162,6 +1171,9 @@ export interface MusicVideo {
 }
 
 export type VideoStatus = { status: 'found'; videos: MusicVideo[] } | { status: 'searching' | 'none' | 'off' | 'nothingPlaying' };
+
+/** The album's animated cover (Apple Music): an HLS playlist, square. */
+export type MotionStatus = { status: 'found'; url: string } | { status: 'searching' | 'none' | 'off' | 'nothingPlaying' };
 
 export type LyricsStatus =
   | { status: 'ready'; lyrics: { lines: LyricLine[]; plain: string | null; instrumental: boolean; source: string } }
@@ -1520,4 +1532,10 @@ export interface UpdateInfo {
   state: UpdateState;
   /** The version that ran before, on the first start after an update. */
   updatedFrom?: string | null;
+}
+
+/** yt-dlp and Deno, for videos YouTube will not embed. */
+export interface StreamToolStatus {
+  installed: boolean;
+  installing: boolean;
 }

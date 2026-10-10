@@ -39,8 +39,8 @@ export const DEFAULT_VISUALS: VisualSettings = {
     transition: 1,
     motion: 0.6,
     emoji: 'some',
-    emojiStyle: '3d',
+    emojiStyle: 'plain',
   },
-  scene: { enabled: true, style: 'visual', intensity: 0.8, speed: 1, blur: 0.1, saturation: 1.1, opacity: 0.9, artwork: true, waveform: false, effects: { ...DEFAULT_EFFECTS }, backdrop: 'auto', musicVideos: true, coverMotion: 0.5, dim: 0.3, corners: 0.5, videoFit: 'fill', videoFocus: 0.5, videoQuality: 'best' },
+  scene: { enabled: true, style: 'visual', intensity: 0.8, speed: 1, blur: 0.1, saturation: 1.1, opacity: 0.9, artwork: true, waveform: false, effects: { ...DEFAULT_EFFECTS }, backdrop: 'auto', musicVideos: true, directVideos: true, animatedCovers: true, coverFit: 'whole', coverMotion: 0.5, dim: 0.3, corners: 0.5, videoFit: 'fill', videoFocus: 0.5, videoQuality: 'best' },
   desktop: { enabled: false, lyrics: false, display: 'primary', clearTaskbar: true, hideFullscreen: true, startWithApp: false },
 };

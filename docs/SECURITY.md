@@ -222,15 +222,40 @@ the PC plays. How that works, and what it never does:
   read (the video ids, titles, channels and lengths); only uploads by the
   artist's own channel or VEVO are kept, and the answer is cached on the PC
   (a month; three days when there is none). The video then plays in
-  YouTube's embedded player from `www.youtube-nocookie.com`, muted, in its
-  own frame: no YouTube script runs in OmniHub's page, the player keeps its
-  own cookies to its own frame, and the app's content security policy lets
-  frames come only from YouTube. OmniHub talks to the player only with the
-  player's own messages (play, pause, seek, speed, mute) and reads back its
-  time, state and quality. Turn the toggle off, or pick *Cover* or *Light
-  show*, and nothing is searched or played.
-- **3D emojis** beside lyrics are Microsoft's Fluent Emoji (MIT licence, in
-  `public/emoji/3d/LICENSE.txt`), shipped inside the app; none are fetched.
+  YouTube's embedded player from `www.youtube-nocookie.com`, muted. YouTube
+  refuses official videos to players embedded by a local address (the app's
+  window is `http://tauri.localhost`), so the player sits in a small static
+  page on OmniHub's own website (`site/player.html`, served by GitHub
+  Pages), which embeds it as any website does and only relays the player's
+  own messages (play, pause, seek, speed, mute; back: time, state, quality)
+  between it and the app — it accepts messages only from OmniHub's windows
+  and only from YouTube's frame, and stores nothing. No YouTube script runs
+  in OmniHub's page; the app's content security policy lets frames come
+  only from that page. GitHub sees the request for the page (like any
+  visit). Turn the toggle off, or pick *Cover* or *Light show*, and nothing
+  is searched or played.
+- **Videos YouTube will not embed** (*Play videos YouTube won't show in
+  apps*, on by default with music videos): when the artist allows a video
+  only on YouTube itself, OmniHub asks **yt-dlp** for the video's stream
+  address and plays it muted in a `<video>`. yt-dlp and **Deno** (the
+  JavaScript runtime yt-dlp needs for YouTube) are downloaded the first time
+  this is needed, from their projects' latest GitHub releases, into
+  `data/tools/video`, and kept only when they match the SHA-256 published
+  with that release (yt-dlp's `SHA2-256SUMS`, Deno's `.sha256sum`). yt-dlp
+  updates itself (`-U`, at most once a day; its updater checks the
+  release's checksums too). They run hidden, with the video's id only; the
+  stream is never saved. The content security policy allows media only from
+  `*.googlevideo.com` (and Apple's video servers, below).
+- **Animated covers** (*Animated covers*, on by default): the song's title
+  and artist go to Apple Music's catalogue (`amp-api.music.apple.com`), with
+  the public key Apple's own web player at music.apple.com uses, read from
+  that page and kept until it expires (no account). The album's "editorial
+  video" plays muted from `mvod.itunes.apple.com` (hls.js, in the page; no
+  worker). Answers are cached for a month (misses for three days).
+- **Emojis** beside lyrics are Microsoft's Fluent Emoji (MIT licence: the
+  3D pictures in `public/emoji/3d`, the one-colour drawings in
+  `public/emoji/plain`, each with its `LICENSE.txt`), shipped inside the
+  app; none are fetched.
 
 ## Deleting files
 
@@ -248,15 +273,21 @@ There is no cloud service and no account. OmniHub itself contacts the
 internet only for:
 
 - **Lyrics** (Music, on by default, can be turned off): the title, artist,
-  album and length of the playing song go to [LRCLIB](https://lrclib.net);
-  results are cached on the PC.
+  album and length of the playing song go to [LRCLIB](https://lrclib.net),
+  and, when LRCLIB has nothing timed for it, the title and artist go to
+  NetEase Cloud Music's public search (`music.163.com`); results are cached
+  on the PC (a song without lyrics is asked again after three days).
 - **Sharper covers** (Music, on by default, can be turned off): the title,
-  artist and album of the playing song go to Apple's iTunes Search API, and
-  the matching cover is downloaded at its original size (usually
-  3000×3000, at most 16 MB); covers are cached on the PC.
+  artist and album of the playing song go to Apple's iTunes Search API and
+  to Deezer's public search (`api.deezer.com`), and the matching cover is
+  downloaded at its original size (Apple: usually 3000×3000; Deezer:
+  1900×1900; at most 16 MB); covers are cached on the PC.
 - **Music videos** (Aurora, on by default, can be turned off): the title and
   artist of the playing song go to YouTube's search page, and the artist's
-  video plays from youtube-nocookie.com (see Aurora above).
+  video plays from youtube-nocookie.com through OmniHub's relay page, or
+  directly with yt-dlp (see Aurora above).
+- **Animated covers** (Aurora, on by default, can be turned off): the title
+  and artist go to Apple Music's catalogue (see Aurora above).
 - **Breach check** (Vault → Health, only when you run it): the first five
   characters of each password's SHA-1 go to Have I Been Pwned's range API
   (k-anonymity); passwords never leave the PC.

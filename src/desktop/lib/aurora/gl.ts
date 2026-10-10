@@ -509,6 +509,9 @@ export class SceneRenderer extends Base {
   }
 
   private hasArt = false;
+  /** An animated cover playing in place of the picture (a frame uploaded per draw). */
+  private artVideo: HTMLVideoElement | null = null;
+  private videoFrame = -1;
 
   private artSize: [number, number] = [1, 1];
 
@@ -550,8 +553,34 @@ export class SceneRenderer extends Base {
     this.artSize = [w, h];
   }
 
+  /** Use an animated cover (a playing <video>) instead of the picture; null goes back to it. */
+  setArtVideo(v: HTMLVideoElement | null) {
+    this.artVideo = v;
+    this.videoFrame = -1;
+  }
+
+  /** The animated cover's current frame into the cover texture (when it moved on). */
+  private uploadVideo() {
+    const v = this.artVideo;
+    if (!v || v.readyState < 2 || !v.videoWidth) return;
+    const t = v.currentTime;
+    if (t === this.videoFrame) return;
+    this.videoFrame = t;
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.art);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    // Any size works without mipmaps (WebGL 1 too), and a frame lives 40 ms.
+    this.params(gl.LINEAR);
+    this.hasArt = true;
+    this.artSize = [v.videoWidth, v.videoHeight];
+  }
+
   draw(time: number, colors: Float32Array, lv: Levels, flash: number, motion: number, s: SceneParams) {
     const gl = this.gl;
+    this.uploadVideo();
     for (let i = 0; i < 16; i++) this.bandBytes[i] = Math.round(Math.min(1, Math.max(0, lv.bands[i])) * 255);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.bands);

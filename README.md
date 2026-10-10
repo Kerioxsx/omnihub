@@ -26,6 +26,15 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.7.0
+
+- **Music videos play**: through a relay page on OmniHub's website (YouTube refuses official videos inside apps), and directly with yt-dlp when an artist allows their video only on YouTube; the most watched official video wins.
+- **Animated album covers** from Apple Music (up to 4K) behind the lyrics, and under the light show's effects.
+- **The whole cover**, nothing cut off, sides blending into its own glow; remixes get their own cover; Deezer as a second cover source.
+- **Lyrics for more songs**: NetEase as a second synced source; misses are retried.
+- **Emojis in Spanish too**, more often, plain and in the lyrics' colour by default.
+- **Simpler Aurora settings**: Quick choices first, the rest under More settings.
+
 ## New in 0.6.1
 
 - **Smoother lyrics in Aurora**: sung words now fade and leave on their own (at most three at a time) instead of collecting, invisible, for a whole line — less work for the graphics card and no words piling up on slower PCs.

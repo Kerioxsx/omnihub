@@ -3,9 +3,12 @@
 //! allowed, OmniHub asks the iTunes Search API (Apple's public catalogue
 //! search: no account, no key) for the same song and uses its artwork at
 //! full size: as uploaded by the label, 3000×3000 for most songs (asking for
-//! more than there is returns the original). Only the title, artist and album are sent. A result is used only
-//! when the song matches (title, artist, length) and the picture looks like
-//! the player's own thumbnail, so a different song's cover never shows up.
+//! more than there is returns the original); then Deezer's public search
+//! (1900×1900). Only the title, artist and album are sent. A result is used
+//! only when the song matches (title, artist, length, and version: a remix is
+//! not the original) and the picture looks like the player's own thumbnail,
+//! so a different song's cover never shows up; the next candidate is tried
+//! when one does not.
 //! Covers are cached on disk, one file per song.
 
 use std::path::PathBuf;
@@ -54,39 +57,156 @@ fn enc(s: &str) -> String {
         .collect()
 }
 
-/// The URL of a large cover for this song, if the catalogue has the song.
+/// Words that make a different recording of a song (usually with its own cover).
+const VERSION_WORDS: &[(&str, &str)] = &[
+    ("remix", "remix"),
+    ("rmx", "remix"),
+    ("live", "live"),
+    ("vivo", "live"),
+    ("acoustic", "acoustic"),
+    ("acustico", "acoustic"),
+    ("acústico", "acoustic"),
+    ("unplugged", "acoustic"),
+    ("instrumental", "instrumental"),
+    ("sped", "sped"),
+    ("slowed", "slowed"),
+    ("nightcore", "sped"),
+    ("demo", "demo"),
+    ("extended", "extended"),
+    ("karaoke", "karaoke"),
+];
+
+/// The version words in a title ("Dame Amor - Remix" → {remix}).
+pub fn version_of(title: &str) -> std::collections::BTreeSet<&'static str> {
+    title.split(|c: char| !c.is_alphanumeric()).filter_map(|w| VERSION_WORDS.iter().find(|(k, _)| w.eq_ignore_ascii_case(k) || w.to_lowercase() == *k).map(|(_, v)| *v)).collect()
+}
+
+/// A catalogue title without brackets and "feat." (no artist to split off).
+fn bare(s: &str) -> String {
+    norm(&clean_query(s, "\u{1}omnihub\u{1}").0)
+}
+
+/// An album name without the store's " - Single" / " - EP".
+fn album_name(album: &str) -> String {
+    let mut a = album.trim();
+    for suffix in [" - Single", " - EP", " (Single)", " - single"] {
+        a = a.strip_suffix(suffix).unwrap_or(a);
+    }
+    bare(a)
+}
+
+/// A cover source: title, artist, album, length, and how to fetch a page.
+pub type Source = fn(&str, &str, &str, u64, &dyn Fn(&str) -> Result<Option<String>, String>) -> Result<Vec<Candidate>, String>;
+
+/// One possible cover: where it is and how well its song matches.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Candidate {
+    pub url: String,
+    pub score: i32,
+}
+
+/// How well a catalogue entry matches the playing song (None: not it).
+#[allow(clippy::too_many_arguments)]
+fn score(title: &str, artist: &str, album: &str, duration_ms: u64, r_title: &str, r_artist: &str, r_album: &str, r_ms: u64) -> Option<i32> {
+    let (t, a) = clean_query(title, artist);
+    let (nt, na) = (norm(&t), norm(&a));
+    let rt = bare(r_title);
+    let ra = norm(r_artist);
+    if nt.is_empty() {
+        return None;
+    }
+    // One title running on from the other ("Waves" / "Waves Remastered"),
+    // but not into a number: "Dame Amor 2" is another song.
+    let (short, long) = if rt.len() <= nt.len() { (&rt, &nt) } else { (&nt, &rt) };
+    let prefix = short.len() >= 4 && long.starts_with(short.as_str()) && long.len() - short.len() <= 12 && !long[short.len()..].bytes().all(|b| b.is_ascii_digit());
+    let title_ok = rt == nt || prefix;
+    let artist_ok = na.is_empty() || ra.contains(&na) || na.contains(&ra);
+    let length_ok = duration_ms == 0 || r_ms == 0 || r_ms.abs_diff(duration_ms) <= 8_000;
+    if !title_ok || !artist_ok || !length_ok {
+        return None;
+    }
+    // "Dame Amor - Remix" is not "Dame Amor": the same version words, or a low score.
+    let same_version = version_of(title) == version_of(r_title);
+    let nal = album_name(album);
+    Some(i32::from(rt == nt) * 4 + i32::from(same_version) * 6 - i32::from(!same_version) * 6 + i32::from(!nal.is_empty() && album_name(r_album) == nal) * 3 + i32::from(duration_ms > 0 && r_ms.abs_diff(duration_ms) <= 2_000) * 2)
+}
+
+/// Covers for this song in Apple's catalogue, best first, at full size.
 /// `get(url)` returns the body (`Ok(None)` for "not found").
-pub fn find(title: &str, artist: &str, album: &str, duration_ms: u64, get: &dyn Fn(&str) -> Result<Option<String>, String>) -> Result<Option<String>, String> {
+pub fn itunes(title: &str, artist: &str, album: &str, duration_ms: u64, get: &dyn Fn(&str) -> Result<Option<String>, String>) -> Result<Vec<Candidate>, String> {
     let (t, a) = clean_query(title, artist);
     if t.is_empty() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
-    let (nt, na, nal) = (norm(&t), norm(&a), norm(&clean_query(album, "").0));
     let url = format!("https://itunes.apple.com/search?term={}&media=music&entity=song&limit=15", enc(&format!("{a} {t}")));
-    let Some(body) = get(&url)? else { return Ok(None) };
+    let Some(body) = get(&url)? else { return Ok(Vec::new()) };
     let res: Response = serde_json::from_str(&body).map_err(|e| format!("unexpected catalogue answer: {e}"))?;
-    let mut best: Option<(u32, &Result_)> = None;
-    for r in &res.results {
-        if r.artwork_url100.is_empty() {
-            continue;
-        }
-        let rt = norm(&clean_query(&r.track_name, "").0);
-        let ra = norm(&r.artist_name);
-        let title_ok = rt == nt || (nt.len() >= 4 && (rt.starts_with(&nt) || nt.starts_with(&rt)) && rt.len().abs_diff(nt.len()) <= 12);
-        let artist_ok = na.is_empty() || ra.contains(&na) || na.contains(&ra);
-        if !title_ok || !artist_ok {
-            continue;
-        }
-        let length_ok = duration_ms == 0 || r.track_time_millis == 0 || r.track_time_millis.abs_diff(duration_ms) <= 8_000;
-        if !length_ok {
-            continue;
-        }
-        let score = u32::from(rt == nt) * 4 + u32::from(!nal.is_empty() && norm(&clean_query(&r.collection_name, "").0) == nal) * 3 + u32::from(r.track_time_millis.abs_diff(duration_ms) <= 2_000) * 2;
-        if best.as_ref().is_none_or(|(s, _)| score > *s) {
-            best = Some((score, r));
-        }
+    let mut out: Vec<Candidate> = res
+        .results
+        .iter()
+        .filter(|r| !r.artwork_url100.is_empty())
+        .filter_map(|r| score(title, artist, album, duration_ms, &r.track_name, &r.artist_name, &r.collection_name, r.track_time_millis).map(|s| Candidate { url: r.artwork_url100.replace("100x100bb", &format!("{SIZE}x{SIZE}bb")), score: s }))
+        .collect();
+    out.sort_by_key(|c| std::cmp::Reverse(c.score));
+    out.dedup_by(|a, b| a.url == b.url);
+    Ok(out)
+}
+
+#[derive(Deserialize)]
+struct DeezerAlbum {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    cover_xl: String,
+}
+
+#[derive(Deserialize)]
+struct DeezerArtist {
+    #[serde(default)]
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct DeezerTrack {
+    #[serde(default)]
+    title: String,
+    /// Seconds.
+    #[serde(default)]
+    duration: u64,
+    artist: DeezerArtist,
+    album: DeezerAlbum,
+}
+
+#[derive(Deserialize)]
+struct DeezerResponse {
+    #[serde(default)]
+    data: Vec<DeezerTrack>,
+}
+
+/// Covers for this song on Deezer (public search, no account), best first, at
+/// 1900×1900 (the largest it serves).
+pub fn deezer(title: &str, artist: &str, album: &str, duration_ms: u64, get: &dyn Fn(&str) -> Result<Option<String>, String>) -> Result<Vec<Candidate>, String> {
+    let (t, a) = clean_query(title, artist);
+    if t.is_empty() {
+        return Ok(Vec::new());
     }
-    Ok(best.map(|(_, r)| r.artwork_url100.replace("100x100bb", &format!("{SIZE}x{SIZE}bb"))))
+    let url = format!("https://api.deezer.com/search?q={}&limit=15", enc(&format!("{a} {t}")));
+    let Some(body) = get(&url)? else { return Ok(Vec::new()) };
+    let res: DeezerResponse = serde_json::from_str(&body).map_err(|e| format!("unexpected Deezer answer: {e}"))?;
+    let mut out: Vec<Candidate> = res
+        .data
+        .iter()
+        .filter(|r| r.album.cover_xl.starts_with("https://") && r.album.cover_xl.contains("1000x1000"))
+        .filter_map(|r| score(title, artist, album, duration_ms, &r.title, &r.artist.name, &r.album.title, r.duration * 1000).map(|s| Candidate { url: r.album.cover_xl.replace("1000x1000", "1900x1900"), score: s }))
+        .collect();
+    out.sort_by_key(|c| std::cmp::Reverse(c.score));
+    out.dedup_by(|a, b| a.url == b.url);
+    Ok(out)
+}
+
+/// The best large cover's URL, if the catalogue has the song (Apple's only).
+pub fn find(title: &str, artist: &str, album: &str, duration_ms: u64, get: &dyn Fn(&str) -> Result<Option<String>, String>) -> Result<Option<String>, String> {
+    Ok(itunes(title, artist, album, duration_ms, get)?.into_iter().next().map(|c| c.url))
 }
 
 /// How alike two pictures are, 0 (same) to 1: their 16×16 thumbnails compared.
@@ -192,6 +312,41 @@ mod tests {
         // A different length (another version) or no match: nothing.
         assert!(find("Waves", "Joey Bada$$", "1999", 240_000, &get).unwrap().is_none());
         assert!(find("Some Other Song", "Joey Bada$$", "", 0, &get).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_remix_gets_the_remix_cover_not_the_originals() {
+        // Apple's real answer for this song (trimmed): the original first.
+        let body = r#"{"results":[
+            {"trackName":"Dame Amor","artistName":"Officialalex425","collectionName":"Dame Amor - Single","trackTimeMillis":209063,"artworkUrl100":"https://is1.example/original/100x100bb.jpg"},
+            {"trackName":"Dame Amor (Remix)","artistName":"Officialalex425 & Oscar Maydon","collectionName":"Dame Amor (Remix) - Single","trackTimeMillis":207875,"artworkUrl100":"https://is1.example/remix/100x100bb.jpg"},
+            {"trackName":"Dame Amor 2","artistName":"Officialalex425","collectionName":"Dame Amor 2 - Single","trackTimeMillis":210693,"artworkUrl100":"https://is1.example/two/100x100bb.jpg"}
+        ]}"#;
+        let get = |_: &str| -> Result<Option<String>, String> { Ok(Some(body.into())) };
+        let remix = itunes("Dame Amor - Remix", "Officialalex425", "Dame Amor (Remix)", 207_900, &get).unwrap();
+        assert_eq!(remix[0].url, "https://is1.example/remix/10000x10000bb.jpg");
+        let original = itunes("Dame Amor", "Officialalex425", "Dame Amor", 209_000, &get).unwrap();
+        assert_eq!(original[0].url, "https://is1.example/original/10000x10000bb.jpg");
+        assert!(!original.iter().any(|c| c.url.contains("/two/")), "Dame Amor 2 is another song");
+        assert_eq!(version_of("Dame Amor - Remix").into_iter().collect::<Vec<_>>(), vec!["remix"]);
+        assert_eq!(version_of("Canción (En Vivo)").into_iter().collect::<Vec<_>>(), vec!["live"]);
+        assert!(version_of("Remixed Feelings Forever").is_empty());
+    }
+
+    #[test]
+    fn deezer_covers_at_its_largest() {
+        let body = r#"{"data":[
+            {"title":"Dame Amor","duration":209,"artist":{"name":"Officialalex425"},"album":{"title":"Dame Amor","cover_xl":"https://cdn-images.dzcdn.net/images/cover/aaa/1000x1000-000000-80-0-0.jpg"}},
+            {"title":"Dame Amor (Remix)","duration":208,"artist":{"name":"Officialalex425"},"album":{"title":"Dame Amor (Remix)","cover_xl":"https://cdn-images.dzcdn.net/images/cover/bbb/1000x1000-000000-80-0-0.jpg"}}
+        ]}"#;
+        let urls = std::cell::RefCell::new(Vec::new());
+        let get = |u: &str| -> Result<Option<String>, String> {
+            urls.borrow_mut().push(u.to_string());
+            Ok(Some(body.into()))
+        };
+        let c = deezer("Dame Amor - Remix", "Officialalex425", "", 207_900, &get).unwrap();
+        assert_eq!(c[0].url, "https://cdn-images.dzcdn.net/images/cover/bbb/1900x1900-000000-80-0-0.jpg");
+        assert!(urls.borrow()[0].starts_with("https://api.deezer.com/search?q=Officialalex425+Dame+Amor"));
     }
 
     #[test]

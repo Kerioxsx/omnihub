@@ -240,7 +240,33 @@ function Emoji({ emoji, style, reduced, current }: { emoji: string; style: Visua
   const transition = reduced ? { duration: 0.2 } : { type: 'spring' as const, stiffness: 420, damping: 13, delay: 0.06 };
   return (
     <span className="mx-[0.16em] inline-block align-[-0.1em]" style={{ animation: reduced || !current ? undefined : 'aurora-bob 3.2s ease-in-out infinite' }} data-lyric-emoji={emoji}>
-      {style === '3d' && !broken ? (
+      {style === 'plain' && !broken ? (
+        // One colour, the lyrics' own: the drawing is a mask over the ink
+        // (the glow sits on a wrapper, since a mask would cut it off).
+        <motion.span
+          role="img"
+          aria-label={emoji}
+          className="inline-block h-[0.84em] w-[0.84em] select-none"
+          style={{ filter: 'drop-shadow(0 0.04em 0.1em rgba(0,0,0,.45)) drop-shadow(0 0 0.16em color-mix(in oklab, var(--aurora-ink, #fff) 55%, transparent))' }}
+          {...pop}
+          transition={transition}
+        >
+          <span
+            className="block h-full w-full"
+            style={{
+              background: 'var(--aurora-ink, #fff)',
+              maskImage: `url("${emojiFile(emoji, 'plain')}")`,
+              WebkitMaskImage: `url("${emojiFile(emoji, 'plain')}")`,
+              maskSize: 'contain',
+              WebkitMaskSize: 'contain',
+              maskRepeat: 'no-repeat',
+              WebkitMaskRepeat: 'no-repeat',
+              maskPosition: 'center',
+              WebkitMaskPosition: 'center',
+            }}
+          />
+        </motion.span>
+      ) : style === '3d' && !broken ? (
         <motion.img
           src={emojiFile(emoji)}
           alt={emoji}

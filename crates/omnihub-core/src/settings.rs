@@ -256,7 +256,7 @@ impl Default for AuroraLyricsSettings {
             transition: 1.0,
             motion: 0.6,
             emoji: EmojiAmount::Some,
-            emoji_style: EmojiStyle::ThreeD,
+            emoji_style: EmojiStyle::Plain,
         }
     }
 }
@@ -274,9 +274,13 @@ pub enum EmojiAmount {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum EmojiStyle {
+    /// One-colour emojis painted in the lyrics' colour, like the reference
+    /// edits (Fluent Emoji's "High Contrast" drawings).
+    #[default]
+    #[serde(rename = "plain")]
+    Plain,
     /// Glossy 3D emojis that come with OmniHub, close to the iPhone's look
     /// (Microsoft's Fluent Emoji, MIT licence).
-    #[default]
     #[serde(rename = "3d")]
     ThreeD,
     /// Windows' own emoji font.
@@ -306,6 +310,18 @@ pub enum VideoQuality {
     Hd1080,
     #[serde(rename = "720")]
     Hd720,
+}
+
+/// How a cover fills a screen of another shape.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum CoverFit {
+    /// All of it, as tall as the screen, its sides blending into a soft,
+    /// blurred extension of itself (nothing is cut off).
+    #[default]
+    Whole,
+    /// Edge to edge, cropped around its detail.
+    Fill,
 }
 
 /// What fills the screen behind the lyrics.
@@ -396,6 +412,13 @@ pub struct SceneSettings {
     pub backdrop: Backdrop,
     /// Look the song's music video up on YouTube (only the title and artist are sent).
     pub music_videos: bool,
+    /// When YouTube will not show a video inside the app, play its stream
+    /// directly (downloads yt-dlp and Deno the first time).
+    pub direct_videos: bool,
+    /// The album's animated cover from Apple Music, when it has one (only
+    /// the title and artist are sent).
+    pub animated_covers: bool,
+    pub cover_fit: CoverFit,
     /// 0–1: how much the full-screen cover drifts and breathes with the beat.
     pub cover_motion: f32,
     /// 0–1: how much the cover or video is darkened behind the lyrics.
@@ -423,6 +446,9 @@ impl Default for SceneSettings {
             effects: EffectSettings::default(),
             backdrop: Backdrop::Auto,
             music_videos: true,
+            direct_videos: true,
+            animated_covers: true,
+            cover_fit: CoverFit::Whole,
             cover_motion: 0.5,
             dim: 0.3,
             corners: 0.5,
@@ -460,6 +486,10 @@ impl Default for DesktopGlowSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct VisualSettings {
+    /// Which release's defaults these settings were last brought up to (0:
+    /// before 0.7). See `SettingsStore::load`.
+    #[serde(default)]
+    pub revision: u32,
     pub view: PlayerView,
     /// Everything Aurora draws (the lyrics stay).
     pub enabled: bool,
@@ -488,6 +518,7 @@ pub struct VisualSettings {
 impl Default for VisualSettings {
     fn default() -> Self {
         VisualSettings {
+            revision: VISUALS_REVISION,
             view: PlayerView::Aurora,
             enabled: true,
             audio_reactive: true,
@@ -822,12 +853,26 @@ pub fn merge_patch(target: &mut serde_json::Value, patch: &serde_json::Value) {
     }
 }
 
+/// Aurora's defaults that changed in a way saved settings should follow.
+pub const VISUALS_REVISION: u32 = 1;
+
+/// Bring settings saved by an older release up to today's defaults where the
+/// user never chose (0.7: plain emojis in the lyrics' colour replaced 3D ones
+/// as the default).
+pub fn upgrade_visuals(v: &mut VisualSettings) {
+    if v.revision < 1 && v.lyrics.emoji_style == EmojiStyle::ThreeD {
+        v.lyrics.emoji_style = EmojiStyle::Plain;
+    }
+    v.revision = VISUALS_REVISION;
+}
+
 impl SettingsStore {
     pub fn load(path: &Path) -> Self {
-        let current = std::fs::read(path)
+        let mut current = std::fs::read(path)
             .ok()
             .and_then(|b| serde_json::from_slice::<Settings>(&b).ok())
             .unwrap_or_default();
+        upgrade_visuals(&mut current.visuals);
         SettingsStore { path: path.to_path_buf(), current: RwLock::new(current) }
     }
 
@@ -894,13 +939,27 @@ mod tests {
     }
 
     #[test]
+    fn settings_from_0_6_get_the_new_emoji_default_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        // Saved by 0.6: 3D was the default then, and there is no revision.
+        std::fs::write(&path, r#"{"visuals":{"lyrics":{"emojiStyle":"3d","emoji":"more"}}}"#).unwrap();
+        let v = SettingsStore::load(&path).get().visuals;
+        assert_eq!((v.lyrics.emoji_style, v.lyrics.emoji, v.revision), (EmojiStyle::Plain, EmojiAmount::More, VISUALS_REVISION));
+        // Chosen again after the upgrade: kept.
+        std::fs::write(&path, r#"{"visuals":{"revision":1,"lyrics":{"emojiStyle":"3d"}}}"#).unwrap();
+        assert_eq!(SettingsStore::load(&path).get().visuals.lyrics.emoji_style, EmojiStyle::ThreeD);
+        assert_eq!(serde_json::to_value(EmojiStyle::Plain).unwrap(), "plain");
+    }
+
+    #[test]
     fn aurora_settings_persist_and_reset() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
         let store = SettingsStore::load(&path);
         let d = Settings::default().visuals;
         assert_eq!((d.view, d.scene.style, d.lyrics.layout, d.glow.animation), (PlayerView::Aurora, SceneStyle::Visual, LyricLayout::Stack, GlowAnimation::Music));
-        assert_eq!((d.scene.backdrop, d.scene.music_videos, d.lyrics.emoji, d.lyrics.emoji_style, d.lyrics.place), (Backdrop::Auto, true, EmojiAmount::Some, EmojiStyle::ThreeD, LyricPlace::Auto));
+        assert_eq!((d.scene.backdrop, d.scene.music_videos, d.lyrics.emoji, d.lyrics.emoji_style, d.lyrics.place), (Backdrop::Auto, true, EmojiAmount::Some, EmojiStyle::Plain, LyricPlace::Auto));
         assert_eq!(serde_json::to_value(EmojiStyle::ThreeD).unwrap(), "3d");
         assert_eq!(serde_json::to_value(VideoQuality::Hd1080).unwrap(), "1080");
         let s = store

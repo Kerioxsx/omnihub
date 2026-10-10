@@ -3,12 +3,20 @@
 // player's frame. No YouTube script runs in OmniHub's page, and the player
 // sets its own cookies only in its own frame.
 //
+// YouTube refuses official music videos to players embedded by a page on a
+// local address (OmniHub's window is http://tauri.localhost): error 150 for
+// nearly all of them. So the player sits in a small page on OmniHub's website
+// (site/player.html), which embeds it as any website does and passes the same
+// messages both ways.
+//
 // The player plays muted; the sound is still the user's music app. Aurora
 // keeps it at the song's position (plus the user's nudge for videos longer
 // than the song), seeking when it drifts more than a second and easing the
 // playback rate for smaller drifts.
 
-export const YT_ORIGIN = 'https://www.youtube-nocookie.com';
+/** OmniHub's relay page, and its origin (the only one we talk to). */
+export const RELAY = 'https://kerioxsx.github.io/omnihub/player.html';
+export const RELAY_ORIGIN = 'https://kerioxsx.github.io';
 
 /** YouTube's errors: 2 bad id, 5 HTML5 error, 100 removed, 101/150 embedding not allowed, 152/153 player blocked. */
 export interface PlayerInfo {
@@ -25,26 +33,10 @@ export interface PlayerInfo {
   error: number | null;
 }
 
-/** The embed for a video, starting near `startSec`, muted, without YouTube's controls. */
+/** The player for a video, starting near `startSec` (muted, without YouTube's controls: see site/player.js). */
 export function embedUrl(id: string, startSec: number): string {
-  const origin = typeof location !== 'undefined' ? location.origin : '';
-  const q = new URLSearchParams({
-    enablejsapi: '1',
-    autoplay: '1',
-    mute: '1',
-    controls: '0',
-    disablekb: '1',
-    fs: '0',
-    iv_load_policy: '3',
-    cc_load_policy: '0',
-    modestbranding: '1',
-    playsinline: '1',
-    rel: '0',
-    start: String(Math.max(0, Math.floor(startSec))),
-    origin,
-    widget_referrer: origin,
-  });
-  return `${YT_ORIGIN}/embed/${encodeURIComponent(id)}?${q}`;
+  const q = new URLSearchParams({ v: id, start: String(Math.max(0, Math.floor(startSec))) });
+  return `${RELAY}?${q}`;
 }
 
 /** "hd2160" → "4K (2160p)", honestly: what YouTube says it is playing. */
@@ -55,7 +47,7 @@ export function qualityLabel(q: string): string {
   return lines >= 2160 ? `4K (${lines}p)` : lines >= 1440 ? `1440p` : `${lines}p`;
 }
 
-export class PlayerLink {
+export class PlayerLink implements VideoControl {
   info: PlayerInfo = { ready: false, state: -1, time: 0, at: 0, rate: 1, duration: 0, quality: '', error: null };
   private readonly id = Math.floor(Math.random() * 1e9);
   private hello: ReturnType<typeof setInterval> | undefined;
@@ -77,7 +69,7 @@ export class PlayerLink {
 
   private post(msg: object) {
     try {
-      this.frame.contentWindow?.postMessage(JSON.stringify(msg), YT_ORIGIN);
+      this.frame.contentWindow?.postMessage(JSON.stringify(msg), RELAY_ORIGIN);
     } catch {
       /* the frame is going away */
     }
@@ -94,7 +86,7 @@ export class PlayerLink {
   }
 
   private onMessage = (e: MessageEvent) => {
-    if (e.source !== this.frame.contentWindow) return;
+    if (e.source !== this.frame.contentWindow || e.origin !== RELAY_ORIGIN) return;
     let d: { event?: string; info?: unknown };
     try {
       d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
@@ -142,5 +134,67 @@ export class PlayerLink {
   destroy() {
     clearInterval(this.hello);
     window.removeEventListener('message', this.onMessage);
+  }
+}
+
+/** What the sync loop steers: YouTube's player, or a plain video element. */
+export interface VideoControl {
+  info: PlayerInfo;
+  command(func: string, args?: unknown[]): void;
+  now(): number;
+  destroy(): void;
+}
+
+/**
+ * A video's own stream (for one YouTube will not embed, got with yt-dlp) in a
+ * muted <video>, steered with the same commands as YouTube's player.
+ */
+export class DirectLink implements VideoControl {
+  info: PlayerInfo = { ready: false, state: -1, time: 0, at: 0, rate: 1, duration: 0, quality: '', error: null };
+  private readonly events = ['loadedmetadata', 'canplay', 'playing', 'pause', 'waiting', 'seeked', 'timeupdate', 'ratechange', 'ended'];
+
+  constructor(
+    private readonly el: HTMLVideoElement,
+    private readonly onChange: () => void,
+  ) {
+    el.muted = true;
+    for (const e of this.events) el.addEventListener(e, this.update);
+    el.addEventListener('error', this.failed);
+  }
+
+  private update = () => {
+    const el = this.el;
+    const i = this.info;
+    i.ready = el.readyState >= 1;
+    i.time = el.currentTime;
+    i.at = performance.now();
+    i.rate = el.playbackRate;
+    i.duration = Number.isFinite(el.duration) ? el.duration : 0;
+    i.state = el.ended ? 0 : el.paused ? 2 : el.readyState < 3 ? 3 : 1;
+    i.quality = el.videoHeight ? `hd${el.videoHeight}` : '';
+    this.onChange();
+  };
+
+  private failed = () => {
+    this.info.error = this.el.error?.code ?? 0;
+    this.onChange();
+  };
+
+  command(func: string, args: unknown[] = []) {
+    const el = this.el;
+    if (func === 'playVideo') void el.play().catch(() => undefined);
+    else if (func === 'pauseVideo') el.pause();
+    else if (func === 'seekTo' && typeof args[0] === 'number') el.currentTime = args[0];
+    else if (func === 'setPlaybackRate' && typeof args[0] === 'number') el.playbackRate = args[0];
+    else if (func === 'mute') el.muted = true;
+  }
+
+  now(): number {
+    return this.el.currentTime;
+  }
+
+  destroy() {
+    for (const e of this.events) this.el.removeEventListener(e, this.update);
+    this.el.removeEventListener('error', this.failed);
   }
 }

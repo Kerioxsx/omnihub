@@ -18,7 +18,9 @@ import { AnimatePresence, motion } from 'motion/react';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { CoverLook } from '../../lib/aurora/coverLook';
 import { cx } from '../../lib/cx';
-import { embedUrl, PlayerLink, qualityLabel } from '../../lib/aurora/youtube';
+import { api, on } from '../../api';
+import { attachHls } from '../../lib/aurora/motion';
+import { DirectLink, embedUrl, PlayerLink, qualityLabel, type VideoControl } from '../../lib/aurora/youtube';
 
 export interface VideoNow {
   video: MusicVideo;
@@ -29,12 +31,18 @@ export interface VideoNow {
   offsetMs: number;
   /** The song went past the end of the video. */
   ended: boolean;
+  /** YouTube's player, or the video's own stream (one YouTube will not embed). */
+  via: 'youtube' | 'direct';
+  /** While the stream is being got: what is happening ("Downloading the video helper… 40%"). */
+  note?: string;
 }
 
 export interface BackdropInput {
   look: CoverLook | null;
   /** Candidates, best first (null: none, or not looked up). */
   videos: MusicVideo[] | null;
+  /** The album's animated cover (an HLS playlist), when it has one. */
+  motion: string | null;
   /** The song's position, ms. */
   time: () => number;
   playing: boolean;
@@ -76,22 +84,82 @@ function frameFor(W: number, H: number, fit: 'fill' | 'fit', focus: number, qual
   return { left: (W - vw) / 2, top: fit === 'fill' ? (H - vh) * focus : (H - vh) / 2, width: cssW, height: cssW / AR, scale: vw / cssW };
 }
 
-function VideoLayer({ video, scene, input, size, onFail }: { video: MusicVideo; scene: Props['scene']; input: BackdropInput; size: { W: number; H: number }; onFail: () => void }) {
+/** The tallest stream to ask for, from the quality setting. */
+function maxHeight(q: VisualSettings['scene']['videoQuality']): number {
+  return q === '720' ? 720 : q === '1080' ? 1080 : 2160;
+}
+
+function VideoLayer({ video, scene, input, size, onFail, onShowing }: { video: MusicVideo; scene: Props['scene']; input: BackdropInput; size: { W: number; H: number }; onFail: () => void; onShowing: (on: boolean) => void }) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const [link, setLink] = useState<PlayerLink | null>(null);
+  const player = useRef<HTMLVideoElement>(null);
+  const [link, setLink] = useState<VideoControl | null>(null);
   const [showing, setShowing] = useState(false);
+  // YouTube's player first; when it will not play the video here, the
+  // video's own stream (if allowed); when that fails too, the next video.
+  const [mode, setMode] = useState<'youtube' | 'fetching' | 'direct'>('youtube');
+  const [stream, setStream] = useState<string | null>(null);
   const live = useRef(input);
   live.current = input;
+  const allowDirect = useRef(scene.directVideos);
+  allowDirect.current = scene.directVideos;
+  const cap = maxHeight(scene.videoQuality);
   // The first frame starts where the song is, so it needs no seek.
   const [start] = useState(() => (input.time() + input.offsetFor(video.id)) / 1000);
 
+  const giveUp = useRef(onFail);
+  giveUp.current = () => {
+    if (mode === 'youtube' && allowDirect.current) setMode('fetching');
+    else onFail();
+  };
+
   useEffect(() => {
-    const f = frame.current;
-    if (!f) return;
-    const l = new PlayerLink(f, () => undefined);
+    if (mode !== 'fetching') return;
+    let gone = false;
+    const { onVideo } = live.current;
+    const note = (n: string) => onVideo?.({ video, quality: '', showing: false, offsetMs: live.current.offsetFor(video.id), ended: false, via: 'direct', note: n });
+    note('YouTube won’t play this video inside apps; getting it directly…');
+    let off: (() => void) | undefined;
+    void on<{ done: number; total: number }>('media:streamInstall', (p) => {
+      if (!gone && p.total > 0) note(`Downloading the video helper (yt-dlp), once… ${Math.min(100, Math.round((100 * p.done) / p.total))}%`);
+    }).then((u) => {
+      if (gone) u();
+      else off = u;
+    });
+    api.media
+      .videoStream(video.id, cap)
+      .then((url) => {
+        if (gone) return;
+        setStream(url);
+        setMode('direct');
+      })
+      .catch((e: unknown) => {
+        if (gone) return;
+        note(String(e));
+        // Leave the reason up a moment, then the next video or the cover.
+        setTimeout(() => !gone && onFail(), 2500);
+      });
+    return () => {
+      gone = true;
+      off?.();
+    };
+  }, [mode, video, cap, onFail]);
+
+  // Say at once that a video is on its way (until it plays, the cover shows).
+  useEffect(() => {
+    live.current.onVideo?.({ video, quality: '', showing: false, offsetMs: live.current.offsetFor(video.id), ended: false, via: 'youtube' });
+  }, [video]);
+
+  useEffect(() => {
+    if (mode === 'fetching') return;
+    const el = mode === 'direct' ? player.current : frame.current;
+    if (!el) return;
+    const l = el instanceof HTMLVideoElement ? new DirectLink(el, () => undefined) : new PlayerLink(el as HTMLIFrameElement, () => undefined);
     setLink(l);
-    return () => l.destroy();
-  }, [video.id]);
+    return () => {
+      l.destroy();
+      setLink(null);
+    };
+  }, [video.id, mode]);
 
   useEffect(() => {
     if (!link) return;
@@ -101,15 +169,25 @@ function VideoLayer({ video, scene, input, size, onFail }: { video: MusicVideo; 
     let shown = false;
     let lastRate = 1;
     let report = '';
+    let everPlayed = false;
     const tick = () => {
       const { time, playing, offsetFor, onVideo } = live.current;
       const i = link.info;
       const now = performance.now();
+      // YouTube says no, never answers, or loads and never starts ("Video
+      // unavailable" sends no error): the next video, or the cover.
       if (i.error !== null || (!i.ready && now - born > 15000)) {
-        onFail();
+        clearInterval(timer);
+        giveUp.current();
         return;
       }
       if (!i.ready) return;
+      if (i.state === 1) everPlayed = true;
+      if (!everPlayed && live.current.playing && now - born > 14000) {
+        clearInterval(timer);
+        giveUp.current();
+        return;
+      }
       const offsetMs = offsetFor(video.id);
       const target = (time() + offsetMs) / 1000;
       const ended = i.duration > 0 && target > i.duration - 0.25;
@@ -136,35 +214,102 @@ function VideoLayer({ video, scene, input, size, onFail }: { video: MusicVideo; 
       if (show !== shown) {
         shown = show;
         setShowing(show);
+        onShowing(show);
       }
-      const r = JSON.stringify([video.id, i.quality, show, offsetMs, ended]);
+      const via = link instanceof DirectLink ? 'direct' : 'youtube';
+      const r = JSON.stringify([video.id, i.quality, show, offsetMs, ended, via]);
       if (r !== report) {
         report = r;
-        onVideo?.({ video, quality: qualityLabel(i.quality), showing: show, offsetMs, ended });
+        onVideo?.({ video, quality: qualityLabel(i.quality), showing: show, offsetMs, ended, via });
       }
     };
     const timer = setInterval(tick, 300);
     return () => clearInterval(timer);
-  }, [link, video, onFail]);
+  }, [link, video, onShowing]);
 
   const f = frameFor(size.W, size.H, scene.videoFit, scene.videoFocus, scene.videoQuality);
   return (
     <div className="absolute inset-0 transition-opacity duration-[900ms] ease-out" style={{ opacity: showing ? 1 : 0 }} data-aurora-video={video.id} data-showing={showing || undefined}>
-      <iframe
-        ref={frame}
-        title={`${video.title} — music video`}
-        src={embedUrl(video.id, start)}
-        allow="autoplay; encrypted-media; picture-in-picture"
-        referrerPolicy="strict-origin-when-cross-origin"
+      {mode === 'youtube' && (
+        <iframe
+          ref={frame}
+          title={`${video.title} — music video`}
+          src={embedUrl(video.id, start)}
+          allow="autoplay; encrypted-media; picture-in-picture"
+          referrerPolicy="strict-origin-when-cross-origin"
+          tabIndex={-1}
+          className="pointer-events-none absolute origin-top-left border-0"
+          style={{ left: f.left, top: f.top, width: f.width, height: f.height, transform: f.scale !== 1 ? `scale(${f.scale})` : undefined }}
+        />
+      )}
+      {mode === 'direct' && stream && (
+        <video
+          ref={player}
+          src={stream}
+          muted
+          playsInline
+          autoPlay
+          preload="auto"
+          disablePictureInPicture
+          tabIndex={-1}
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          style={{ objectFit: scene.videoFit === 'fit' ? 'contain' : 'cover', objectPosition: `50% ${Math.round(scene.videoFocus * 100)}%` }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The album's animated cover, looping, placed like the still cover (all of it,
+ * or filling the screen). It fades in once it plays; until then, and if it
+ * cannot play, the still cover shows.
+ */
+function MotionLayer({ url, fit, box, wide, paused }: { url: string; fit: 'whole' | 'fill'; box: { side: number; left: number; top: number }; wide: boolean; paused: boolean }) {
+  const el = useRef<HTMLVideoElement>(null);
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const v = el.current;
+    if (!v) return;
+    let stop: (() => void) | undefined;
+    let gone = false;
+    setOn(false);
+    const playing = () => setOn(true);
+    v.addEventListener('playing', playing);
+    attachHls(v, url).then(
+      (s) => (gone ? s() : (stop = s)),
+      () => undefined,
+    );
+    return () => {
+      gone = true;
+      v.removeEventListener('playing', playing);
+      stop?.();
+    };
+  }, [url]);
+  useEffect(() => {
+    const v = el.current;
+    if (!v) return;
+    if (paused) v.pause();
+    else void v.play().catch(() => undefined);
+  }, [paused]);
+  const mask = wide ? 'linear-gradient(to right, transparent, #000 9%, #000 91%, transparent)' : 'linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent)';
+  return (
+    <div className="pointer-events-none absolute inset-0 transition-opacity duration-[1200ms] ease-out" style={{ opacity: on ? 1 : 0 }} data-aurora-motion data-playing={on || undefined}>
+      <video
+        ref={el}
+        muted
+        loop
+        playsInline
+        disablePictureInPicture
         tabIndex={-1}
-        className="pointer-events-none absolute origin-top-left border-0"
-        style={{ left: f.left, top: f.top, width: f.width, height: f.height, transform: f.scale !== 1 ? `scale(${f.scale})` : undefined }}
+        className={fit === 'whole' ? 'absolute object-cover' : 'absolute inset-0 h-full w-full object-cover'}
+        style={fit === 'whole' ? { width: box.side, height: box.side, left: box.left, top: box.top, maskImage: mask, WebkitMaskImage: mask } : undefined}
       />
     </div>
   );
 }
 
-export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced, look, videos, time, playing, offsetFor, onVideo, lyricY, glare }: Props) {
+export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced, look, videos, motion: motionUrl, time, playing, offsetFor, onVideo, lyricY, glare }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ W: 1600, H: 900 });
   useEffect(() => {
@@ -177,7 +322,8 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
   }, []);
 
   // The next candidate when YouTube will not play one here (embedding off, removed).
-  const list = scene.backdrop === 'cover' || !scene.musicVideos ? [] : (videos ?? []);
+  // An animated cover from Apple beats the artist's YouTube visualizer.
+  const list = scene.backdrop === 'cover' || !scene.musicVideos ? [] : (videos ?? []).filter((v) => !(motionUrl && v.kind === 'visualizer'));
   const listKey = list.map((v) => v.id).join(',');
   const [failed, setFailed] = useState<string[]>([]);
   useEffect(() => setFailed([]), [listKey]);
@@ -190,11 +336,16 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
   }, [video, onVideo]);
 
   const m = reduced ? 0 : Math.max(0, Math.min(1, scene.coverMotion));
-  const input: BackdropInput = { look, videos, time, playing, offsetFor, onVideo, lyricY, glare };
+  const input: BackdropInput = { look, videos, motion: motionUrl, time, playing, offsetFor, onVideo, lyricY, glare };
+  const [videoShowing, setVideoShowing] = useState(false);
+  useEffect(() => setVideoShowing(false), [video?.id]);
   // The user's amount, more over a bright picture, less over a dark one.
   const dim = Math.max(0, Math.min(1, scene.dim * (0.55 + 1.1 * Math.max(0, Math.min(1, glare)))));
   const focus = look?.focusY ?? 0.45;
   const corners = Math.max(0, Math.min(1, scene.corners));
+  // The whole cover: a square as big as the screen's shorter side.
+  const side = Math.min(size.W, size.H);
+  const wide = size.W >= size.H;
 
   return (
     // With no cover (only a video), the light show stays visible underneath.
@@ -205,22 +356,64 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
         {art && (
           <motion.div key={art} className="absolute inset-0" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0.4 : 1.4, ease: [0.22, 1, 0.36, 1] }}>
             <div className="absolute inset-0" style={{ transform: `scale(calc(1 + var(--aurora-beat, 0) * ${(0.014 * m).toFixed(4)}))`, willChange: 'transform' }}>
-              <img
-                src={art}
-                alt=""
-                draggable={false}
-                decoding="async"
-                className="absolute left-[-5%] top-[-5%] h-[110%] w-[110%] max-w-none object-cover"
-                style={{ objectPosition: `50% ${Math.round(focus * 100)}%`, ['--m' as string]: m, animation: m > 0 ? `aurora-drift ${Math.round(46 / Math.max(0.3, scene.speed))}s ease-in-out infinite alternate` : undefined, animationPlayState: playing ? 'running' : 'paused', willChange: 'transform' }}
-                data-aurora-cover
-              />
+              {scene.coverFit === 'whole' ? (
+                <>
+                  {/* The screen around the cover: the cover itself, enlarged and
+                      softened, so it reads as one picture reaching the edges. */}
+                  <img
+                    src={art}
+                    alt=""
+                    aria-hidden
+                    draggable={false}
+                    decoding="async"
+                    className="absolute left-[-12%] top-[-12%] h-[124%] w-[124%] max-w-none object-cover"
+                    style={{ filter: 'blur(48px) saturate(1.35) brightness(0.78)', ['--m' as string]: m, animation: m > 0 ? `aurora-drift ${Math.round(60 / Math.max(0.3, scene.speed))}s ease-in-out infinite alternate-reverse` : undefined, animationPlayState: playing ? 'running' : 'paused' }}
+                    data-aurora-cover-fill
+                  />
+                  {/* All of the cover, as large as the screen allows, its sides
+                      melting into that light. */}
+                  <div
+                    className="absolute"
+                    style={{
+                      width: side,
+                      height: side,
+                      left: (size.W - side) / 2,
+                      top: (size.H - side) / 2,
+                      maskImage: wide ? 'linear-gradient(to right, transparent, #000 9%, #000 91%, transparent)' : 'linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent)',
+                      WebkitMaskImage: wide ? 'linear-gradient(to right, transparent, #000 9%, #000 91%, transparent)' : 'linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent)',
+                    }}
+                  >
+                    <img
+                      src={art}
+                      alt=""
+                      draggable={false}
+                      decoding="async"
+                      className="h-full w-full object-cover"
+                      style={{ ['--m' as string]: m * 0.5, animation: m > 0 ? `aurora-drift ${Math.round(46 / Math.max(0.3, scene.speed))}s ease-in-out infinite alternate` : undefined, animationPlayState: playing ? 'running' : 'paused', willChange: 'transform' }}
+                      data-aurora-cover
+                    />
+                  </div>
+                </>
+              ) : (
+                <img
+                  src={art}
+                  alt=""
+                  draggable={false}
+                  decoding="async"
+                  className="absolute left-[-5%] top-[-5%] h-[110%] w-[110%] max-w-none object-cover"
+                  style={{ objectPosition: `50% ${Math.round(focus * 100)}%`, ['--m' as string]: m, animation: m > 0 ? `aurora-drift ${Math.round(46 / Math.max(0.3, scene.speed))}s ease-in-out infinite alternate` : undefined, animationPlayState: playing ? 'running' : 'paused', willChange: 'transform' }}
+                  data-aurora-cover
+                />
+              )}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+      {/* The album's animated cover over the still one (it rests while a music video shows). */}
+      {motionUrl && art && <MotionLayer url={motionUrl} fit={scene.coverFit} box={{ side, left: (size.W - side) / 2, top: (size.H - side) / 2 }} wide={wide} paused={!playing || videoShowing} />}
       {/* "Whole picture": the cover blurred around the video. */}
       {video && scene.videoFit === 'fit' && art && <img src={art} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-3xl" />}
-      {video && <VideoLayer key={video.id} video={video} scene={scene} input={input} size={size} onFail={onFail} />}
+      {video && <VideoLayer key={video.id} video={video} scene={scene} input={input} size={size} onFail={onFail} onShowing={setVideoShowing} />}
       {/* Readability: behind the lyrics the picture softens into a feathered
           patch of frosted glass and darkens a little; the rest stays sharp. */}
       {dim > 0.01 && (
