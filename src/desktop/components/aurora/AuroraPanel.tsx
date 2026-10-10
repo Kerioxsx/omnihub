@@ -3,11 +3,12 @@
 // glow, colours), then the visual, the lyrics and the rest. Every change
 // shows at once and is saved (lib/aurora/settings.ts).
 
-import type { AmbientDisplay, ColorMode, LyricFont, SceneStyle, VisualSettings, VisualStatus } from '@shared/types';
+import type { AmbientDisplay, ColorMode, Effects, LyricFont, SceneStyle, VisualSettings, VisualStatus } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown, FolderOpen, RotateCcw, ShieldCheck, X } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useState } from 'react';
 import { api } from '../../api';
+import { DEFAULT_EFFECTS } from '../../lib/aurora/defaults';
 import { patchVisuals, resetVisuals, useVisuals } from '../../lib/aurora/settings';
 import { cx } from '../../lib/cx';
 import { useSettings } from '../../state/settings';
@@ -102,7 +103,11 @@ function Dropdown<T extends string | number>({ label, value, options, onChange }
 
 function Swatch({ label, value, onChange, big }: { label: string; value: string; onChange: (v: string) => void; big?: boolean }) {
   return (
-    <label className={cx('relative block shrink-0 cursor-pointer overflow-hidden rounded-full border border-white/25 shadow-inner', big ? 'h-12 w-12' : 'h-8 w-8')} title={label} style={{ background: big ? `conic-gradient(from 0deg, ${value}, ${value})` : value }}>
+    <label
+      className={cx('relative block shrink-0 cursor-pointer overflow-hidden rounded-full border border-white/25 shadow-inner', big ? 'h-12 w-12' : 'h-8 w-8')}
+      title={label}
+      style={{ background: big ? `conic-gradient(from 0deg, ${value}, ${value})` : value }}
+    >
       <input type="color" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
     </label>
   );
@@ -227,12 +232,7 @@ function LyricsSection({ v }: { v: VisualSettings }) {
           ]}
           onChange={(layout) => set({ layout })}
         />
-        <Dropdown
-          label="Font"
-          value={l.font}
-          options={(Object.keys(FONTS) as LyricFont[]).map((k) => ({ value: k, label: FONTS[k].label }))}
-          onChange={(font) => set({ font })}
-        />
+        <Dropdown label="Font" value={l.font} options={(Object.keys(FONTS) as LyricFont[]).map((k) => ({ value: k, label: FONTS[k].label }))} onChange={(font) => set({ font })} />
         <Slider label="Size" value={l.size} min={0.5} max={1.8} onChange={(size) => set({ size })} format={pct} />
         <Dropdown
           label="Weight"
@@ -254,7 +254,13 @@ function LyricsSection({ v }: { v: VisualSettings }) {
           ]}
           onChange={(x) => set(x === 'word' ? { timing: 'auto', wordHighlight: true } : { timing: 'line', wordHighlight: false })}
         />
-        <p className="pb-1 text-[11px] leading-snug text-white/45">Word by word only when the lyrics time each word; otherwise the whole line lights up at once.</p>
+        <Toggle
+          label="Estimate words when lyrics only time lines"
+          hint="Most lyrics online time each line, not each word. This spreads a line's words over it by their syllables, so the highlight still moves word by word — close, not exact. Off: the whole line lights up."
+          checked={l.estimateWords}
+          disabled={l.timing === 'line' || !l.wordHighlight}
+          onChange={(estimateWords) => set({ estimateWords })}
+        />
         <Dropdown
           label="Emphasis"
           value={l.emphasis}
@@ -278,15 +284,19 @@ function LyricsSection({ v }: { v: VisualSettings }) {
         <Dropdown
           label="Shown"
           value={l.lines}
-          options={stack ? [
-            { value: 1, label: 'Only what is sung' },
-            { value: 2, label: '+ what comes next' },
-            { value: 3, label: '+ before and next' },
-          ] : [
-            { value: 1, label: 'Current line' },
-            { value: 2, label: '+ next line' },
-            { value: 3, label: '+ next two' },
-          ]}
+          options={
+            stack
+              ? [
+                  { value: 1, label: 'Only what is sung' },
+                  { value: 2, label: '+ what comes next' },
+                  { value: 3, label: '+ before and next' },
+                ]
+              : [
+                  { value: 1, label: 'Current line' },
+                  { value: 2, label: '+ next line' },
+                  { value: 3, label: '+ next two' },
+                ]
+          }
           onChange={(lines) => set({ lines })}
         />
         <Dropdown
@@ -303,6 +313,8 @@ function LyricsSection({ v }: { v: VisualSettings }) {
         <Slider label="Move up or down" value={l.offsetY} min={-25} max={25} step={1} onChange={(offsetY) => set({ offsetY })} format={(x) => `${x > 0 ? '+' : ''}${Math.round(x)}%`} />
         <Slider label="Backing" value={l.backing} min={0} max={0.9} onChange={(backing) => set({ backing })} format={pct} />
         <Slider label="Transition speed" value={l.transition} min={0.25} max={2.5} onChange={(transition) => set({ transition })} format={times} />
+        <Slider label="Movement" value={l.motion} min={0} max={1.5} onChange={(motion) => set({ motion })} format={(x) => (x < 0.005 ? 'still' : pct(x))} />
+        <p className="pb-1 text-[11px] leading-snug text-white/45">How much the lyrics bounce on beats, sway with the music and pop in. Reduced motion keeps them still.</p>
         <Toggle label="Show by themselves" hint="Hiding lyrics with L lasts for this song; the next song with lyrics shows them again." checked={l.autoShow} onChange={(autoShow) => set({ autoShow })} />
         <p className="pt-1 text-[11px] text-white/40">Shortcuts: L shows or hides the lyrics, V switches views.</p>
       </div>
@@ -380,10 +392,71 @@ function DesktopSection({ v }: { v: VisualSettings }) {
       <Toggle label="Glow around the screen" hint="The edge light around your monitor, over every app, while music plays. Clicks go straight through it." checked={d.enabled} onChange={(enabled) => set({ enabled })} />
       <div className={cx(!d.enabled && 'pointer-events-none opacity-45')}>
         <Toggle label="Lyrics on the desktop" hint="Floating lyrics over your apps." checked={d.lyrics} onChange={(lyrics) => set({ lyrics })} />
-        <Dropdown label="Display" value={d.display} options={[{ value: 'primary', label: 'Main display' }, { value: 'all', label: 'Every display' }, ...displays.map((m) => ({ value: m.name, label: m.label }))]} onChange={(display) => set({ display })} />
+        <Dropdown
+          label="Display"
+          value={d.display}
+          options={[{ value: 'primary', label: 'Main display' }, { value: 'all', label: 'Every display' }, ...displays.map((m) => ({ value: m.name, label: m.label }))]}
+          onChange={(display) => set({ display })}
+        />
         <Toggle label="Stay above the taskbar" checked={d.clearTaskbar} onChange={(clearTaskbar) => set({ clearTaskbar })} />
         <Toggle label="Step aside for full-screen apps and games" hint="Hides while a game, video or presentation fills the screen, and during game boosts." checked={d.hideFullscreen} onChange={(hideFullscreen) => set({ hideFullscreen })} />
         <Toggle label="Turn on when OmniHub starts" checked={d.startWithApp} onChange={(startWithApp) => set({ startWithApp })} />
+      </div>
+    </Section>
+  );
+}
+
+const EFFECTS: { key: keyof Effects; label: string }[] = [
+  { key: 'zoom', label: 'Beat zoom' },
+  { key: 'bloom', label: 'Glow on bright parts' },
+  { key: 'echo', label: 'Echo behind' },
+  { key: 'ripple', label: 'Ripples' },
+  { key: 'twist', label: 'Twist' },
+  { key: 'shake', label: 'Shake' },
+  { key: 'glitch', label: 'Glitch' },
+  { key: 'split', label: 'Colour split' },
+  { key: 'pixelate', label: 'Pixelate on beats' },
+  { key: 'fisheye', label: 'Fisheye' },
+  { key: 'kaleidoscope', label: 'Kaleidoscope' },
+  { key: 'halftone', label: 'Halftone dots' },
+  { key: 'scanlines', label: 'Scanlines' },
+  { key: 'duotone', label: 'Duotone (palette colours)' },
+];
+
+const CALM: Effects = { zoom: 0.3, glitch: 0, split: 0, fisheye: 0, ripple: 0, kaleidoscope: 0, halftone: 0, pixelate: 0, shake: 0, echo: 0.25, scanlines: 0, duotone: 0, twist: 0, bloom: 0.25 };
+const WILD: Effects = { zoom: 1, glitch: 0.7, split: 0.8, fisheye: 0.3, ripple: 0.6, kaleidoscope: 0, halftone: 0.25, pixelate: 0.45, shake: 0.5, echo: 0.7, scanlines: 0.3, duotone: 0, twist: 0.45, bloom: 0.75 };
+
+/** What happens to the cover: each effect with its own strength. */
+function EffectsSection({ v }: { v: VisualSettings }) {
+  const fx = { ...DEFAULT_EFFECTS, ...v.scene.effects };
+  const set = (effects: Partial<Effects>) => patchVisuals({ scene: { effects } });
+  const shuffle = () => {
+    const r = () => Math.round(Math.random() * 100) / 100;
+    // Lively but not chaos: a few strong effects, the rest light.
+    const picks = EFFECTS.map((e) => e.key).sort(() => Math.random() - 0.5);
+    const next = Object.fromEntries(picks.map((k, i) => [k, i < 4 ? 0.5 + r() * 0.5 : i < 8 ? r() * 0.3 : 0])) as unknown as Effects;
+    set({ ...next, zoom: Math.max(0.3, next.zoom) });
+  };
+  const presets: [string, () => void][] = [
+    ['Calm', () => set(CALM)],
+    ['Default', () => set(DEFAULT_EFFECTS)],
+    ['Wild', () => set(WILD)],
+    ['Shuffle', shuffle],
+  ];
+  return (
+    <Section title="Effects">
+      <div className={cx(!v.scene.enabled && 'pointer-events-none opacity-45')}>
+        <div className="mb-1 flex gap-1" role="group" aria-label="Effect presets">
+          {presets.map(([label, run]) => (
+            <button key={label} type="button" onClick={run} className="h-7 flex-1 rounded-[8px] bg-white/[0.08] text-[11.5px] font-semibold text-white/80 hover:bg-white/15">
+              {label}
+            </button>
+          ))}
+        </div>
+        {EFFECTS.map(({ key, label }) => (
+          <Slider key={key} label={label} value={fx[key]} min={0} max={1} onChange={(x) => set({ [key]: x })} format={(x) => (x < 0.005 ? 'off' : pct(x))} />
+        ))}
+        <p className="pt-1 text-[11px] leading-snug text-white/40">Effects follow the beat and the bass. Reduced motion turns the moving ones off.</p>
       </div>
     </Section>
   );
@@ -394,7 +467,7 @@ function SourcesSection() {
   const update = useSettings((s) => s.update);
   if (!media) return null;
   return (
-    <Section title="Where lyrics come from">
+    <Section title="Lyrics and covers">
       <div className="py-1.5">
         <div className="text-[12.5px] font-medium text-white/90">Your .lrc files</div>
         <div className="mt-0.5 text-[11px] leading-snug text-white/45">Checked first. Matched by the file's tags or its name (“Artist - Title.lrc”), and only when its length fits the song.</div>
@@ -416,13 +489,30 @@ function SourcesSection() {
             <FolderOpen size={14} />
           </button>
           {media.lrcFolder && (
-            <button type="button" onClick={() => void update({ media: { lrcFolder: null } })} className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-white/10 text-white/80 hover:bg-white/20" aria-label="Stop using the folder" title="Stop using the folder">
+            <button
+              type="button"
+              onClick={() => void update({ media: { lrcFolder: null } })}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-white/10 text-white/80 hover:bg-white/20"
+              aria-label="Stop using the folder"
+              title="Stop using the folder"
+            >
               <X size={14} />
             </button>
           )}
         </div>
       </div>
-      <Toggle label="Look lyrics up online" hint="From LRCLIB, a free, open lyrics library. Only the song's title, artist, album and length are sent." checked={media.lyricsOnline} onChange={(lyricsOnline) => void update({ media: { lyricsOnline } })} />
+      <Toggle
+        label="Look lyrics up online"
+        hint="From LRCLIB, a free, open lyrics library. Only the song's title, artist, album and length are sent."
+        checked={media.lyricsOnline}
+        onChange={(lyricsOnline) => void update({ media: { lyricsOnline } })}
+      />
+      <Toggle
+        label="Sharper covers"
+        hint="Players give Windows a small cover. This finds the same cover at 1200×1200 in Apple's iTunes catalogue (only the title, artist and album are sent) and uses it when it matches."
+        checked={media.hiresArt}
+        onChange={(hiresArt) => void update({ media: { hiresArt } })}
+      />
     </Section>
   );
 }
@@ -445,7 +535,10 @@ export function AuroraPanel({ open, onClose, status, full }: { open: boolean; on
           animate={{ opacity: 1, x: 0, scale: 1 }}
           exit={{ opacity: 0, x: 24, scale: 0.98 }}
           transition={{ type: 'spring', stiffness: 380, damping: 34 }}
-          className={cx('absolute right-3 z-40 flex w-[320px] max-w-[calc(100%-24px)] flex-col overflow-hidden rounded-[18px] border border-white/[0.12] bg-[#121218]/60 text-white shadow-[0_30px_80px_-20px_rgba(0,0,0,.85),inset_0_1px_0_rgba(255,255,255,.08)] backdrop-blur-2xl backdrop-saturate-150', full ? 'bottom-24 top-16' : 'bottom-20 top-14')}
+          className={cx(
+            'absolute right-3 z-40 flex w-[320px] max-w-[calc(100%-24px)] flex-col overflow-hidden rounded-[18px] border border-white/[0.12] bg-[#121218]/60 text-white shadow-[0_30px_80px_-20px_rgba(0,0,0,.85),inset_0_1px_0_rgba(255,255,255,.08)] backdrop-blur-2xl backdrop-saturate-150',
+            full ? 'bottom-24 top-16' : 'bottom-20 top-14',
+          )}
           aria-label="Aurora settings"
           data-aurora-panel
         >
@@ -463,6 +556,7 @@ export function AuroraPanel({ open, onClose, status, full }: { open: boolean; on
             {!v.enabled && <p className="px-4 pt-3 text-[11.5px] leading-snug text-amber-200/80">Aurora is off: no sound is analysed and nothing is drawn. The lyrics still show.</p>}
             <LightSection v={v} />
             <VisualSection v={v} />
+            <EffectsSection v={v} />
             <LyricsSection v={v} />
             <SoundSection v={v} status={status} />
             <ComfortSection v={v} />

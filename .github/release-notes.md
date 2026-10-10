@@ -1,14 +1,12 @@
 ## New in this version
 
-- **Aurora — a new way to see your music.** Open Music (or full screen) and the song itself becomes the show:
-  - **the cover art is the visual**, big and vivid on black: it swells with the bass, glitches, splits its colours and jumps on the beats, and changes with every song. Styles: **Visual**, **Fisheye**, **Fisheye Visual**, **Minimal** (mostly dark) and **Ambient** (colour fields);
-  - **a thin neon light around the screen** in the cover's colours: a crisp edge, an inner highlight, a soft glow and a wider bloom. Bass widens it, beats lift it, quiet parts soften it; it never flickers;
-  - **huge floating lyrics**: the word being sung in the middle, the one before above, the next one in a pill below. Word by word when the lyrics time each word; otherwise a whole line at a time (no guessing). Instrumental breaks show breathing dots, and the next line appears just before it is sung;
-  - pausing freezes everything where it is (then shows the cover as a card); seeking and skipping update at once and never show the last song's lyrics.
-- **The Apple Music–style Lyrics view is still there.** Switch between **Aurora** and **Lyrics** at the top left (or press V); OmniHub remembers your choice.
-- **Settings for everything** in a compact glass panel (Settings in the player's dock): gradient and colours (from the cover, or your own two, several or one), animation (music sync, idle, none), thickness and glow, visual style, intensity and speed, lyric font, size, weight, highlight, position and more, sensitivity and bass response, reduced motion and no flashes. Changes show at once and are saved. **Reset to defaults** is one click. **L** shows or hides the lyrics.
-- **Glow around your screen** (optional): the same light around your monitor, over every app, on one display or all. Clicks go straight through it, and it steps aside while a game or video is full screen.
-- **Your own lyrics files**: choose a folder of `.lrc` files and they are used first (matched by the file's tags or "Artist - Title.lrc" name, and only when the length fits the song).
+Aurora, after the first real-world try:
+
+- **Sharper covers.** Music players give Windows a small cover (often 300×300), which looked soft stretched across the screen. OmniHub now finds the same cover at **1200×1200** in Apple's iTunes catalogue — only when the song and the picture match — and draws every cover with sharper scaling. Only the song's title, artist and album are sent; turn it off under *Lyrics and covers*.
+- **More effects, each on its own slider.** Beat zoom, glow on bright parts, echo, ripples, twist, shake, glitch, colour split, pixelate on beats, fisheye, kaleidoscope, halftone dots, scanlines and duotone, with **Calm**, **Default**, **Wild** and **Shuffle** presets. Glitch is subtle by default now.
+- **Lyrics word by word for every song.** Most lyrics online only time each line; Aurora now spreads a line's words over it by their syllables, so the highlight moves word by word (close, not exact — songs whose lyrics time each word still use those exact timings). Turn *Estimate words* off for whole lines.
+- **Only the word being sung is highlighted.** The next word below is now quiet instead of sitting in a coloured pill.
+- **Lyrics that move with the music.** Words pop in, bounce on beats and sway gently. A new **Movement** slider sets how much (Reduced motion keeps them still).
 
 **How Aurora hears the music:** it reads the sound Windows is already playing (the mix you hear, called loopback), only while Aurora is on screen. It never uses the microphone, never records and never sends sound anywhere. Turn off *Follow the music* to stop it; the light then moves on its own.
 

@@ -234,6 +234,9 @@ internet only for:
 - **Lyrics** (Music, on by default, can be turned off): the title, artist,
   album and length of the playing song go to [LRCLIB](https://lrclib.net);
   results are cached on the PC.
+- **Sharper covers** (Music, on by default, can be turned off): the title,
+  artist and album of the playing song go to Apple's iTunes Search API, and
+  the matching 1200×1200 cover is downloaded; covers are cached on the PC.
 - **Breach check** (Vault → Health, only when you run it): the first five
   characters of each password's SHA-1 go to Have I Been Pwned's range API
   (k-anonymity); passwords never leave the PC.

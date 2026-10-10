@@ -120,6 +120,13 @@ or the UI:
   folder first (matched on tags or "Artist - Title" names, length within
   8 s, lines that fit the track), then the cache, then LRCLIB. Lyrics are
   stored per track key, so a new track never gets the last one's lines.
+- **Covers** (`media/artwork.rs`): the player's thumbnail is replaced by a
+  1200×1200 copy from the iTunes catalogue when the song matches (title,
+  artist, length) and the picture looks like the thumbnail (16×16
+  comparison); cached in `data/covers`. The art id changes, so views refetch.
+- **Word timing** (`lib/aurora/timing.ts`): for lyrics that only time
+  lines, words are spread over each line by syllables (opt-out); real word
+  timestamps always win.
 - **Frontend** (`src/desktop/lib/aurora`, `components/aurora`): one
   animation loop per view drives two WebGL canvases — the scene (the cover
   art with glitch slices, channel split, a fisheye lens, beat pulses and

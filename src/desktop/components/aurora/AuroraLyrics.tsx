@@ -1,11 +1,12 @@
 // Aurora's lyrics, over the music.
 //
-// Stack (the default, like the reference): what is being sung, huge, in the
-// middle; the previous one small and faded above, the next one small in a
-// pill below. It moves one word at a time only when the lyrics really time
-// each word; with line timings it moves one line at a time and lights the
-// whole line (no guessing). Lines: the current line with the next ones
-// under it, words filling in as they are sung when timed.
+// Stack (the default, like the reference): the word being sung, huge, in
+// the middle and highlighted; the one before above and the one after below,
+// small and quiet. Words come from the lyrics' own word timings, or — for
+// lyrics that only time lines, when "estimate words" is on — from
+// lib/aurora/timing.ts, which spreads each line's words by syllables. With
+// that off, a whole line lights up at a time. Lines: the current line with
+// the next ones under it, words filling in as they are sung.
 //
 // Instrumental breaks show three breathing dots that fill up toward the next
 // line, which appears a moment before it is sung. Seeking jumps straight to
@@ -15,6 +16,8 @@
 import type { LyricLine, VisualSettings } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import { type CSSProperties, forwardRef, memo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { LevelFollower } from '../../lib/aurora/audio';
+import { estimateWords } from '../../lib/aurora/timing';
 import { activeLine } from '../../lib/nowPlaying';
 
 export type LyricsState = 'ready' | 'searching' | 'none' | 'off' | 'instrumental' | 'plain' | 'loading';
@@ -246,9 +249,19 @@ function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
   const small = (it: StackItem) => Math.max(15, Math.min(sizeOf(it) * 0.36, base * (it.word ? 0.3 : 0.2)));
   const dur = reduced ? 0.25 : jump ? 0.1 : 0.34 / Math.max(0.25, s.transition);
   const ease = [0.22, 1, 0.36, 1] as const;
+  // Movement: each word gets its own slight tilt, more with more movement.
+  const mv = reduced ? 0 : Math.max(0, s.motion);
+  const tiltOf = (key: string) => {
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+    return (((h >>> 0) % 1000) / 1000 - 0.5) * 6 * mv;
+  };
   const hl = s.highlightColor ?? '#ffffff';
   const g = Math.min(1, s.glow);
-  const glowShadow = s.glow > 0 ? `0 0 ${0.12 + 0.1 * s.glow}em color-mix(in oklab, var(--aurora-glow) ${Math.round(75 * g)}%, transparent), 0 0 ${0.5 * s.glow}em color-mix(in oklab, var(--aurora-glow) ${Math.round(40 * g)}%, transparent), 0 0.04em 0.3em rgba(0,0,0,.45)` : '0 0.04em 0.3em rgba(0,0,0,.5)';
+  const glowShadow =
+    s.glow > 0
+      ? `0 0 ${0.12 + 0.1 * s.glow}em color-mix(in oklab, var(--aurora-glow) ${Math.round(75 * g)}%, transparent), 0 0 ${0.5 * s.glow}em color-mix(in oklab, var(--aurora-glow) ${Math.round(40 * g)}%, transparent), 0 0.04em 0.3em rgba(0,0,0,.45)`
+      : '0 0.04em 0.3em rgba(0,0,0,.5)';
 
   type Row = { key: string; role: 'prev' | 'cur' | 'next'; node: ReactNode; size: number };
   const rows: Row[] = [];
@@ -259,11 +272,20 @@ function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
 
   const look = (role: Row['role'], dots: boolean): CSSProperties => {
     if (role === 'cur' && !dots) {
-      if (s.emphasis === 'box') return { color: '#fff', background: 'var(--aurora-box)', padding: '0.02em 0.22em 0.06em', borderRadius: '0.14em', textShadow: '0 0.03em 0.12em rgba(0,0,0,.35)', boxShadow: s.glow > 0 ? `0 0 ${0.6 * s.glow}em color-mix(in oklab, var(--aurora-glow) 45%, transparent)` : undefined };
+      if (s.emphasis === 'box')
+        return {
+          color: '#fff',
+          background: 'var(--aurora-box)',
+          padding: '0.02em 0.22em 0.06em',
+          borderRadius: '0.14em',
+          textShadow: '0 0.03em 0.12em rgba(0,0,0,.35)',
+          boxShadow: s.glow > 0 ? `0 0 ${0.6 * s.glow}em color-mix(in oklab, var(--aurora-glow) 45%, transparent)` : undefined,
+        };
       if (s.emphasis === 'color') return { color: 'var(--aurora-hl-accent)', textShadow: glowShadow };
       return { color: hl, textShadow: glowShadow };
     }
-    if (role === 'next') return { color: '#fff', background: 'var(--aurora-pill)', padding: '0.1em 0.55em 0.14em', borderRadius: '999px', textShadow: '0 0.03em 0.1em rgba(0,0,0,.3)' };
+    // Only what is being sung is highlighted; what comes next stays quiet.
+    if (role === 'next') return { color: 'rgba(255,255,255,.7)', textShadow: '0 0.04em 0.3em rgba(0,0,0,.55)' };
     return { color: 'rgba(255,255,255,.55)', textShadow: '0 0.04em 0.3em rgba(0,0,0,.5)' };
   };
 
@@ -275,10 +297,20 @@ function StackLayout({ lines, time, s, reduced, width, full }: LayoutProps) {
         {rows.map((r) => (
           <motion.div
             key={r.key}
-            initial={reduced ? { opacity: 0, fontSize: r.size } : { opacity: 0, y: '0.5em', filter: 'blur(6px)', fontSize: r.size }}
-            animate={{ opacity: r.role === 'prev' ? 0.6 : 1, y: 0, filter: 'blur(0px)', fontSize: r.size }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0, y: '-0.4em', filter: 'blur(6px)' }}
-            transition={{ duration: dur, ease }}
+            initial={reduced ? { opacity: 0, fontSize: r.size } : { opacity: 0, y: `${0.4 + 0.5 * mv}em`, scale: 1 - 0.35 * mv, rotate: tiltOf(r.key) * 2, filter: 'blur(6px)', fontSize: r.size }}
+            animate={{ opacity: r.role === 'prev' ? 0.6 : 1, y: 0, scale: 1, rotate: r.role === 'cur' ? tiltOf(r.key) * 0.5 : 0, filter: 'blur(0px)', fontSize: r.size }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, y: `-${0.4 + 0.4 * mv}em`, scale: 1 - 0.2 * mv, rotate: -tiltOf(r.key), filter: 'blur(6px)' }}
+            // With movement, words pop in with a little overshoot.
+            transition={
+              mv > 0.02 && !jump
+                ? {
+                    default: { duration: dur, ease },
+                    scale: { type: 'spring', stiffness: 520, damping: 12 + (1.5 - mv) * 9 },
+                    y: { type: 'spring', stiffness: 380, damping: 14 + (1.5 - mv) * 8 },
+                    rotate: { type: 'spring', stiffness: 300, damping: 16 },
+                  }
+                : { duration: dur, ease }
+            }
             className="max-w-full leading-[1.08] tracking-[-0.02em] [text-wrap:balance]"
             style={{ fontWeight: r.role === 'cur' ? s.weight : Math.max(600, s.weight - 100), marginTop: r.role === 'next' ? '0.35em' : r.role === 'cur' ? '0.04em' : 0 }}
             data-lyric-role={r.role}
@@ -320,7 +352,11 @@ function LinesLayout({ lines, time, s, reduced, full }: LayoutProps) {
     const words = wordMode && l.words?.length ? l.words : null;
     body = {
       key: `l${phase.index}`,
-      node: words ? <KaraokeWords line={l} end={lineEnd(lines, phase.index)} time={time} color={s.emphasis === 'color' ? 'var(--aurora-hl-accent)' : hl} glow={s.glow} /> : <span style={{ color: lineColor, textShadow: glowCss, ...box }}>{l.text}</span>,
+      node: words ? (
+        <KaraokeWords line={l} end={lineEnd(lines, phase.index)} time={time} color={s.emphasis === 'color' ? 'var(--aurora-hl-accent)' : hl} glow={s.glow} />
+      ) : (
+        <span style={{ color: lineColor, textShadow: glowCss, ...box }}>{l.text}</span>
+      ),
       after: upcoming(phase.index + 1),
     };
   } else if (phase.kind === 'break' || phase.kind === 'intro') {
@@ -332,7 +368,16 @@ function LinesLayout({ lines, time, s, reduced, full }: LayoutProps) {
   return (
     <div style={{ fontSize }}>
       <AnimatePresence mode="popLayout" initial={false}>
-        <motion.div key={body.key} initial={enter} animate={settle} exit={exit} transition={{ duration: dur, ease: [0.22, 1, 0.36, 1] }} className="leading-[1.12] tracking-[-0.02em] [text-wrap:balance]" style={{ fontWeight: s.weight }} data-lyric-current>
+        <motion.div
+          key={body.key}
+          initial={enter}
+          animate={settle}
+          exit={exit}
+          transition={{ duration: dur, ease: [0.22, 1, 0.36, 1] }}
+          className="leading-[1.12] tracking-[-0.02em] [text-wrap:balance]"
+          style={{ fontWeight: s.weight }}
+          data-lyric-current
+        >
           {body.node}
         </motion.div>
       </AnimatePresence>
@@ -376,6 +421,37 @@ export const AuroraLyrics = memo(
   forwardRef<HTMLDivElement, AuroraLyricsProps>(function AuroraLyrics({ lines, state, time, trackKey, settings: s, reduced, full, shown, onShowPlain }, boxRef) {
     const root = useRef<HTMLDivElement>(null);
     const [width, setWidth] = useState(1200);
+    // Movement with the music: a gentle sway, a lift with the bass and a
+    // bounce on beats, applied to the whole block on every frame.
+    const [moveEl, setMoveEl] = useState<HTMLDivElement | null>(null);
+    const mv = reduced ? 0 : Math.max(0, s.motion);
+    useEffect(() => {
+      if (!moveEl) return;
+      if (mv < 0.005) {
+        moveEl.style.transform = '';
+        return;
+      }
+      const follow = new LevelFollower();
+      let raf = 0;
+      let last = performance.now();
+      let t = Math.random() * 100;
+      const step = (now: number) => {
+        raf = requestAnimationFrame(step);
+        const dt = Math.min(0.1, (now - last) / 1000);
+        last = now;
+        t += dt;
+        const lv = follow.step(dt);
+        const k = mv * (lv.active ? 1 : 0.4);
+        const x = Math.sin(t * 0.55) * 7 * k + Math.sin(t * 1.7) * 2 * k;
+        const y = Math.cos(t * 0.75) * 5 * k - lv.low * 10 * mv;
+        const rot = Math.sin(t * 0.4) * 1.2 * k;
+        const scale = 1 + lv.beat * 0.075 * mv + lv.level * 0.02 * mv;
+        const jolt = lv.beat > 0.8 ? (Math.random() - 0.5) * 4 * mv : 0;
+        moveEl.style.transform = `translate(${(x + jolt).toFixed(2)}px, ${y.toFixed(2)}px) rotate(${rot.toFixed(3)}deg) scale(${scale.toFixed(4)})`;
+      };
+      raf = requestAnimationFrame(step);
+      return () => cancelAnimationFrame(raf);
+    }, [moveEl, mv]);
     useEffect(() => {
       const el = root.current;
       if (!el) return;
@@ -408,6 +484,8 @@ export const AuroraLyrics = memo(
       }
     }, [state, trackKey]);
 
+    // Lyrics that only time lines: words spread over each line (an estimate, when allowed).
+    const timed = useMemo(() => (s.estimateWords && s.timing === 'auto' && s.wordHighlight ? estimateWords(lines) : lines), [lines, s.estimateWords, s.timing, s.wordHighlight]);
     const ready = state === 'ready' && lines.length > 0;
     const top = s.place === 'upper' ? 28 : s.place === 'lower' ? 70 : 48;
     const font = FONTS[s.font] ?? FONTS.display;
@@ -421,7 +499,7 @@ export const AuroraLyrics = memo(
       fontFamily: font.css,
       fontStretch: font.stretch,
     } as CSSProperties;
-    const layout = { lines, time, s, reduced, width, full };
+    const layout = { lines: timed, time, s, reduced, width, full };
 
     return (
       <div ref={root} className="pointer-events-none absolute inset-0 z-[5] [container-type:size]" aria-live="off">
@@ -429,25 +507,30 @@ export const AuroraLyrics = memo(
           {shown && (ready || (message && !messageGone)) && (
             <motion.div key={`${trackKey}-box`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45 }} className="absolute inset-0">
               <div ref={boxRef} className="absolute left-1/2 w-[90%] max-w-[1500px] text-center" style={{ top: `${top + s.offsetY}%`, transform: `translate(calc(-50% + ${s.offsetX}cqw), -50%)`, ...vars }} data-aurora-lyrics>
-                <div className={plate ? 'inline-block max-w-full rounded-[0.6em] px-[1.2em] py-[0.6em] backdrop-blur-xl' : undefined} style={{ background: plate ? `rgba(4,4,10,${s.backing})` : undefined, fontSize: plate ? 'clamp(14px, 1.6cqw, 26px)' : undefined }}>
-                  {ready ? (
-                    s.layout === 'lines' ? (
-                      <LinesLayout {...layout} />
-                    ) : (
-                      <StackLayout {...layout} />
-                    )
-                  ) : message ? (
-                    <div className="text-white" style={{ fontSize: full ? 'clamp(20px, 2.2cqw, 40px)' : 'clamp(16px, 2.4cqw, 26px)' }} data-lyric-message>
-                      {state === 'instrumental' && <BreakDots from={0} to={1} time={still} reduced={reduced} />}
-                      <div className={state === 'searching' || state === 'loading' ? 'animate-pulse font-semibold opacity-70' : 'font-bold opacity-85'}>{message.title}</div>
-                      {message.detail && <div className="mx-auto mt-2 max-w-[28em] text-[0.55em] font-medium leading-snug text-white/60">{message.detail}</div>}
-                      {message.action && (
-                        <button type="button" onClick={message.action.run} className="pointer-events-auto mt-3 rounded-full bg-white/12 px-4 py-1.5 text-[0.5em] font-semibold text-white backdrop-blur hover:bg-white/20">
-                          {message.action.label}
-                        </button>
-                      )}
-                    </div>
-                  ) : null}
+                <div ref={setMoveEl} className="will-change-transform">
+                  <div
+                    className={plate ? 'inline-block max-w-full rounded-[0.6em] px-[1.2em] py-[0.6em] backdrop-blur-xl' : undefined}
+                    style={{ background: plate ? `rgba(4,4,10,${s.backing})` : undefined, fontSize: plate ? 'clamp(14px, 1.6cqw, 26px)' : undefined }}
+                  >
+                    {ready ? (
+                      s.layout === 'lines' ? (
+                        <LinesLayout {...layout} />
+                      ) : (
+                        <StackLayout {...layout} />
+                      )
+                    ) : message ? (
+                      <div className="text-white" style={{ fontSize: full ? 'clamp(20px, 2.2cqw, 40px)' : 'clamp(16px, 2.4cqw, 26px)' }} data-lyric-message>
+                        {state === 'instrumental' && <BreakDots from={0} to={1} time={still} reduced={reduced} />}
+                        <div className={state === 'searching' || state === 'loading' ? 'animate-pulse font-semibold opacity-70' : 'font-bold opacity-85'}>{message.title}</div>
+                        {message.detail && <div className="mx-auto mt-2 max-w-[28em] text-[0.55em] font-medium leading-snug text-white/60">{message.detail}</div>}
+                        {message.action && (
+                          <button type="button" onClick={message.action.run} className="pointer-events-auto mt-3 rounded-full bg-white/12 px-4 py-1.5 text-[0.5em] font-semibold text-white backdrop-blur hover:bg-white/20">
+                            {message.action.label}
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </motion.div>

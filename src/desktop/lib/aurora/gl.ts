@@ -16,6 +16,7 @@
 //
 // Both write GLSL ES 1.0 so they run on WebGL 1 and 2.
 
+import type { Effects } from '@shared/types';
 import type { Levels } from './audio';
 
 const VERT = `
@@ -102,7 +103,10 @@ void main() {
 
 const SCENE_FRAG = `${HEAD}
 uniform float uIntensity, uBlur, uSat, uOpacity, uWave, uWaveY, uCalmK, uHasArt, uShow, uGlitch, uLens, uAmbient, uMinimal, uSeed;
+// Effects, 0–1 each.
+uniform float uZoom, uSplit, uRipple, uKaleido, uHalftone, uPixel, uShake, uEcho, uScan, uDuo, uTwist, uBloom;
 uniform vec4 uCalm;
+uniform vec2 uArtSize;
 uniform sampler2D uArt, uBands;
 
 float noise(vec2 p) {
@@ -116,6 +120,33 @@ float fbm(vec2 p) {
   return v;
 }
 vec2 rot(vec2 p, float a) { float c = cos(a), s = sin(a); return vec2(c * p.x - s * p.y, s * p.x + c * p.y); }
+
+// Catmull-Rom (bicubic) sampling in 9 bilinear taps: a small cover drawn
+// big stays crisp instead of turning into smooth blur.
+vec3 sharp(vec2 uv) {
+  vec2 pos = uv * uArtSize;
+  vec2 t1 = floor(pos - 0.5) + 0.5;
+  vec2 f = pos - t1;
+  vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  vec2 w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  vec2 w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  vec2 w3 = f * f * (-0.5 + 0.5 * f);
+  vec2 w12 = w1 + w2;
+  vec2 t0 = (t1 - 1.0) / uArtSize;
+  vec2 t3 = (t1 + 2.0) / uArtSize;
+  vec2 t12 = (t1 + w2 / w12) / uArtSize;
+  vec3 c = vec3(0.0);
+  c += texture2D(uArt, vec2(t0.x, t0.y)).rgb * w0.x * w0.y;
+  c += texture2D(uArt, vec2(t12.x, t0.y)).rgb * w12.x * w0.y;
+  c += texture2D(uArt, vec2(t3.x, t0.y)).rgb * w3.x * w0.y;
+  c += texture2D(uArt, vec2(t0.x, t12.y)).rgb * w0.x * w12.y;
+  c += texture2D(uArt, vec2(t12.x, t12.y)).rgb * w12.x * w12.y;
+  c += texture2D(uArt, vec2(t3.x, t12.y)).rgb * w3.x * w12.y;
+  c += texture2D(uArt, vec2(t0.x, t3.y)).rgb * w0.x * w3.y;
+  c += texture2D(uArt, vec2(t12.x, t3.y)).rgb * w12.x * w3.y;
+  c += texture2D(uArt, vec2(t3.x, t3.y)).rgb * w3.x * w3.y;
+  return max(c, 0.0);
+}
 
 // Slow colour fields (Ambient, or no cover).
 vec3 fields(vec2 p, float t) {
@@ -131,13 +162,35 @@ vec3 fields(vec2 p, float t) {
   return c * (f * f * f * 0.9 * e + curtain * (0.25 + 0.8 * uMid) * 0.7);
 }
 
-// The cover with its effects, and how much of it shows (alpha).
-vec4 cover(vec2 p, vec2 frag, float t, float g) {
+// Where on the cover a point of the screen lands, after the effects that
+// move things around (p: centred, the cover spans -0.5…0.5).
+vec2 warp(vec2 p, float t, float g, out vec2 shape) {
+  float m = uMotion * (1.0 - uMinimal);
+  // A swirl from the middle that tightens with the bass.
+  float r = length(p);
+  p = rot(p, uTwist * m * (0.35 * sin(t * 4.0) + 0.9 * uLow + 0.6 * uBeat * uFlash) * max(0.0, 0.65 - r));
+  // Kaleidoscope: six mirrored slices.
+  if (uKaleido > 0.001) {
+    float seg = 6.2831853 / 6.0;
+    float a = atan(p.y, p.x) + t * 0.6 * m;
+    a = mod(a, seg);
+    a = abs(a - seg * 0.5);
+    p = mix(p, vec2(cos(a), sin(a)) * length(p), uKaleido);
+  }
   // A lens that swells with the bass.
   float r2 = dot(p, p);
   float bulge = uLens * (0.55 + 0.45 * uLow * uMotion);
   p *= 1.0 - bulge * max(0.0, 0.3 - r2) * 1.6;
-  vec2 undistorted = p;
+  shape = p;
+  // Rings rippling out from the middle on the beat.
+  r = length(p);
+  p += (p / max(r, 1e-4)) * sin(r * 38.0 - uTime * 5.0) * 0.011 * uRipple * m * (0.35 + 0.9 * uLow + 0.8 * uBeat * uFlash);
+  // Blocks on beats.
+  float px = uPixel * uBeat * uFlash * m;
+  if (px > 0.04) {
+    float cells = mix(160.0, 18.0, px);
+    p = (floor(p * cells) + 0.5) / cells;
+  }
   // Rows slipping sideways, blocks jumping, a few rows smeared.
   float rows = mix(12.0, 44.0, hash(vec2(uSeed, 1.3)));
   float row = floor((p.y + 0.5) * rows);
@@ -148,21 +201,34 @@ vec4 cover(vec2 p, vec2 frag, float t, float g) {
   p += jump * (vec2(hash(blk + 3.1), hash(blk + 5.7)) - 0.5) * 0.22 * g;
   float smear = step(1.0 - 0.1 * g, hash(vec2(row, uSeed + 3.0)));
   p.x = mix(p.x, floor(p.x * 6.0) / 6.0 + 0.04, smear);
+  return p;
+}
+
+// The cover with its effects, and how much of it shows (alpha).
+vec4 cover(vec2 p, vec2 frag, float t, float g, bool crisp) {
+  vec2 shape;
+  p = warp(p, t, g, shape);
   // Colour channels splitting apart.
-  float split = (0.002 + 0.016 * g + 0.006 * uHi * uMotion) * (1.0 - uMinimal);
+  float split = (0.0015 + 0.012 * g + (0.004 + 0.012 * uBeat * uFlash + 0.006 * uHi) * uSplit * uMotion) * (1.0 - uMinimal);
   vec2 a = p + 0.5;
-  float bias = uBlur * 3.0;
+  vec2 o = vec2(split, split * 0.3);
   vec3 c;
-  c.r = texture2D(uArt, a + vec2(split, split * 0.3), bias).r;
-  c.g = texture2D(uArt, a, bias).g;
-  c.b = texture2D(uArt, a - vec2(split, split * 0.3), bias).b;
+  if (crisp && uBlur < 0.2) {
+    c = vec3(sharp(a + o).r, sharp(a).g, sharp(a - o).b);
+    // A touch of sharpening on top, for covers smaller than the screen.
+    vec3 soft = texture2D(uArt, a, 1.5).rgb;
+    c = max(c + (c - soft) * 0.35, 0.0);
+  } else {
+    float bias = uBlur * 3.0;
+    c = vec3(texture2D(uArt, a + o, bias).r, texture2D(uArt, a, bias).g, texture2D(uArt, a - o, bias).b);
+  }
   // Edges dissolve into the dark, grainy like spray paint.
-  vec2 q = abs(undistorted);
+  vec2 q = abs(shape);
   float edge = max(q.x, q.y);
-  float rough = noise(undistorted * 14.0 + t * 0.5) - 0.5;
-  float m = smoothstep(0.5, 0.36, edge + rough * 0.16);
+  float rough = noise(shape * 14.0 + t * 0.5) - 0.5;
+  float m = smoothstep(0.5, 0.38, edge + rough * 0.12);
   float grain = step(hash(floor(frag / 1.5) + floor(uTime * 10.0)), m * 1.3);
-  m = mix(grain, m, smoothstep(0.55, 0.95, m));
+  m = mix(grain, m, smoothstep(0.5, 0.95, m));
   m *= step(abs(a.x - 0.5), 0.5) * step(abs(a.y - 0.5), 0.5);
   return vec4(c, m);
 }
@@ -180,16 +246,36 @@ void main() {
 
   float artK = uHasArt * (1.0 - uAmbient);
   if (artK > 0.0) {
-    float g = uGlitch * uIntensity * uMotion * (1.0 - uMinimal) * (0.15 + 0.85 * uBeat * uFlash + 0.35 * uHi);
-    float size = mix(0.94, 0.5, uMinimal) * mix(0.55, 1.0, uShow) * (1.0 + (0.06 * uLow + 0.04 * uBeat * uFlash) * uIntensity * uMotion);
-    vec2 p = rot(pc, 0.025 * sin(t * 6.0) * uMotion) / size;
+    float m = uMotion * (1.0 - uMinimal);
+    float g = uGlitch * uIntensity * m * (0.15 + 0.85 * uBeat * uFlash + 0.35 * uHi);
+    float pulse = (0.12 * uLow + 0.1 * uBeat * uFlash) * uZoom * uIntensity * uMotion;
+    float size = mix(0.94, 0.5, uMinimal) * mix(0.55, 1.0, uShow) * (1.0 + pulse);
+    // The camera shakes a little on hard beats.
+    vec2 shake = (vec2(noise(vec2(uTime * 23.0, 1.0)), noise(vec2(3.0, uTime * 23.0))) - 0.5) * 0.05 * uShake * uBeat * uFlash * m;
+    vec2 p = rot(pc + shake, 0.025 * sin(t * 6.0) * uMotion) / size;
+    float bright = uOpacity * mix(1.0, 0.45, uMinimal) * (0.82 + 0.28 * uLevel + 0.12 * uBeat * uFlash);
     // A larger ghost behind, breathing out on beats.
-    vec4 ghost = cover(p / (1.22 + 0.08 * uBeat * uFlash), frag, t, g * 0.6);
-    vec4 art = cover(p, frag, t, g);
-    float bright = uOpacity * mix(1.0, 0.45, uMinimal) * (0.78 + 0.3 * uLevel + 0.12 * uBeat * uFlash);
-    vec3 ghostCol = mix(ghost.rgb, ghost.rgb * (uC1 * 1.4), 0.5);
-    col += ghostCol * ghost.a * 0.13 * (1.0 - uMinimal) * bright;
-    col = mix(col, art.rgb * bright, art.a);
+    if (uEcho > 0.001) {
+      vec4 ghost = cover(p / (1.22 + 0.1 * uBeat * uFlash), frag, t, g * 0.6, false);
+      vec3 ghostCol = mix(ghost.rgb, ghost.rgb * (uC1 * 1.4), 0.5);
+      col += ghostCol * ghost.a * 0.32 * uEcho * (1.0 - uMinimal) * bright;
+    }
+    vec4 art = cover(p, frag, t, g, true);
+    vec3 c = art.rgb;
+    float luma = dot(c, vec3(0.299, 0.587, 0.114));
+    // Recoloured in the palette.
+    c = mix(c, mix(uC0 * 0.12, mix(uC0, uC1, smoothstep(0.3, 0.9, luma)) * 1.25, smoothstep(0.05, 0.85, luma)), uDuo);
+    // Printed dots, sized by brightness.
+    if (uHalftone > 0.001) {
+      float cell = 7.0 * max(1.0, uRes.y / 900.0);
+      vec2 g2 = mod(rot(frag, 0.785), cell) / cell - 0.5;
+      float dotR = sqrt(clamp(luma, 0.0, 1.0)) * 0.62;
+      float dotM = smoothstep(dotR + 0.08, dotR - 0.08, length(g2));
+      c = mix(c, c * dotM * 1.35, uHalftone);
+    }
+    // Bright parts glow, more on beats.
+    c += c * smoothstep(0.5, 1.0, luma) * uBloom * (0.35 + 0.9 * uBeat * uFlash + 0.3 * uLevel);
+    col = mix(col, c * bright, art.a);
   }
   if (uAmbient > 0.0 || uHasArt < 0.5) {
     col += fields(pc, t) * uIntensity * uOpacity * max(uAmbient, 1.0 - uHasArt);
@@ -204,6 +290,13 @@ void main() {
     float line = exp(-abs(abs(dy) - h) * uRes.y / 2.5);
     float fill = smoothstep(h, 0.0, abs(dy)) * 0.22;
     col += pal(uv.x * 0.8 + t * 0.4) * (line * 0.75 + fill) * (0.35 + 0.65 * uLevel) * uOpacity * smoothstep(1.0, 0.75, x);
+  }
+
+  // Scanlines, and a slow bright band rolling down.
+  if (uScan > 0.001) {
+    float lines = 0.5 + 0.5 * sin(frag.y * 3.14159 * 0.5 / max(1.0, uRes.y / 900.0));
+    float band = smoothstep(0.08, 0.0, abs(fract(uv.y + uTime * 0.04) - 0.5));
+    col *= 1.0 - uScan * (0.32 * lines - 0.18 * band);
   }
 
   // Calmer behind the lyrics.
@@ -381,6 +474,8 @@ export interface SceneParams {
   /** the lyrics' box: centre x, y and half width, height (0–1, y up) */
   calm: [number, number, number, number];
   calmStrength: number;
+  /** effect strengths, 0–1 */
+  effects: Effects;
 }
 
 export class SceneRenderer extends Base {
@@ -415,7 +510,12 @@ export class SceneRenderer extends Base {
 
   private hasArt = false;
 
-  /** The cover art, sharp (up to 1024², with mipmaps for the softness setting). */
+  private artSize: [number, number] = [1, 1];
+
+  /**
+   * The cover at 1024–2048 px, with mipmaps for the softness setting.
+   * WebGL 1 needs a power of two: the next one up.
+   */
   setArt(img: HTMLImageElement | null) {
     const gl = this.gl;
     gl.activeTexture(gl.TEXTURE0);
@@ -424,22 +524,30 @@ export class SceneRenderer extends Base {
     if (!img) {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
       this.params(gl.LINEAR);
+      this.artSize = [1, 1];
       return;
     }
-    // A power of two (WebGL 1 mipmaps need one), no bigger than the cover.
-    const side = Math.max(img.naturalWidth, img.naturalHeight) >= 900 ? 1024 : 512;
+    const nw = img.naturalWidth || 512;
+    const nh = img.naturalHeight || 512;
+    const gl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext;
+    // Small covers are scaled up first with the browser's best filter (and
+    // vector ones drawn at full size), so the GPU never stretches 300 px.
+    const pot = (v: number) => Math.min(2048, 2 ** Math.ceil(Math.log2(Math.max(64, v))));
+    const k = Math.min(2048, Math.max(1024, nw, nh)) / Math.max(nw, nh);
+    const [w, h] = gl2 ? [Math.round(nw * k), Math.round(nh * k)] : [pot(nw * k), pot(nh * k)];
     const c = document.createElement('canvas');
-    c.width = side;
-    c.height = side;
+    c.width = w;
+    c.height = h;
     const ctx = c.getContext('2d');
     if (!ctx) return;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(img, 0, 0, side, side);
+    ctx.drawImage(img, 0, 0, w, h);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.generateMipmap(gl.TEXTURE_2D);
     this.params(gl.LINEAR_MIPMAP_LINEAR);
+    this.artSize = [w, h];
   }
 
   draw(time: number, colors: Float32Array, lv: Levels, flash: number, motion: number, s: SceneParams) {
@@ -460,6 +568,20 @@ export class SceneRenderer extends Base {
     this.f('uShow', s.show);
     this.f('uSeed', s.seed);
     this.f('uHasArt', this.hasArt ? 1 : 0);
+    gl.uniform2f(this.u('uArtSize'), this.artSize[0], this.artSize[1]);
+    const e = s.effects;
+    this.f('uZoom', e.zoom);
+    this.f('uSplit', e.split);
+    this.f('uRipple', e.ripple);
+    this.f('uKaleido', e.kaleidoscope);
+    this.f('uHalftone', e.halftone);
+    this.f('uPixel', e.pixelate);
+    this.f('uShake', e.shake);
+    this.f('uEcho', e.echo);
+    this.f('uScan', e.scanlines);
+    this.f('uDuo', e.duotone);
+    this.f('uTwist', e.twist);
+    this.f('uBloom', e.bloom);
     this.f('uWave', s.wave ? 1 : 0);
     this.f('uWaveY', s.waveY);
     this.f('uCalmK', s.calmStrength);

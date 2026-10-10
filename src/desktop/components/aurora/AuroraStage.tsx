@@ -9,6 +9,7 @@ import type { VisualSettings, VisualStatus } from '@shared/types';
 import { type RefObject, useEffect, useRef, useState } from 'react';
 import { LevelFollower, useAudioFeed } from '../../lib/aurora/audio';
 import { cx } from '../../lib/cx';
+import { DEFAULT_EFFECTS } from '../../lib/aurora/defaults';
 import { GlowRenderer, SceneRenderer } from '../../lib/aurora/gl';
 import { albumPalette, glowPalette, type Lab, PaletteBlender, targetPalette } from '../../lib/aurora/palette';
 
@@ -144,14 +145,17 @@ export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY
         const w = sc.canvas.getBoundingClientRect().width || 1;
         sc.resize(Math.max(0.3, Math.min(dpr, 1920 / w)));
         const st = v.scene.style;
+        const fx = { ...DEFAULT_EFFECTS, ...v.scene.effects };
         const coverless = !v.scene.artwork || st === 'ambient';
         sc.draw(time, colors, lv, flash, motion, {
           intensity: v.scene.intensity,
           blur: v.scene.blur,
           saturation: v.scene.saturation * v.color.vividness,
           opacity: v.scene.opacity,
-          glitch: st === 'visual' ? 1 : st === 'fisheyeVisual' ? 0.85 : st === 'fisheye' ? 0.12 : 0,
-          lens: st === 'fisheye' ? 1 : st === 'fisheyeVisual' ? 0.8 : 0,
+          // The style is a starting point; the effects set how much of each.
+          glitch: fx.glitch * (st === 'fisheye' ? 0.3 : 1),
+          lens: st === 'fisheye' ? Math.max(1, fx.fisheye) : st === 'fisheyeVisual' ? Math.max(0.8, fx.fisheye) : fx.fisheye,
+          effects: fx,
           ambient: coverless ? 1 : 0,
           minimal: st === 'minimal' ? 1 : 0,
           show,

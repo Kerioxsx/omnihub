@@ -838,6 +838,8 @@ export interface Settings {
     trebleDb: number;
     /** A folder of your own .lrc files, checked before looking online. */
     lrcFolder: string | null;
+    /** Sharper covers from the iTunes catalogue (the player's are small). */
+    hiresArt: boolean;
   };
   visuals: VisualSettings;
   updates: {
@@ -851,6 +853,24 @@ export interface Settings {
 /** `aurora`: light, scene and floating lyrics; `lyrics`: the Apple Music–style view. */
 export type PlayerView = 'aurora' | 'lyrics';
 export type ColorMode = 'album' | 'duo' | 'multi' | 'single';
+
+/** How strongly each effect plays on the cover, 0–1 (0 = off). */
+export interface Effects {
+  zoom: number;
+  glitch: number;
+  split: number;
+  fisheye: number;
+  ripple: number;
+  kaleidoscope: number;
+  halftone: number;
+  pixelate: number;
+  shake: number;
+  echo: number;
+  scanlines: number;
+  duotone: number;
+  twist: number;
+  bloom: number;
+}
 
 export type SceneStyle = 'visual' | 'fisheye' | 'fisheyeVisual' | 'minimal' | 'ambient';
 export type LyricFont = 'display' | 'condensed' | 'heavy' | 'serif' | 'impact';
@@ -886,6 +906,8 @@ export interface VisualSettings {
     size: number;
     weight: number;
     wordHighlight: boolean;
+    /** Lyrics that only time lines: spread the words over each line by syllables (close, not exact). */
+    estimateWords: boolean;
     timing: 'auto' | 'line';
     place: 'center' | 'upper' | 'lower';
     offsetX: number;
@@ -895,8 +917,10 @@ export interface VisualSettings {
     highlightColor: string | null;
     glow: number;
     transition: number;
+    /** 0–1.5: how much the lyrics move with the music (bounce, sway, pop) */
+    motion: number;
   };
-  scene: { enabled: boolean; style: SceneStyle; intensity: number; speed: number; blur: number; saturation: number; opacity: number; artwork: boolean; waveform: boolean };
+  scene: { enabled: boolean; style: SceneStyle; intensity: number; speed: number; blur: number; saturation: number; opacity: number; artwork: boolean; waveform: boolean; effects: Effects };
   desktop: { enabled: boolean; lyrics: boolean; display: string; clearTaskbar: boolean; hideFullscreen: boolean; startWithApp: boolean };
 }
 
@@ -1086,6 +1110,8 @@ export interface LyricLine {
   ms: number;
   text: string;
   words?: LyricWord[];
+  /** Word timings estimated here, not from the lyrics (desktop only). */
+  estimated?: boolean;
 }
 
 export type LyricsStatus =

@@ -7,6 +7,7 @@
 //! the track position, the PC time it was valid at, and the PC's clock, so a
 //! phone can run the clock itself between events.
 
+pub mod artwork;
 pub mod audio;
 pub mod eq;
 pub mod lyrics;
@@ -348,11 +349,25 @@ pub enum LyricsStatus {
     NothingPlaying,
 }
 
+/// The playing track's cover: the player's thumbnail, or a sharper copy (`hd`).
+struct Art {
+    key: String,
+    bytes: Arc<Vec<u8>>,
+    mime: String,
+    hd: bool,
+}
+
+impl Art {
+    fn id(&self) -> String {
+        art_id(&if self.hd { format!("{}\u{1f}hd", self.key) } else { self.key.clone() })
+    }
+}
+
 struct Inner {
     backend: Box<dyn MediaBackend>,
     tracker: Tracker,
     state: Option<MediaState>,
-    art: Option<(String, Arc<Vec<u8>>, String)>,
+    art: Option<Art>,
 }
 
 pub struct MediaHub {
@@ -365,6 +380,9 @@ pub struct MediaHub {
     lrc_folder: Mutex<Option<PathBuf>>,
     /// Look the current track's lyrics up again (the folder changed).
     refetch: AtomicBool,
+    /// Look sharper covers up online (settings).
+    hires_art: AtomicBool,
+    covers: artwork::ArtCache,
 }
 
 impl MediaHub {
@@ -382,7 +400,7 @@ impl MediaHub {
                 Box::new(NoBackend)
             }
         };
-        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false) })
+        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")) })
     }
 
     /// Whether this is the pretend player (the mixer and open apps pretend too).
@@ -414,16 +432,18 @@ impl MediaHub {
         let mut g = self.inner.lock();
         let snap = g.backend.snapshot();
         let key = snap.as_ref().map(track_key);
-        // Fetch the artwork once per track.
-        if key.is_some() && g.art.as_ref().map(|(k, _, _)| Some(k)) != Some(key.as_ref()) {
-            let art = g.backend.art();
-            g.art = art.map(|(b, mime)| (key.clone().unwrap_or_default(), Arc::new(b), mime));
-            if g.art.is_none() {
-                // Remember "no art" for this track too.
-                g.art = Some((key.clone().unwrap_or_default(), Arc::new(Vec::new()), String::new()));
+        // Fetch the artwork once per track (and a sharper copy, when allowed).
+        if let (Some(k), Some(sn)) = (&key, &snap) {
+            if g.art.as_ref().map(|a| &a.key) != Some(k) {
+                let (bytes, mime) = g.backend.art().unwrap_or_default();
+                let bytes = Arc::new(bytes);
+                g.art = Some(Art { key: k.clone(), bytes: bytes.clone(), mime, hd: false });
+                if !self.fake && self.hires_art.load(Ordering::Relaxed) {
+                    self.upgrade_art(k.clone(), sn.title.clone(), sn.artist.clone(), sn.album.clone(), sn.duration_ms, bytes);
+                }
             }
         }
-        let art = g.art.as_ref().filter(|(_, b, _)| !b.is_empty()).map(|(k, _, _)| art_id(k));
+        let art = g.art.as_ref().filter(|a| !a.bytes.is_empty()).map(Art::id);
         let (state, announce) = g.tracker.update(snap.as_ref(), art, now);
         let new_track = state.as_ref().map(|s| &s.key) != g.state.as_ref().map(|s| &s.key);
         g.state = state.clone();
@@ -445,7 +465,7 @@ impl MediaHub {
     /// Cover art for `id` (as given in [`MediaState::art`]).
     pub fn art(&self, id: &str) -> Option<(Arc<Vec<u8>>, String)> {
         let g = self.inner.lock();
-        g.art.as_ref().filter(|(k, b, _)| !b.is_empty() && art_id(k) == id).map(|(_, b, m)| (b.clone(), m.clone()))
+        g.art.as_ref().filter(|a| !a.bytes.is_empty() && a.id() == id).map(|a| (a.bytes.clone(), a.mime.clone()))
     }
 
     /// Cover art as a `data:` URL (for the desktop window).
@@ -465,6 +485,43 @@ impl MediaHub {
     pub fn lyrics(&self) -> LyricsStatus {
         let Some(s) = self.state() else { return LyricsStatus::NothingPlaying };
         self.lyrics.lock().get(&s.key).cloned().unwrap_or(LyricsStatus::Searching)
+    }
+
+    /// Look sharper covers up online (settings).
+    pub fn set_hires_art(&self, on: bool) {
+        self.hires_art.store(on, Ordering::Relaxed);
+    }
+
+    /// Swap the player's small thumbnail for a 1200×1200 copy of the same
+    /// cover, from the cache or the iTunes catalogue (see [`artwork`]).
+    fn upgrade_art(self: &Arc<Self>, key: String, title: String, artist: String, album: String, duration_ms: u64, thumb: Arc<Vec<u8>>) {
+        let hub = self.clone();
+        std::thread::spawn(move || {
+            let cache_key = format!("{}\u{1f}{}\u{1f}{}\u{1f}{}", title.to_lowercase(), artist.to_lowercase(), album.to_lowercase(), duration_ms / 4000);
+            let bytes = match hub.covers.get(&cache_key) {
+                Some(found) => found,
+                None => {
+                    let found = match artwork::find(&title, &artist, &album, duration_ms, &lyrics::http_get).and_then(|u| u.map(|u| artwork::download(&u)).transpose()) {
+                        Ok(found) => found,
+                        Err(e) => {
+                            // Offline or refused: try again next time.
+                            tracing::info!("cover lookup failed: {e}");
+                            return;
+                        }
+                    };
+                    // Only a picture of the same cover (when the player gave one to compare).
+                    let found = found.filter(|b| artwork::mime_of(b).is_some()).filter(|b| thumb.is_empty() || artwork::difference(&thumb, b).is_some_and(|d| d < 0.16));
+                    hub.covers.put(&cache_key, found.as_deref());
+                    found
+                }
+            };
+            let Some(bytes) = bytes else { return };
+            let Some(mime) = artwork::mime_of(&bytes) else { return };
+            let mut g = hub.inner.lock();
+            if g.art.as_ref().is_some_and(|a| a.key == key) {
+                g.art = Some(Art { key, bytes: Arc::new(bytes), mime: mime.into(), hd: true });
+            }
+        });
     }
 
     /// Where the user keeps .lrc files (checked before anything else).

@@ -112,6 +112,7 @@ impl AppCore {
         });
         core.apply_visuals(&s.visuals);
         core.media.set_lrc_folder(s.media.lrc_folder.as_ref().map(std::path::PathBuf::from));
+        core.media.set_hires_art(s.media.hires_art);
         Ok(core)
     }
 
@@ -344,6 +345,9 @@ impl AppCore {
                     tracing::warn!("equaliser: {e}");
                 }
             });
+        }
+        if before.media.hires_art != after.media.hires_art {
+            self.media.set_hires_art(after.media.hires_art);
         }
         if before.media.lrc_folder != after.media.lrc_folder {
             self.media.set_lrc_folder(after.media.lrc_folder.as_ref().map(std::path::PathBuf::from));

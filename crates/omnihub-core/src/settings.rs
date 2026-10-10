@@ -56,11 +56,13 @@ pub struct MediaSettings {
     pub treble_db: f32,
     /// A folder of your own .lrc files, checked before looking online.
     pub lrc_folder: Option<String>,
+    /// Sharper covers from the iTunes catalogue (the player's are small).
+    pub hires_art: bool,
 }
 
 impl Default for MediaSettings {
     fn default() -> Self {
-        MediaSettings { allow_phone: true, lyrics_online: true, eq_enabled: false, bass_db: 0.0, treble_db: 0.0, lrc_folder: None }
+        MediaSettings { allow_phone: true, lyrics_online: true, eq_enabled: false, bass_db: 0.0, treble_db: 0.0, lrc_folder: None, hires_art: true }
     }
 }
 
@@ -205,6 +207,9 @@ pub struct AuroraLyricsSettings {
     pub weight: u16,
     /// Light up the word being sung.
     pub word_highlight: bool,
+    /// Lyrics that only time lines (most): spread the words over the line by
+    /// their syllables, so the highlight moves word by word (close, not exact).
+    pub estimate_words: bool,
     pub timing: LyricTiming,
     pub place: LyricPlace,
     /// Moved by hand, percent of the width/height.
@@ -219,11 +224,13 @@ pub struct AuroraLyricsSettings {
     pub glow: f32,
     /// × the default speed of line changes.
     pub transition: f32,
+    /// 0–1.5: how much the lyrics move with the music (bounce, sway, pop).
+    pub motion: f32,
 }
 
 impl Default for AuroraLyricsSettings {
     fn default() -> Self {
-        AuroraLyricsSettings { layout: LyricLayout::Stack, emphasis: LyricEmphasis::Glow, font: "display".into(), visible: true, auto_show: true, size: 1.0, weight: 800, word_highlight: true, timing: LyricTiming::Auto, place: LyricPlace::Center, offset_x: 0.0, offset_y: 0.0, lines: 3, backing: 0.0, highlight_color: None, glow: 0.6, transition: 1.0 }
+        AuroraLyricsSettings { layout: LyricLayout::Stack, emphasis: LyricEmphasis::Glow, font: "display".into(), visible: true, auto_show: true, size: 1.0, weight: 800, word_highlight: true, estimate_words: true, timing: LyricTiming::Auto, place: LyricPlace::Center, offset_x: 0.0, offset_y: 0.0, lines: 3, backing: 0.0, highlight_color: None, glow: 0.6, transition: 1.0, motion: 0.6 }
     }
 }
 
@@ -243,6 +250,42 @@ pub enum SceneStyle {
     Ambient,
 }
 
+/// How strongly each effect plays on the cover, 0–1 (0 = off).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct EffectSettings {
+    /// Swells with the bass and beats.
+    pub zoom: f32,
+    /// Rows slipping and blocks jumping on beats.
+    pub glitch: f32,
+    /// Colour channels splitting apart.
+    pub split: f32,
+    pub fisheye: f32,
+    /// Rings rippling out from the middle.
+    pub ripple: f32,
+    pub kaleidoscope: f32,
+    /// Printed dots.
+    pub halftone: f32,
+    /// Blocks on beats.
+    pub pixelate: f32,
+    pub shake: f32,
+    /// A larger ghost of the cover behind it.
+    pub echo: f32,
+    pub scanlines: f32,
+    /// The cover recoloured in the palette.
+    pub duotone: f32,
+    /// A swirl from the middle.
+    pub twist: f32,
+    /// Bright parts glowing.
+    pub bloom: f32,
+}
+
+impl Default for EffectSettings {
+    fn default() -> Self {
+        EffectSettings { zoom: 0.5, glitch: 0.3, split: 0.35, fisheye: 0.0, ripple: 0.25, kaleidoscope: 0.0, halftone: 0.0, pixelate: 0.0, shake: 0.15, echo: 0.4, scanlines: 0.0, duotone: 0.0, twist: 0.15, bloom: 0.4 }
+    }
+}
+
 /// The music-reactive scene behind the lyrics.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
@@ -260,11 +303,12 @@ pub struct SceneSettings {
     pub artwork: bool,
     /// A ring that follows the spectrum.
     pub waveform: bool,
+    pub effects: EffectSettings,
 }
 
 impl Default for SceneSettings {
     fn default() -> Self {
-        SceneSettings { enabled: true, style: SceneStyle::Visual, intensity: 0.8, speed: 1.0, blur: 0.1, saturation: 1.1, opacity: 0.9, artwork: true, waveform: false }
+        SceneSettings { enabled: true, style: SceneStyle::Visual, intensity: 0.8, speed: 1.0, blur: 0.1, saturation: 1.1, opacity: 0.9, artwork: true, waveform: false, effects: EffectSettings::default() }
     }
 }
 
