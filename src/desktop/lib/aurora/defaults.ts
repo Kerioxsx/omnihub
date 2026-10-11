@@ -3,7 +3,7 @@
 
 import type { Effects, VisualSettings } from '@shared/types';
 
-export const DEFAULT_EFFECTS: Effects = { zoom: 0.5, glitch: 0.3, split: 0.35, fisheye: 0, ripple: 0.25, kaleidoscope: 0, halftone: 0, pixelate: 0, shake: 0.15, echo: 0.4, scanlines: 0, duotone: 0, twist: 0.15, bloom: 0.4 };
+export const DEFAULT_EFFECTS: Effects = { zoom: 0.5, glitch: 0.3, split: 0.35, fisheye: 0, ripple: 0.25, kaleidoscope: 0, halftone: 0, pixelate: 0, shake: 0.15, echo: 0.4, scanlines: 0, duotone: 0, twist: 0.15, bloom: 0.4, colorflash: 0.3 };
 
 export const DEFAULT_VISUALS: VisualSettings = {
   view: 'aurora',
@@ -40,7 +40,9 @@ export const DEFAULT_VISUALS: VisualSettings = {
     motion: 0.6,
     emoji: 'some',
     emojiStyle: 'plain',
+    glitch: 0.5,
+    echo: true,
   },
-  scene: { enabled: true, style: 'visual', intensity: 0.8, speed: 1, blur: 0.1, saturation: 1.1, opacity: 0.9, artwork: true, waveform: false, effects: { ...DEFAULT_EFFECTS }, backdrop: 'auto', musicVideos: true, directVideos: true, animatedCovers: true, coverFit: 'whole', coverMotion: 0.5, dim: 0.3, corners: 0.5, videoFit: 'fill', videoFocus: 0.5, videoQuality: 'best' },
+  scene: { enabled: true, style: 'visual', intensity: 0.8, speed: 1, blur: 0.1, saturation: 1.1, opacity: 0.9, artwork: true, waveform: false, effects: { ...DEFAULT_EFFECTS }, backdrop: 'auto', musicVideos: true, directVideos: true, syncVideos: true, mirrorApp: true, animatedCovers: true, coverFit: 'whole', coverMotion: 0.5, dim: 0.3, corners: 0.5, videoFit: 'fill', videoFocus: 0.5, videoQuality: 'best' },
   desktop: { enabled: false, lyrics: false, display: 'primary', clearTaskbar: true, hideFullscreen: true, startWithApp: false },
 };

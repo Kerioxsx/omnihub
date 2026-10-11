@@ -8,6 +8,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalEvents, ThemeController } from './components/GlobalEvents';
 import { Logo } from './components/Logo';
 import { PowerBanner } from './components/PowerBanner';
+import { isWindowFullscreen, setWindowFullscreen } from './lib/nowPlaying';
 import { SendDialog } from './components/SendDialog';
 import { Sidebar } from './components/Sidebar';
 import { Toaster } from './components/Toaster';
@@ -51,6 +52,24 @@ const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient'>, ComponentType> = {
 const forceOnboarding = new URLSearchParams(window.location.search).get('onboarding') === '1';
 
 function useGlobalShortcuts() {
+  // Never stuck in full screen: F11 toggles it anywhere, Esc leaves it when
+  // no full-screen player is open (the player handles Esc itself). And the
+  // app starts windowed (an earlier version could restore full screen).
+  useEffect(() => {
+    void setWindowFullscreen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'F11') {
+        e.preventDefault();
+        void isWindowFullscreen().then((on) => setWindowFullscreen(!on));
+        return;
+      }
+      if (e.key === 'Escape' && !document.querySelector('[data-full-player="fullscreen"]')) {
+        void isWindowFullscreen().then((on) => (on ? setWindowFullscreen(false) : undefined));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;

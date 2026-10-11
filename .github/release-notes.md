@@ -1,14 +1,11 @@
 ## New in this version
 
-**Any emoji pack.** Aurora's *Your font & emoji pack* now takes any pack, not only game textures:
-
-- **A zip of pictures** — PNG, GIF (animated ones move), WebP, JPG or SVG. Twemoji, Noto, OpenMoji, Apple or Samsung emoji dumps, Discord or Twitch emotes, a game's item textures… Each emoji the lyrics earn gets the pack's matching picture, however the pack names its files: by code point (`1f525.png`, `emoji_u1f525.png`, `U+1F525.svg`), by the emoji itself (`🔥.png`), by its name (`fire.png`, `red_heart.webp`, `Fire_3d.png`, `face_with_tears_of_joy.svg`), by its short code (`joy.gif`, `heart.png`), or by the word in the song ("apple" → `apple.png`). Pixel-art pictures stay crisp; smooth ones stay smooth.
-- **Or an emoji font** (.ttf, .otf, .ttc, .woff): every emoji is drawn in it.
-- Where the pack has nothing for an emoji, the plain emoji shows. Your files stay on your PC; nothing is uploaded or shipped with OmniHub.
-
-**Also in 0.7.1** (last update): your own lyrics font, an emoji at least every two lines, the whole cover again, clearer reasons when a music video can't play, and faster releases.
-
-**Spotify's animated covers (Canvas):** Spotify doesn't let other apps read them (there is no public way), so OmniHub can't show them. Animated covers come from Apple Music when the album has one there.
+- **Music videos that start later are matched to the song.** Many official videos open with a story, so the song starts later than on the album and the video ran early. OmniHub now downloads the video's soundtrack (a few MB, not kept), listens to your song as the PC plays it, finds where the song is in the video, and moves the video so the two line up. It's remembered for each video. (Settings → More → *Match videos to the song by ear*.)
+- **Spotify's Canvas and videos, mirrored.** Spotify doesn't let other apps read its animated art or videos, so OmniHub watches Spotify's window like a screen recorder (Apple Music's too), finds the part that moves, and shows it behind the lyrics, in step. Nothing is saved or sent. If Spotify is completely covered or minimised it may stop drawing; then the cover shows, and OmniHub says so.
+- **Closer to the edits:** the word being sung splits into pink and cyan copies and jolts on hard beats; a new word arrives with an echo trail; and in the light show the colours swing round on drops. Each has its own setting.
+- **Lyrics in time with the voice.** For lyrics that only time whole lines, the words were spread too fast (the highlight ran ahead of the singer); they now take the line's whole time.
+- **Never stuck in full screen.** OmniHub no longer comes back in full screen after closing or updating during full-screen Aurora; F11 and Esc leave full screen anywhere.
+- **Clearer videos.** A small note beside *Aurora / Lyrics* says what the music video is doing (looking, loading, playing, or why it can't play), and the blurred cover around a "whole picture" video only shows while the video does.
 
 **What is sent where:** to find a video, only the song's title and artist go to YouTube; for animated covers, to Apple Music; for covers, to Apple and Deezer; for lyrics, to LRCLIB and NetEase. Every one can be turned off.
 

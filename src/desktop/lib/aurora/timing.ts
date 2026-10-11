@@ -1,8 +1,9 @@
 // Word timings for lyrics that only time lines (most lyrics online do).
-// Each word gets a share of the line by its syllables, over about as long
-// as singing those syllables takes (never past the next line), so the
-// highlight moves word by word. It is an estimate, close but not exact, and
-// only used when the setting allows; real word timings always win.
+// Each word gets a share of the line by its syllables, spread over the time
+// the line has until the next one (singers fill it), unless that is so long
+// a pause must follow (then at most a slow singing pace), so the highlight
+// moves word by word with the voice. It is an estimate, close but not
+// exact, and only used when the setting allows; real word timings always win.
 
 import type { LyricLine } from '@shared/types';
 
@@ -16,8 +17,8 @@ export function syllables(word: string): number {
   return Math.max(1, groups - silentE);
 }
 
-/** About how long singing a syllable takes, ms. */
-const PER_SYLLABLE = 240;
+/** The slowest a syllable is sung, ms: a line with more room than that is followed by a pause, not sung slower. */
+const MAX_PER_SYLLABLE = 480;
 
 /** Lines with word timings: the file's own, or estimated (`estimated: true`). */
 export function estimateWords(lines: LyricLine[]): LyricLine[] {
@@ -33,8 +34,8 @@ export function estimateWords(lines: LyricLine[]): LyricLine[] {
     const room = Math.max(400, next - l.ms);
     const weights = parts.map((p) => syllables(p) + 0.35);
     const total = weights.reduce((a, b) => a + b, 0);
-    // Sung at its own pace, squeezed in when the next line comes sooner.
-    const span = Math.min(room * 0.92, total * PER_SYLLABLE + 200);
+    // Over the line's time (a breath before the next one), at most a slow pace.
+    const span = Math.min(room * 0.88, total * MAX_PER_SYLLABLE);
     let at = 0;
     const words = parts.map((text, k) => {
       const w = { ms: Math.round(l.ms + (span * at) / total), text };

@@ -3,7 +3,7 @@
 // glow, colours), then the visual, the lyrics and the rest. Every change
 // shows at once and is saved (lib/aurora/settings.ts).
 
-import type { AmbientDisplay, Backdrop, ColorMode, Effects, LyricFont, SceneStyle, VideoStatus, VisualSettings, VisualStatus } from '@shared/types';
+import type { AmbientDisplay, Backdrop, ColorMode, Effects, LyricFont, MirrorStatus, SceneStyle, VideoStatus, VideoSync, VisualSettings, VisualStatus } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown, FolderOpen, RotateCcw, ShieldCheck, X } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useState } from 'react';
@@ -21,9 +21,16 @@ import { FONTS } from './AuroraLyrics';
 export interface PanelVideo {
   status: VideoStatus | null;
   now: VideoNow | null;
-  /** The nudge for the video on screen, ms. */
+  /** The offset of the video on screen, ms (the user's nudge, else the matched one). */
   offset: number;
-  setOffset: (ms: number) => void;
+  /** null: back to automatic. */
+  setOffset: (ms: number | null) => void;
+  /** The user nudged this video themselves. */
+  manual?: boolean;
+  /** Matching this video to the song by ear. */
+  sync?: VideoSync | null;
+  /** The music app's own Canvas or video, mirrored from its window. */
+  mirror?: MirrorStatus | null;
   hasCover: boolean;
   /** The album has an animated cover (Apple Music), playing behind the lyrics. */
   motion?: boolean;
@@ -147,10 +154,37 @@ const px = (v: number) => `${Math.round(v * 10) / 10} px`;
 // ---------- sections ----------
 
 /** What is behind the lyrics now, and why, in plain words. */
+/** What the matching by ear says about the video's timing. */
+function syncLine(sync: VideoSync | null, manual: boolean, synced: boolean): string {
+  const by = (ms: number) => `${(Math.abs(ms) / 1000).toFixed(1)} s`;
+  const auto =
+    sync?.state === 'matched'
+      ? Math.abs(sync.offsetMs) < 300
+        ? 'Matched by ear: the video plays in step with the song.'
+        : sync.offsetMs > 0
+          ? `Matched by ear: the song starts ${by(sync.offsetMs)} into the video, so that much is skipped.`
+          : `Matched by ear: the video starts ${by(sync.offsetMs)} into the song.`
+      : sync?.state === 'matching'
+        ? `${sync.note}`
+        : sync?.state === 'unsure'
+          ? `Couldn't match it by ear: ${sync.note}.`
+          : synced
+            ? 'This video is as long as the song and plays in step with it.'
+            : 'This video is longer than the song (a story before or after).';
+  return manual ? `${auto} Your own timing is used for this video (Auto goes back).` : `${auto} If it is out of step, move it here; it is remembered for this video.`;
+}
+
 function backgroundLine(v: VisualSettings, video?: PanelVideo): string {
   const s = v.scene;
   const now = video?.now ?? null;
   const st = video?.status ?? null;
+  const m = video?.mirror;
+  if (m?.state === 'mirroring' && s.backdrop !== 'visual' && !(now?.showing && m.kind === 'canvas')) {
+    return m.kind === 'video' ? 'The video the music app is playing, mirrored from its window (in step with it).' : 'The music app’s animated art (Canvas), mirrored from its window.';
+  }
+  if (m?.state === 'hidden' && !now?.showing) {
+    return 'The music app stopped drawing its animated art while its window is covered: keep part of it visible (or on another screen). The cover shows meanwhile.';
+  }
   return (
     s.backdrop === 'visual'
       ? video?.motion
@@ -210,6 +244,20 @@ function BackgroundSection({ v, video }: { v: VisualSettings; video?: PanelVideo
         onChange={(directVideos) => set({ directVideos })}
       />
       <Toggle
+        label="Mirror Spotify’s Canvas and videos"
+        hint="Spotify (and Apple Music) don’t let other apps read their animated art or videos, so OmniHub watches the app’s window like a screen recorder, finds the part that moves and shows it behind the lyrics, in step. Nothing is saved or sent. A window covered completely or minimised may stop drawing; then the cover shows."
+        checked={s.mirrorApp}
+        disabled={s.backdrop === 'visual'}
+        onChange={(mirrorApp) => set({ mirrorApp })}
+      />
+      <Toggle
+        label="Match videos to the song by ear"
+        hint="Many videos open with a story, so the song starts later than on the album. OmniHub downloads the video's soundtrack (a few MB, not kept), listens to the song as your PC plays it, and moves the video so the two line up. Uses yt-dlp, like the option above."
+        checked={s.syncVideos}
+        disabled={!s.musicVideos || s.backdrop === 'cover' || s.backdrop === 'visual'}
+        onChange={(syncVideos) => set({ syncVideos })}
+      />
+      <Toggle
         label="Animated covers"
         hint="When the album has a moving cover on Apple Music, it plays instead of the still one (in the light show too). Only the song's title and artist are searched for."
         checked={s.animatedCovers}
@@ -237,11 +285,11 @@ function BackgroundSection({ v, video }: { v: VisualSettings; video?: PanelVideo
                 {Math.abs(d / 1000)}s
               </button>
             ))}
-            <button type="button" onClick={() => video?.setOffset(0)} className="h-7 rounded-[8px] bg-white/[0.08] px-2.5 text-[11.5px] font-semibold text-white/70 hover:bg-white/[0.14]">
-              Reset
+            <button type="button" onClick={() => video?.setOffset(null)} className="h-7 rounded-[8px] bg-white/[0.08] px-2.5 text-[11.5px] font-semibold text-white/70 hover:bg-white/[0.14]" title="Back to the timing matched by ear">
+              Auto
             </button>
           </div>
-          <p className="mt-1 text-[11px] leading-snug text-white/45">{now.video.synced ? 'This video is as long as the song and plays in step with it.' : 'This video is longer than the song (a story before or after). If it is out of step, move it here; it is remembered for this video.'}</p>
+          <p className="mt-1 text-[11px] leading-snug text-white/45" data-video-sync={video?.sync?.state}>{syncLine(video?.sync ?? null, !!video?.manual, now.video.synced)}</p>
         </div>
       )}
       {usesVideo && (
@@ -624,6 +672,8 @@ function LyricsSection({ v }: { v: VisualSettings }) {
           </span>
         </div>
         <Slider label="Glow" value={l.glow} min={0} max={1.5} onChange={(glow) => set({ glow })} format={pct} />
+        <Slider label="Glitch on beats" value={l.glitch ?? 0.5} min={0} max={1} onChange={(glitch) => set({ glitch })} format={(x) => (x < 0.005 ? 'off' : pct(x))} />
+        <Toggle label="Echo trail" hint="A new word arrives with fading copies behind it, like the edits." checked={l.echo ?? true} onChange={(echo) => set({ echo })} />
         <Dropdown
           label="Shown"
           value={l.lines}
@@ -753,6 +803,7 @@ function DesktopSection({ v }: { v: VisualSettings }) {
 const EFFECTS: { key: keyof Effects; label: string }[] = [
   { key: 'zoom', label: 'Beat zoom' },
   { key: 'bloom', label: 'Glow on bright parts' },
+  { key: 'colorflash', label: 'Colour flash on drops' },
   { key: 'echo', label: 'Echo behind' },
   { key: 'ripple', label: 'Ripples' },
   { key: 'twist', label: 'Twist' },
@@ -767,8 +818,8 @@ const EFFECTS: { key: keyof Effects; label: string }[] = [
   { key: 'duotone', label: 'Duotone (palette colours)' },
 ];
 
-const CALM: Effects = { zoom: 0.3, glitch: 0, split: 0, fisheye: 0, ripple: 0, kaleidoscope: 0, halftone: 0, pixelate: 0, shake: 0, echo: 0.25, scanlines: 0, duotone: 0, twist: 0, bloom: 0.25 };
-const WILD: Effects = { zoom: 1, glitch: 0.7, split: 0.8, fisheye: 0.3, ripple: 0.6, kaleidoscope: 0, halftone: 0.25, pixelate: 0.45, shake: 0.5, echo: 0.7, scanlines: 0.3, duotone: 0, twist: 0.45, bloom: 0.75 };
+const CALM: Effects = { zoom: 0.3, glitch: 0, split: 0, fisheye: 0, ripple: 0, kaleidoscope: 0, halftone: 0, pixelate: 0, shake: 0, echo: 0.25, scanlines: 0, duotone: 0, twist: 0, bloom: 0.25, colorflash: 0 };
+const WILD: Effects = { zoom: 1, glitch: 0.7, split: 0.8, fisheye: 0.3, ripple: 0.6, kaleidoscope: 0, halftone: 0.25, pixelate: 0.45, shake: 0.5, echo: 0.7, scanlines: 0.3, duotone: 0, twist: 0.45, bloom: 0.75, colorflash: 0.7 };
 
 /** What happens to the cover: each effect with its own strength. */
 function EffectsSection({ v }: { v: VisualSettings }) {

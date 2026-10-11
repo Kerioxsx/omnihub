@@ -1197,6 +1197,44 @@ pub async fn media_motion(core: Core<'_>) -> Res<serde_json::Value> {
     Ok(serde_json::json!({ "key": core.media.state().map(|s| s.key), "motion": core.media.motion(allowed) }))
 }
 
+/// Mirror the playing app's own Canvas or music video from its window
+/// (asked every second or two while Aurora wants it; see media::mirror).
+#[tauri::command]
+pub async fn media_mirror(core: Core<'_>) -> Res<omnihub_core::media::mirror::MirrorStatus> {
+    let scene = core.settings.get().visuals.scene;
+    if !scene.mirror_app {
+        return Ok(omnihub_core::media::mirror::MirrorStatus { state: "off".into(), ..Default::default() });
+    }
+    let Some(s) = core.media.state() else {
+        return Ok(omnihub_core::media::mirror::MirrorStatus { state: "off".into(), ..Default::default() });
+    };
+    Ok(core.media.mirror.hold(&s.app, s.playing))
+}
+
+/// The mirror's newest picture: its number (4 bytes, little endian) then the
+/// JPEG; empty when there is nothing newer than `after`.
+#[tauri::command]
+pub async fn media_mirror_frame(core: Core<'_>, after: u32) -> Res<tauri::ipc::Response> {
+    Ok(tauri::ipc::Response::new(match core.media.mirror.frame(after) {
+        Some((seq, jpeg)) => {
+            let mut out = Vec::with_capacity(jpeg.len() + 4);
+            out.extend_from_slice(&seq.to_le_bytes());
+            out.extend_from_slice(&jpeg);
+            out
+        }
+        None => Vec::new(),
+    }))
+}
+
+/// Match the music video `id` to the playing song by ear (see media::align).
+#[tauri::command]
+pub async fn media_video_sync(core: Core<'_>, id: String) -> Res<serde_json::Value> {
+    let scene = core.settings.get().visuals.scene;
+    let allowed = scene.music_videos && scene.sync_videos;
+    let core = core.inner().clone();
+    blocking(move || Ok(serde_json::json!({ "key": core.media.state().map(|s| s.key), "sync": core.media.video_sync(&id, allowed, core.visual.tap.clone()) }))).await
+}
+
 /// The stream of a video YouTube will not embed (yt-dlp), when the user allows it.
 #[tauri::command]
 pub async fn media_video_stream(core: Core<'_>, id: String, max_height: u32) -> Res<String> {

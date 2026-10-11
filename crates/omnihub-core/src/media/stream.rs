@@ -201,6 +201,35 @@ impl StreamTool {
         }
     }
 
+    /// The video's soundtrack (AAC, the smallest there is), downloaded into
+    /// `dir` for `align` to listen to; the caller deletes it.
+    pub fn soundtrack(&self, id: &str, dir: &Path) -> Result<PathBuf, String> {
+        if !(id.len() == 11 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')) {
+            return Err("Not a YouTube video id.".into());
+        }
+        if !self.status().installed {
+            return Err("The video helper isn't downloaded.".into());
+        }
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        let template = dir.join(format!("{id}.%(ext)s"));
+        let out = command(&self.ytdlp())
+            .arg("--js-runtimes")
+            .arg(format!("deno:{}", self.deno().display()))
+            .args(["--no-playlist", "--no-warnings", "--no-progress", "--ignore-config", "--no-part", "--force-overwrites", "--cache-dir"])
+            .arg(self.dir.join("cache"))
+            .args(["-f", "ba[ext=m4a][abr<=96]/ba[ext=m4a]/ba[acodec^=mp4a]", "--max-filesize", "40M", "-o"])
+            .arg(&template)
+            .args(["--"])
+            .arg(format!("https://www.youtube.com/watch?v={id}"))
+            .output()
+            .map_err(|e| format!("Could not start yt-dlp: {e}"))?;
+        let found = std::fs::read_dir(dir).ok().and_then(|rd| rd.filter_map(|e| e.ok()).map(|e| e.path()).find(|p| p.file_stem().and_then(|s| s.to_str()) == Some(id)));
+        match found {
+            Some(p) if out.status.success() => Ok(p),
+            _ => Err(explain(&String::from_utf8_lossy(&out.stderr))),
+        }
+    }
+
     /// yt-dlp updates itself (checked against its release's checksums), at
     /// most once a day, in the background.
     fn update_now_and_then(&self, now: u64) {

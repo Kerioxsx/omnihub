@@ -870,6 +870,8 @@ export interface Effects {
   duotone: number;
   twist: number;
   bloom: number;
+  /** The colours swinging round for a moment on hard beats. */
+  colorflash: number;
 }
 
 export type SceneStyle = 'visual' | 'fisheye' | 'fisheyeVisual' | 'minimal' | 'ambient';
@@ -924,6 +926,10 @@ export interface VisualSettings {
     /** Emojis beside words they match. */
     emoji: EmojiAmount;
     emojiStyle: EmojiStyle;
+    /** 0–1: the sung word splits into coloured copies and jolts on hard beats. */
+    glitch: number;
+    /** A new word arrives with fading copies trailing behind it. */
+    echo: boolean;
   };
   scene: {
     enabled: boolean;
@@ -942,6 +948,10 @@ export interface VisualSettings {
     musicVideos: boolean;
     /** When YouTube will not embed a video, play its stream directly (yt-dlp, downloaded once). */
     directVideos: boolean;
+    /** Match a video whose song starts later to the song, by ear (its soundtrack via yt-dlp). */
+    syncVideos: boolean;
+    /** Show the music app's own Canvas or video, mirrored from its window. */
+    mirrorApp: boolean;
     /** The album's animated cover from Apple Music, when it has one. */
     animatedCovers: boolean;
     /** 'whole': all of the cover, its sides blending into a blurred extension; 'fill': edge to edge, cropped. */
@@ -1551,4 +1561,16 @@ export interface AuroraLook {
 }
 
 /** What an emoji pack turned out to be. */
+/** The music app's own moving picture, mirrored from its window (see media/mirror.rs). */
+export interface MirrorStatus {
+  state: 'off' | 'looking' | 'mirroring' | 'hidden' | 'none' | 'unavailable';
+  kind: 'canvas' | 'video' | null;
+  app: string | null;
+  width: number;
+  height: number;
+}
+
+/** How far a music video is from being matched to the song (see media/align.rs). */
+export type VideoSync = { state: 'off' } | { state: 'matching'; note: string } | { state: 'matched'; offsetMs: number; score: number } | { state: 'unsure'; note: string };
+
 export type EmojiPack = { kind: 'pictures'; count: number } | { kind: 'font'; name: string };

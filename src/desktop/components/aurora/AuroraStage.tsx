@@ -106,6 +106,10 @@ export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY
     let show = 0;
     let seed = 1;
     let seeded = 0;
+    // Drops: the light show's colour swing (radians) and the lyrics' jolt, both fading.
+    let hue = 0;
+    let jolt = 0;
+    let lastBeat = 0;
     let glowTime = time;
     const quiet = new LevelFollower().v;
     let calmK = 0;
@@ -146,6 +150,20 @@ export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY
       const sc = scene.current;
       // Paused: the cover shrinks back and the scene dims (the player shows a card).
       show += ((isPlaying ? 1 : 0.16) - show) * (1 - Math.exp(-dt * (isPlaying ? 2.2 : 1.6)));
+      // Hard beats: the colours swing round now and then (the light show), and
+      // the lyrics jolt (--aurora-jolt), unless flashes are off.
+      const hit = lv.beat > 0.7 && lastBeat <= 0.7;
+      lastBeat = lv.beat;
+      const fxNow = { ...DEFAULT_EFFECTS, ...v.scene.effects };
+      if (hit && flash && Math.random() < 0.2 + 0.6 * fxNow.colorflash) hue = (Math.random() < 0.5 ? -1 : 1) * (1.2 + Math.random() * 1.6) * Math.min(1, fxNow.colorflash * 1.6);
+      hue *= Math.exp(-dt * 7);
+      if (hit && flash && Math.random() < 0.7) jolt = (Math.random() < 0.5 ? -1 : 1) * (0.5 + 0.5 * Math.random());
+      jolt *= Math.exp(-dt * 12);
+      const player = root.current?.parentElement;
+      if (player) {
+        player.style.setProperty('--aurora-beat', (lv.beat * flash).toFixed(3));
+        player.style.setProperty('--aurora-jolt', jolt.toFixed(3));
+      }
       // A new glitch pattern a few times a second, more often on beats.
       if (!reduced && now - seeded > 1000 / (3 + 12 * lv.beat)) {
         seeded = now;
@@ -167,6 +185,7 @@ export function AuroraStage({ visuals, art, playing, calmRef, framed, who, waveY
           glitch: fx.glitch * (st === 'fisheye' ? 0.3 : 1),
           lens: st === 'fisheye' ? Math.max(1, fx.fisheye) : st === 'fisheyeVisual' ? Math.max(0.8, fx.fisheye) : fx.fisheye,
           effects: fx,
+          hue: fx.colorflash > 0 ? hue : 0,
           ambient: coverless ? 1 : 0,
           minimal: st === 'minimal' ? 1 : 0,
           show,

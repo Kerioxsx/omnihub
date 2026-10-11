@@ -103,6 +103,13 @@ const handlers: Record<string, Handler> = {
   },
   aurora_font: () => localStorage.getItem('omnihub.demo.font'),
   aurora_texture: (a) => demoTextures()[str(a, 'name')] ?? null,
+  media_mirror: () => ({ state: 'unavailable', kind: null, app: null, width: 0, height: 0 }),
+  media_mirror_frame: () => null,
+  // A test can hand the demo a matched offset (localStorage "omnihub.demo.sync", in ms).
+  media_video_sync: () => {
+    const ms = localStorage.getItem('omnihub.demo.sync');
+    return { key: music.mediaVideo().key, sync: ms === null ? { state: 'off' } : { state: 'matched', offsetMs: Number(ms), score: 0.8 } };
+  },
   media_stream_status: () => ({ installed: !!localStorage.getItem('omnihub.demo.stream'), installing: false }),
   media_art: (a) => music.mediaArt(str(a, 'id')),
   media_audio: () => music.mediaAudio(),

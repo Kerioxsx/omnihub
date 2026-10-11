@@ -104,7 +104,15 @@ void main() {
 const SCENE_FRAG = `${HEAD}
 uniform float uIntensity, uBlur, uSat, uOpacity, uWave, uWaveY, uCalmK, uHasArt, uShow, uGlitch, uLens, uAmbient, uMinimal, uSeed;
 // Effects, 0–1 each.
-uniform float uZoom, uSplit, uRipple, uKaleido, uHalftone, uPixel, uShake, uEcho, uScan, uDuo, uTwist, uBloom;
+uniform float uZoom, uSplit, uRipple, uKaleido, uHalftone, uPixel, uShake, uEcho, uScan, uDuo, uTwist, uBloom, uHue;
+
+// The colours turned round the colour wheel by a (radians), brightness kept.
+vec3 hueTurn(vec3 c, float a) {
+  vec3 yiq = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312) * c;
+  float h = atan(yiq.z, yiq.y) + a;
+  float ch = length(yiq.yz);
+  return mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703) * vec3(yiq.x, ch * cos(h), ch * sin(h));
+}
 uniform vec4 uCalm;
 uniform vec2 uArtSize;
 uniform sampler2D uArt, uBands;
@@ -303,6 +311,8 @@ void main() {
   vec2 d = (uv - uCalm.xy) / max(uCalm.zw, vec2(0.01));
   col *= 1.0 - 0.38 * exp(-dot(d, d) * 0.9) * uCalmK;
 
+  // A drop: the colours swing round for a moment.
+  if (abs(uHue) > 0.001) col = max(hueTurn(col, uHue), 0.0);
   float l = dot(col, vec3(0.299, 0.587, 0.114));
   col = max(mix(vec3(l), col, uSat), 0.0);
   col *= uShow;
@@ -476,6 +486,8 @@ export interface SceneParams {
   calmStrength: number;
   /** effect strengths, 0–1 */
   effects: Effects;
+  /** radians: the colours turned for a moment (a drop) */
+  hue?: number;
 }
 
 export class SceneRenderer extends Base {
@@ -611,6 +623,7 @@ export class SceneRenderer extends Base {
     this.f('uDuo', e.duotone);
     this.f('uTwist', e.twist);
     this.f('uBloom', e.bloom);
+    this.f('uHue', s.hue ?? 0);
     this.f('uWave', s.wave ? 1 : 0);
     this.f('uWaveY', s.waveY);
     this.f('uCalmK', s.calmStrength);

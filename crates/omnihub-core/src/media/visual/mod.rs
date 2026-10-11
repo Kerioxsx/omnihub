@@ -89,6 +89,8 @@ pub struct VisualHub {
     /// The pretend player's state, for the test signal.
     fake_playing: Arc<AtomicBool>,
     fake_track: Arc<AtomicU32>,
+    /// The sound handed to music-video matching while it listens (`align`).
+    pub tap: Arc<crate::media::align::Tap>,
 }
 
 impl VisualHub {
@@ -103,6 +105,7 @@ impl VisualHub {
             fake,
             fake_playing: Arc::new(AtomicBool::new(true)),
             fake_track: Arc::new(AtomicU32::new(0)),
+            tap: Arc::new(crate::media::align::Tap::default()),
         })
     }
 
@@ -246,6 +249,9 @@ impl VisualHub {
                             }
                         } else {
                             last_data = Instant::now();
+                        }
+                        if self.tap.on.load(Ordering::Relaxed) && !buf.is_empty() {
+                            self.tap.live.lock().push(&buf, a.sample_rate(), crate::media::now_ms());
                         }
                         a.push(&buf);
                     }

@@ -13,7 +13,7 @@
 // The video fades in only once it plays at the right moment, so nothing
 // half-loaded or out of step is ever shown; the cover stays underneath.
 
-import type { MusicVideo, VisualSettings } from '@shared/types';
+import type { MirrorStatus, MusicVideo, VisualSettings } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import { memo, useEffect, useRef, useState } from 'react';
 import type { CoverLook } from '../../lib/aurora/coverLook';
@@ -43,6 +43,8 @@ export interface BackdropInput {
   videos: MusicVideo[] | null;
   /** The album's animated cover (an HLS playlist), when it has one. */
   motion: string | null;
+  /** The music app's own Canvas or video, mirrored from its window. */
+  mirror?: MirrorStatus | null;
   /** The song's position, ms. */
   time: () => number;
   playing: boolean;
@@ -286,6 +288,74 @@ function VideoLayer({ video, scene, input, size, onFail, onShowing }: { video: M
 }
 
 /**
+ * The music app's own moving picture (Spotify's Canvas or the video it
+ * plays), mirrored from its window: frames are fetched as they come (JPEG)
+ * and drawn on a canvas. A Canvas loop is placed like the cover (all of it,
+ * its sides melting into a blurred copy); a video fills the screen.
+ */
+function MirrorLayer({ kind, fit, box, wide }: { kind: 'canvas' | 'video'; fit: 'whole' | 'fill'; box: { side: number; left: number; top: number }; wide: boolean }) {
+  const main = useRef<HTMLCanvasElement>(null);
+  const soft = useRef<HTMLCanvasElement>(null);
+  const [on, setOn] = useState(false);
+  const [aspect, setAspect] = useState(9 / 16);
+  useEffect(() => {
+    let alive = true;
+    let seq = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const next = async () => {
+      if (!alive) return;
+      try {
+        const f = await api.media.mirrorFrame(seq);
+        if (f && alive) {
+          seq = f.seq;
+          const bmp = await createImageBitmap(new Blob([f.jpeg as BlobPart], { type: 'image/jpeg' }));
+          const c = main.current;
+          if (c) {
+            if (c.width !== bmp.width || c.height !== bmp.height) {
+              c.width = bmp.width;
+              c.height = bmp.height;
+              setAspect(bmp.width / Math.max(1, bmp.height));
+            }
+            c.getContext('2d')?.drawImage(bmp, 0, 0);
+          }
+          const s = soft.current;
+          if (s) {
+            s.width = 48;
+            s.height = Math.max(1, Math.round((48 * bmp.height) / bmp.width));
+            s.getContext('2d')?.drawImage(bmp, 0, 0, s.width, s.height);
+          }
+          bmp.close();
+          setOn(true);
+        }
+      } catch {
+        /* the next one */
+      }
+      timer = setTimeout(() => void next(), 66);
+    };
+    void next();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, []);
+  const whole = kind === 'canvas' && fit === 'whole';
+  // A Canvas: as tall as the screen (a portrait loop), centred.
+  const h = whole ? box.side : 0;
+  const w = whole ? Math.min(h * aspect, wide ? box.side * 3 : box.side) : 0;
+  const mask = 'linear-gradient(to right, transparent, #000 10%, #000 90%, transparent)';
+  return (
+    <div className="pointer-events-none absolute inset-0 transition-opacity duration-[900ms] ease-out" style={{ opacity: on ? 1 : 0 }} data-aurora-mirror={kind}>
+      <canvas ref={soft} className="absolute left-[-12%] top-[-12%] h-[124%] w-[124%]" style={{ filter: 'blur(44px) saturate(1.3) brightness(0.8)', objectFit: 'cover' }} />
+      {whole ? (
+        <canvas ref={main} className="absolute" style={{ width: w, height: h, left: `calc(50% - ${w / 2}px)`, top: `calc(50% - ${h / 2}px)`, objectFit: 'cover', maskImage: mask, WebkitMaskImage: mask }} />
+      ) : (
+        <canvas ref={main} className="absolute inset-0 h-full w-full" style={{ objectFit: 'cover' }} />
+      )}
+    </div>
+  );
+}
+
+/**
  * The album's animated cover, looping, placed like the still cover (all of it,
  * or filling the screen). It fades in once it plays; until then, and if it
  * cannot play, the still cover shows.
@@ -334,7 +404,7 @@ function MotionLayer({ url, fit, box, wide, paused }: { url: string; fit: 'whole
   );
 }
 
-export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced, look, videos, motion: motionUrl, time, playing, offsetFor, onVideo, lyricY, glare }: Props) {
+export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced, look, videos, motion: motionUrl, mirror, time, playing, offsetFor, onVideo, lyricY, glare }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ W: 1600, H: 900 });
   useEffect(() => {
@@ -346,9 +416,15 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
     return () => ro.disconnect();
   }, []);
 
+  // What the music app itself shows (mirrored from its window): its video
+  // beats YouTube's (it is the same, already in step), its Canvas beats the
+  // still and the Apple cover; a YouTube video still beats a Canvas.
+  const mirrored = mirror?.state === 'mirroring' && mirror.kind ? mirror.kind : null;
+  const mirrorVideo = mirrored === 'video' && scene.backdrop !== 'cover';
+  const mirrorCanvas = mirrored === 'canvas';
   // The next candidate when YouTube will not play one here (embedding off, removed).
-  // An animated cover from Apple beats the artist's YouTube visualizer.
-  const list = scene.backdrop === 'cover' || !scene.musicVideos ? [] : (videos ?? []).filter((v) => !(motionUrl && v.kind === 'visualizer'));
+  // An animated cover (Apple's, or the app's Canvas) beats the artist's YouTube visualizer.
+  const list = scene.backdrop === 'cover' || !scene.musicVideos || mirrorVideo ? [] : (videos ?? []).filter((v) => !((motionUrl || mirrorCanvas) && v.kind === 'visualizer'));
   const listKey = list.map((v) => v.id).join(',');
   const [failed, setFailed] = useState<{ id: string; why: string }[]>([]);
   useEffect(() => setFailed([]), [listKey]);
@@ -366,7 +442,7 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
   }, [video, onVideo, whyNot, lastFailed]);
 
   const m = reduced ? 0 : Math.max(0, Math.min(1, scene.coverMotion));
-  const input: BackdropInput = { look, videos, motion: motionUrl, time, playing, offsetFor, onVideo, lyricY, glare };
+  const input: BackdropInput = { look, videos, motion: motionUrl, mirror, time, playing, offsetFor, onVideo, lyricY, glare };
   const [videoShowing, setVideoShowing] = useState(false);
   useEffect(() => setVideoShowing(false), [video?.id]);
   // The user's amount, more over a bright picture, less over a dark one.
@@ -440,9 +516,13 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
         )}
       </AnimatePresence>
       {/* The album's animated cover over the still one (it rests while a music video shows). */}
-      {motionUrl && art && <MotionLayer url={motionUrl} fit={scene.coverFit} box={{ side, left: (size.W - side) / 2, top: (size.H - side) / 2 }} wide={wide} paused={!playing || videoShowing} />}
-      {/* "Whole picture": the cover blurred around the video. */}
-      {video && scene.videoFit === 'fit' && art && <img src={art} alt="" aria-hidden className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-3xl" />}
+      {motionUrl && art && !mirrored && <MotionLayer url={motionUrl} fit={scene.coverFit} box={{ side, left: (size.W - side) / 2, top: (size.H - side) / 2 }} wide={wide} paused={!playing || videoShowing} />}
+      {(mirrorCanvas || mirrorVideo) && mirrored && <MirrorLayer key={mirrored} kind={mirrored} fit={scene.coverFit} box={{ side, left: (size.W - side) / 2, top: (size.H - side) / 2 }} wide={wide} />}
+      {/* "Whole picture": the cover blurred around the video, only while the
+          video shows (until then, and when it can't play, the cover stays sharp). */}
+      {video && scene.videoFit === 'fit' && art && (
+        <img src={art} alt="" aria-hidden className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-3xl transition-opacity duration-[900ms]" style={{ opacity: videoShowing ? 0.7 : 0 }} data-aurora-video-surround />
+      )}
       {video && <VideoLayer key={video.id} video={video} scene={scene} input={input} size={size} onFail={onFail} onShowing={setVideoShowing} />}
       {/* Readability: behind the lyrics the picture softens into a feathered
           patch of frosted glass and darkens a little; the rest stays sharp. */}

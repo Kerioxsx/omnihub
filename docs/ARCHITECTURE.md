@@ -203,6 +203,20 @@ or the UI:
   forms). The pictures are Fluent Emoji: plain one-colour SVGs in
   `public/emoji/plain`, drawn as a mask over the lyric ink (the default),
   or 3D WebPs in `public/emoji/3d`; both rebuilt by `scripts/emoji-3d.py`.
+- **Video matching** (`media/align.rs`): onset envelopes (log-band spectral
+  flux, 50/s) of the video's soundtrack (yt-dlp + symphonia) and of the
+  live loopback (tapped from `VisualHub`, mapped to song time through
+  playback checkpoints) are cross-correlated (normalised, ±1 s exclusion for
+  the runner-up); a clear fit twice in a row is the offset, cached per video
+  and song length and announced with `media:videoSync`. The user's own
+  nudge wins over it.
+- **App mirror** (`media/mirror.rs`): the playing app's window (Spotify,
+  Apple Music) is captured at ~12 fps; a 160-px grey copy tracks per-pixel
+  change; the largest dense moving block (not text) is the picture, settled
+  over a few detections, cropped and JPEG-encoded; the window fetches it
+  with `media_mirror_frame` (binary). A picture that stops moving while the
+  song plays means the app stopped drawing ("hidden"). Its video beats
+  YouTube's; its Canvas beats Apple's cover.
 - **Your font & emoji pack** (`media/look.rs`, `lib/aurora/textures.ts`): the
   user's font and emoji pack (a zip of pictures, or an emoji font) are copied
   into `data/aurora-look` and read back as data URLs (fonts as `@font-face`).

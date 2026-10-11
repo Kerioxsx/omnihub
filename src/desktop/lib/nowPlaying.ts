@@ -121,6 +121,19 @@ export const usePlayer = create<{ open: boolean; show: () => void; hide: () => v
   hide: () => set({ open: false }),
 }));
 
+/** Whether the window is full screen now. */
+export async function isWindowFullscreen(): Promise<boolean> {
+  try {
+    if (inTauri) {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      return await getCurrentWindow().isFullscreen();
+    }
+  } catch {
+    /* not known */
+  }
+  return !!document.fullscreenElement;
+}
+
 /** The OmniHub window itself in full screen (the browser page in the demo). */
 export async function setWindowFullscreen(on: boolean): Promise<void> {
   try {

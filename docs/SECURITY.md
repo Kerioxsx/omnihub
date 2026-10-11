@@ -256,6 +256,19 @@ the PC plays. How that works, and what it never does:
   3D pictures in `public/emoji/3d`, the one-colour drawings in
   `public/emoji/plain`, each with its `LICENSE.txt`), shipped inside the
   app; none are fetched.
+- **Matching videos to the song** (*Match videos to the song by ear*, on
+  with music videos): the video's soundtrack is downloaded with yt-dlp (the
+  smallest AAC stream, at most 40 MB) into `data/videos/soundtracks`,
+  decoded in-process (symphonia) and deleted at once; while it listens, the
+  light show's loopback capture also hands its sound to the matcher (onset
+  envelopes only, in memory). Only the offset found is kept
+  (`data/videos/sync.json`, per video and song length).
+- **Mirroring the music app** (*Mirror Spotify's Canvas and videos*): while
+  Aurora shows and Spotify or Apple Music plays, their window is captured
+  (the same window capture as screen sharing, `xcap`) about 12 times a
+  second, only to find and crop the moving picture; the crop is kept in
+  memory as one JPEG for the window to fetch and is never saved or sent.
+  Only the playing app's own window is captured.
 - **Your font & emoji pack**: a font file and an emoji pack (a zip of
   pictures, or an emoji font) the user picks in Windows' own file dialog (the
   window never hands Rust a path). Fonts are kept only if their first bytes

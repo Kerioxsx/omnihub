@@ -7,11 +7,13 @@
 //! the track position, the PC time it was valid at, and the PC's clock, so a
 //! phone can run the clock itself between events.
 
+pub mod align;
 pub mod artwork;
 pub mod audio;
 pub mod eq;
 pub mod look;
 pub mod lyrics;
+pub mod mirror;
 pub mod mixer;
 pub mod motion;
 pub mod stream;
@@ -395,6 +397,16 @@ pub struct MediaHub {
     /// Animated album covers per track (looked up when Aurora asks).
     motions: Mutex<HashMap<String, motion::MotionStatus>>,
     motion: motion::MotionFinder,
+    /// Music videos matched to the song by ear (see `align`): status per
+    /// video and song length, the offsets found, the job running, and when
+    /// Aurora last asked (a job nobody asks about stops).
+    syncs: Mutex<HashMap<String, align::SyncStatus>>,
+    sync_cache: align::SyncCache,
+    sync_running: Mutex<Option<String>>,
+    sync_asked: Mutex<HashMap<String, std::time::Instant>>,
+    sync_dir: PathBuf,
+    /// The playing app's own Canvas or video, from its window (see `mirror`).
+    pub mirror: Arc<mirror::Mirror>,
     /// The user's own lyric font and emoji textures.
     pub look: look::LookFiles,
 }
@@ -414,7 +426,7 @@ impl MediaHub {
                 Box::new(NoBackend)
             }
         };
-        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")), stream: stream::StreamTool::new(data_dir.join("tools").join("video")), motions: Mutex::new(HashMap::new()), motion: motion::MotionFinder::new(data_dir.join("motion")), look: look::LookFiles::new(data_dir.join("aurora-look")) })
+        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")), stream: stream::StreamTool::new(data_dir.join("tools").join("video")), motions: Mutex::new(HashMap::new()), motion: motion::MotionFinder::new(data_dir.join("motion")), look: look::LookFiles::new(data_dir.join("aurora-look")), syncs: Mutex::new(HashMap::new()), sync_cache: align::SyncCache::new(data_dir.join("videos").join("sync.json")), sync_running: Mutex::new(None), sync_asked: Mutex::new(HashMap::new()), sync_dir: data_dir.join("videos").join("soundtracks"), mirror: mirror::Mirror::new(fake) })
     }
 
     /// Whether this is the pretend player (the mixer and open apps pretend too).
@@ -594,6 +606,137 @@ impl MediaHub {
             hub.events.emit("media:motion", serde_json::json!({ "key": s.key }));
         });
         motion::MotionStatus::Searching
+    }
+
+    /// Match the music video `id` to the playing song by ear (see `align`):
+    /// the offset is found once, remembered, and announced with
+    /// `media:videoSync`. `allowed` is the setting; `tap` is the light show's
+    /// listener, which hands over the PC's sound while matching.
+    pub fn video_sync(self: &Arc<Self>, id: &str, allowed: bool, tap: Arc<align::Tap>) -> align::SyncStatus {
+        use align::SyncStatus as S;
+        let Some(s) = self.state() else { return S::Off };
+        if !allowed || self.fake || id.len() != 11 {
+            return S::Off;
+        }
+        let key = format!("{id}|{}", s.duration_ms / 2000);
+        self.sync_asked.lock().insert(key.clone(), std::time::Instant::now());
+        if let Some(st) = self.syncs.lock().get(&key) {
+            return st.clone();
+        }
+        if let Some(ms) = self.sync_cache.get(&key) {
+            let st = S::Matched { offset_ms: ms, score: 1.0 };
+            self.syncs.lock().insert(key, st.clone());
+            return st;
+        }
+        {
+            let mut running = self.sync_running.lock();
+            if running.is_some() {
+                return S::Matching { note: "Waiting to match the video to the song…".into() };
+            }
+            *running = Some(key.clone());
+        }
+        let st = S::Matching { note: "Getting the video's soundtrack…".into() };
+        self.syncs.lock().insert(key.clone(), st.clone());
+        let hub = self.clone();
+        let id = id.to_string();
+        std::thread::spawn(move || {
+            let result = hub.run_sync(&id, &key, &s.key, &tap);
+            tap.on.store(false, Ordering::Relaxed);
+            tap.live.lock().clear();
+            match result {
+                Ok((offset_ms, score)) => {
+                    tracing::info!("music video {id} matched to the song: {offset_ms} ms (score {score:.2})");
+                    hub.sync_cache.put(&key, offset_ms);
+                    hub.syncs.lock().insert(key.clone(), S::Matched { offset_ms, score });
+                }
+                // Asked again later (the song came back, Aurora reopened): try again then.
+                Err((_, true)) => {
+                    hub.syncs.lock().remove(&key);
+                }
+                Err((note, false)) => {
+                    tracing::info!("music video {id} not matched: {note}");
+                    hub.syncs.lock().insert(key.clone(), S::Unsure { note });
+                }
+            }
+            *hub.sync_running.lock() = None;
+            hub.events.emit("media:videoSync", serde_json::json!({ "id": id }));
+        });
+        st
+    }
+
+    /// The matching itself: soundtrack, then listening until the fit is
+    /// clear twice in a row. Err((why, try again later)).
+    fn run_sync(self: &Arc<Self>, id: &str, key: &str, track: &str, tap: &align::Tap) -> Result<(i64, f32), (String, bool)> {
+        use align::SyncStatus as S;
+        let note = |n: &str| {
+            self.syncs.lock().insert(key.to_string(), S::Matching { note: n.to_string() });
+            self.events.emit("media:videoSync", serde_json::json!({ "id": id }));
+        };
+        let wanted = || self.sync_asked.lock().get(key).is_some_and(|t| t.elapsed() < Duration::from_secs(20));
+        if !self.stream.status().installed {
+            note("Downloading the video helper (yt-dlp), once…");
+            let events = self.events.clone();
+            self.stream.install(&mut |done, total| events.emit("media:streamInstall", serde_json::json!({ "done": done, "total": total }))).map_err(|e| (e, false))?;
+        }
+        note("Getting the video's soundtrack…");
+        let path = self.stream.soundtrack(id, &self.sync_dir).map_err(|e| (e, false))?;
+        let decoded = align::decode(&path);
+        let _ = std::fs::remove_file(&path);
+        let (pcm, sr) = decoded.map_err(|e| (format!("couldn't read the video's soundtrack ({e})"), false))?;
+        let video = align::peaks(&align::envelope(&pcm, sr));
+        let length = pcm.len() as f32 / sr as f32;
+        drop(pcm);
+        note("Listening, to match the video to the song…");
+        tap.live.lock().clear();
+        tap.on.store(true, Ordering::Relaxed);
+        let mut checkpoints: Vec<(i64, f64, f64)> = Vec::new();
+        let started = std::time::Instant::now();
+        let mut tried = std::time::Instant::now();
+        let mut previous: Option<align::Fit> = None;
+        loop {
+            std::thread::sleep(Duration::from_millis(200));
+            if !wanted() {
+                return Err(("Aurora stopped showing the video".into(), true));
+            }
+            let Some(st) = self.state() else { return Err(("nothing is playing".into(), true)) };
+            if st.key != track {
+                return Err(("the song changed".into(), true));
+            }
+            let now = now_ms();
+            if st.playing {
+                let song = st.position_at_time(now) as f64;
+                if let Some(&(w, s0, r)) = checkpoints.last() {
+                    // A seek: what was heard before it no longer lines up.
+                    if now - w <= 600 && (s0 + (now - w) as f64 * r - song).abs() > 1500.0 {
+                        checkpoints.clear();
+                        tap.live.lock().clear();
+                        previous = None;
+                    }
+                }
+                checkpoints.push((now, song, st.rate));
+            }
+            if tried.elapsed() >= Duration::from_secs(3) {
+                tried = std::time::Instant::now();
+                let heard = {
+                    let live = tap.live.lock();
+                    align::in_song_time(&live, |t| align::song_time_at(&checkpoints, t, 600))
+                };
+                if let Some((start, values)) = heard.filter(|(_, v)| v.len() as f32 >= align::RATE * 12.0) {
+                    match align::best_fit(&align::peaks(&values), start, &video, -15.0, length) {
+                        Some(fit) if align::trustworthy(&fit) => {
+                            if previous.is_some_and(|p| (p.offset - fit.offset).abs() < 0.15) {
+                                return Ok(((fit.offset * 1000.0).round() as i64, fit.score));
+                            }
+                            previous = Some(fit);
+                        }
+                        _ => previous = None,
+                    }
+                }
+            }
+            if started.elapsed() > Duration::from_secs(100) {
+                return Err(("couldn't tell by ear where the song is in the video (a different mix or a live version?)".into(), false));
+            }
+        }
     }
 
     pub fn stream_status(&self) -> stream::StreamToolStatus {

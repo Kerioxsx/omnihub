@@ -107,7 +107,16 @@ pub fn run(args: Vec<String>) {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["overlay"]).with_filter(|label| !label.starts_with("ambient-")).build())
+        // Size, place and maximised are remembered; full screen is not (closed or
+        // updated during full-screen Aurora, it would come back full screen
+        // with no player open to leave it).
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::all() & !tauri_plugin_window_state::StateFlags::FULLSCREEN)
+                .with_denylist(&["overlay"])
+                .with_filter(|label| !label.starts_with("ambient-"))
+                .build(),
+        )
         .manage(core.clone())
         .manage(commands::PendingSend::default())
         .manage(commands::LastCrash(parking_lot::Mutex::new(last_crash)))
@@ -326,6 +335,9 @@ pub fn run(args: Vec<String>) {
             commands::media_lyrics,
             commands::media_video,
             commands::media_video_stream,
+            commands::media_video_sync,
+            commands::media_mirror,
+            commands::media_mirror_frame,
             commands::media_motion,
             commands::aurora_look,
             commands::aurora_choose_font,

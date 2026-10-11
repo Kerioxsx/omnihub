@@ -232,6 +232,11 @@ pub struct AuroraLyricsSettings {
     /// Emojis beside words they match ("saw 👁", "city 🏙").
     pub emoji: EmojiAmount,
     pub emoji_style: EmojiStyle,
+    /// 0–1: the word being sung splits into coloured copies and jolts on
+    /// hard beats, like the glitchy edits.
+    pub glitch: f32,
+    /// A new word arrives with fading copies trailing behind it.
+    pub echo: bool,
 }
 
 impl Default for AuroraLyricsSettings {
@@ -258,6 +263,8 @@ impl Default for AuroraLyricsSettings {
             motion: 0.6,
             emoji: EmojiAmount::Some,
             emoji_style: EmojiStyle::Plain,
+            glitch: 0.5,
+            echo: true,
         }
     }
 }
@@ -388,11 +395,14 @@ pub struct EffectSettings {
     pub twist: f32,
     /// Bright parts glowing.
     pub bloom: f32,
+    /// The colours swinging round for a moment on hard beats (the drops in
+    /// Spider-Verse edits).
+    pub colorflash: f32,
 }
 
 impl Default for EffectSettings {
     fn default() -> Self {
-        EffectSettings { zoom: 0.5, glitch: 0.3, split: 0.35, fisheye: 0.0, ripple: 0.25, kaleidoscope: 0.0, halftone: 0.0, pixelate: 0.0, shake: 0.15, echo: 0.4, scanlines: 0.0, duotone: 0.0, twist: 0.15, bloom: 0.4 }
+        EffectSettings { zoom: 0.5, glitch: 0.3, split: 0.35, fisheye: 0.0, ripple: 0.25, kaleidoscope: 0.0, halftone: 0.0, pixelate: 0.0, shake: 0.15, echo: 0.4, scanlines: 0.0, duotone: 0.0, twist: 0.15, bloom: 0.4, colorflash: 0.3 }
     }
 }
 
@@ -420,6 +430,13 @@ pub struct SceneSettings {
     /// When YouTube will not show a video inside the app, play its stream
     /// directly (downloads yt-dlp and Deno the first time).
     pub direct_videos: bool,
+    /// Match a video whose song starts later (a story intro) to the song by
+    /// ear: its soundtrack is downloaded with yt-dlp and compared with what
+    /// the PC plays (see media::align).
+    pub sync_videos: bool,
+    /// Show the music app's own Canvas or video, mirrored from its window
+    /// (Spotify, Apple Music; see media::mirror).
+    pub mirror_app: bool,
     /// The album's animated cover from Apple Music, when it has one (only
     /// the title and artist are sent).
     pub animated_covers: bool,
@@ -452,6 +469,8 @@ impl Default for SceneSettings {
             backdrop: Backdrop::Auto,
             music_videos: true,
             direct_videos: true,
+            sync_videos: true,
+            mirror_app: true,
             animated_covers: true,
             cover_fit: CoverFit::Whole,
             cover_motion: 0.5,

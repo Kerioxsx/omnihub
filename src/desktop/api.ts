@@ -205,6 +205,18 @@ export const api = {
     video: () => call<{ key: string | null; video: T.VideoStatus }>('media_video'),
     /** The stream of a video YouTube will not embed (downloads yt-dlp and Deno the first time). */
     videoStream: (id: string, maxHeight: number) => call<string>('media_video_stream', { id, maxHeight }),
+    /** Mirror the playing app's Canvas or video from its window (asked again every second or two). */
+    mirror: () => call<T.MirrorStatus>('media_mirror'),
+    /** The mirror's newest picture after `after`: [number, JPEG], or null. */
+    mirrorFrame: async (after: number): Promise<{ seq: number; jpeg: Uint8Array } | null> => {
+      const buf = await call<ArrayBuffer | number[] | null>('media_mirror_frame', { after });
+      if (!buf) return null;
+      const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf);
+      if (bytes.length < 5) return null;
+      return { seq: new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0, true), jpeg: bytes.subarray(4) };
+    },
+    /** Match the music video to the playing song by ear (asked again while it works). */
+    videoSync: (id: string) => call<{ key: string | null; sync: T.VideoSync }>('media_video_sync', { id }),
     streamStatus: () => call<T.StreamToolStatus>('media_stream_status'),
     /** The playing song's animated album cover (looked up once per song). */
     motion: () => call<{ key: string | null; motion: T.MotionStatus }>('media_motion'),

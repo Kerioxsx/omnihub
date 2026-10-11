@@ -425,6 +425,19 @@ function StackLayout({ lines, time, s, reduced, width, full, textures, emojiFont
     redraw((n) => n + 1);
   };
 
+  // Glitch: on hard beats the sung word splits into a pink and a cyan copy
+  // and jolts sideways (--aurora-beat / --aurora-jolt, set by the stage).
+  const gl = reduced ? 0 : Math.max(0, Math.min(1, s.glitch ?? 0));
+  const split = (base: string | undefined) => {
+    if (gl < 0.01) return base;
+    const d = (0.08 * gl).toFixed(3);
+    const rgb = `calc(var(--aurora-beat, 0) * ${d}em) 0 0 rgba(255, 46, 136, ${(0.55 + 0.35 * gl).toFixed(2)}), calc(var(--aurora-beat, 0) * -${d}em) 0 0 rgba(36, 224, 255, ${(0.55 + 0.35 * gl).toFixed(2)})`;
+    return base && base !== 'none' ? `${rgb}, ${base}` : rgb;
+  };
+  const jolt: CSSProperties | undefined = gl >= 0.01 ? { transform: `translateX(calc(var(--aurora-jolt, 0) * ${(0.14 * gl).toFixed(3)}em)) skewX(calc(var(--aurora-jolt, 0) * ${(-6 * gl).toFixed(2)}deg))` } : undefined;
+  // Echo: a new word arrives with fading copies trailing below it.
+  const echo = !!s.echo && !reduced && mv > 0.02 && !jump && mounted.current;
+
   const look = (role: Row['role'], dots: boolean): CSSProperties => {
     if (role === 'cur' && !dots) {
       if (s.emphasis === 'box')
@@ -436,8 +449,8 @@ function StackLayout({ lines, time, s, reduced, width, full, textures, emojiFont
           textShadow: '0 0.03em 0.12em rgba(0,0,0,.35)',
           boxShadow: s.glow > 0 ? `0 0 ${0.6 * s.glow}em color-mix(in oklab, var(--aurora-glow) 45%, transparent)` : undefined,
         };
-      if (s.emphasis === 'color') return { color: 'var(--aurora-hl-accent)', textShadow: glowShadow };
-      return { color: hl, textShadow: glowShadow };
+      if (s.emphasis === 'color') return { color: 'var(--aurora-hl-accent)', textShadow: split(glowShadow) };
+      return { color: hl, textShadow: split(glowShadow) };
     }
     // Only what is being sung is highlighted; what comes next stays quiet
     // (the same colour, softer).
@@ -473,8 +486,25 @@ function StackLayout({ lines, time, s, reduced, width, full, textures, emojiFont
           data-lyric-role={r.role}
           {...(r.role === 'cur' ? { 'data-lyric-current': '' } : r.role === 'next' ? { 'data-lyric-next': '' } : {})}
         >
-          <span className="inline-block transition-[background-color,color,padding,border-radius] duration-300 [box-decoration-break:clone]" style={look(r.role, r.key.startsWith('gap'))}>
+          <span className="relative inline-block transition-[background-color,color,padding,border-radius] duration-300 [box-decoration-break:clone]" style={{ ...look(r.role, r.key.startsWith('gap')), ...(r.role === 'cur' ? jolt : undefined) }}>
             {r.node}
+            {r.role === 'cur' && echo && !r.key.startsWith('gap') && (
+              <>
+                {[0.36, 0.72].map((off, k) => (
+                  <motion.span
+                    key={`${r.key}-echo${k}`}
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 select-none"
+                    style={{ color: 'color-mix(in oklab, var(--aurora-ink, #fff) 70%, transparent)', textShadow: 'none', filter: 'blur(1.5px)' }}
+                    initial={{ opacity: 0.5 - 0.2 * k, y: `${off}em` }}
+                    animate={{ opacity: 0, y: `${off * 0.25}em` }}
+                    transition={{ duration: 0.42 + 0.12 * k, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    {r.node}
+                  </motion.span>
+                ))}
+              </>
+            )}
           </span>
         </motion.div>
       ))}

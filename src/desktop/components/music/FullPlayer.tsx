@@ -14,12 +14,12 @@
 // light around the frame, a small dock) and **Lyrics** (the Apple
 // Music–style layout described above).
 
-import type { LyricLine, LyricsStatus, MediaState, PlayerView, VisualStatus } from '@shared/types';
+import type { LyricLine, LyricsStatus, MediaState, MirrorStatus, PlayerView, VideoStatus, VideoSync, VisualStatus } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import { AlignLeft, ChevronDown, Maximize2, MicVocal, Minimize2, Minus, Music2, Pause, Play, Plus, SkipBack, SkipForward, SlidersHorizontal, Sparkles, Volume1, Volume2, VolumeX } from 'lucide-react';
 import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../api';
-import { useCoverLook, useMotionCover, useMusicVideo, useVideoOffsets } from '../../lib/aurora/cinema';
+import { useCoverLook, useMirror, useMotionCover, useMusicVideo, useVideoOffsets, useVideoSync } from '../../lib/aurora/cinema';
 import { calmPlace, glareAt, PLACE_TOP, type Place } from '../../lib/aurora/coverLook';
 import { PaletteBlender } from '../../lib/aurora/palette';
 import { patchVisuals, useVisuals } from '../../lib/aurora/settings';
@@ -312,6 +312,53 @@ function lyricsState(l: LyricsStatus | null, lines: LyricLine[]): LyricsState {
 }
 
 /** Aurora or Lyrics, top left. */
+/**
+ * What the music video is doing, next to the view switch, so it can be seen
+ * without opening the settings: looking, loading, playing (for a moment), or
+ * why it can't play (for a while; the settings keep saying it).
+ */
+function VideoNote({ status, now, trackKey, sync, mirror, appName }: { status: VideoStatus | null; now: VideoNow | null; trackKey: string | undefined; sync: VideoSync | null; mirror: MirrorStatus | null; appName: string | undefined }) {
+  const app = appName || 'The music app';
+  const hidden = mirror?.state === 'hidden';
+  const mirrorNote =
+    mirror?.state === 'mirroring'
+      ? `${mirror.kind === 'video' ? `The video ${app} is playing` : `${app}’s animated art`}, mirrored from its window`
+      : hidden
+        ? `${app} stopped drawing its animated art while it’s covered: keep part of its window visible, or move it to another screen`
+        : null;
+  const matchedBy = sync?.state === 'matched' && sync.offsetMs >= 1000 ? `Matched to the song by ear · skips a ${(sync.offsetMs / 1000).toFixed(1)} s intro` : null;
+  const failed = !!now?.note && now.note.startsWith('Couldn’t');
+  const text =
+    (hidden ? mirrorNote : null) ??
+    now?.note ??
+    (sync?.state === 'matching' ? sync.note : null) ??
+    (now?.showing && matchedBy ? matchedBy : null) ??
+    (now?.showing
+      ? `${now.video.kind === 'visualizer' ? 'Visualizer' : 'Music video'}${now.quality ? ` · ${now.quality}` : ''}${now.via === 'direct' ? ' · played directly' : ''}`
+      : now && !now.ended
+        ? 'Loading the music video…'
+        : status?.status === 'searching'
+          ? 'Looking for the music video…'
+          : mirrorNote);
+  const settled = !!now?.showing || mirror?.state === 'mirroring';
+  const bad = failed || (hidden && text === mirrorNote);
+  // Playing: said for a few seconds; a reason it can't play: for longer.
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    setGone(false);
+    if (!text) return;
+    const t = settled || bad ? setTimeout(() => setGone(true), bad ? 15000 : 5000) : undefined;
+    return () => clearTimeout(t);
+  }, [text, settled, bad, trackKey]);
+  if (!text || gone) return null;
+  return (
+    <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className={cx('ml-2 inline-flex max-w-[44vw] items-center gap-1.5 truncate rounded-full px-3 py-1 text-[11.5px] backdrop-blur', bad ? 'bg-amber-500/20 text-amber-100' : 'bg-black/35 text-white/80')} title={text} data-video-note>
+      {!settled && !bad && <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-white/70" />}
+      <span className="truncate">{text}</span>
+    </motion.div>
+  );
+}
+
 function ViewSwitch({ view, onChange }: { view: PlayerView; onChange: (v: PlayerView) => void }) {
   const items: { v: PlayerView; label: string; icon: typeof Sparkles; title: string }[] = [
     { v: 'aurora', label: 'Aurora', icon: Sparkles, title: 'Aurora: light that follows the music, with floating lyrics (V)' },
@@ -551,7 +598,17 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
   const videos = videoStatus?.status === 'found' ? videoStatus.videos : null;
   const [videoNow, setVideoNow] = useState<VideoNow | null>(null);
   useEffect(() => setVideoNow(null), [state?.key]);
-  const [offsetFor, setVideoOffset] = useVideoOffsets();
+  const [manualOffset, setVideoOffset, offsetsVersion] = useVideoOffsets();
+  // The video matched to the song by ear (a story intro skipped); the user's
+  // own nudge, when there is one, wins.
+  const syncId = (videoNow?.video ?? videos?.[0])?.kind === 'video' ? (videoNow?.video ?? videos?.[0])?.id : undefined;
+  const videoSync = useVideoSync(state?.key, syncId, wantVideo && scene.syncVideos);
+  const matched = videoSync?.sync.state === 'matched' ? { id: videoSync.id, ms: videoSync.sync.offsetMs } : null;
+  const offsetFor = useCallback(
+    (id: string) => manualOffset(id) ?? (matched && matched.id === id ? matched.ms : 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [manualOffset, matched?.id, matched?.ms, offsetsVersion],
+  );
   const rootRef = useRef<HTMLDivElement>(null);
   const [aspect, setAspect] = useState(16 / 9);
   useEffect(() => {
@@ -572,7 +629,9 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
   // The album's animated cover (Apple Music), for the cover and the light show.
   const motionStatus = useMotionCover(state?.key, aurora && scene.animatedCovers && !!art);
   const motionUrl = motionStatus?.status === 'found' ? motionStatus.url : null;
-  const backdrop = useMemo<BackdropInput>(() => ({ look, videos, motion: motionUrl, time: songTime, playing: !!state?.playing, offsetFor, onVideo: setVideoNow, lyricY, glare }), [look, videos, motionUrl, songTime, state?.playing, offsetFor, lyricY, glare]);
+  // The music app's own Canvas or video, mirrored from its window (not for the light show).
+  const mirror = useMirror(state?.key, aurora && scene.mirrorApp && scene.backdrop !== 'visual' && !!state);
+  const backdrop = useMemo<BackdropInput>(() => ({ look, videos, motion: motionUrl, mirror, time: songTime, playing: !!state?.playing, offsetFor, onVideo: setVideoNow, lyricY, glare }), [look, videos, motionUrl, mirror, songTime, state?.playing, offsetFor, lyricY, glare]);
   const pos = np.position();
   const active = useMemo(() => activeLine(lines, pos + offset), [lines, pos, offset]);
 
@@ -653,6 +712,7 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
   return (
     <div
       ref={rootRef}
+      data-full-player={mode}
       className={cx('relative isolate flex h-full w-full overflow-hidden text-white [container-type:size]', hide && 'cursor-none')}
       onMouseMove={wake}
       onPointerDown={wake}
@@ -679,8 +739,9 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
 
       {/* Top bar */}
       <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-end gap-2 p-4" style={fade}>
-        <div className="mr-auto">
+        <div className="mr-auto flex items-center">
           <ViewSwitch view={visuals.view} onChange={setView} />
+          {aurora && <VideoNote status={wantVideo ? videoStatus : null} now={wantVideo ? videoNow : null} trackKey={state?.key} sync={videoSync && videoNow && videoSync.id === videoNow.video.id ? videoSync.sync : null} mirror={mirror} appName={state?.appName} />}
         </div>
         {synced && (
           <div className="flex items-center gap-1 rounded-full bg-white/10 px-1.5 py-1 text-[11.5px] backdrop-blur" aria-label="Lyrics timing">
@@ -810,7 +871,7 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
         onClose={() => setPanel(false)}
         status={captureStatus}
         full={full}
-        video={{ status: videoStatus, now: videoNow, offset: videoNow ? offsetFor(videoNow.video.id) : 0, setOffset: (ms) => videoNow && setVideoOffset(videoNow.video.id, ms), hasCover: !!art, motion: !!motionUrl }}
+        video={{ mirror, status: videoStatus, now: videoNow, offset: videoNow ? offsetFor(videoNow.video.id) : 0, setOffset: (ms) => videoNow && setVideoOffset(videoNow.video.id, ms), manual: !!videoNow && manualOffset(videoNow.video.id) !== undefined, sync: videoSync && videoNow && videoSync.id === videoNow.video.id ? videoSync.sync : null, hasCover: !!art, motion: !!motionUrl }}
       />
     </div>
   );
