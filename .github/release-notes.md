@@ -1,12 +1,12 @@
 ## New in this version
 
-**A quick update to Aurora:**
+**Any emoji pack.** Aurora's *Your font & emoji pack* now takes any pack, not only game textures:
 
-- **Your own font and emoji pictures.** Under *Your font & textures* in Aurora's settings, choose a font file (.ttf, .otf or .woff) for the lyrics and a zip of item textures for the emojis, for a Minecraft look: words get the matching picture ("apple" → the apple, "diamonds" → a diamond, "blue" → the heart of the sea, love → a heart), drawn pixel-sharp. Your files are copied into OmniHub's data folder and stay on your PC; nothing is uploaded or shipped with OmniHub.
-- **An emoji at least every two lines.** Lines with a word to picture get theirs as before; when two lines in a row have none, the second gets one anyway (a sparkle, a note, a star…). "Bye", "goodbye" and "hello" get 👋.
-- **The whole cover again.** Everyone is switched back to the whole cover once (nothing cut off at the top or bottom); "Fill" is still there and now says that it cuts.
-- **Music videos: clearer and more reliable.** If the app missed the moment a video was found, it now asks again until it knows, and when a video can't play, Aurora says why (the artist doesn't allow it in apps, YouTube blocked its player, the stream failed…) instead of quietly showing the cover.
-- **Faster releases.** Updates now build and publish in a fraction of the time.
+- **A zip of pictures** — PNG, GIF (animated ones move), WebP, JPG or SVG. Twemoji, Noto, OpenMoji, Apple or Samsung emoji dumps, Discord or Twitch emotes, a game's item textures… Each emoji the lyrics earn gets the pack's matching picture, however the pack names its files: by code point (`1f525.png`, `emoji_u1f525.png`, `U+1F525.svg`), by the emoji itself (`🔥.png`), by its name (`fire.png`, `red_heart.webp`, `Fire_3d.png`, `face_with_tears_of_joy.svg`), by its short code (`joy.gif`, `heart.png`), or by the word in the song ("apple" → `apple.png`). Pixel-art pictures stay crisp; smooth ones stay smooth.
+- **Or an emoji font** (.ttf, .otf, .ttc, .woff): every emoji is drawn in it.
+- Where the pack has nothing for an emoji, the plain emoji shows. Your files stay on your PC; nothing is uploaded or shipped with OmniHub.
+
+**Also in 0.7.1** (last update): your own lyrics font, an emoji at least every two lines, the whole cover again, clearer reasons when a music video can't play, and faster releases.
 
 **Spotify's animated covers (Canvas):** Spotify doesn't let other apps read them (there is no public way), so OmniHub can't show them. Animated covers come from Apple Music when the album has one there.
 

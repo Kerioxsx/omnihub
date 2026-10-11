@@ -212,8 +212,9 @@ export const api = {
     look: () => call<T.AuroraLook>('aurora_look'),
     /** Pick a font file and use it for the lyrics (null when cancelled). */
     chooseFont: () => call<string | null>('aurora_choose_font'),
-    /** Pick a zip of PNG textures and use them as emojis (how many; null when cancelled). */
-    chooseTextures: () => call<number | null>('aurora_choose_textures'),
+    /** Pick an emoji pack (a zip of pictures, or an emoji font) and use it (null when cancelled). */
+    chooseEmojiPack: () => call<T.EmojiPack | null>('aurora_choose_emoji_pack'),
+    emojiFont: () => call<string | null>('aurora_emoji_font'),
     forgetLook: (font: boolean, textures: boolean) => call<void>('aurora_forget_look', { font, textures }),
     font: () => call<string | null>('aurora_font'),
     texture: (name: string) => call<string | null>('aurora_texture', { name }),

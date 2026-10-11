@@ -22,7 +22,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { type CSSProperties, forwardRef, memo, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { LevelFollower } from '../../lib/aurora/audio';
 import { emojiFile, planEmojis } from '../../lib/aurora/emoji';
-import { CUSTOM_FONT, TEXTURE_WORDS, type TextureSet, textureFor, useAuroraLook, useCustomFont, useTexture } from '../../lib/aurora/textures';
+import { CUSTOM_EMOJI_FONT, CUSTOM_FONT, isPixelArt, TEXTURE_WORDS, type TextureSet, textureFor, useAuroraLook, useCustomEmojiFont, useCustomFont, useTexture } from '../../lib/aurora/textures';
 import { estimateWords } from '../../lib/aurora/timing';
 import { activeLine } from '../../lib/nowPlaying';
 
@@ -237,11 +237,12 @@ const still = () => 0;
 const EMOJI_FONT = '"Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 
 /** One emoji beside a word: it pops in, then floats gently. */
-function Emoji({ emoji, style: chosen, texture, reduced, current }: { emoji: string; style: VisualSettings['lyrics']['emojiStyle']; texture?: string | null; reduced: boolean; current: boolean }) {
+function Emoji({ emoji, style: chosen, texture, emojiFont, reduced, current }: { emoji: string; style: VisualSettings['lyrics']['emojiStyle']; texture?: string | null; emojiFont?: boolean; reduced: boolean; current: boolean }) {
   const [broken, setBroken] = useState(false);
-  // The user's textures: the matching picture, else the plain emoji.
+  // The user's pack: the matching picture, else its emoji font, else the plain emoji.
   const picture = useTexture(chosen === 'textures' ? (texture ?? null) : null);
-  const style = chosen === 'textures' ? (picture ? 'textures' : 'plain') : chosen;
+  const style = chosen === 'textures' ? (picture ? 'textures' : emojiFont ? 'system' : 'plain') : chosen;
+  const [pixelated, setPixelated] = useState(false);
   const pop = reduced ? { initial: { opacity: 0 }, animate: { opacity: 1 } } : { initial: { opacity: 0, scale: 0.2, rotate: -24, y: '0.2em' }, animate: { opacity: 1, scale: 1, rotate: 0, y: 0 } };
   const transition = reduced ? { duration: 0.2 } : { type: 'spring' as const, stiffness: 420, damping: 13, delay: 0.06 };
   return (
@@ -252,9 +253,11 @@ function Emoji({ emoji, style: chosen, texture, reduced, current }: { emoji: str
           src={picture}
           alt={emoji}
           draggable={false}
-          className="inline-block h-[0.9em] w-[0.9em] select-none"
-          style={{ imageRendering: 'pixelated', filter: 'drop-shadow(0 0.05em 0.08em rgba(0,0,0,.55))' }}
+          onLoad={(e) => setPixelated(isPixelArt(e.currentTarget, texture ?? ''))}
+          className="inline-block h-[0.9em] w-[0.9em] select-none object-contain"
+          style={{ imageRendering: pixelated ? 'pixelated' : 'auto', filter: 'drop-shadow(0 0.05em 0.08em rgba(0,0,0,.55))' }}
           data-lyric-texture={texture ?? undefined}
+          data-pixelated={pixelated || undefined}
           {...pop}
           transition={transition}
         />
@@ -296,7 +299,7 @@ function Emoji({ emoji, style: chosen, texture, reduced, current }: { emoji: str
           transition={transition}
         />
       ) : (
-        <motion.span className="inline-block" style={{ fontFamily: EMOJI_FONT, fontSize: '0.84em', textShadow: 'none' }} {...pop} transition={transition}>
+        <motion.span className="inline-block" style={{ fontFamily: chosen === 'textures' && emojiFont ? `"${CUSTOM_EMOJI_FONT}", ${EMOJI_FONT}` : EMOJI_FONT, fontSize: '0.84em', textShadow: 'none' }} data-lyric-emoji-font={chosen === 'textures' && emojiFont ? '' : undefined} {...pop} transition={transition}>
           {emoji}
         </motion.span>
       )}
@@ -314,8 +317,10 @@ interface LayoutProps {
   /** Width of the overlay, px. */
   width: number;
   full: boolean;
-  /** The user's textures, when chosen (emoji look "Your textures"). */
+  /** The user's emoji pack's pictures, when it has some (emoji look "Your pack"). */
   textures: TextureSet | null;
+  /** The user's emoji pack is a font. */
+  emojiFont: boolean;
 }
 
 type Row = { key: string; role: 'prev' | 'cur' | 'next'; node: ReactNode; size: number };
@@ -323,7 +328,7 @@ type Row = { key: string; role: 'prev' | 'cur' | 'next'; node: ReactNode; size: 
 type Leaving = Row & { id: string; x: number; y: number; w: number; opacity: number; fontSize: string; born: number };
 
 /** The reference look: the step being sung, huge, between its neighbours. */
-function StackLayout({ lines, time, s, reduced, width, full, textures }: LayoutProps) {
+function StackLayout({ lines, time, s, reduced, width, full, textures, emojiFont }: LayoutProps) {
   const wordMode = s.timing === 'auto' && s.wordHighlight;
   const items = useMemo(() => stackItems(lines, wordMode), [lines, wordMode]);
   // Which steps get an emoji, worked out once per song (with textures, words
@@ -335,7 +340,7 @@ function StackLayout({ lines, time, s, reduced, width, full, textures }: LayoutP
     const p = emojis[i];
     if (!p) return it.text;
     const texture = useTextures && textures ? textureFor(textures, p.emoji, p.word, p.filler) : null;
-    const e = <Emoji key="e" emoji={p.emoji} style={s.emojiStyle} texture={texture} reduced={reduced} current={current} />;
+    const e = <Emoji key="e" emoji={p.emoji} style={s.emojiStyle} texture={texture} emojiFont={emojiFont} reduced={reduced} current={current} />;
     return p.before ? (
       <>
         {e}
@@ -594,6 +599,7 @@ export const AuroraLyrics = memo(
     // The user's own font and textures (chosen in Aurora's settings).
     const { look, textures } = useAuroraLook();
     useCustomFont(s.font === 'custom', look?.font);
+    useCustomEmojiFont(s.emojiStyle === 'textures', look?.emojiFont);
     // Movement with the music: a gentle sway, a lift with the bass and a
     // bounce on beats, applied to the whole block on every frame.
     const [moveEl, setMoveEl] = useState<HTMLDivElement | null>(null);
@@ -673,7 +679,7 @@ export const AuroraLyrics = memo(
       fontFamily: font.css,
       fontStretch: font.stretch,
     } as CSSProperties;
-    const layout = { lines: timed, time, s, reduced, width, full, textures };
+    const layout = { lines: timed, time, s, reduced, width, full, textures, emojiFont: !!look?.emojiFont };
 
     return (
       <div ref={root} className="pointer-events-none absolute inset-0 z-[5] [container-type:size]" aria-live="off">

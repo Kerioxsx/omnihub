@@ -26,6 +26,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.7.2
+
+- **Any emoji pack** in Aurora: a zip of pictures (PNG, GIF, WebP, JPG or SVG — Twemoji, Noto, OpenMoji, Discord emotes, game textures…) matched by code point, name, short code or the word itself, or an emoji font. Pixel art stays crisp. Your files stay on your PC.
+
 ## New in 0.7.1
 
 - **Your own font and emoji pictures** in Aurora: choose a font file and a zip of item textures (a Minecraft look); words get the matching picture. They stay on your PC.

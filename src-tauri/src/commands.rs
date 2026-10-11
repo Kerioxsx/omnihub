@@ -1242,16 +1242,27 @@ pub async fn aurora_choose_font(app: AppHandle, core: Core<'_>) -> Res<Option<St
     .await
 }
 
-/// Pick a zip of PNG pictures on this PC and use them for the emojis.
+/// Pick an emoji pack on this PC (a zip of pictures, or an emoji font) and
+/// use it for the emojis.
 #[tauri::command]
-pub async fn aurora_choose_textures(app: AppHandle, core: Core<'_>) -> Res<Option<usize>> {
+pub async fn aurora_choose_emoji_pack(app: AppHandle, core: Core<'_>) -> Res<Option<omnihub_core::media::look::EmojiPack>> {
+    use omnihub_core::media::look::EmojiPack;
     let core = core.inner().clone();
     blocking(move || {
-        let picked = app.dialog().file().set_title("Choose a zip of textures (PNG pictures)").add_filter("Zip", &["zip"]).blocking_pick_file();
+        let picked = app
+            .dialog()
+            .file()
+            .set_title("Choose an emoji pack: a zip of pictures, or an emoji font")
+            .add_filter("Emoji packs", &["zip", "ttf", "otf", "ttc", "woff", "woff2"])
+            .blocking_pick_file();
         let Some(path) = picked.and_then(|p| p.into_path().ok()) else { return Ok(None) };
-        let count = core.media.look.import_textures(&path)?;
-        core.audit.record("desktop", "aurora.textures", &format!("{count} pictures"), true);
-        Ok(Some(count))
+        let pack = core.media.look.import_emoji_pack(&path)?;
+        let detail = match &pack {
+            EmojiPack::Pictures { count } => format!("{count} pictures"),
+            EmojiPack::Font { name } => format!("emoji font {name}"),
+        };
+        core.audit.record("desktop", "aurora.emoji-pack", &detail, true);
+        Ok(Some(pack))
     })
     .await
 }
@@ -1264,11 +1275,18 @@ pub async fn aurora_forget_look(core: Core<'_>, font: bool, textures: bool) -> R
             core.media.look.forget_font();
         }
         if textures {
-            core.media.look.forget_textures();
+            core.media.look.forget_emoji_pack();
         }
         Ok(())
     })
     .await
+}
+
+/// The emoji pack's font as a data URL (when the pack is a font).
+#[tauri::command]
+pub async fn aurora_emoji_font(core: Core<'_>) -> Res<Option<String>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.media.look.emoji_font_data_url())).await
 }
 
 /// The chosen font as a data URL.

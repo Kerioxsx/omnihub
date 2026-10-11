@@ -80,21 +80,26 @@ const handlers: Record<string, Handler> = {
     const url = localStorage.getItem('omnihub.demo.motion');
     return { key: music.mediaVideo().key, motion: url ? { status: 'found', url } : { status: 'none' } };
   },
-  // A test can hand the demo a font and textures (localStorage "omnihub.demo.font", a data URL,
-  // and "omnihub.demo.textures", a JSON map of name → data URL); nothing is shipped.
+  // A test can hand the demo a font and an emoji pack (localStorage "omnihub.demo.font" and
+  // "omnihub.demo.emojiFont", data URLs, and "omnihub.demo.textures", a JSON map of name →
+  // data URL); nothing is shipped.
   aurora_look: () => {
     const textures = demoTextures();
-    return { font: localStorage.getItem('omnihub.demo.font') ? 'Demo font' : null, textures: Object.keys(textures).sort() };
+    return { font: localStorage.getItem('omnihub.demo.font') ? 'Demo font' : null, textures: Object.keys(textures).sort(), emojiFont: localStorage.getItem('omnihub.demo.emojiFont') ? 'Demo emoji font' : null };
   },
+  aurora_emoji_font: () => localStorage.getItem('omnihub.demo.emojiFont'),
   aurora_choose_font: () => {
     throw new Error('Choosing a font needs the Windows app.');
   },
-  aurora_choose_textures: () => {
-    throw new Error('Choosing textures needs the Windows app.');
+  aurora_choose_emoji_pack: () => {
+    throw new Error('Choosing an emoji pack needs the Windows app.');
   },
   aurora_forget_look: (a) => {
     if (bool(a, 'font')) localStorage.removeItem('omnihub.demo.font');
-    if (bool(a, 'textures')) localStorage.removeItem('omnihub.demo.textures');
+    if (bool(a, 'textures')) {
+      localStorage.removeItem('omnihub.demo.textures');
+      localStorage.removeItem('omnihub.demo.emojiFont');
+    }
   },
   aurora_font: () => localStorage.getItem('omnihub.demo.font'),
   aurora_texture: (a) => demoTextures()[str(a, 'name')] ?? null,

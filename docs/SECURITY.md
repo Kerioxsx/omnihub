@@ -256,17 +256,19 @@ the PC plays. How that works, and what it never does:
   3D pictures in `public/emoji/3d`, the one-colour drawings in
   `public/emoji/plain`, each with its `LICENSE.txt`), shipped inside the
   app; none are fetched.
-- **Your font & textures**: a font file and a zip of pictures the user picks
-  in Windows' own file dialog (the window never hands Rust a path). The font
-  is kept only if its first bytes say TrueType, OpenType or WOFF (20 MB at
-  most); from the zip only PNG files are taken, by their file name alone
-  (lower case, letters, digits and `_`; folders are ignored, so nothing can
-  be written outside `data/aurora-look/textures`), each up to 2 MB, 300 MB
-  and 50,000 entries in all, into a temporary folder that replaces the last
-  set only when the import succeeds. They are read back as data URLs (the
-  content security policy already allows `data:` fonts and images). They
-  never leave the PC, and OmniHub ships none (the user's own copies of a
-  game's font or textures).
+- **Your font & emoji pack**: a font file and an emoji pack (a zip of
+  pictures, or an emoji font) the user picks in Windows' own file dialog (the
+  window never hands Rust a path). Fonts are kept only if their first bytes
+  say TrueType, OpenType, a collection or WOFF (20 MB at most). From a zip
+  only pictures are taken, each checked by its first bytes (PNG, GIF, WebP,
+  JPEG; SVG must be an `<svg>` document), by its file name alone (lower case,
+  letters, digits and `_`, other characters as code points; folders are
+  ignored, so nothing can be written outside `data/aurora-look/textures`),
+  each up to 4 MB, 400 MB and 60,000 entries in all, into a temporary folder
+  that replaces the last set only when the import succeeds. They are read
+  back as data URLs and shown only as images or `@font-face` fonts (SVG in an
+  `<img>` runs no script; the content security policy already allows `data:`
+  fonts and images). They never leave the PC, and OmniHub ships none.
 
 ## Deleting files
 

@@ -350,7 +350,7 @@ function QuickSection({ v, video }: { v: VisualSettings; video?: PanelVideo }) {
           options={[
             { value: 'plain', label: 'Lyric colour', hint: 'One colour, the same as the lyrics' },
             { value: '3d', label: '3D', hint: 'Glossy, full colour' },
-            { value: 'textures', label: 'Textures', hint: 'Pictures from your own zip of textures (see “Your font & textures”)' },
+            { value: 'textures', label: 'Your pack', hint: 'Your own emoji pack or textures (see “Your font & emoji pack”)' },
           ]}
           onChange={(emojiStyle) => lyrics({ emojiStyle })}
         />
@@ -387,15 +387,15 @@ function YourLookSection({ v }: { v: VisualSettings }) {
   const chooseTextures = async () => {
     setBusy('textures');
     try {
-      const count = await api.media.chooseTextures();
-      if (count) {
+      const pack = await api.media.chooseEmojiPack();
+      if (pack) {
         forgetPictures();
         changed();
         lyrics({ emojiStyle: 'textures', ...(l.emoji === 'off' ? { emoji: 'some' as const } : {}) });
-        toast.success('Emojis now use your textures', `${count.toLocaleString()} pictures`);
+        toast.success('Emojis now use your pack', pack.kind === 'font' ? `Emoji font: ${pack.name}` : `${pack.count.toLocaleString()} pictures`);
       }
     } catch (e) {
-      toast.error('Could not use that zip', errorText(e));
+      toast.error('Could not use that emoji pack', errorText(e));
     } finally {
       setBusy(null);
     }
@@ -408,6 +408,7 @@ function YourLookSection({ v }: { v: VisualSettings }) {
     if (!font && l.emojiStyle === 'textures') lyrics({ emojiStyle: 'plain' });
   };
   const textures = look?.textures.length ?? 0;
+  const packDetail = look?.emojiFont ? `Emoji font: ${look.emojiFont}` : textures ? `${textures.toLocaleString()} pictures` : 'None chosen';
   const row = (label: string, detail: string, on: boolean, choose: () => void, chooseLabel: string, kind: 'font' | 'textures', use: () => void) => (
     <div className="flex items-center gap-2 py-1.5">
       <div className="min-w-0 flex-1">
@@ -430,17 +431,17 @@ function YourLookSection({ v }: { v: VisualSettings }) {
     </div>
   );
   return (
-    <Section title="Your font & textures">
+    <Section title="Your font & emoji pack">
       <p className="pb-1 text-[11px] leading-snug text-white/55">
-        For a Minecraft look: choose its font file (.ttf) and a zip of item textures. Words get the matching picture (“apple” → the apple, “diamonds” → a diamond, love → a heart). Your files stay on this PC.
+        Any font file for the lyrics, and any emoji pack: a zip of pictures (PNG, GIF, WebP, JPG or SVG — Twemoji, Noto, OpenMoji, Discord emotes, a game’s item textures…) or an emoji font. Each emoji gets the pack’s matching picture, by code point, by name or by the word itself (“apple” → the apple). Your files stay on this PC.
       </p>
       {row('Lyrics font', look?.font ?? 'None chosen', l.font === 'custom', () => void chooseFont(), look?.font ? 'Change…' : 'Choose .ttf…', 'font', () => lyrics({ font: 'custom' }))}
       {row(
-        'Emoji textures',
-        textures ? `${textures.toLocaleString()} pictures` : 'None chosen',
+        'Emoji pack',
+        packDetail,
         l.emojiStyle === 'textures',
         () => void chooseTextures(),
-        textures ? 'Change…' : 'Choose .zip…',
+        packDetail !== 'None chosen' ? 'Change…' : 'Choose…',
         'textures',
         () => lyrics({ emojiStyle: 'textures', ...(l.emoji === 'off' ? { emoji: 'some' as const } : {}) }),
       )}
@@ -582,7 +583,7 @@ function LyricsSection({ v }: { v: VisualSettings }) {
             { value: 'plain', label: 'In the lyrics’ colour' },
             { value: '3d', label: '3D (glossy)' },
             { value: 'system', label: 'Windows' },
-            { value: 'textures', label: 'Your textures' },
+            { value: 'textures', label: 'Your emoji pack' },
           ]}
           onChange={(emojiStyle) => set({ emojiStyle })}
         />

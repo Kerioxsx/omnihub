@@ -1544,6 +1544,11 @@ export interface StreamToolStatus {
 export interface AuroraLook {
   /** The font's name (its file name), if one was chosen. */
   font: string | null;
-  /** The texture names (file names without ".png"). */
+  /** The emoji pack's picture names (file names without the extension). */
   textures: string[];
+  /** The emoji pack, when it is a font: its name. */
+  emojiFont: string | null;
 }
+
+/** What an emoji pack turned out to be. */
+export type EmojiPack = { kind: 'pictures'; count: number } | { kind: 'font'; name: string };
