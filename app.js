@@ -1011,6 +1011,7 @@
       DFIntCSGLevelOfDetailSwitchingDistanceL12: '0',
       DFIntCSGLevelOfDetailSwitchingDistanceL23: '0',
       DFIntCSGLevelOfDetailSwitchingDistanceL34: '0',
+      DFFlagDebugPauseVoxelizer: 'True',
       DFIntDebugFRMQualityLevelOverride: '1',
       FFlagHandleAltEnterFullscreenManually: 'False',
     },
