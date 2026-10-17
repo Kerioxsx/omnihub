@@ -181,11 +181,56 @@ and lets a phone do some of that. This is what protects each part.
   (`--omnihub-helper fps-admin allow <account>`, which runs `net localgroup`
   with the group's name looked up from its SID). Remove yourself from the
   group in Computer Management to undo it.
+- NVIDIA settings for the game (on in Competitive mode): with the same
+  one-time UAC prompt, the elevated helper (`nv+:Game.exe`) sets five
+  values on the game's profile in the NVIDIA driver through NVAPI's
+  documented driver-settings interface (`nvapi64.dll`, function and setting
+  ids from NVIDIA's open SDK headers): power management, maximum
+  pre-rendered frames, texture filtering quality, vertical sync and the
+  driver frame cap. A value the user set on that profile themselves is left
+  alone. Turning it off (or deleting the profile) restores NVIDIA's
+  defaults for those five (`nv-:`). Reading them needs no elevation.
+- The boost no longer waits behind the administrator prompt: the prompt is
+  owned by OmniHub's window (so it opens in front), and after 25 seconds
+  the game starts without it; the prompt's answer still lands in its step.
 - Nothing touches a game's memory or program files, so anti-cheat has
   nothing to object to. Besides the settings files above, the exception is
   Roblox's own settings file,
   `ClientSettings\ClientAppSettings.json`, where OmniHub writes Fast Flags
   (keeping any flags it did not write).
+
+## My PC: lighting, fans, screens and specs
+
+- Specs are read, never written: the firmware's SMBIOS table
+  (`GetSystemFirmwareTable('RSMB')`: motherboard, case type, memory sticks),
+  the registry (processor, `HARDWARE\DEVICEMAP\Scsi` disk names), DXGI
+  (graphics cards) and the list of USB/HID devices present
+  (`CM_Get_Device_ID_List`, matched against a fixed table of coolers and
+  hubs). No administrator rights, no driver, nothing sent anywhere.
+- OmniHub loads no driver of its own for lighting or fans. It talks to
+  programs the user installs and runs: **OpenRGB** over its SDK protocol on
+  `127.0.0.1` (port 6742 by default; colours and "direct" mode only — no
+  profiles, settings or firmware commands are sent), **LibreHardwareMonitor**
+  over its remote web server, and **liquidctl** as a command-line program.
+  OmniHub only ever connects to LibreHardwareMonitor on `127.0.0.1`,
+  `localhost` or `[::1]`: another address is refused, so fan controls are
+  never sent to, or read from, another machine. Its optional password is
+  kept encrypted for the Windows account (DPAPI).
+- Fan safety: no fan is set under 30% (pumps 50%), every controlled fan runs
+  at 100% from 90 °C, a fan with no temperature to follow is handed back to
+  the hardware, speeds fall at most 3% per two seconds, and on quit every fan
+  OmniHub set goes back to the hardware's own control (`value=null`).
+  Coolers driven through liquidctl get a temperature profile they run
+  themselves; opening the page changes nothing until a profile is picked.
+- "Start OpenRGB" runs OpenRGB from where its installer put it (Program
+  Files or the user's programs folder), as the user, with `--server
+  --startminimized`.
+- Screen media: a picture or video the user picks in Windows' file dialog is
+  copied into `data\rig-media` only if its first bytes are a PNG, JPEG,
+  GIF, WebP, MP4 or WebM (40 MB for pictures, 1 GB for videos); the window
+  never passes a path. The case-screen window gets files through
+  `rigmedia://` by library id only (a UUID and a known extension; nothing
+  else resolves), with byte ranges.
 
 ## Aurora and the PC's sound
 

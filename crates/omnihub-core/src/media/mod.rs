@@ -386,6 +386,8 @@ pub struct MediaHub {
     lrc_folder: Mutex<Option<PathBuf>>,
     /// Look the current track's lyrics up again (the folder changed).
     refetch: AtomicBool,
+    /// Poll quickly until then (Unix ms): a control was just used.
+    quick_until: std::sync::atomic::AtomicI64,
     /// Look sharper covers up online (settings).
     hires_art: AtomicBool,
     covers: artwork::ArtCache,
@@ -426,7 +428,7 @@ impl MediaHub {
                 Box::new(NoBackend)
             }
         };
-        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")), stream: stream::StreamTool::new(data_dir.join("tools").join("video")), motions: Mutex::new(HashMap::new()), motion: motion::MotionFinder::new(data_dir.join("motion")), look: look::LookFiles::new(data_dir.join("aurora-look")), syncs: Mutex::new(HashMap::new()), sync_cache: align::SyncCache::new(data_dir.join("videos").join("sync.json")), sync_running: Mutex::new(None), sync_asked: Mutex::new(HashMap::new()), sync_dir: data_dir.join("videos").join("soundtracks"), mirror: mirror::Mirror::new(fake) })
+        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), quick_until: std::sync::atomic::AtomicI64::new(0), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")), stream: stream::StreamTool::new(data_dir.join("tools").join("video")), motions: Mutex::new(HashMap::new()), motion: motion::MotionFinder::new(data_dir.join("motion")), look: look::LookFiles::new(data_dir.join("aurora-look")), syncs: Mutex::new(HashMap::new()), sync_cache: align::SyncCache::new(data_dir.join("videos").join("sync.json")), sync_running: Mutex::new(None), sync_asked: Mutex::new(HashMap::new()), sync_dir: data_dir.join("videos").join("soundtracks"), mirror: mirror::Mirror::new(fake) })
     }
 
     /// Whether this is the pretend player (the mixer and open apps pretend too).
@@ -445,15 +447,20 @@ impl MediaHub {
                 let _ = unsafe { windows::Win32::System::WinRT::RoInitialize(windows::Win32::System::WinRT::RO_INIT_MULTITHREADED) };
                 loop {
                     let Some(hub) = weak.upgrade() else { return };
-                    hub.poll(&lyrics_online);
+                    let playing = hub.poll(&lyrics_online);
+                    // Four times a second while music plays (lyrics follow
+                    // it); more slowly when nothing does, unless a control
+                    // was just pressed.
+                    let quick = playing || hub.quick_until.load(Ordering::Relaxed) > now_ms();
                     drop(hub);
-                    std::thread::sleep(Duration::from_millis(250));
+                    std::thread::sleep(Duration::from_millis(if quick { 250 } else { 750 }));
                 }
             })
             .ok();
     }
 
-    fn poll(self: &Arc<Self>, lyrics_online: &dyn Fn() -> bool) {
+    /// Read the player and announce changes; returns whether it plays.
+    fn poll(self: &Arc<Self>, lyrics_online: &dyn Fn() -> bool) -> bool {
         let now = now_ms();
         let mut g = self.inner.lock();
         let snap = g.backend.snapshot();
@@ -482,6 +489,7 @@ impl MediaHub {
         if announce {
             self.events.emit("media:state", serde_json::json!({ "state": state, "nowMs": now_ms() }));
         }
+        state.is_some_and(|s| s.playing)
     }
 
     pub fn state(&self) -> Option<MediaState> {
@@ -501,6 +509,7 @@ impl MediaHub {
     }
 
     pub fn control(&self, action: Action, position_ms: u64) -> Result<(), String> {
+        self.quick_until.store(now_ms() + 3000, Ordering::Relaxed);
         let mut g = self.inner.lock();
         if g.state.is_none() && !matches!(action, Action::Play | Action::Toggle) {
             return Err("Nothing is playing on the PC.".into());

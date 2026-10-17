@@ -3834,7 +3834,7 @@ dependencies = [
 
 [[package]]
 name = "omnihub"
-version = "0.7.3"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "omnihub-core",
@@ -3853,12 +3853,13 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "webview2-com",
  "windows",
 ]
 
 [[package]]
 name = "omnihub-core"
-version = "0.7.3"
+version = "0.8.0"
 dependencies = [
  "aes-gcm",
  "anyhow",

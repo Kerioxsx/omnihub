@@ -4,6 +4,7 @@
 mod commands;
 mod ambient;
 mod overlay;
+mod rest;
 mod rig;
 mod shortcuts;
 mod tray;
@@ -172,6 +173,7 @@ pub fn run(args: Vec<String>) {
             core.start_background();
             ambient::start(handle.clone());
             rig::start(handle.clone());
+            rest::start(handle.clone());
 
             // Autostart passes --minimized; "Start minimized" decides whether
             // that start stays in the tray. A normal launch always shows.

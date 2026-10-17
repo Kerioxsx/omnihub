@@ -172,7 +172,7 @@ mod tests {
         LightProfile { effect, colors: colors.iter().map(|c| c.to_string()).collect(), ..Default::default() }
     }
 
-    /// The same values `effects.test.ts` expects from the window's copy.
+    /// The window's copy (`src/desktop/lib/rig/effects.ts`) gives the same values.
     #[test]
     fn effects_match_the_preview() {
         let red_blue = profile(Effect::Static, &["#ff0000", "#0000ff"]);

@@ -8,6 +8,7 @@
 import type { AudioFrame, VisualStatus } from '@shared/types';
 import { useEffect, useState } from 'react';
 import { api, on } from '../../api';
+import { everyWhileVisible } from '../hooks';
 
 export interface Levels {
   level: number;
@@ -56,11 +57,11 @@ export function useAudioFeed(enabled: boolean, who: string): VisualStatus | null
         () => undefined,
       );
     hold();
-    const timer = setInterval(hold, 4000);
+    const stopHolding = everyWhileVisible(hold, 4000);
     const stop = on<VisualStatus>('audio:status', (s) => alive && setStatus(s));
     return () => {
       alive = false;
-      clearInterval(timer);
+      stopHolding();
       void stop.then((u) => u());
       void api.visual.release(who).catch(() => undefined);
       off();

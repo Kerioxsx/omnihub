@@ -425,6 +425,8 @@ export class PcScene {
     if (!this.visible) return;
     this.frame = requestAnimationFrame(this.loop);
     const now = performance.now();
+    // Full refresh rate while you look at it; ~30 fps behind a game or another app.
+    if (!document.hasFocus() && now - this.last < 32) return;
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     this.controls.update();

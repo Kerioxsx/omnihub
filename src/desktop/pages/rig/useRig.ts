@@ -4,6 +4,7 @@
 import type { DeepPartial, LightProfile, RigMedia, RigSettings, RigStatus, Specs } from '@shared/types';
 import { useCallback, useEffect, useState } from 'react';
 import { api, errorText, on } from '../../api';
+import { everyWhileVisible } from '../../lib/hooks';
 import { toast } from '../../state/toasts';
 
 export interface Rig {
@@ -36,12 +37,12 @@ export function useRig(): Rig {
     reloadMedia();
     const hold = () => void api.rig.hold().then((s) => alive && setStatus(s), () => undefined);
     hold();
-    const timer = setInterval(hold, 4000);
+    const stopHolding = everyWhileVisible(hold, 4000);
     const offStatus = on<RigStatus>('rig:status', (s) => alive && setStatus(s));
     const offSettings = on<RigSettings>('rig:settings', (s) => alive && setSettings(s));
     return () => {
       alive = false;
-      clearInterval(timer);
+      stopHolding();
       void offStatus.then((u) => u());
       void offSettings.then((u) => u());
     };

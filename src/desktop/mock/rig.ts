@@ -64,6 +64,8 @@ function status(): RigStatus {
   const cpu = 52 + Math.sin(t / 7) * 6;
   const gpu = 47 + Math.sin(t / 9) * 5;
   const fast = settings.fans.profile === 'fast' ? 1.35 : settings.fans.profile === 'silent' ? 0.72 : 1;
+  // OmniHub never sets a fan under 30% (the hardware's own Auto may).
+  const duty = (base: number) => (settings.fans.profile === 'auto' ? base : Math.max(30, Math.round(base * fast)));
   return {
     lighting: settings.lighting.enabled ? 'on' : 'off',
     lightingMessage: null,
@@ -79,10 +81,10 @@ function status(): RigStatus {
     fans: 'on',
     fansMessage: null,
     controls: [
-      { id: '/lpc/nct6799d/0/control/1', name: 'CPU Fan', hardware: 'Nuvoton NCT6799D', role: 'case', percent: Math.round(38 * fast), skipped: false },
-      { id: '/lpc/nct6799d/0/control/2', name: 'Chassis Fan #1', hardware: 'Nuvoton NCT6799D', role: 'case', percent: Math.round(34 * fast), skipped: false },
-      { id: '/lpc/nct6799d/0/control/3', name: 'Chassis Fan #2', hardware: 'Nuvoton NCT6799D', role: 'case', percent: Math.round(34 * fast), skipped: settings.fans.skip.includes('/lpc/nct6799d/0/control/3') },
-      { id: '/gpu-nvidia/0/control/1', name: 'GPU Fan', hardware: 'NVIDIA GeForce RTX 4070 SUPER', role: 'gpu', percent: Math.round(30 * fast), skipped: false },
+      { id: '/lpc/nct6799d/0/control/1', name: 'CPU Fan', hardware: 'Nuvoton NCT6799D', role: 'case', percent: duty(38), skipped: false },
+      { id: '/lpc/nct6799d/0/control/2', name: 'Chassis Fan #1', hardware: 'Nuvoton NCT6799D', role: 'case', percent: duty(34), skipped: false },
+      { id: '/lpc/nct6799d/0/control/3', name: 'Chassis Fan #2', hardware: 'Nuvoton NCT6799D', role: 'case', percent: duty(34), skipped: settings.fans.skip.includes('/lpc/nct6799d/0/control/3') },
+      { id: '/gpu-nvidia/0/control/1', name: 'GPU Fan', hardware: 'NVIDIA GeForce RTX 4070 SUPER', role: 'gpu', percent: duty(30), skipped: false },
     ],
     rpm: [
       ['CPU Fan', Math.round(980 * fast)],

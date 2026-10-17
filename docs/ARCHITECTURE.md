@@ -91,12 +91,30 @@ round trip.
 
 ## Music, tasks and games
 
-`media/` polls Windows' media sessions (GSMTC) every 250 ms for the track,
+`media/` polls Windows' media sessions (GSMTC) every 250 ms while music plays (750 ms otherwise, and quickly again for 3 s after a control) for the track,
 cover and position, and sends `media:state` with the PC's clock so the phone
 can line up time-synced lyrics (fetched from LRCLIB, cached per song) to
 within a frame. `system/procs.rs` groups processes by name; GPU figures come
 from the "GPU Engine" and "GPU Process Memory" performance counters (the
 busiest engine per program, like Task Manager) via `system/gpu.rs`.
+
+### My PC (`rig/`)
+
+`RigHub` owns `data/rig.json` and one worker thread that runs only while it
+is needed (lighting on, a fan profile other than Auto, or the page/case
+screen holding a lease) and otherwise exits. `specs.rs` parses SMBIOS and
+matches present USB ids; `openrgb.rs` is an OpenRGB SDK client (protocol 3:
+controller list, `SETCUSTOMMODE`, `UPDATELEDS`); `lighting.rs` holds the
+effects, which `src/desktop/lib/rig/effects.ts` repeats for the 3D preview
+(same values); `lhm.rs` reads LibreHardwareMonitor's `data.json` and sets
+controls; `fans.rs` holds the curves, floors and smoothing; `liquidctl.rs`
+runs liquidctl; `screens.rs` keeps the media library. The worker sends
+frames at 30 fps for moving effects (once a second otherwise), reads the
+sensors every 2 s, and pushes `rig:status` only while a view holds it. The
+shell adds the `casescreen` window (on the chosen monitor) and the
+`rigmedia://` protocol. The 3D view (`lib/rig/scene3d.ts`, three.js, loaded
+with the page) builds the PC from the specs and the user's description,
+draws every LED of a part in one instanced mesh, and pauses when hidden.
 
 ### Aurora
 

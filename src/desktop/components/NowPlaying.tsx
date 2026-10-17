@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 import { Maximize2, Music2, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../api';
-import { useEvent } from '../lib/hooks';
+import { everyWhileVisible, useEvent } from '../lib/hooks';
 import { usePlayer } from '../lib/nowPlaying';
 import { toast } from '../state/toasts';
 import { IconButton } from './ui/Button';
@@ -56,8 +56,7 @@ export function NowPlayingCard() {
 
   useEffect(() => {
     if (!state?.playing) return;
-    const t = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(t);
+    return everyWhileVisible(() => setNow(Date.now()), 250);
   }, [state?.playing]);
 
   const pos = !state ? 0 : Math.min(state.durationMs || Infinity, state.playing ? state.positionMs + Math.max(0, now + offset - state.positionAt) * (state.rate || 1) : state.positionMs);
