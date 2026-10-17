@@ -28,7 +28,7 @@ const TEMPLATES: Record<GameKind, { name: string; launch: GameLaunch; process: s
 export function withMode(b: GameBoost, mode: BoostMode): GameBoost {
   if (mode === 'custom') return { ...b, mode };
   const competitive = mode === 'competitive';
-  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, preciseTimer: true, fullSpeed: true };
+  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, preciseTimer: true, fullSpeed: true, nvidiaProfile: competitive };
 }
 
 const defaultMode = (kind: GameKind): BoostMode => (kind === 'gta5' || kind === 'cyberpunk' || kind === 'custom' ? 'quality' : 'competitive');
@@ -44,7 +44,7 @@ function template(kind: GameKind): GameProfile {
     launch: t.launch,
     process: t.process,
     exePath: kind === 'fortnite' ? 'C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe' : kind === 'roblox' ? 'C:\\Users\\You\\AppData\\Local\\Roblox\\Versions\\version-6d3a1b2c4e5f4a1b\\RobloxPlayerBeta.exe' : null,
-    boost: withMode({ mode: 'custom', powerPlan: 'ultimate', priority: 'high', closeApps: [], reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, fullscreenOptimizationsOff: false, wifiLowLatency: true, networkPriority: false, startHighPriority: false, gameSettings: true, closeJunk: true, lowerBackground: true, preciseTimer: true, fullSpeed: true, fpsMeter: true }, defaultMode(kind)),
+    boost: withMode({ mode: 'custom', powerPlan: 'ultimate', priority: 'high', closeApps: [], reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, fullscreenOptimizationsOff: false, wifiLowLatency: true, networkPriority: false, startHighPriority: false, gameSettings: true, closeJunk: true, lowerBackground: true, preciseTimer: true, fullSpeed: true, fpsMeter: true, nvidiaProfile: false }, defaultMode(kind)),
     pingHost: null,
     roblox: { ...ROBLOX_DEFAULT },
     lastPlayed: null,
@@ -61,7 +61,7 @@ const profiles: GameProfile[] = (() => {
   r.lastPlayed = Math.floor(Date.now() / 1000) - 2 * 86400;
   return [f, r];
 })();
-const applied = new Map<string, { qos: boolean; ifeo: boolean }>([[profiles[0].id, { qos: false, ifeo: true }]]);
+const applied = new Map<string, { qos: boolean; ifeo: boolean; nv: boolean }>([[profiles[0].id, { qos: false, ifeo: true, nv: false }]]);
 
 let session: GameSession | null = null;
 let timers: ReturnType<typeof setTimeout>[] = [];
@@ -104,8 +104,8 @@ export function remove(id: string) {
 export function state(id: string): GameState | null {
   const p = profiles.find((q) => q.id === id);
   if (!p) return null;
-  const a = applied.get(id) ?? { qos: false, ifeo: false };
-  return { networkPriority: a.qos, startHighPriority: a.ifeo, onWifi: true, running: false };
+  const a = applied.get(id) ?? { qos: false, ifeo: false, nv: false };
+  return { networkPriority: a.qos, startHighPriority: a.ifeo, nvidiaProfile: a.nv, onWifi: true, running: false };
 }
 
 function push(f: (s: GameSession) => void) {
@@ -132,11 +132,11 @@ export function play(id: string, launch: boolean): GameSession {
   if (b.silenceNotifications) steps.push({ id: 'notifications', label: 'Notifications', status: 'done', detail: 'Pop-ups paused' });
   if (b.gameMode) steps.push({ id: 'gamemode', label: 'Game Mode', status: 'skipped', detail: 'already on' });
   if (b.gpuHighPerformance || b.fullscreenOptimizationsOff) steps.push({ id: 'pergame', label: 'GPU & fullscreen', status: 'done', detail: [b.gpuHighPerformance && 'high-performance GPU', b.fullscreenOptimizationsOff && 'fullscreen optimizations off'].filter(Boolean).join(', ') });
-  if (b.networkPriority || b.startHighPriority) {
-    const a = applied.get(id) ?? { qos: false, ifeo: false };
-    const need = (b.networkPriority && !a.qos) || (b.startHighPriority && !a.ifeo);
+  if (b.networkPriority || b.startHighPriority || b.nvidiaProfile) {
+    const a = applied.get(id) ?? { qos: false, ifeo: false, nv: false };
+    const need = (b.networkPriority && !a.qos) || (b.startHighPriority && !a.ifeo) || (b.nvidiaProfile && !a.nv);
     steps.push({ id: 'admin', label: 'Network & start priority', status: need ? 'done' : 'skipped', detail: need ? 'Turned on (kept for next time)' : 'already on' });
-    applied.set(id, { qos: b.networkPriority || a.qos, ifeo: b.startHighPriority || a.ifeo });
+    applied.set(id, { qos: b.networkPriority || a.qos, ifeo: b.startHighPriority || a.ifeo, nv: b.nvidiaProfile || a.nv });
   }
   if (b.preciseTimer) steps.push({ id: 'timer', label: 'Precise timer', status: 'done', detail: '0.5 ms (Windows’ default is up to 15.6 ms)' });
   if (b.wifiLowLatency) steps.push({ id: 'wifi', label: 'Wi-Fi', status: 'done', detail: 'Low-latency mode on Intel(R) Wi-Fi 6E AX211 160MHz' });

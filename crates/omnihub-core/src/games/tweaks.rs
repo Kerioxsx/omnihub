@@ -53,6 +53,9 @@ pub enum AdminOp {
     QosOff(String),
     StartHighOn(String),
     StartHighOff(String),
+    /// The game's NVIDIA driver profile (see `nvidia`).
+    NvidiaOn(String),
+    NvidiaOff(String),
 }
 
 impl AdminOp {
@@ -62,6 +65,8 @@ impl AdminOp {
             AdminOp::QosOff(e) => format!("qos-:{e}"),
             AdminOp::StartHighOn(e) => format!("ifeo+:{e}"),
             AdminOp::StartHighOff(e) => format!("ifeo-:{e}"),
+            AdminOp::NvidiaOn(e) => format!("nv+:{e}"),
+            AdminOp::NvidiaOff(e) => format!("nv-:{e}"),
         }
     }
 
@@ -76,6 +81,8 @@ impl AdminOp {
             "qos-" => AdminOp::QosOff(exe),
             "ifeo+" => AdminOp::StartHighOn(exe),
             "ifeo-" => AdminOp::StartHighOff(exe),
+            "nv+" => AdminOp::NvidiaOn(exe),
+            "nv-" => AdminOp::NvidiaOff(exe),
             _ => return None,
         })
     }
@@ -279,6 +286,8 @@ mod imp {
                 AdminOp::QosOff(exe) => run("powershell", &["-NoProfile", "-NonInteractive", "-Command", &format!("Remove-NetQosPolicy -Name '{}' -Confirm:$false", qos_policy_name(exe))]).map(|_| ()),
                 AdminOp::StartHighOn(exe) => RegKey::predef(HKEY_LOCAL_MACHINE).create_subkey(format!(r"{IFEO}\{exe}\PerfOptions")).and_then(|(k, _)| k.set_value("CpuPriorityClass", &3u32)).map_err(|e| e.to_string()),
                 AdminOp::StartHighOff(exe) => start_high_off(exe),
+                AdminOp::NvidiaOn(exe) => crate::games::nvidia::apply(exe).map(|_| ()),
+                AdminOp::NvidiaOff(exe) => crate::games::nvidia::undo(exe),
             };
             if let Err(e) = r {
                 tracing::warn!("{}: {e}", op.arg());
@@ -417,6 +426,11 @@ mod imp {
     /// Whether a finer timer OmniHub asks for reaches games too. Since
     /// Windows 10 2004 each program gets only the timer it asked for, and
     /// Windows 11 brings back the shared one with GlobalTimerResolutionRequests.
+    /// Whether some app is registered for `scheme:` links (Epic's, Steam's…).
+    pub fn link_handler_installed(scheme: &str) -> bool {
+        RegKey::predef(winreg::enums::HKEY_CLASSES_ROOT).open_subkey(scheme).is_ok_and(|k| k.get_raw_value("URL Protocol").is_ok())
+    }
+
     pub fn timer_reaches_games() -> Result<(), String> {
         let build = read_string(HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "CurrentBuildNumber").and_then(|b| b.parse::<u32>().ok()).unwrap_or(0);
         if build < 19041 || read_dword(HKEY_LOCAL_MACHINE, KERNEL, "GlobalTimerResolutionRequests") == Some(1) {
@@ -545,6 +559,9 @@ mod imp {
         pub fn start() -> Result<(TimerResolution, f32), String> {
             Err(ONLY.into())
         }
+    }
+    pub fn link_handler_installed(_scheme: &str) -> bool {
+        true
     }
     pub fn timer_reaches_games() -> Result<(), String> {
         Err(ONLY.into())

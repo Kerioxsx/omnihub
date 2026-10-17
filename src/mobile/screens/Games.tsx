@@ -163,10 +163,10 @@ export function GamesPage({ onBack }: { onBack: () => void }) {
               )}
               <ul className="mt-3 space-y-1.5">
                 {(session.phase === 'ended' && session.restored.length ? session.restored : session.steps).map((s) => {
-                  const Icon = s.status === 'done' ? CheckCircle2 : s.status === 'failed' ? XCircle : CircleSlash;
+                  const Icon = s.status === 'done' ? CheckCircle2 : s.status === 'failed' ? XCircle : s.status === 'waiting' ? LoaderCircle : CircleSlash;
                   return (
                     <li key={s.id} className="flex items-start gap-2 text-[13px]">
-                      <Icon size={15} className={cx('mt-0.5 shrink-0', s.status === 'done' ? 'text-good' : s.status === 'failed' ? 'text-bad' : 'text-faint')} />
+                      <Icon size={15} className={cx('mt-0.5 shrink-0', s.status === 'done' ? 'text-good' : s.status === 'failed' ? 'text-bad' : s.status === 'waiting' ? 'animate-spin text-accent' : 'text-faint')} />
                       <span className="min-w-0">
                         <span className="font-semibold">{s.label}</span> <span className="text-dim">{s.detail}</span>
                       </span>

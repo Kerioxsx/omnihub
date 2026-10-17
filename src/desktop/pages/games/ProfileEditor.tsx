@@ -56,7 +56,7 @@ const NEVER = new Set(['omnihub.exe', 'explorer.exe', 'steam.exe', 'steamwebhelp
 function withMode(b: GameBoost, mode: BoostMode): GameBoost {
   if (mode === 'custom') return { ...b, mode };
   const competitive = mode === 'competitive';
-  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, preciseTimer: true, fullSpeed: true };
+  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, preciseTimer: true, fullSpeed: true, nvidiaProfile: competitive };
 }
 
 const MODES: { value: BoostMode; icon: LucideIcon; title: string; blurb: (game: string, hasSettings: boolean) => string }[] = [
@@ -334,6 +334,11 @@ export function ProfileEditor({ profile, session, busy, activeHere, onSaved, onD
           <Row title="Always start at High priority" badge={<AdminBadge on={state?.startHighPriority} />} hint="Windows itself starts the game at High priority — works even when anti-cheat blocks changing it later (Fortnite, VALORANT).">
             <Switch checked={b.startHighPriority} onChange={(v) => boost({ startHighPriority: v })} label="Always start at High priority" />
           </Row>
+          {state?.nvidiaProfile !== null && (
+            <Row title="NVIDIA settings for the game" badge={<AdminBadge on={state?.nvidiaProfile ?? undefined} />} hint="The game's profile in the NVIDIA driver: prefer maximum performance, low latency mode on, fast texture filtering, no forced VSync and no driver frame cap. Anything you set for the game there yourself stays.">
+              <Switch checked={b.nvidiaProfile} disabled={set} onChange={(v) => boost({ nvidiaProfile: v })} label="NVIDIA settings for the game" />
+            </Row>
+          )}
           {!draft.exePath && (b.gpuHighPerformance || b.fullscreenOptimizationsOff) && <div className="px-5 py-2.5 text-[12px] text-faint">GPU and fullscreen settings are applied once OmniHub has seen the game run.</div>}
         </div>
       </Card>

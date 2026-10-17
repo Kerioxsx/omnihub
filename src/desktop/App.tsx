@@ -19,6 +19,7 @@ import { useMediaQuery, useStoredState } from './lib/hooks';
 import { PAGE_IDS, type RouteId, navigate, useRoute } from './lib/router';
 import { AppsPage } from './pages/apps/AppsPage';
 import { GamesPage } from './pages/games/GamesPage';
+import { RigPage } from './pages/rig/RigPage';
 import { MusicPage } from './pages/music/MusicPage';
 import { PlayerHost } from './components/music/PlayerHost';
 import { HomePage } from './pages/home/HomePage';
@@ -34,7 +35,7 @@ import { VaultPage } from './pages/vault/VaultPage';
 import { usePalette } from './state/dialogs';
 import { useSettings } from './state/settings';
 
-const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient'>, ComponentType> = {
+const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen'>, ComponentType> = {
   home: HomePage,
   storage: StoragePage,
   apps: AppsPage,
@@ -43,6 +44,7 @@ const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient'>, ComponentType> = {
   music: MusicPage,
   tasks: TasksPage,
   games: GamesPage,
+  rig: RigPage,
   vault: VaultPage,
   phone: PhonePage,
   screen: ScreenPage,
@@ -122,7 +124,7 @@ export function App() {
 
   if (!settings) return <Splash error={error} onRetry={() => void load()} />;
 
-  const pageId = route.id === 'overlay' || route.id === 'ambient' ? 'home' : route.id;
+  const pageId = route.id === 'overlay' || route.id === 'ambient' || route.id === 'casescreen' ? 'home' : route.id;
   const PageComp = PAGES[pageId];
   const showOnboarding = onboardingForced || !settings.general.onboarded;
 

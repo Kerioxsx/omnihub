@@ -8,6 +8,7 @@ import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from '.
 import { scene } from './mock/art';
 import * as core from './mock/core';
 import * as games from './mock/games';
+import { rig } from './mock/rig';
 import * as optimize from './mock/optimize';
 import * as updates from './mock/update';
 
@@ -41,6 +42,19 @@ const handlers: Record<string, Handler> = {
   update_state: () => updates.info(),
   update_check: () => updates.check(),
   update_install: () => updates.install(),
+  rig_specs: () => rig.specs(),
+  rig_settings: () => rig.settings(),
+  rig_update: (a) => rig.update(obj(a, 'patch')),
+  rig_hold: () => rig.hold(),
+  rig_profiles: () => rig.profiles(),
+  rig_save_profile: (a) => rig.saveProfile(obj(a, 'profile')),
+  rig_delete_profile: (a) => rig.deleteProfile(str(a, 'id')),
+  rig_lhm_login: () => undefined,
+  rig_start_openrgb: () => undefined,
+  rig_media: () => rig.media(),
+  rig_media_add: () => rig.addMedia(),
+  rig_media_remove: (a) => rig.removeMedia(str(a, 'id')),
+  rig_displays: () => rig.displays(),
   games_list: () => games.list(),
   games_create: (a) => games.create(str(a, 'kind') as GameKind),
   games_save: (a) => games.save(obj<GameProfile>(a, 'profile')),

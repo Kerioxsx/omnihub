@@ -5,6 +5,7 @@
 // screenshotted without Windows.
 
 import type * as T from '@shared/types';
+import { demoArt } from './lib/rig/demoArt';
 
 type Args = Record<string, unknown>;
 
@@ -312,9 +313,34 @@ export const api = {
     airplayFirewall: () => call<T.FirewallReport>('airplay_firewall'),
     airplayFixFirewall: (includePublic: boolean) => call<T.FirewallReport>('airplay_fix_firewall', { includePublic }),
   },
+
+  /** My PC: lighting (OpenRGB), fans (LibreHardwareMonitor, liquidctl), screens and specs. */
+  rig: {
+    specs: (refresh = false) => call<T.Specs>('rig_specs', { refresh }),
+    settings: () => call<T.RigSettings>('rig_settings'),
+    update: (patch: T.DeepPartial<T.RigSettings>) => call<T.RigSettings>('rig_update', { patch }),
+    /** The page is open (call every few seconds); `rig:status` events follow. */
+    hold: () => call<T.RigStatus>('rig_hold'),
+    profiles: () => call<T.LightProfile[]>('rig_profiles'),
+    saveProfile: (profile: T.LightProfile) => call<T.LightProfile>('rig_save_profile', { profile }),
+    deleteProfile: (id: string) => call<void>('rig_delete_profile', { id }),
+    lhmLogin: (user: string, password: string) => call<void>('rig_lhm_login', { user, password }),
+    startOpenRgb: () => call<void>('rig_start_openrgb'),
+    media: () => call<T.RigMedia[]>('rig_media'),
+    /** Pick a picture, GIF or video (null when cancelled). */
+    addMedia: () => call<T.RigMedia | null>('rig_media_add'),
+    removeMedia: (id: string) => call<void>('rig_media_remove', { id }),
+    displays: () => call<T.RigDisplay[]>('rig_displays'),
+  },
 };
 
 export type Api = typeof api;
+
+/** Where the window loads a library picture or video from. */
+export function rigMediaUrl(id: string): string {
+  if (!inTauri) return demoArt(id);
+  return `http://rigmedia.localhost/${encodeURIComponent(id)}`;
+}
 
 /** Error text from a rejected command (Tauri rejects with a string). */
 export function errorText(e: unknown): string {

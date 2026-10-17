@@ -4,6 +4,7 @@
 mod commands;
 mod ambient;
 mod overlay;
+mod rig;
 mod shortcuts;
 mod tray;
 
@@ -94,6 +95,7 @@ pub fn run(args: Vec<String>) {
         tracing::warn!("the previous run did not end normally; details in logs/last-crash.txt");
     }
     let core = AppCore::new(paths, CoreOptions::default()).expect("cannot open the OmniHub database");
+    let rig_hub = core.rig.clone();
     #[cfg(windows)]
     let session_logs = logs_dir.clone();
 
@@ -118,6 +120,13 @@ pub fn run(args: Vec<String>) {
                 .build(),
         )
         .manage(core.clone())
+        .register_asynchronous_uri_scheme_protocol("rigmedia", {
+            let core = core.clone();
+            move |_ctx, request, responder| {
+                let core = core.clone();
+                std::thread::spawn(move || responder.respond(rig::serve(&core, &request)));
+            }
+        })
         .manage(commands::PendingSend::default())
         .manage(commands::LastCrash(parking_lot::Mutex::new(last_crash)))
         .setup(move |app| {
@@ -162,6 +171,7 @@ pub fn run(args: Vec<String>) {
             core.updater.set_in_use(move || window_handle.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false)));
             core.start_background();
             ambient::start(handle.clone());
+            rig::start(handle.clone());
 
             // Autostart passes --minimized; "Start minimized" decides whether
             // that start stays in the tray. A normal launch always shows.
@@ -408,12 +418,27 @@ pub fn run(args: Vec<String>) {
             commands::vault_totp,
             commands::app_last_crash,
             commands::app_log_error,
+            rig::rig_specs,
+            rig::rig_settings,
+            rig::rig_update,
+            rig::rig_hold,
+            rig::rig_profiles,
+            rig::rig_save_profile,
+            rig::rig_delete_profile,
+            rig::rig_lhm_login,
+            rig::rig_start_openrgb,
+            rig::rig_media,
+            rig::rig_media_add,
+            rig::rig_media_remove,
+            rig::rig_displays,
         ])
         .build(tauri::generate_context!())
         .expect("error while starting OmniHub")
         .run(move |_app, event| {
             // A normal exit (tray Quit, an update): next start is not a crash.
             if let tauri::RunEvent::Exit = event {
+                // Fans OmniHub drives go back to the hardware's own control.
+                rig_hub.shutdown();
                 omnihub_core::crashlog::end_session(&logs_dir);
             }
         });

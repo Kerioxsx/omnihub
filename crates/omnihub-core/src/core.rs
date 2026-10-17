@@ -64,6 +64,8 @@ pub struct AppCore {
     pub media: Arc<crate::media::MediaHub>,
     /// Listens to the PC's sound for the music visuals (only while one is shown).
     pub visual: Arc<crate::media::visual::VisualHub>,
+    /// Lighting, fans, screens and specs ("My PC").
+    pub rig: Arc<crate::rig::RigHub>,
     browser_integration: bool,
     /// Drives already warned about (root → when), so each warns once a day.
     low_space_warned: parking_lot::Mutex<std::collections::HashMap<String, i64>>,
@@ -85,6 +87,7 @@ impl AppCore {
         let s = settings.get();
         vault.set_auto_lock(s.vault.auto_lock_minutes);
         let procs = Arc::new(crate::system::procs::ProcessMonitor::new());
+        let visual = crate::media::visual::VisualHub::new(events.clone(), opts.fake_media || std::env::var("OMNIHUB_FAKE_MEDIA").is_ok_and(|v| v == "1"));
         let core = Arc::new(AppCore {
             notes: Notes::new(db.clone(), events.clone()),
             screenshots: ScreenshotLibrary::new(db.clone(), events.clone(), &paths.cache),
@@ -99,7 +102,8 @@ impl AppCore {
             updater: Arc::new(crate::update::Updater::new(&paths.cache, &paths.data, events.clone())),
             procs,
             media: crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media),
-            visual: crate::media::visual::VisualHub::new(events.clone(), opts.fake_media || std::env::var("OMNIHUB_FAKE_MEDIA").is_ok_and(|v| v == "1")),
+            visual: visual.clone(),
+            rig: crate::rig::RigHub::new(&paths.data, events.clone(), visual),
             low_space_warned: Default::default(),
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
             paths,
@@ -131,6 +135,7 @@ impl AppCore {
                 core.remote.expire_vault_sessions();
             })
             .ok();
+        self.rig.start();
         let s = self.settings.get();
         self.notes.watch_folder(s.notes.claude_folder.as_deref().map(std::path::Path::new));
         let core = self.clone();

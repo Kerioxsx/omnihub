@@ -139,7 +139,7 @@ pub fn dx_set(list: &str, key: &str, value: Option<&str>) -> String {
     parts.iter().map(|p| format!("{p};")).collect()
 }
 
-fn machine() -> Machine {
+pub fn machine() -> Machine {
     use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
     let sys = System::new_with_specifics(RefreshKind::nothing().with_cpu(CpuRefreshKind::nothing()).with_memory(MemoryRefreshKind::nothing().with_ram()));
     Machine {

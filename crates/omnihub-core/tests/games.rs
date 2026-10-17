@@ -40,6 +40,7 @@ fn harmless(b: &Boost) -> Boost {
         precise_timer: false,
         full_speed: false,
         fps_meter: false,
+        nvidia_profile: false,
         ..b.clone()
     }
 }
@@ -154,6 +155,38 @@ fn boost_launch_watch_restore() {
     assert!(again.delete(&b.id).is_ok());
     assert_eq!(again.profiles().len(), 1);
     let _ = hog_proc.kill();
+}
+
+/// An administrator prompt nobody answers never holds the game back: Play
+/// starts it after a short wait, and the answer still lands in its step.
+#[test]
+fn play_does_not_wait_for_the_admin_prompt() {
+    let dir = tempfile::tempdir().unwrap();
+    let hub = GameHub::with_test_timing(dir.path(), EventBus::new(), Arc::new(ProcessMonitor::new()), Duration::from_millis(100), Duration::from_secs(10)).with_admin(Duration::from_millis(300), |_| {
+        std::thread::sleep(Duration::from_millis(2500));
+        Ok(())
+    });
+    let game = stand_in(dir.path(), "ag.exe");
+    let mut p = hub.create(GameKind::Custom);
+    p.launch = Launch::Exe { path: game.to_string_lossy().into_owned(), args: wait_args(4) };
+    p.process = String::new();
+    p.boost = harmless(&p.boost);
+    p.boost.network_priority = true;
+    p.boost.start_high_priority = false;
+    let p = hub.save(p).unwrap().profile;
+    assert_eq!(p.process, "ag.exe");
+
+    let t = Instant::now();
+    hub.play(&p.id, true).unwrap();
+    wait_until("the launch", Duration::from_secs(2), || hub.session().is_some_and(|s| s.steps.iter().any(|x| x.id == "launch")));
+    assert!(t.elapsed() < Duration::from_millis(2000), "launched after {:?}", t.elapsed());
+    let s = hub.session().unwrap();
+    let admin = s.steps.iter().find(|x| x.id == "admin").cloned().expect("admin step");
+    assert_eq!(admin.status, StepStatus::Waiting, "{admin:?}");
+    assert_eq!(s.steps.iter().find(|x| x.id == "launch").unwrap().status, StepStatus::Done);
+    // The prompt's answer comes later and replaces the waiting step.
+    wait_until("the admin answer", Duration::from_secs(6), || hub.session().is_some_and(|s| s.steps.iter().any(|x| x.id == "admin" && x.status == StepStatus::Done)));
+    wait_until("the boost to end", Duration::from_secs(15), || hub.session().is_some_and(|s| !s.active()));
 }
 
 /// Fortnite found through its Epic manifest, added as a profile, its

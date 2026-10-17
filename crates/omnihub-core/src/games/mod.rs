@@ -11,6 +11,7 @@ pub mod fps;
 pub mod ini;
 pub mod junk;
 pub mod library;
+pub mod nvidia;
 pub mod pc;
 pub mod ping;
 pub mod roblox;
@@ -160,6 +161,10 @@ pub struct Boost {
     pub full_speed: bool,
     /// Measure frames per second while playing (PresentMon).
     pub fps_meter: bool,
+    /// Per game, needs admin once: the game's NVIDIA driver profile set for
+    /// speed (full clocks, low latency, fast texture filtering, no forced
+    /// VSync).
+    pub nvidia_profile: bool,
 }
 
 impl Boost {
@@ -184,6 +189,8 @@ impl Boost {
         b.lower_background = true;
         b.precise_timer = true;
         b.full_speed = true;
+        // Texture filtering's fast setting is a (small) picture trade-off.
+        b.nvidia_profile = competitive;
         b
     }
 }
@@ -209,6 +216,7 @@ impl Default for Boost {
             precise_timer: true,
             full_speed: true,
             fps_meter: true,
+            nvidia_profile: false,
         }
     }
 }
@@ -317,7 +325,31 @@ pub fn launch_target(launch: &Launch) -> Result<Option<(String, String)>, String
     }))
 }
 
+/// The scheme of a game link and the app that opens it.
+fn link_app(target: &str) -> Option<(&str, &'static str)> {
+    let scheme = target.split_once(':')?.0;
+    if scheme.len() < 2 || matches!(scheme, "http" | "https") || !scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+')) {
+        return None;
+    }
+    let app = match scheme {
+        "com.epicgames.launcher" => "the Epic Games Launcher",
+        "steam" => "Steam",
+        "roblox" | "roblox-player" => "Roblox",
+        "battlenet" => "Battle.net",
+        "uplay" => "Ubisoft Connect",
+        "origin2" => "the EA app",
+        "minecraft" => "the Minecraft Launcher",
+        _ => "the game's launcher",
+    };
+    Some((scheme, app))
+}
+
 fn start(target: &str, args: &str) -> std::io::Result<()> {
+    if let Some((scheme, app)) = link_app(target) {
+        if !tweaks::link_handler_installed(scheme) {
+            return Err(std::io::Error::other(format!("Nothing on this PC opens {scheme}: links. Install {app} (or open it once), then press Play again.")));
+        }
+    }
     let path = Path::new(target);
     if path.is_file() {
         let mut c = std::process::Command::new(path);
@@ -379,6 +411,8 @@ pub enum StepStatus {
     Done,
     Skipped,
     Failed,
+    /// Still going (an administrator prompt not answered yet).
+    Waiting,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -459,6 +493,8 @@ pub struct SaveResult {
 pub struct GameState {
     pub network_priority: bool,
     pub start_high_priority: bool,
+    /// The game's NVIDIA profile is set; `None` without an NVIDIA driver.
+    pub nvidia_profile: Option<bool>,
     pub on_wifi: Option<bool>,
     pub running: bool,
 }
@@ -494,7 +530,13 @@ pub struct GameHub {
     poll: Duration,
     /// How long to wait for a launched game to show up.
     wait_limit: Duration,
+    /// How long a boost waits for Windows' administrator prompt.
+    admin_wait: Duration,
+    /// Runs the administrator changes (a stand-in in tests).
+    run_admin: AdminRunner,
 }
+
+type AdminRunner = Arc<dyn Fn(&[AdminOp]) -> Result<(), String> + Send + Sync>;
 
 fn write_json(path: &Path, v: &impl Serialize) -> std::io::Result<()> {
     let tmp = path.with_extension("tmp");
@@ -505,11 +547,22 @@ fn write_json(path: &Path, v: &impl Serialize) -> std::io::Result<()> {
 fn step(id: &str, label: &str, r: Result<String, String>) -> Step {
     let (status, detail) = match r {
         Ok(d) if d.starts_with("skip:") => (StepStatus::Skipped, d[5..].trim().to_string()),
+        Ok(d) if d.starts_with("wait:") => (StepStatus::Waiting, d[5..].trim().to_string()),
         Err(e) if e == "Windows only" => (StepStatus::Skipped, e),
         Ok(d) => (StepStatus::Done, d),
         Err(e) => (StepStatus::Failed, e),
     };
     Step { id: id.into(), label: label.into(), status, detail }
+}
+
+/// Whether an NVIDIA driver answers (asked once; drivers don't come and go).
+fn nvidia_available() -> bool {
+    static AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *AVAILABLE.get_or_init(nvidia::available)
+}
+
+fn nvidia_on(exe: &str) -> bool {
+    nvidia_available() && nvidia::state(exe).is_ok_and(|s| s.on)
 }
 
 fn short(name: &str) -> &str {
@@ -519,7 +572,12 @@ fn short(name: &str) -> &str {
 impl GameHub {
     pub fn new(data_dir: &Path, events: EventBus, procs: Arc<ProcessMonitor>) -> Arc<Self> {
         let store_path = data_dir.join("games.json");
-        let store = std::fs::read(&store_path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+        let mut store: Store = std::fs::read(&store_path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+        // A mode decides its switches, including ones added since the
+        // profile was saved.
+        for p in &mut store.profiles {
+            p.boost = p.boost.with_mode(p.boost.mode);
+        }
         Arc::new(GameHub {
             journal_path: data_dir.join("games-session.json"),
             backups_dir: data_dir.join("game-settings-backup"),
@@ -538,6 +596,8 @@ impl GameHub {
             roblox_roots: Mutex::new(roblox::roots()),
             poll: Duration::from_secs(2),
             wait_limit: Duration::from_secs(600),
+            admin_wait: Duration::from_secs(25),
+            run_admin: Arc::new(tweaks::run_admin),
         })
     }
 
@@ -547,6 +607,14 @@ impl GameHub {
         let mut h = Arc::try_unwrap(hub).unwrap_or_else(|_| unreachable!());
         h.poll = poll;
         h.wait_limit = wait_limit;
+        Arc::new(h)
+    }
+
+    /// For tests: a stand-in for the administrator step and its wait.
+    pub fn with_admin(self: Arc<Self>, wait: Duration, run: impl Fn(&[AdminOp]) -> Result<(), String> + Send + Sync + 'static) -> Arc<Self> {
+        let mut h = Arc::try_unwrap(self).unwrap_or_else(|_| unreachable!());
+        h.admin_wait = wait;
+        h.run_admin = Arc::new(run);
         Arc::new(h)
     }
 
@@ -642,9 +710,12 @@ impl GameHub {
             if old.boost.start_high_priority && !p.boost.start_high_priority && tweaks::start_high_enabled(&old.process) {
                 ops.push(AdminOp::StartHighOff(old.process.clone()));
             }
+            if old.boost.nvidia_profile && !p.boost.nvidia_profile && nvidia_on(&old.process) {
+                ops.push(AdminOp::NvidiaOff(old.process.clone()));
+            }
         }
         if let Err(e) = tweaks::run_admin(&ops) {
-            warnings.push(format!("Saved, but the network/start priority is still on: {e}"));
+            warnings.push(format!("Saved, but the network/start priority or NVIDIA settings are still on: {e}"));
         }
         let mut inner = self.inner.lock();
         if let Some(slot) = inner.store.profiles.iter_mut().find(|q| q.id == p.id) {
@@ -671,6 +742,9 @@ impl GameHub {
         if !p.process.is_empty() && tweaks::start_high_enabled(&p.process) {
             ops.push(AdminOp::StartHighOff(p.process.clone()));
         }
+        if !p.process.is_empty() && p.boost.nvidia_profile && nvidia_on(&p.process) {
+            ops.push(AdminOp::NvidiaOff(p.process.clone()));
+        }
         let _ = tweaks::run_admin(&ops);
         let mut inner = self.inner.lock();
         inner.store.profiles.retain(|q| q.id != id);
@@ -685,6 +759,7 @@ impl GameHub {
         Some(GameState {
             network_priority: has && tweaks::qos_enabled(&p.process),
             start_high_priority: has && tweaks::start_high_enabled(&p.process),
+            nvidia_profile: nvidia_available().then(|| has && nvidia::state(&p.process).is_ok_and(|s| s.on)),
             on_wifi: tweaks::on_wifi(),
             running: has && !self.procs.pids_named(&p.process).is_empty(),
         })
@@ -974,7 +1049,16 @@ impl GameHub {
         }
         self.emit();
         let hub = self.clone();
-        std::thread::Builder::new().name("game-boost".into()).spawn(move || hub.run(p, launch, stop)).map_err(|e| e.to_string())?;
+        std::thread::Builder::new()
+            .name("game-boost".into())
+            .spawn(move || {
+                let run = hub.clone();
+                if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || run.run(p, launch, stop))) {
+                    let why = e.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| e.downcast_ref::<String>().cloned()).unwrap_or_default();
+                    hub.crashed(&why);
+                }
+            })
+            .map_err(|e| e.to_string())?;
         Ok(self.session().unwrap_or_else(|| unreachable!()))
     }
 
@@ -1115,11 +1199,13 @@ impl GameHub {
             if b.start_high_priority && !tweaks::start_high_enabled(&p.process) {
                 ops.push(AdminOp::StartHighOn(p.process.clone()));
             }
+            if b.nvidia_profile && nvidia_available() && !nvidia_on(&p.process) {
+                ops.push(AdminOp::NvidiaOn(p.process.clone()));
+            }
         }
         if !ops.is_empty() {
-            let label = ops.iter().map(|o| if matches!(o, AdminOp::QosOn(_)) { "network priority" } else { "start at High priority" }).collect::<Vec<_>>().join(" + ");
-            self.push(step("admin", "Network & start priority", tweaks::run_admin(&ops).map(|_| format!("Turned on {label} (kept for next time)"))));
-        } else if b.network_priority || b.start_high_priority {
+            self.admin_step(ops, &stop);
+        } else if b.network_priority || b.start_high_priority || (b.nvidia_profile && nvidia_available()) {
             self.push(step("admin", "Network & start priority", Ok("skip: already on".into())));
         }
 
@@ -1281,6 +1367,51 @@ impl GameHub {
         self.emit();
     }
 
+    /// The one administrator change of a boost. Windows' prompt is answered
+    /// by a person, so the game is never held behind it for long: after
+    /// `admin_wait` the boost goes on, and the answer still lands in the
+    /// step when it comes.
+    fn admin_step(self: &Arc<Self>, ops: Vec<AdminOp>, stop: &AtomicBool) {
+        const ID: &str = "admin";
+        const LABEL: &str = "Network & start priority";
+        let what = ops
+            .iter()
+            .map(|o| match o {
+                AdminOp::QosOn(_) => "network priority",
+                AdminOp::NvidiaOn(_) => "the game's NVIDIA settings",
+                _ => "start at High priority",
+            })
+            .collect::<Vec<_>>()
+            .join(" + ");
+        self.push(step(ID, LABEL, Ok("wait: answer Windows' administrator prompt (the shield in the taskbar if it isn't in front)".into())));
+        let (tx, rx) = crossbeam_channel::bounded::<Result<String, String>>(1);
+        let hub = self.clone();
+        let run_admin = self.run_admin.clone();
+        let spawned = std::thread::Builder::new().name("game-admin".into()).spawn(move || {
+            let r = run_admin(&ops).map(|_| format!("Turned on {what} (kept for next time)"));
+            // Nobody waits any more: report the answer by itself.
+            if let Err(crossbeam_channel::SendError(r)) = tx.send(r) {
+                hub.push(step(ID, LABEL, r));
+            }
+        });
+        if let Err(e) = spawned {
+            self.push(step(ID, LABEL, Err(e.to_string())));
+            return;
+        }
+        let t0 = Instant::now();
+        loop {
+            match rx.recv_timeout(Duration::from_millis(250)) {
+                Ok(r) => return self.push(step(ID, LABEL, r)),
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => return self.push(step(ID, LABEL, Err("The administrator step stopped unexpectedly.".into()))),
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) if stop.load(Ordering::Relaxed) || t0.elapsed() >= self.admin_wait => {
+                    self.push(step(ID, LABEL, Ok("wait: still waiting for Windows' administrator prompt — the boost went on without it".into())));
+                    return;
+                }
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
+            }
+        }
+    }
+
     fn per_exe_settings(&self, p: &GameProfile) {
         let b = &p.boost;
         if !(b.gpu_high_performance || b.fullscreen_optimizations_off) {
@@ -1387,6 +1518,29 @@ impl GameHub {
     }
 
     /// After a crash or power cut during a boost: put the PC back.
+    /// A boost that failed half-way: put back what it changed and end the
+    /// session, so Play and Boost only work again.
+    fn crashed(&self, why: &str) {
+        tracing::error!("games: the boost failed: {why}");
+        let restored = match std::fs::read(&self.journal_path).ok().and_then(|b| serde_json::from_slice::<Journal>(&b).ok()) {
+            Some(j) => self.restore(&j, true),
+            None => Vec::new(),
+        };
+        let _ = std::fs::remove_file(&self.journal_path);
+        *self.live_fps.lock() = None;
+        {
+            let mut inner = self.inner.lock();
+            inner.stop = None;
+            if let Some(s) = inner.session.as_mut() {
+                s.restored = restored;
+                s.phase = Phase::Ended;
+                s.ended_at = Some(crate::db::now());
+                s.message = Some(format!("The boost stopped on an error{}; what it changed was put back.", if why.is_empty() { String::new() } else { format!(" ({why})") }));
+            }
+        }
+        self.emit();
+    }
+
     pub fn recover(&self) {
         let Some(j) = std::fs::read(&self.journal_path).ok().and_then(|b| serde_json::from_slice::<Journal>(&b).ok()) else { return };
         tracing::info!("games: restoring settings from an unfinished boost");

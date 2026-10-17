@@ -1247,6 +1247,8 @@ export interface GameBoost {
   fullSpeed: boolean;
   /** Measure FPS while playing (PresentMon). */
   fpsMeter: boolean;
+  /** Per game, admin once: the game's NVIDIA driver profile set for speed. */
+  nvidiaProfile: boolean;
 }
 
 // ---------- the games' own settings, installed games, PC tweaks ----------
@@ -1399,7 +1401,7 @@ export type GamePhase = 'starting' | 'waiting' | 'playing' | 'boosted' | 'restor
 export interface GameStep {
   id: string;
   label: string;
-  status: 'done' | 'skipped' | 'failed';
+  status: 'done' | 'skipped' | 'failed' | 'waiting';
   detail: string;
 }
 
@@ -1475,6 +1477,8 @@ export interface LoadTest {
 export interface GameState {
   networkPriority: boolean;
   startHighPriority: boolean;
+  /** null without an NVIDIA driver. */
+  nvidiaProfile: boolean | null;
   onWifi: boolean | null;
   running: boolean;
 }
@@ -1574,3 +1578,145 @@ export interface MirrorStatus {
 export type VideoSync = { state: 'off' } | { state: 'matching'; note: string } | { state: 'matched'; offsetMs: number; score: number } | { state: 'unsure'; note: string };
 
 export type EmojiPack = { kind: 'pictures'; count: number } | { kind: 'font'; name: string };
+
+// ---------- My PC (lighting, fans, screens, specs) ----------
+
+export type LightEffect = 'off' | 'static' | 'breathing' | 'spectrum' | 'wave' | 'gradient' | 'music' | 'temperature';
+
+export interface LightProfile {
+  id: string;
+  name: string;
+  effect: LightEffect;
+  /** "#rrggbb". */
+  colors: string[];
+  /** 0.2 (slow) to 3 (fast). */
+  speed: number;
+  /** 0–100. */
+  brightness: number;
+}
+
+export type FanProfile = 'silent' | 'auto' | 'fast';
+export type FanRole = 'case' | 'gpu' | 'pump';
+export type CoolerKind = 'unknown' | 'air' | 'aio';
+export type BoardSize = 'eAtx' | 'atx' | 'microAtx' | 'miniItx';
+export type Chassis = 'unknown' | 'desktop' | 'tower' | 'miniTower' | 'smallFormFactor' | 'allInOne' | 'laptop';
+export type DeviceRole = 'other' | 'cooler' | 'hub' | 'screen';
+export type LitKind = 'motherboard' | 'memory' | 'gpu' | 'cooler' | 'ledStrip' | 'keyboard' | 'mouse' | 'mousemat' | 'headset' | 'headsetStand' | 'gamepad' | 'light' | 'speaker' | 'virtual' | 'storage' | 'case' | 'microphone' | 'accessory' | 'keypad' | 'other';
+export type LinkState = 'off' | 'on' | 'missing' | 'error';
+
+export interface RamStick {
+  slot: string;
+  sizeGb: number;
+  speed: number;
+  maker: string;
+  part: string;
+  kind: string;
+}
+
+export interface KnownDevice {
+  vendorId: number;
+  productId: number;
+  name: string;
+  role: DeviceRole;
+  radiatorMm: number | null;
+  lcd: boolean;
+}
+
+export interface Specs {
+  cpu: string;
+  cores: number;
+  threads: number;
+  gpus: string[];
+  ram: RamStick[];
+  ramGb: number;
+  boardMaker: string;
+  board: string;
+  boardSize: BoardSize;
+  system: string;
+  chassis: Chassis;
+  cooler: CoolerKind;
+  coolerName: string;
+  radiatorMm: number | null;
+  devices: KnownDevice[];
+  disks: { name: string; nvme: boolean }[];
+  displays: PcDisplay[];
+}
+
+export type ScreenShow = { kind: 'off' } | { kind: 'media'; id: string } | { kind: 'stats' } | { kind: 'nowPlaying' } | { kind: 'liquid' };
+
+export interface RigSettings {
+  lighting: { enabled: boolean; profile: string; custom: LightProfile[]; port: number; peripherals: boolean; skip: string[] };
+  fans: { profile: FanProfile; lhmUrl: string; lhmUser: string; lhmSecret: string; skip: string[]; coolers: boolean; liquidctlPath: string | null };
+  screens: { monitor: string; monitorShow: ScreenShow; fill: boolean; lcd: string; lcdShow: ScreenShow; lcdBrightness: number };
+  model: { caseColor: 'black' | 'white'; glass: boolean; cooler: CoolerKind | null; radiatorMm: number | null; frontFans: number; topFans: number; rearFans: number; bottomFans: number; ramRgb: boolean; verticalGpu: boolean; caseScreen: boolean };
+}
+
+export interface LitDevice {
+  key: string;
+  name: string;
+  kind: LitKind;
+  leds: number;
+  zones: string[];
+  on: boolean;
+}
+
+export interface FanControl {
+  id: string;
+  name: string;
+  hardware: string;
+  role: FanRole | null;
+  percent: number | null;
+  skipped: boolean;
+}
+
+export interface CoolerReading {
+  key: string;
+  value: number;
+  unit: string;
+}
+
+export interface CoolerDevice {
+  description: string;
+  vendorId: number;
+  productId: number;
+  address: string;
+  driver: string;
+  lcd: boolean;
+  status: CoolerReading[];
+}
+
+export interface RigStatus {
+  lighting: LinkState;
+  lightingMessage: string | null;
+  devices: LitDevice[];
+  openrgbInstalled: string | null;
+  fans: LinkState;
+  fansMessage: string | null;
+  controls: FanControl[];
+  /** [name, rpm]. */
+  rpm: [string, number][];
+  cpuTemp: number | null;
+  gpuTemp: number | null;
+  coolers: LinkState;
+  coolersMessage: string | null;
+  coolerDevices: CoolerDevice[];
+  liquidTemp: number | null;
+  lcdMessage: string | null;
+}
+
+export interface RigMedia {
+  id: string;
+  name: string;
+  kind: 'picture' | 'gif' | 'video';
+  mime: string;
+  bytes: number;
+}
+
+export interface RigDisplay {
+  name: string;
+  label: string;
+  width: number;
+  height: number;
+  scale: number;
+  primary: boolean;
+}

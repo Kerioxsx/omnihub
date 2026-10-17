@@ -217,10 +217,10 @@ export function GamesPage() {
 }
 
 function StepRow({ s }: { s: GameStep }) {
-  const Icon = s.status === 'done' ? CheckCircle2 : s.status === 'failed' ? XCircle : CircleSlash;
+  const Icon = s.status === 'done' ? CheckCircle2 : s.status === 'failed' ? XCircle : s.status === 'waiting' ? LoaderCircle : CircleSlash;
   return (
     <motion.li initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="flex items-start gap-2 text-[12.5px]">
-      <Icon size={14} className={cx('mt-px shrink-0', s.status === 'done' ? 'text-good' : s.status === 'failed' ? 'text-bad' : 'text-faint')} />
+      <Icon size={14} className={cx('mt-px shrink-0', s.status === 'done' ? 'text-good' : s.status === 'failed' ? 'text-bad' : s.status === 'waiting' ? 'animate-spin text-accent' : 'text-faint')} />
       <span className="shrink-0 font-medium text-fg">{s.label}</span>
       <span className={cx('min-w-0', s.status === 'failed' ? 'text-bad' : 'text-dim')}>{s.detail}</span>
     </motion.li>

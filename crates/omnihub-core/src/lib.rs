@@ -18,6 +18,7 @@ pub mod media;
 pub mod notes;
 pub mod paths;
 pub mod remote;
+pub mod rig;
 pub mod settings;
 pub mod startup;
 pub mod storage;

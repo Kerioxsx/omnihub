@@ -5,15 +5,30 @@ use std::path::Path;
 #[cfg(windows)]
 pub fn shell_execute(file: &str, params: &str) -> std::io::Result<()> {
     use windows::core::HSTRING;
-    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW};
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-    let r = unsafe { ShellExecuteW(None, &HSTRING::from("open"), &HSTRING::from(file), &HSTRING::from(params), None, SW_SHOWNORMAL) };
-    // ShellExecute returns a value > 32 on success.
-    if r.0 as isize > 32 {
-        Ok(())
-    } else {
-        Err(std::io::Error::other(format!("could not open {file} (error {})", r.0 as isize)))
+    // Links (steam://, com.epicgames.launcher://…) are handed to their app
+    // through COM: Windows asks for it initialised, and for NOASYNC from a
+    // thread that sleeps instead of pumping messages, or the hand-off can
+    // be lost and nothing opens.
+    let com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) }.is_ok();
+    let (verb, f, p) = (HSTRING::from("open"), HSTRING::from(file), HSTRING::from(params));
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOASYNC,
+        hwnd: crate::system::elevation::own_window(),
+        lpVerb: windows::core::PCWSTR(verb.as_ptr()),
+        lpFile: windows::core::PCWSTR(f.as_ptr()),
+        lpParameters: windows::core::PCWSTR(p.as_ptr()),
+        nShow: SW_SHOWNORMAL.0,
+        ..Default::default()
+    };
+    let r = unsafe { ShellExecuteExW(&mut info) };
+    if com {
+        unsafe { CoUninitialize() };
     }
+    r.map_err(|e| std::io::Error::other(format!("could not open {file}: {}", e.message())))
 }
 
 #[cfg(not(windows))]
