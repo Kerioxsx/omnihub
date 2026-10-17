@@ -14,6 +14,10 @@ pub struct RamStick {
     pub size_gb: f64,
     /// MT/s as configured (falls back to the rated speed).
     pub speed: u32,
+    /// MT/s the stick reports as its own: the standard speed, which for
+    /// EXPO and XMP kits is the slower one they run at until it is turned on.
+    #[serde(default)]
+    pub rated: u32,
     pub maker: String,
     pub part: String,
     /// "DDR4", "DDR5"…
@@ -268,6 +272,7 @@ pub fn firmware(table: &[u8]) -> Firmware {
                     slot: s.string(0x10),
                     size_gb: (mb / 1024.0 * 10.0).round() / 10.0,
                     speed: if configured > 0 { configured } else { rated },
+                    rated,
                     maker: clean(s.string(0x17)),
                     part: clean(s.string(0x1A)),
                     kind: memory_kind(s.byte(0x12).unwrap_or(0)).to_string(),
@@ -284,6 +289,48 @@ pub fn firmware(table: &[u8]) -> Firmware {
 
 /// A motherboard's size, from how makers name them ("B650M", "Z790-I",
 /// "mATX", "ITX").
+/// Memory speeds kits are sold at, MT/s.
+const KIT_SPEEDS: &[u32] = &[
+    2133, 2400, 2666, 2933, 3000, 3200, 3466, 3600, 3733, 3866, 4000, 4133, 4266, 4400, 4600, 4800, 5200, 5600, 6000, 6200, 6400, 6600, 6800, 7000, 7200, 7600, 7800, 8000, 8200, 8400, 8600, 8800,
+];
+
+/// The speed a memory kit is sold at, from its part number: G.Skill
+/// "F5-6000J3038F16G", Corsair "CMK32GX5M2B6000C36" and TeamGroup
+/// "FF3D532G6000HC38" spell it out; Kingston "KF560C36" and Crucial
+/// "CP16G60C36" give it in hundreds before the CAS latency. None for
+/// part numbers that don't say (most standard-speed memory).
+pub fn kit_speed(part: &str) -> Option<u32> {
+    let b = part.as_bytes();
+    let mut best = None;
+    let mut i = 0;
+    while i < b.len() {
+        if !b[i].is_ascii_digit() {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < b.len() && b[i].is_ascii_digit() {
+            i += 1;
+        }
+        let run = &part[start..i];
+        let before_cl = b.get(i) == Some(&b'C') && b.get(i + 1).is_some_and(u8::is_ascii_digit);
+        let speed = match run.len() {
+            4 => run.parse::<u32>().ok().filter(|s| KIT_SPEEDS.contains(s)),
+            // Hundreds, after the DDR generation for Kingston ("KF560C36").
+            2 | 3 if before_cl && (run.len() == 2 || run.starts_with(['4', '5'])) => run[run.len() - 2..].parse::<u32>().ok().and_then(|code| KIT_SPEEDS.iter().copied().find(|s| s / 100 == code)),
+            _ => None,
+        };
+        best = best.max(speed);
+    }
+    best
+}
+
+/// Every memory stick, from the firmware's tables alone (quicker than
+/// `detect`).
+pub fn memory() -> Vec<RamStick> {
+    imp::smbios().map(|t| firmware(&t).ram).unwrap_or_default()
+}
+
 pub fn board_size(name: &str) -> BoardSize {
     let n = name.to_ascii_uppercase();
     if n.contains("ITX") || n.contains("-I ") || n.ends_with("-I") || n.contains("-I GAMING") || n.contains(" I GAMING") {
@@ -577,6 +624,27 @@ mod tests {
     }
 
     #[test]
+    fn kit_speeds_from_part_numbers() {
+        for (part, speed) in [
+            ("F5-6000J3038F16G", Some(6000)),
+            ("F4-3600C16-16GTZNC", Some(3600)),
+            ("CMK32GX5M2B6000C36", Some(6000)),
+            ("CMW32GX4M2E3200C16", Some(3200)),
+            ("FF3D532G6000HC38ADC01", Some(6000)),
+            ("KF560C36BBEK2-32", Some(6000)),
+            ("KF426C16BB/16", Some(2666)),
+            ("KF548C38BBE-16", Some(4800)),
+            ("CP16G60C36U5B.M8D1", Some(6000)),
+            ("CT16G48C40U5.M8A1", Some(4800)),
+            ("M323R2GA3BB0-CQKOL", None),
+            ("HMCG78AGBUA081N", None),
+            ("", None),
+        ] {
+            assert_eq!(kit_speed(part), speed, "{part}");
+        }
+    }
+
+    #[test]
     fn reads_the_board_case_and_every_stick() {
         let mut t = Vec::new();
         t.extend(s(1, &[1, 2, 0, 0], &["To Be Filled By O.E.M.", "To Be Filled By O.E.M."]));
@@ -593,7 +661,7 @@ mod tests {
         assert_eq!(f.system, "", "placeholder names are dropped");
         assert_eq!(f.chassis, Chassis::Desktop);
         assert_eq!(f.ram.len(), 2, "empty slots are skipped");
-        assert_eq!(f.ram[0], RamStick { slot: "DIMM_A2".into(), size_gb: 16.0, speed: 6000, maker: "G.Skill".into(), part: "F5-6000J3038F16G".into(), kind: "DDR5".into() });
+        assert_eq!(f.ram[0], RamStick { slot: "DIMM_A2".into(), size_gb: 16.0, speed: 6000, rated: 4800, maker: "G.Skill".into(), part: "F5-6000J3038F16G".into(), kind: "DDR5".into() });
     }
 
     #[test]

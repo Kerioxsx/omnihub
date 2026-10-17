@@ -1265,6 +1265,8 @@ export interface FortniteOptions {
   resolutionScale: number;
   showFps: boolean;
   fullscreen: boolean;
+  /** NVIDIA Reflex Low Latency: 0 off, 1 on, 2 on + boost. */
+  reflex: number;
 }
 
 export interface MinecraftOptions {
@@ -1336,7 +1338,7 @@ export interface InstalledGame {
   profileId: string | null;
 }
 
-export type TweakId = 'refreshRate' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'gpuScheduling' | 'preciseTimer' | 'networkThrottling' | 'mouseAcceleration' | 'stickyKeys' | 'memoryIntegrity';
+export type TweakId = 'refreshRate' | 'memorySpeed' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'gpuScheduling' | 'preciseTimer' | 'networkThrottling' | 'mouseAcceleration' | 'stickyKeys' | 'memoryIntegrity';
 
 export interface PcTweak {
   id: TweakId;
@@ -1377,6 +1379,8 @@ export interface RobloxFlags {
   noGrass: boolean;
   graySky: boolean;
   lowDetailDistance: boolean;
+  /** Lighting worked out once (voxel lighting stops updating). */
+  pauseVoxelizer: boolean;
   qualityLevel: number | null;
   exclusiveFullscreen: boolean;
   ignoreDisplayScaling: boolean;
@@ -1608,6 +1612,8 @@ export interface RamStick {
   slot: string;
   sizeGb: number;
   speed: number;
+  /** The stick's own (standard) speed; EXPO/XMP kits run at it until turned on. */
+  rated: number;
   maker: string;
   part: string;
   kind: string;

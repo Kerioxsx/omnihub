@@ -18,6 +18,7 @@ import { GameTile } from './shared';
 
 const ICON: Record<TweakId, typeof Zap> = {
   refreshRate: Monitor,
+  memorySpeed: MemoryStick,
   powerPlan: Power,
   gameDvr: Video,
   gameMode: Gauge,
@@ -136,9 +137,11 @@ export function PcOptimize() {
               </div>
               <div className="flex shrink-0 items-center gap-1.5 self-center">
                 {t.settingsLink ? (
-                  <Button variant="secondary" size="sm" icon={ExternalLink} onClick={() => void api.app.openUrl(t.settingsLink as string).catch((e: unknown) => toast.error('Could not open Windows Security', errorText(e)))}>
-                    Open Windows Security
-                  </Button>
+                  !(t.optimized && t.id === 'memorySpeed') && (
+                    <Button variant="secondary" size="sm" icon={ExternalLink} onClick={() => void api.app.openUrl(t.settingsLink as string).catch((e: unknown) => toast.error('Could not open Windows’ settings', errorText(e)))}>
+                      {t.id === 'memorySpeed' ? 'Open Recovery' : 'Open Windows Security'}
+                    </Button>
+                  )
                 ) : t.optimized ? (
                   t.canUndo && (
                     <Button variant="ghost" size="sm" icon={RotateCcw} loading={busy === t.id} disabled={!!busy} onClick={() => void set(t, false)}>

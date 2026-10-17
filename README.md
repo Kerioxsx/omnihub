@@ -27,6 +27,12 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.8.1
+
+- **More for Fortnite**: NVIDIA Reflex On + Boost, GPU crash debugging and latency markers off, and with Lowest quality also Nanite, Lumen and temporal anti-aliasing off (for DirectX 12).
+- **More for Roblox**: the graphics slider at its lowest instead of Automatic, and *Lighting worked out once* (an allowlisted Fast Flag) in the Max FPS preset.
+- **Memory speed check** in Optimize PC: says when a DDR5-6000 or DDR4-3600 kit runs slower because EXPO or XMP is off in the BIOS.
+
 ## New in 0.8.0
 
 - **Play and Boost only work again**: the administrator prompt opens in front and the game never waits behind it.

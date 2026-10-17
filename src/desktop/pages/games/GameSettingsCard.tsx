@@ -52,7 +52,10 @@ const PRO_ROWS: Record<ProGame, { key: keyof ProOptions; title: string; hint: st
     { key: 'uncapped', title: 'Frame limit 600, VSync off', hint: 'Overwatch’s highest frame limit, with VSync and triple buffering off.' },
     { key: 'lowLatency', title: 'Reduce buffering', hint: 'One frame less queued up: lower input delay.' },
   ],
-  roblox: [{ key: 'uncapped', title: 'Maximum frame rate 240', hint: 'The highest frame limit in Roblox’s own menu.' }],
+  roblox: [
+    { key: 'uncapped', title: 'Maximum frame rate 240', hint: 'The highest frame limit in Roblox’s own menu.' },
+    { key: 'lowestQuality', title: 'Lowest graphics quality', hint: 'Roblox’s graphics slider at 1 instead of Automatic, which picks near the top on a fast PC: shorter view distance, simpler shadows and details.' },
+  ],
 };
 
 const isPro = (g: ConfigGame): g is ProGame => g in PRO_ROWS;
@@ -180,7 +183,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
               <Row title="Performance rendering mode" hint="Fortnite’s lightest renderer, made for high frame rates. The biggest single gain on most PCs.">
                 <Switch checked={o.fortnite.performanceMode} onChange={(v) => fn({ performanceMode: v })} label="Performance mode" />
               </Row>
-              <Row title="Lowest quality everywhere" hint="Shadows, effects, post-processing, textures, foliage and grass at their lowest — what most pros play with.">
+              <Row title="Lowest quality everywhere" hint="Shadows, effects, post-processing, textures, foliage and grass at their lowest, and DirectX 12’s Nanite, Lumen and anti-aliasing off — what most pros play with.">
                 <Switch checked={o.fortnite.lowestQuality} onChange={(v) => fn({ lowestQuality: v })} label="Lowest quality" />
               </Row>
               {o.fortnite.lowestQuality && (
@@ -196,6 +199,9 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                     </option>
                   ))}
                 </Select>
+              </Row>
+              <Row title="NVIDIA Reflex Low Latency" hint="Lower input delay on NVIDIA graphics cards. Boost also keeps the card at full clocks when the processor holds it back. Set once Fortnite has saved it.">
+                <Segmented size="sm" label="NVIDIA Reflex" value={String(o.fortnite.reflex)} onChange={(v) => fn({ reflex: Number(v) })} options={[{ value: '0', label: 'Off' }, { value: '1', label: 'On' }, { value: '2', label: 'On + Boost' }]} />
               </Row>
               <Row title="Fullscreen" hint="Exclusive fullscreen has the lowest input delay.">
                 <Switch checked={o.fortnite.fullscreen} onChange={(v) => fn({ fullscreen: v })} label="Fullscreen" />

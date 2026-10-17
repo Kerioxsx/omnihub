@@ -6,7 +6,9 @@
 //! and, for aim rather than frames, no mouse acceleration and no Sticky
 //! Keys pop-up. None of them lowers picture quality. Memory Integrity is
 //! reported with a link to Windows' own switch: it costs some performance,
-//! but it is a security feature, so the choice stays there.
+//! but it is a security feature, so the choice stays there. Memory running
+//! below the speed its kit is sold at (EXPO or XMP off) is reported too;
+//! that switch is in the BIOS, which OmniHub never touches.
 //!
 //! What a setting was before OmniHub changed it is kept in a small journal,
 //! so each one can be put back exactly.
@@ -21,6 +23,7 @@ use serde_json::Value;
 #[serde(rename_all = "camelCase")]
 pub enum TweakId {
     RefreshRate,
+    MemorySpeed,
     PowerPlan,
     GameDvr,
     GameMode,
@@ -34,14 +37,15 @@ pub enum TweakId {
 }
 
 impl TweakId {
-    pub fn all() -> [TweakId; 11] {
+    pub fn all() -> [TweakId; 12] {
         use TweakId::*;
-        [RefreshRate, PowerPlan, GameDvr, GameMode, WindowedGames, GpuScheduling, PreciseTimer, NetworkThrottling, MouseAcceleration, StickyKeys, MemoryIntegrity]
+        [RefreshRate, MemorySpeed, PowerPlan, GameDvr, GameMode, WindowedGames, GpuScheduling, PreciseTimer, NetworkThrottling, MouseAcceleration, StickyKeys, MemoryIntegrity]
     }
 
     fn key(self) -> &'static str {
         match self {
             TweakId::RefreshRate => "refreshRate",
+            TweakId::MemorySpeed => "memorySpeed",
             TweakId::PowerPlan => "powerPlan",
             TweakId::GameDvr => "gameDvr",
             TweakId::GameMode => "gameMode",
@@ -156,6 +160,7 @@ fn describe(id: TweakId) -> (&'static str, &'static str, Impact, bool, bool) {
     // (title, description, impact, admin, restart)
     match id {
         TweakId::RefreshRate => ("Monitor at its full refresh rate", "Windows often leaves a 144 or 240 Hz monitor at 60 Hz. Every frame above that is drawn but never shown.", Impact::High, false, false),
+        TweakId::MemorySpeed => ("Memory at the speed it is sold at", "Kits sold as DDR5-6000 or DDR4-3600 run at the slower standard speed until EXPO (AMD) or XMP (Intel) is turned on in the BIOS — often the biggest free gain in processor-bound games like Fortnite and Roblox. To reach the BIOS: Recovery → Advanced startup → Restart now → Troubleshoot → Advanced options → UEFI Firmware Settings.", Impact::High, false, true),
         TweakId::PowerPlan => ("Ultimate Performance power plan", "Keeps the processor at full speed instead of waiting to ramp up — fewer stutters and higher lows. Uses more power (on a laptop, keep it plugged in).", Impact::Medium, false, false),
         TweakId::GameDvr => ("Background game recording off", "Xbox Game Bar can record games in the background (Game DVR), which costs frames. Screenshots with Win+Shift+S still work.", Impact::Medium, false, false),
         TweakId::GameMode => ("Game Mode", "Windows holds back updates and background work while a game runs.", Impact::Low, false, false),
@@ -176,8 +181,13 @@ pub fn status(journal_path: &Path, remembered_plan: Option<&str>) -> PcStatus {
         .into_iter()
         .map(|id| {
             let (title, description, impact, admin, restart) = describe(id);
-            let s = imp::state(id, remembered_plan);
-            Tweak { id, title: title.into(), description: description.into(), impact, available: s.available, optimized: s.optimized, current: s.current, admin, restart, settings_link: (id == TweakId::MemoryIntegrity).then(|| "windowsdefender://coreisolation".to_string()), can_undo: j.contains_key(id.key()) }
+            let s = if id == TweakId::MemorySpeed { memory_state(&crate::rig::specs::memory()) } else { imp::state(id, remembered_plan) };
+            let settings_link = match id {
+                TweakId::MemoryIntegrity => Some("windowsdefender://coreisolation".to_string()),
+                TweakId::MemorySpeed => Some("ms-settings:recovery".to_string()),
+                _ => None,
+            };
+            Tweak { id, title: title.into(), description: description.into(), impact, available: s.available, optimized: s.optimized, current: s.current, admin, restart, settings_link, can_undo: j.contains_key(id.key()) }
         })
         .collect();
     PcStatus { tweaks, machine: machine() }
@@ -233,6 +243,22 @@ struct State {
     available: bool,
     optimized: bool,
     current: String,
+}
+
+/// Whether memory runs at the speed its part number says the kit is sold
+/// at (EXPO or XMP on). Sticks whose part number doesn't say are taken to
+/// be standard memory, at its speed already.
+fn memory_state(ram: &[crate::rig::specs::RamStick]) -> State {
+    let running = ram.iter().map(|r| r.speed).filter(|&s| s > 0).min();
+    let Some(running) = running else {
+        return State { available: false, optimized: true, current: "Not reported by this PC's firmware".into() };
+    };
+    match ram.iter().filter_map(|r| crate::rig::specs::kit_speed(&r.part)).max() {
+        // Within 100 MT/s: firmware reports 5998 for 6000.
+        Some(kit) if running + 100 < kit => State { available: true, optimized: false, current: format!("{running} MT/s — the kit is sold as {kit} MT/s: turn on EXPO or XMP in the BIOS") },
+        Some(kit) => State { available: true, optimized: true, current: format!("{running} MT/s (sold as {kit} MT/s)") },
+        None => State { available: true, optimized: true, current: format!("{running} MT/s") },
+    }
 }
 
 #[cfg(windows)]
@@ -459,6 +485,7 @@ mod imp {
                 Some(f) => st(true, f & SKF_HOTKEYACTIVE == 0, if f & SKF_HOTKEYACTIVE == 0 { "Shortcut off".into() } else { "Shift ×5 opens Sticky Keys".into() }),
                 None => st(false, false, "Unknown".into()),
             },
+            TweakId::MemorySpeed => memory_state(&crate::rig::specs::memory()),
             TweakId::MemoryIntegrity => {
                 let on = read_dword(HKEY_LOCAL_MACHINE, HVCI, "Enabled") == Some(1);
                 st(true, !on, if on { "On".into() } else { "Off".into() })
@@ -532,6 +559,7 @@ mod imp {
                 Ok((json!(before), None))
             }
             TweakId::MemoryIntegrity => Err("Memory Integrity is changed in Windows Security → Core isolation.".into()),
+            TweakId::MemorySpeed => Err("EXPO or XMP is turned on in the BIOS (UEFI Firmware Settings).".into()),
         }
     }
 
@@ -584,7 +612,7 @@ mod imp {
                 let p = before.as_array().and_then(|a| (a.len() == 3).then(|| [a[0].as_i64().unwrap_or(6) as i32, a[1].as_i64().unwrap_or(10) as i32, a[2].as_i64().unwrap_or(1) as i32])).unwrap_or([6, 10, 1]);
                 set_mouse(p)
             }
-            TweakId::MemoryIntegrity => Ok(()),
+            TweakId::MemoryIntegrity | TweakId::MemorySpeed => Ok(()),
         }
     }
 
@@ -672,11 +700,24 @@ mod tests {
     }
 
     #[test]
+    fn memory_below_its_kit_speed() {
+        use crate::rig::specs::RamStick;
+        let stick = |speed: u32, part: &str| RamStick { speed, rated: 4800, part: part.into(), ..Default::default() };
+        let off = memory_state(&[stick(4800, "F5-6000J3038F16G"), stick(4800, "F5-6000J3038F16G")]);
+        assert!(off.available && !off.optimized && off.current.contains("6000"), "{}", off.current);
+        let on = memory_state(&[stick(5998, "F5-6000J3038F16G")]);
+        assert!(on.optimized, "{}", on.current);
+        assert!(memory_state(&[stick(5600, "M323R2GA3BB0-CQKOL")]).optimized, "standard memory");
+        assert!(!memory_state(&[]).available);
+    }
+
+    #[test]
     fn status_lists_every_tweak() {
         let dir = tempfile::tempdir().unwrap();
         let s = status(&dir.path().join("j.json"), None);
         assert_eq!(s.tweaks.len(), TweakId::all().len());
         assert!(s.tweaks.iter().any(|t| t.id == TweakId::MemoryIntegrity && t.settings_link.is_some()));
+        assert!(s.tweaks.iter().any(|t| t.id == TweakId::MemorySpeed && t.settings_link.as_deref() == Some("ms-settings:recovery")));
         assert!(s.machine.threads > 0);
         assert_eq!(helper_admin(&["rm".into()]), 64);
         assert_eq!(helper_admin(&["timer".into(), "x".into()]), 64);

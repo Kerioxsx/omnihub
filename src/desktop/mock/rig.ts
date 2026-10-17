@@ -23,8 +23,8 @@ const specs: Specs = {
   threads: 16,
   gpus: ['NVIDIA GeForce RTX 4070 SUPER'],
   ram: [
-    { slot: 'DIMM_A2', sizeGb: 16, speed: 6000, maker: 'G.Skill', part: 'F5-6000J3038F16G', kind: 'DDR5' },
-    { slot: 'DIMM_B2', sizeGb: 16, speed: 6000, maker: 'G.Skill', part: 'F5-6000J3038F16G', kind: 'DDR5' },
+    { slot: 'DIMM_A2', sizeGb: 16, speed: 6000, rated: 4800, maker: 'G.Skill', part: 'F5-6000J3038F16G', kind: 'DDR5' },
+    { slot: 'DIMM_B2', sizeGb: 16, speed: 6000, rated: 4800, maker: 'G.Skill', part: 'F5-6000J3038F16G', kind: 'DDR5' },
   ],
   ramGb: 32,
   boardMaker: 'ASUSTeK COMPUTER INC.',

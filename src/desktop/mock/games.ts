@@ -33,7 +33,7 @@ export function withMode(b: GameBoost, mode: BoostMode): GameBoost {
 
 const defaultMode = (kind: GameKind): BoostMode => (kind === 'gta5' || kind === 'cyberpunk' || kind === 'custom' ? 'quality' : 'competitive');
 
-const ROBLOX_DEFAULT: RobloxFlags = { enabled: true, preset: 'balanced', renderer: 'auto', msaa: null, textureQuality: null, noGrass: false, graySky: false, lowDetailDistance: false, qualityLevel: null, exclusiveFullscreen: false, ignoreDisplayScaling: false, custom: {} };
+const ROBLOX_DEFAULT: RobloxFlags = { enabled: true, preset: 'balanced', renderer: 'auto', msaa: null, textureQuality: null, noGrass: false, graySky: false, lowDetailDistance: false, pauseVoxelizer: false, qualityLevel: null, exclusiveFullscreen: false, ignoreDisplayScaling: false, custom: {} };
 
 function template(kind: GameKind): GameProfile {
   const t = TEMPLATES[kind];
@@ -253,7 +253,7 @@ export function withPreset(f: RobloxFlags): RobloxFlags {
   const base: RobloxFlags = { ...ROBLOX_DEFAULT, enabled: f.enabled, preset: f.preset, custom: f.custom };
   switch (f.preset) {
     case 'maxFps':
-      return { ...base, renderer: 'd3d11', msaa: 0, textureQuality: 0, noGrass: true, lowDetailDistance: true, qualityLevel: 1, exclusiveFullscreen: true };
+      return { ...base, renderer: 'd3d11', msaa: 0, textureQuality: 0, noGrass: true, lowDetailDistance: true, pauseVoxelizer: true, qualityLevel: 1, exclusiveFullscreen: true };
     case 'balanced':
       return { ...base, renderer: 'd3d11', noGrass: true, exclusiveFullscreen: true };
     case 'quality':
@@ -274,6 +274,7 @@ export function preview(flags: RobloxFlags) {
   if (f.noGrass) Object.assign(m, { FIntFRMMinGrassDistance: '0', FIntFRMMaxGrassDistance: '0' });
   if (f.graySky) m.FFlagDebugSkyGray = 'True';
   if (f.lowDetailDistance) for (const k of ['', 'L12', 'L23', 'L34']) m[`DFIntCSGLevelOfDetailSwitchingDistance${k}`] = '0';
+  if (f.pauseVoxelizer) m.DFFlagDebugPauseVoxelizer = 'True';
   if (f.qualityLevel != null) m.DFIntDebugFRMQualityLevelOverride = String(f.qualityLevel);
   if (f.exclusiveFullscreen) m.FFlagHandleAltEnterFullscreenManually = 'False';
   if (f.ignoreDisplayScaling) m.DFFlagDisableDPIScale = 'True';

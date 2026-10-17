@@ -71,6 +71,9 @@ pub struct RobloxFlags {
     pub gray_sky: bool,
     /// Simpler models in the distance.
     pub low_detail_distance: bool,
+    /// Lighting worked out once instead of again as things move (voxel
+    /// lighting stops updating): fewer frames spent on light.
+    pub pause_voxelizer: bool,
     /// Forces Roblox's graphics level, 1–21.
     pub quality_level: Option<u8>,
     /// Alt+Enter switches to exclusive fullscreen.
@@ -92,6 +95,7 @@ impl Default for RobloxFlags {
             no_grass: false,
             gray_sky: false,
             low_detail_distance: false,
+            pause_voxelizer: false,
             quality_level: None,
             exclusive_fullscreen: false,
             ignore_display_scaling: false,
@@ -105,7 +109,7 @@ impl RobloxFlags {
     pub fn with_preset(&self, preset: Preset) -> RobloxFlags {
         let base = RobloxFlags { enabled: self.enabled, preset, custom: self.custom.clone(), ..Default::default() };
         match preset {
-            Preset::MaxFps => RobloxFlags { renderer: Renderer::D3d11, msaa: Some(0), texture_quality: Some(0), no_grass: true, low_detail_distance: true, quality_level: Some(1), exclusive_fullscreen: true, ..base },
+            Preset::MaxFps => RobloxFlags { renderer: Renderer::D3d11, msaa: Some(0), texture_quality: Some(0), no_grass: true, low_detail_distance: true, pause_voxelizer: true, quality_level: Some(1), exclusive_fullscreen: true, ..base },
             Preset::Balanced => RobloxFlags { renderer: Renderer::D3d11, no_grass: true, exclusive_fullscreen: true, ..base },
             Preset::Quality => RobloxFlags { msaa: Some(4), texture_quality: Some(3), ..base },
             Preset::Custom => RobloxFlags { preset, ..self.clone() },
@@ -144,6 +148,9 @@ impl RobloxFlags {
             for k in ["DFIntCSGLevelOfDetailSwitchingDistance", "DFIntCSGLevelOfDetailSwitchingDistanceL12", "DFIntCSGLevelOfDetailSwitchingDistanceL23", "DFIntCSGLevelOfDetailSwitchingDistanceL34"] {
                 set(k, "0".into());
             }
+        }
+        if f.pause_voxelizer {
+            set("DFFlagDebugPauseVoxelizer", "True".into());
         }
         if let Some(l) = f.quality_level {
             set("DFIntDebugFRMQualityLevelOverride", l.clamp(1, 21).to_string());
@@ -278,6 +285,9 @@ mod tests {
         assert_eq!(max["DFIntTextureQualityOverride"], "0");
         assert_eq!(max["FFlagDebugGraphicsPreferD3D11"], "True");
         assert_eq!(max["DFIntDebugFRMQualityLevelOverride"], "1");
+        assert_eq!(max["DFFlagDebugPauseVoxelizer"], "True");
+        let balanced = RobloxFlags::default().to_flags();
+        assert!(!balanced.contains_key("DFFlagDebugPauseVoxelizer"), "lighting keeps updating outside Max FPS");
         let custom = RobloxFlags { preset: Preset::Custom, renderer: Renderer::Vulkan, custom: serde_json::from_str(r#"{"DFIntTaskSchedulerTargetFps":"9999"}"#).unwrap(), ..Default::default() }.to_flags();
         assert_eq!(custom["FFlagDebugGraphicsPreferVulkan"], "True");
         assert_eq!(ignored(&custom), vec!["DFIntTaskSchedulerTargetFps".to_string()]);

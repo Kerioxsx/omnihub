@@ -7,7 +7,7 @@ import { addProfile, list as listProfiles, newProfile } from './games';
 
 const PRO: ProOptions = { uncapped: true, lowestQuality: true, lowLatency: true };
 let options: ConfigOptions = {
-  fortnite: { frameLimit: 0, performanceMode: true, lowestQuality: true, viewDistance: 1, resolutionScale: 100, showFps: true, fullscreen: true },
+  fortnite: { frameLimit: 0, performanceMode: true, lowestQuality: true, viewDistance: 1, resolutionScale: 100, showFps: true, fullscreen: true, reflex: 2 },
   minecraft: { unlimitedFps: true, fastGraphics: true, minimalParticles: true, noClouds: true, renderDistance: null, simulationDistance: null },
   valorant: { ...PRO },
   cs2: { ...PRO },
@@ -19,12 +19,12 @@ let options: ConfigOptions = {
 const ORDER: ConfigGame[] = ['fortnite', 'valorant', 'cs2', 'apex', 'overwatch', 'roblox', 'minecraft'];
 const LABEL: Record<ConfigGame, string> = { fortnite: 'Fortnite', valorant: 'VALORANT', cs2: 'Counter-Strike 2', apex: 'Apex Legends', overwatch: 'Overwatch 2', roblox: 'Roblox', minecraft: 'Minecraft' };
 const NOTE: Record<ConfigGame, string | null> = {
-  fortnite: 'Turn on NVIDIA Reflex (On + Boost) in Fortnite’s graphics settings if you have it.',
+  fortnite: 'NVIDIA Reflex is set once Fortnite has saved it (start it once on an NVIDIA card). For fewer hitches, tick Disable Cosmetic Streaming in the Epic Games Launcher (Fortnite → Options): it downloads every skin ahead of time.',
   valorant: 'Turn on NVIDIA Reflex (On + Boost) in VALORANT’s video settings if you have it.',
   cs2: 'CS2 keeps its frame limit in the console: type fps_max 0 for unlimited (or fps_max 540).',
   apex: 'Apex’s frame limit is a launch option: add +fps_max 0 in Steam (Properties → Launch options) or the EA app.',
   overwatch: 'Turn on NVIDIA Reflex (Enabled + Boost) in Overwatch’s video settings if you have it.',
-  roblox: 'Roblox’s own menu goes up to 240 FPS; the rest of its speed comes from the Fast Flags below.',
+  roblox: 'Roblox’s own menu goes up to 240 FPS; the rest of its speed comes from the graphics slider and the Fast Flags below.',
   minecraft: null,
 };
 const PATHS: Record<ConfigGame, string[]> = {
@@ -39,13 +39,13 @@ const PATHS: Record<ConfigGame, string[]> = {
 
 /** What the pretend files say now. */
 const files: Record<ConfigGame, Record<string, string>> = {
-  fortnite: { FrameRateLimit: '144', PreferredFeatureLevel: 'sm6', PreferredRHI: 'dx12', bUseVSync: 'True', 'sg.ShadowQuality': '3', 'sg.TextureQuality': '3', 'sg.EffectsQuality': '3', 'sg.PostProcessQuality': '3', 'sg.ViewDistanceQuality': '3', 'sg.ResolutionQuality': '100', FullscreenMode: '1', bShowFPS: 'False', bMotionBlur: 'True', bShowGrass: 'True' },
+  fortnite: { FrameRateLimit: '144', PreferredFeatureLevel: 'sm6', PreferredRHI: 'dx12', bUseVSync: 'True', 'sg.ShadowQuality': '3', 'sg.TextureQuality': '3', 'sg.EffectsQuality': '3', 'sg.PostProcessQuality': '3', 'sg.ViewDistanceQuality': '3', 'sg.ResolutionQuality': '100', FullscreenMode: '1', bShowFPS: 'False', bMotionBlur: 'True', bShowGrass: 'True', LatencyTweak2: '0', bUseGPUCrashDebugging: 'True', bUseNanite: 'True' },
   minecraft: { maxFps: '120', enableVsync: 'true', graphicsMode: '1', renderDistance: '12', particles: '0', renderClouds: 'true', ao: 'true', entityShadows: 'true' },
   valorant: { bUseVSync: 'True', FrameRateLimit: '240', 'sg.ShadowQuality': '2', 'sg.EffectsQuality': '2', 'sg.TextureQuality': '3', 'sg.AntiAliasingQuality': '2', 'sg.PostProcessQuality': '1' },
   cs2: { 'setting.mat_vsync': '1', 'setting.r_low_latency': '0', 'setting.shaderquality': '1', 'setting.videocfg_shadow_quality': '2', 'setting.msaa_samples': '4', 'setting.videocfg_texture_detail': '2', 'setting.videocfg_ao_detail': '1' },
   apex: { 'setting.mat_vsync_mode': '1' },
   overwatch: { FrameRateCap: '300', VerticalSyncEnabled: '1', TripleBufferingEnabled: '0', ReduceBuffering: '0' },
-  roblox: { FramerateCap: '60' },
+  roblox: { FramerateCap: '60', SavedQualityLevel: '0', GraphicsQualityLevel: '8' },
 };
 const originals = structuredClone(files);
 const backups: Partial<Record<ConfigGame, number>> = {};
@@ -75,6 +75,7 @@ function pro(game: 'valorant' | 'cs2' | 'apex' | 'overwatch' | 'roblox'): Want[]
       break;
     case 'roblox':
       if (o.uncapped) w.push(['FramerateCap', '240', 'Maximum frame rate: 240']);
+      if (o.lowestQuality) w.push(['SavedQualityLevel', '1', 'Graphics quality: 1 (lowest)'], ['GraphicsQualityLevel', '1', 'Graphics quality: 1 (lowest)']);
       break;
   }
   return w.filter(([k]) => k in files[game]);
@@ -89,12 +90,15 @@ function wanted(game: ConfigGame): Want[] {
       ['bMotionBlur', 'False', 'Motion blur off'],
       ['bShowFPS', o.showFps ? 'True' : 'False', o.showFps ? 'FPS counter on' : 'FPS counter off'],
       ['sg.ResolutionQuality', String(o.resolutionScale), `3D resolution: ${o.resolutionScale}%`],
+      ['bUseGPUCrashDebugging', 'False', 'GPU crash debugging off'],
+      ['LatencyTweak2', String(o.reflex), `NVIDIA Reflex: ${['off', 'on', 'on + boost'][o.reflex]}`],
     ];
     if (o.fullscreen) w.push(['FullscreenMode', '0', 'Window mode: fullscreen']);
     if (o.performanceMode) w.push(['PreferredFeatureLevel', 'es31', 'Rendering mode: Performance']);
     if (o.lowestQuality) {
       w.push(['bShowGrass', 'False', 'Grass off'], ['sg.ViewDistanceQuality', String(o.viewDistance), `View distance: ${['near', 'medium', 'far', 'epic'][o.viewDistance]}`]);
       for (const [k, what] of [['sg.ShadowQuality', 'Shadows'], ['sg.TextureQuality', 'Textures'], ['sg.EffectsQuality', 'Effects'], ['sg.PostProcessQuality', 'Post-processing']]) w.push([k, '0', `${what}: low`]);
+      w.push(['bUseNanite', 'False', 'Nanite geometry off']);
     }
     return w;
   }
@@ -132,6 +136,7 @@ function settings(game: ConfigGame): ConfigSetting[] {
         row('Frame rate limit', limit === 0 ? 'Unlimited' : `${limit} FPS`, limit === 0 || limit >= 240),
         row('Rendering mode', f.PreferredFeatureLevel === 'es31' ? 'Performance' : 'DirectX 12', f.PreferredFeatureLevel === 'es31'),
         row('VSync', f.bUseVSync === 'True' ? 'On' : 'Off', f.bUseVSync !== 'True'),
+        row('NVIDIA Reflex', ['Off', 'On', 'On + Boost'][Number(f.LatencyTweak2)] ?? 'On + Boost', Number(f.LatencyTweak2) >= 1),
         row('Shadows', ['Off', 'Medium', 'High', 'Epic'][shadows] ?? 'High', shadows === 0),
         row('Window mode', f.FullscreenMode === '0' ? 'Fullscreen' : 'Windowed fullscreen', f.FullscreenMode === '0'),
         row('FPS counter', f.bShowFPS === 'True' ? 'On' : 'Off', f.bShowFPS === 'True'),
@@ -162,7 +167,7 @@ function settings(game: ConfigGame): ConfigSetting[] {
     case 'overwatch':
       return [row('Frame rate limit', `${f.FrameRateCap} FPS`, Number(f.FrameRateCap) >= 400), row('VSync', onOff(f.VerticalSyncEnabled), f.VerticalSyncEnabled === '0'), row('Reduce buffering', onOff(f.ReduceBuffering), f.ReduceBuffering === '1')];
     case 'roblox':
-      return [row('Maximum frame rate', `${f.FramerateCap} FPS`, Number(f.FramerateCap) >= 240)];
+      return [row('Maximum frame rate', `${f.FramerateCap} FPS`, Number(f.FramerateCap) >= 240), row('Graphics quality', f.SavedQualityLevel === '0' ? 'Automatic' : `${f.SavedQualityLevel} of 10`, f.SavedQualityLevel === '1')];
   }
 }
 
@@ -243,6 +248,7 @@ export function addInstalled(key: string): GameProfile {
 
 const TWEAKS: Record<TweakId, Omit<PcTweak, 'optimized' | 'current' | 'canUndo'> & { on: string; off: string }> = {
   refreshRate: { id: 'refreshRate', title: 'Monitor at its full refresh rate', description: 'Windows often leaves a 144 or 240 Hz monitor at 60 Hz. Every frame above that is drawn but never shown.', impact: 'high', available: true, admin: false, restart: false, settingsLink: null, on: '170 Hz', off: 'ASUS VG27AQL1A at 60 Hz — can do 170 Hz' },
+  memorySpeed: { id: 'memorySpeed', title: 'Memory at the speed it is sold at', description: 'Kits sold as DDR5-6000 or DDR4-3600 run at the slower standard speed until EXPO (AMD) or XMP (Intel) is turned on in the BIOS — often the biggest free gain in processor-bound games like Fortnite and Roblox. To reach the BIOS: Recovery → Advanced startup → Restart now → Troubleshoot → Advanced options → UEFI Firmware Settings.', impact: 'high', available: true, admin: false, restart: true, settingsLink: 'ms-settings:recovery', on: '6000 MT/s (sold as 6000 MT/s)', off: '4800 MT/s — the kit is sold as 6000 MT/s: turn on EXPO or XMP in the BIOS' },
   powerPlan: { id: 'powerPlan', title: 'Ultimate Performance power plan', description: 'Keeps the processor at full speed instead of waiting to ramp up — fewer stutters and higher lows. Uses more power (on a laptop, keep it plugged in).', impact: 'medium', available: true, admin: false, restart: false, settingsLink: null, on: 'High or Ultimate Performance', off: 'Balanced or power saving' },
   gameDvr: { id: 'gameDvr', title: 'Background game recording off', description: 'Xbox Game Bar can record games in the background (Game DVR), which costs frames. Screenshots with Win+Shift+S still work.', impact: 'medium', available: true, admin: false, restart: false, settingsLink: null, on: 'Off', off: 'On' },
   gameMode: { id: 'gameMode', title: 'Game Mode', description: 'Windows holds back updates and background work while a game runs.', impact: 'low', available: true, admin: false, restart: false, settingsLink: null, on: 'On', off: 'Off' },
@@ -256,6 +262,7 @@ const TWEAKS: Record<TweakId, Omit<PcTweak, 'optimized' | 'current' | 'canUndo'>
 };
 const pcState: Record<TweakId, { optimized: boolean; undo: boolean }> = {
   refreshRate: { optimized: false, undo: false },
+  memorySpeed: { optimized: true, undo: false },
   powerPlan: { optimized: false, undo: false },
   gameDvr: { optimized: false, undo: false },
   gameMode: { optimized: true, undo: false },
@@ -278,6 +285,7 @@ export function pcStatus(): PcStatus {
 
 export async function pcSet(id: TweakId, on: boolean): Promise<PcStatus> {
   if (id === 'memoryIntegrity') throw new Error('Memory Integrity is changed in Windows Security → Core isolation.');
+  if (id === 'memorySpeed') throw new Error('EXPO or XMP is turned on in the BIOS (UEFI Firmware Settings).');
   await new Promise((r) => setTimeout(r, TWEAKS[id].admin ? 900 : 300));
   pcState[id] = { optimized: on, undo: on };
   return pcStatus();

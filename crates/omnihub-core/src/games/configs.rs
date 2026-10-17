@@ -79,10 +79,10 @@ impl ConfigGame {
         Some(match self {
             ConfigGame::Cs2 => "CS2 keeps its frame limit in the console: type fps_max 0 for unlimited (or fps_max 540).",
             ConfigGame::Apex => "Apex's frame limit is a launch option: add +fps_max 0 in Steam (Properties → Launch options) or the EA app.",
-            ConfigGame::Roblox => "Roblox's own menu goes up to 240 FPS; the rest of its speed comes from the Fast Flags below.",
+            ConfigGame::Roblox => "Roblox's own menu goes up to 240 FPS; the rest of its speed comes from the graphics slider and the Fast Flags below.",
             ConfigGame::Valorant => "Turn on NVIDIA Reflex (On + Boost) in VALORANT's video settings if you have it.",
             ConfigGame::Overwatch => "Turn on NVIDIA Reflex (Enabled + Boost) in Overwatch's video settings if you have it.",
-            ConfigGame::Fortnite => "Turn on NVIDIA Reflex (On + Boost) in Fortnite's graphics settings if you have it.",
+            ConfigGame::Fortnite => "NVIDIA Reflex is set once Fortnite has saved it (start it once on an NVIDIA card). For fewer hitches, tick Disable Cosmetic Streaming in the Epic Games Launcher (Fortnite → Options): it downloads every skin ahead of time.",
             ConfigGame::Minecraft => return None,
         })
     }
@@ -173,11 +173,13 @@ pub struct FortniteOptions {
     pub show_fps: bool,
     /// Fullscreen rather than windowed (lowest input delay).
     pub fullscreen: bool,
+    /// NVIDIA Reflex Low Latency: 0 off, 1 on, 2 on + boost.
+    pub reflex: u8,
 }
 
 impl Default for FortniteOptions {
     fn default() -> Self {
-        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true }
+        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2 }
     }
 }
 
@@ -311,6 +313,12 @@ fn fortnite_edits(o: &FortniteOptions) -> Vec<Edit> {
         edit(s, "bDisableMouseAcceleration", "True", false, "Mouse acceleration off"),
         // Spreads rendering over more cores (Fortnite's "Multithreaded Rendering").
         edit(s, "bAllowMultithreadedRendering", "True", false, "Multithreaded rendering on"),
+        // Testing aids in Fortnite's menu that cost frames while on.
+        edit(s, "bUseGPUCrashDebugging", "False", false, "GPU crash debugging off"),
+        edit(s, "bLatencyTweak1", "False", false, "Latency markers off"),
+        edit(s, "bLatencyFlash", "False", false, "Latency flash off"),
+        // The menu's NVIDIA Reflex Low Latency (0 off, 1 on, 2 on + boost).
+        edit(s, "LatencyTweak2", o.reflex.min(2).to_string(), false, format!("NVIDIA Reflex: {}", REFLEX[o.reflex.min(2) as usize])),
     ];
     if o.fullscreen {
         for key in ["FullscreenMode", "LastConfirmedFullscreenMode", "PreferredFullscreenMode"] {
@@ -333,9 +341,18 @@ fn fortnite_edits(o: &FortniteOptions) -> Vec<Edit> {
         for (key, what) in UE_GROUPS {
             e.push(edit(g, key, "0", true, format!("{what}: low")));
         }
+        e.push(edit(g, "sg.LandscapeQuality", "0", false, "Landscape: low"));
+        // DirectX 12's heaviest features: Nanite geometry, Lumen lighting
+        // and reflections, and temporal anti-aliasing / super resolution.
+        e.push(edit(s, "bUseNanite", "False", false, "Nanite geometry off"));
+        e.push(edit(s, "DesiredGlobalIlluminationQuality", "0", false, "Lumen global illumination off"));
+        e.push(edit(s, "DesiredReflectionQuality", "0", false, "Lumen reflections off"));
+        e.push(edit(s, "FortAntiAliasingMethod", "Disabled", false, "Anti-aliasing and super resolution off"));
     }
     e
 }
+
+const REFLEX: [&str; 3] = ["off", "on", "on + boost"];
 
 fn minecraft_edits(o: &MinecraftOptions, doc: &Doc) -> Vec<Edit> {
     // Minecraft has spelled values differently over the years; follow the file.
@@ -459,6 +476,12 @@ fn roblox_edits(o: &ProOptions) -> Vec<Edit> {
     if o.uncapped {
         e.push(edit(None, "FramerateCap", "240", false, "Maximum frame rate: 240"));
     }
+    if o.lowest_quality {
+        // The graphics slider (0 is Automatic, 1-10 its steps) and the level
+        // Roblox last ran at, so the first frame is already at the lowest.
+        e.push(edit(None, "SavedQualityLevel", "1", false, "Graphics quality: 1 (lowest)"));
+        e.push(edit(None, "GraphicsQualityLevel", "1", false, "Graphics quality: 1 (lowest)"));
+    }
     e
 }
 
@@ -536,10 +559,13 @@ pub fn settings(game: ConfigGame, doc: &Doc) -> Vec<Setting> {
             let on = |k: &str| doc.get(s, k).is_some_and(|v| v.eq_ignore_ascii_case("true"));
             let shadows = doc.get(Some(FN_SCALABILITY), "sg.ShadowQuality").and_then(|v| v.parse::<i32>().ok());
             let mode = doc.get(s, "FullscreenMode").and_then(|v| v.parse::<i32>().ok());
+            let reflex = doc.get(s, "LatencyTweak2").and_then(|v| v.parse::<usize>().ok());
             vec![
                 row("Frame rate limit", match limit { Some(l) if l <= 0.0 => "Unlimited".into(), Some(l) => format!("{l:.0} FPS"), None => "Not set".into() }, limit.is_some_and(|l| l <= 0.0 || l >= 240.0)),
                 row("Rendering mode", if perf { "Performance".into() } else if rhi.eq_ignore_ascii_case("dx11") { "DirectX 11".into() } else if rhi.eq_ignore_ascii_case("dx12") { "DirectX 12".into() } else { "Game's choice".into() }, perf),
                 row("VSync", on_off(on("bUseVSync")), !on("bUseVSync")),
+                // Only where Fortnite offers it (an NVIDIA card).
+                row(if reflex.is_some() { "NVIDIA Reflex" } else { "" }, match reflex { Some(0) => "Off".into(), Some(1) => "On".into(), _ => "On + Boost".into() }, reflex.is_some_and(|r| r >= 1)),
                 row("Shadows", match shadows { Some(0) => "Off".into(), Some(n) => ["Off", "Medium", "High", "Epic", "Cinematic"].get(n as usize).copied().unwrap_or("High").into(), None => "Game's choice".into() }, shadows == Some(0)),
                 row("Window mode", match mode { Some(0) => "Fullscreen".into(), Some(1) => "Windowed fullscreen".into(), Some(2) => "Windowed".into(), _ => "Game's choice".into() }, mode == Some(0)),
                 row("FPS counter", on_off(on("bShowFPS")), on("bShowFPS")),
@@ -595,7 +621,11 @@ pub fn settings(game: ConfigGame, doc: &Doc) -> Vec<Setting> {
         }
         ConfigGame::Roblox => {
             let cap = num(None, "FramerateCap");
-            vec![row("Maximum frame rate", match cap { Some(c) if c <= 0.0 => "Default".into(), Some(c) => format!("{c:.0} FPS"), None => "Game's choice".into() }, cap.is_some_and(|c| c >= 240.0))]
+            let quality = num(None, "SavedQualityLevel");
+            vec![
+                row("Maximum frame rate", match cap { Some(c) if c <= 0.0 => "Default".into(), Some(c) => format!("{c:.0} FPS"), None => "Game's choice".into() }, cap.is_some_and(|c| c >= 240.0)),
+                row(if quality.is_some() { "Graphics quality" } else { "" }, match quality { Some(q) if q <= 0.0 => "Automatic".into(), Some(q) => format!("{q:.0} of 10"), None => String::new() }, quality.is_some_and(|q| q == 1.0)),
+            ]
         }
     };
     rows.retain(|r| !r.label.is_empty());
@@ -711,7 +741,7 @@ pub fn restore(game: ConfigGame, paths: &[PathBuf], backups: &Path) -> Result<()
 mod tests {
     use super::*;
 
-    const FORTNITE: &str = "[/Script/FortniteGame.FortGameUserSettings]\r\nbUseVSync=True\r\nbMotionBlur=True\r\nbShowGrass=True\r\nbShowFPS=False\r\nFullscreenMode=1\r\nLastConfirmedFullscreenMode=1\r\nPreferredFullscreenMode=1\r\nFrameRateLimit=144.000000\r\nbUseDynamicResolution=False\r\n\r\n[ScalabilityGroups]\r\nsg.ResolutionQuality=100.000000\r\nsg.ViewDistanceQuality=3\r\nsg.ShadowQuality=3\r\nsg.TextureQuality=3\r\n\r\n[D3DRHIPreference]\r\nPreferredRHI=dx12\r\nPreferredFeatureLevel=sm6\r\n";
+    const FORTNITE: &str = "[/Script/FortniteGame.FortGameUserSettings]\r\nbUseVSync=True\r\nbMotionBlur=True\r\nbShowGrass=True\r\nbShowFPS=False\r\nFullscreenMode=1\r\nLastConfirmedFullscreenMode=1\r\nPreferredFullscreenMode=1\r\nFrameRateLimit=144.000000\r\nbUseDynamicResolution=False\r\nbUseGPUCrashDebugging=True\r\nLatencyTweak2=0\r\nbUseNanite=True\r\nDesiredGlobalIlluminationQuality=3\r\nFortAntiAliasingMethod=TSREpic\r\n\r\n[ScalabilityGroups]\r\nsg.ResolutionQuality=100.000000\r\nsg.ViewDistanceQuality=3\r\nsg.ShadowQuality=3\r\nsg.TextureQuality=3\r\n\r\n[D3DRHIPreference]\r\nPreferredRHI=dx12\r\nPreferredFeatureLevel=sm6\r\n";
 
     #[test]
     fn fortnite_goes_fast_and_comes_back() {
@@ -726,6 +756,7 @@ mod tests {
         assert!(before.found);
         assert_eq!(before.settings[0].value, "144 FPS");
         assert_eq!(before.settings[1].value, "DirectX 12");
+        assert_eq!((before.settings[3].label.as_str(), before.settings[3].value.as_str()), ("NVIDIA Reflex", "Off"));
         assert!(before.pending.iter().any(|c| c.key == "FrameRateLimit" && c.from.as_deref() == Some("144.000000")));
         assert!(!before.pending.iter().any(|c| c.key == "bUseDynamicResolution"), "already off");
         assert!(!before.pending.iter().any(|c| c.key == "MeshQuality"), "absent section-only key is not invented");
@@ -741,12 +772,24 @@ mod tests {
         assert_eq!(doc.get(Some(FN_RHI), "PreferredRHI").as_deref(), Some("dx12"), "the API is left to Fortnite");
         assert_eq!(doc.get(Some(FN_SCALABILITY), "sg.ShadowQuality").as_deref(), Some("0"));
         assert_eq!(doc.get(Some(FN_SCALABILITY), "sg.EffectsQuality").as_deref(), Some("0"), "known scalability keys are added");
+        assert_eq!(doc.get(Some(FN_SECTION), "LatencyTweak2").as_deref(), Some("2"), "Reflex on + boost");
+        assert_eq!(doc.get(Some(FN_SECTION), "bUseGPUCrashDebugging").as_deref(), Some("False"));
+        assert_eq!(doc.get(Some(FN_SECTION), "bUseNanite").as_deref(), Some("False"));
+        assert_eq!(doc.get(Some(FN_SECTION), "DesiredGlobalIlluminationQuality").as_deref(), Some("0"));
+        assert_eq!(doc.get(Some(FN_SECTION), "FortAntiAliasingMethod").as_deref(), Some("Disabled"));
+        for absent in ["DesiredReflectionQuality", "bLatencyFlash"] {
+            assert!(doc.get(Some(FN_SECTION), absent).is_none(), "{absent} is not invented");
+        }
+        assert!(doc.get(Some(FN_SCALABILITY), "sg.LandscapeQuality").is_none());
         assert!(String::from_utf8(std::fs::read(&path).unwrap()).unwrap().contains("\r\n"), "line endings kept");
 
         let after = status(ConfigGame::Fortnite, &opts, &paths, &backups, false);
         assert!(after.pending.is_empty(), "{:?}", after.pending);
         assert_eq!(after.settings[0].value, "Unlimited");
         assert_eq!(after.settings[1].value, "Performance");
+        assert_eq!(after.settings[3].value, "On + Boost");
+        // Without Reflex in the file (not an NVIDIA card) there is no row for it.
+        assert!(!settings(ConfigGame::Fortnite, &Doc::ini(b"[/Script/FortniteGame.FortGameUserSettings]\r\nbUseVSync=False\r\n")).iter().any(|r| r.label == "NVIDIA Reflex"));
         assert!(after.backup_at.is_some());
 
         // A second optimize with other options keeps the first copy (yours).
@@ -844,10 +887,14 @@ mod tests {
         apply(ConfigGame::Valorant, &opts, &val, &bk).unwrap();
         assert_eq!(std::fs::read_to_string(&val[0]).unwrap(), "[/Script/ShooterGame.ShooterGameUserSettings]\nbUseVSync=False\n[ScalabilityGroups]\nsg.ShadowQuality=0\n", "only keys VALORANT wrote");
 
-        let rb = file("GlobalBasicSettings_13.xml", "<roblox>\n<Properties>\n\t<int name=\"FramerateCap\">60</int>\n</Properties>\n</roblox>\n");
+        let rb = file("GlobalBasicSettings_13.xml", "<roblox>\n<Properties>\n\t<int name=\"FramerateCap\">60</int>\n\t<int name=\"GraphicsQualityLevel\">8</int>\n\t<token name=\"SavedQualityLevel\">0</token>\n</Properties>\n</roblox>\n");
+        assert_eq!(status(ConfigGame::Roblox, &opts, &rb, &bk, false).settings[1].value, "Automatic");
         apply(ConfigGame::Roblox, &opts, &rb, &bk).unwrap();
-        assert!(std::fs::read_to_string(&rb[0]).unwrap().contains("<int name=\"FramerateCap\">240</int>"));
-        assert_eq!(status(ConfigGame::Roblox, &opts, &rb, &bk, false).settings[0].value, "240 FPS");
+        let text = std::fs::read_to_string(&rb[0]).unwrap();
+        assert!(text.contains("<int name=\"FramerateCap\">240</int>"));
+        assert!(text.contains("<int name=\"GraphicsQualityLevel\">1</int>") && text.contains("<token name=\"SavedQualityLevel\">1</token>"), "{text}");
+        let after = status(ConfigGame::Roblox, &opts, &rb, &bk, false);
+        assert_eq!((after.settings[0].value.as_str(), after.settings[1].value.as_str()), ("240 FPS", "1 of 10"));
     }
 
     #[test]

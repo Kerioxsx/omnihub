@@ -13,9 +13,9 @@ import { toast } from '../../state/toasts';
 import { Row } from './shared';
 
 const PRESETS: Record<Exclude<RobloxPreset, 'custom'>, Partial<RobloxFlags>> = {
-  maxFps: { renderer: 'd3d11', msaa: 0, textureQuality: 0, noGrass: true, lowDetailDistance: true, qualityLevel: 1, exclusiveFullscreen: true, graySky: false, ignoreDisplayScaling: false },
-  balanced: { renderer: 'd3d11', msaa: null, textureQuality: null, noGrass: true, lowDetailDistance: false, qualityLevel: null, exclusiveFullscreen: true, graySky: false, ignoreDisplayScaling: false },
-  quality: { renderer: 'auto', msaa: 4, textureQuality: 3, noGrass: false, lowDetailDistance: false, qualityLevel: null, exclusiveFullscreen: false, graySky: false, ignoreDisplayScaling: false },
+  maxFps: { renderer: 'd3d11', msaa: 0, textureQuality: 0, noGrass: true, lowDetailDistance: true, pauseVoxelizer: true, qualityLevel: 1, exclusiveFullscreen: true, graySky: false, ignoreDisplayScaling: false },
+  balanced: { renderer: 'd3d11', msaa: null, textureQuality: null, noGrass: true, lowDetailDistance: false, pauseVoxelizer: false, qualityLevel: null, exclusiveFullscreen: true, graySky: false, ignoreDisplayScaling: false },
+  quality: { renderer: 'auto', msaa: 4, textureQuality: 3, noGrass: false, lowDetailDistance: false, pauseVoxelizer: false, qualityLevel: null, exclusiveFullscreen: false, graySky: false, ignoreDisplayScaling: false },
 };
 
 /** What the options look like for a preset (Custom shows them as set). */
@@ -142,6 +142,9 @@ export function RobloxCard({ flags, onChange }: { flags: RobloxFlags; onChange: 
         </Row>
         <Row title="Simpler distant objects" hint="Lower detail for far-away parts — more FPS in big maps.">
           <Switch checked={f.lowDetailDistance} onChange={(v) => set({ lowDetailDistance: v })} label="Simpler distant objects" />
+        </Row>
+        <Row title="Lighting worked out once" hint="Roblox stops re-lighting the world as things move: more FPS, but moving lights and shadows stay as they were.">
+          <Switch checked={f.pauseVoxelizer} onChange={(v) => set({ pauseVoxelizer: v })} label="Lighting worked out once" />
         </Row>
         <Row title="Plain gray sky">
           <Switch checked={f.graySky} onChange={(v) => set({ graySky: v })} label="Plain gray sky" />

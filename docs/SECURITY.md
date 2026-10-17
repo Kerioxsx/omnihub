@@ -173,6 +173,10 @@ and lets a phone do some of that. This is what protects each part.
   `HwSchMode` for GPU scheduling, `GlobalTimerResolutionRequests` (Windows
   11) and the multimedia `NetworkThrottlingIndex`/`SystemResponsiveness`.
   Memory Integrity is only reported, with a link to Windows Security.
+  Memory speed is only reported too: the speed each stick runs at
+  (SMBIOS type 17) against the speed its part number says the kit is sold
+  at, with a link to Windows' Recovery settings; EXPO and XMP are BIOS
+  settings OmniHub never changes.
 - FPS meter: Intel PresentMon, downloaded from this repository's release and
   checked against a SHA-256 built into the app, runs as you while the game
   plays and reads the frame events Windows records (ETW); it never opens the
