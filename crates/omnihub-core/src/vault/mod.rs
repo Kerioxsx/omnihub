@@ -5,7 +5,9 @@
 
 pub mod crypto;
 pub mod generator;
+pub mod health;
 pub mod hello;
+pub mod totp;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -62,6 +64,9 @@ pub struct Entry {
     pub updated: i64,
     #[serde(default)]
     pub password_changed: i64,
+    /// Two-factor secret: an `otpauth://totp/…` link or a base32 secret.
+    #[serde(default)]
+    pub totp: String,
 }
 
 impl std::fmt::Debug for Entry {
@@ -74,6 +79,7 @@ impl Drop for Entry {
     fn drop(&mut self) {
         self.password.zeroize();
         self.notes.zeroize();
+        self.totp.zeroize();
         self.username.zeroize();
         self.email.zeroize();
     }
@@ -98,6 +104,8 @@ pub struct EntrySummary {
     /// Apple...). The UI warns and suggests passkeys or app passwords.
     pub primary_account: bool,
     pub password_score: u8,
+    /// A two-factor secret is saved (the code itself is never listed).
+    pub has_totp: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -114,6 +122,8 @@ pub struct EntryInput {
     pub notes: Option<String>,
     pub tags: Vec<String>,
     pub favorite: bool,
+    /// `None` keeps the current two-factor secret; `Some("")` removes it.
+    pub totp: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -150,6 +160,8 @@ pub enum VaultError {
     Crypto(#[from] CryptoError),
     #[error("{0}")]
     Hello(String),
+    #[error("{0}")]
+    Invalid(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
@@ -182,14 +194,37 @@ pub struct Vault {
     events: EventBus,
 }
 
+/// Identity providers whose account unlocks many others.
 const PRIMARY_DOMAINS: &[&str] = &[
-    "google.com", "gmail.com", "googlemail.com", "accounts.google", "microsoft.com", "live.com", "outlook.com", "hotmail.com",
-    "msn.com", "apple.com", "icloud.com", "me.com", "appleid", "yahoo.com", "proton.me", "protonmail.com",
+    "google.com", "gmail.com", "googlemail.com", "microsoft.com", "microsoftonline.com", "live.com", "outlook.com", "hotmail.com", "msn.com", "apple.com", "icloud.com", "me.com", "yahoo.com", "proton.me", "protonmail.com",
 ];
 
+fn url_host(url: &str) -> Option<String> {
+    let u = url.trim();
+    if u.is_empty() {
+        return None;
+    }
+    let rest = u.split_once("://").map_or(u, |(_, r)| r);
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host = host.split(':').next()?.trim_end_matches('.').to_lowercase();
+    (!host.is_empty()).then_some(host)
+}
+
+fn is_provider(domain: &str) -> bool {
+    let d = domain.to_lowercase();
+    PRIMARY_DOMAINS.iter().any(|p| d == *p || d.ends_with(&format!(".{p}")))
+}
+
+/// The account at a big identity provider itself (Google, Microsoft, Apple,
+/// Yahoo, Proton) — not every site where one of their addresses is the
+/// login: a GitHub login with a Gmail address is not a Google account.
 pub fn is_primary_account(url: &str, username: &str, email: &str) -> bool {
-    let hay = format!("{} {} {}", url, username, email).to_lowercase();
-    PRIMARY_DOMAINS.iter().any(|d| hay.contains(d))
+    match url_host(url) {
+        Some(host) => is_provider(&host),
+        // No website: an entry that is just the address itself.
+        None => [email, username].iter().any(|id| id.rsplit_once('@').is_some_and(|(_, d)| is_provider(d))),
+    }
 }
 
 const HELLO_AAD: &[u8] = b"omnihub-hello-v1";
@@ -424,6 +459,7 @@ impl Vault {
             has_notes: !e.notes.is_empty(),
             primary_account: is_primary_account(&e.url, &e.username, &e.email),
             password_score: if e.password.is_empty() { 0 } else { generator::strength(&e.password).score },
+            has_totp: !e.totp.is_empty(),
         }
     }
 
@@ -433,6 +469,29 @@ impl Vault {
             v.sort_by(|a, b| b.favorite.cmp(&a.favorite).then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase())));
             Ok(v)
         })
+    }
+
+    /// Weak, reused, old passwords and accounts without 2FA codes.
+    pub fn health(&self) -> Result<health::HealthReport, VaultError> {
+        self.with_open(|o| Ok(health::report(&o.entries, crate::db::now())))
+    }
+
+    /// Entries whose password appears in known breaches (with how often),
+    /// using `fetch` for the range API (see [`health`]); the vault is not
+    /// held locked while the network is asked.
+    pub fn breach_check(&self, fetch: &dyn Fn(&str) -> Result<String, String>) -> Result<Vec<health::HealthItem>, VaultError> {
+        let hashed: Vec<(health::HealthItem, String)> = self.with_open(|o| Ok(o.entries.iter().filter(|e| !e.password.is_empty()).map(|e| (health::item(e, 0), health::sha1_hex(&e.password))).collect()))?;
+        let hashes: Vec<String> = hashed.iter().map(|(_, h)| h.clone()).collect();
+        let counts = health::breach_counts(&hashes, fetch).map_err(VaultError::Invalid)?;
+        let mut found: Vec<health::HealthItem> = hashed
+            .into_iter()
+            .filter_map(|(mut i, h)| {
+                i.detail = *counts.get(&h)?;
+                Some(i)
+            })
+            .collect();
+        found.sort_by_key(|i| std::cmp::Reverse(i.detail));
+        Ok(found)
     }
 
     pub fn get(&self, id: &str) -> Result<Entry, VaultError> {
@@ -469,6 +528,13 @@ impl Vault {
             if let Some(n) = input.notes {
                 e.notes = n;
             }
+            if let Some(t) = input.totp {
+                let t = t.trim().to_string();
+                if !t.is_empty() {
+                    totp::parse(&t).map_err(|e| VaultError::Invalid(e.to_string()))?;
+                }
+                e.totp = t;
+            }
             e.updated = now;
             let summary = Self::summary(e);
             self.write_file(o)?;
@@ -496,11 +562,18 @@ impl Vault {
             "email" => entry.email.clone(),
             "url" => entry.url.clone(),
             "notes" => entry.notes.clone(),
+            "totp" => totp::code_now(&entry.totp).map_err(|e| VaultError::Invalid(e.to_string()))?,
             _ => return Err(VaultError::NotFound),
         };
         let value = Zeroizing::new(value);
         crate::system::clipboard::copy_secret(&value, clear_after)?;
         Ok(())
+    }
+
+    /// The current two-factor code of an entry and seconds until it changes.
+    pub fn totp_code(&self, id: &str) -> Result<(String, u64), VaultError> {
+        let entry = self.get(id)?;
+        totp::current(&entry.totp).map_err(|e| VaultError::Invalid(e.to_string()))
     }
 
     /// Encrypted, password-protected backup (without the DPAPI layer, so it
@@ -696,5 +769,11 @@ mod tests {
         assert!(is_primary_account("https://accounts.google.com", "", ""));
         assert!(is_primary_account("", "someone@outlook.com", ""));
         assert!(!is_primary_account("https://github.com", "octocat", ""));
+        // A Gmail address as the login elsewhere is not the Google account.
+        assert!(!is_primary_account("https://github.com/login", "octocat", "someone@gmail.com"));
+        assert!(!is_primary_account("https://google.com.evil.example", "", ""));
+        assert!(is_primary_account("https://appleid.apple.com", "", "someone@gmail.com"));
+        assert!(is_primary_account("login.live.com", "", ""));
+        assert!(is_primary_account("", "", "someone@icloud.com"));
     }
 }

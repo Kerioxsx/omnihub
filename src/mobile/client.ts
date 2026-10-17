@@ -93,7 +93,7 @@ export interface ServerInfo {
   tls: boolean;
   paired: boolean;
   pairingOpen: boolean;
-  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean };
+  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean; games?: boolean };
 }
 
 export interface FsEntry {
@@ -116,6 +116,55 @@ export interface Status {
   pendingPower: PendingPower | null;
   vaultUnlocked: boolean;
 }
+
+// ---------- music ----------
+
+export type { AudioInfo, FpsLive, GameKind, GameSession, GameStep, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, PingResult, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
+import type { AudioInfo, FpsLive, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
+
+/** One app in the PC's volume mixer. */
+export interface AppVolume {
+  key: string;
+  name: string;
+  level: number;
+  muted: boolean;
+  active: boolean;
+}
+
+/** An app using the PC's microphone right now. */
+export interface Call {
+  key: string;
+  name: string;
+  sinceMs: number | null;
+}
+
+export interface Mixer {
+  master: { level: number; muted: boolean } | null;
+  mic: { muted: boolean; devices: number } | null;
+  apps: AppVolume[];
+  calls: Call[];
+  /** Other apps recording from a microphone right now (a game's voice chat). */
+  micApps: string[];
+}
+
+/** A program with a window open on the PC. */
+export interface OpenApp {
+  key: string;
+  exeName: string;
+  name: string;
+  titles: string[];
+  canQuit: boolean;
+}
+
+export interface PhoneGame {
+  id: string;
+  name: string;
+  kind: GameKind;
+  lastPlayed: number | null;
+  canLaunch: boolean;
+  process: string;
+}
+
 
 export const client = {
   info: () => request<ServerInfo>('GET', '/api/info'),
@@ -159,6 +208,15 @@ export const client = {
     const t = await request<{ url: string; name: string }>('POST', `/api/inbox/${item.id}/ticket`);
     triggerDownload(t.url, t.name, false);
   },
+  /** Fetch an offered file into memory so it can go to the share sheet (Save to Photos/Files). */
+  fetchForShare: async (item: InboxItem): Promise<File> => {
+    const t = await request<{ url: string; name: string }>('POST', `/api/inbox/${item.id}/ticket`);
+    const res = await fetch(t.url);
+    if (!res.ok) throw new Error(`The PC answered ${res.status}`);
+    const blob = await res.blob();
+    return new File([blob], t.name, { type: blob.type || 'application/octet-stream' });
+  },
+  sendClipboard: (text: string) => request<void>('POST', '/api/clipboard', { text }),
   dismiss: (id: string) => request<void>('DELETE', `/api/inbox/${id}`),
 
   power: () => request<{ enabled: boolean; actions: { action: PowerAction; label: string; destructive: boolean }[]; pending: PendingPower | null; delaySeconds: number }>('GET', '/api/power'),
@@ -167,6 +225,30 @@ export const client = {
 
   apps: () => request<{ apps: { id: string; name: string; publisher: string; source: string }[] }>('GET', '/api/apps'),
   appIcon: (id: string) => request<{ icon: string | null }>('GET', `/api/apps/${id}/icon`),
+  games: () => request<{ profiles: PhoneGame[]; session: GameSession | null; fps?: FpsLive | null }>('GET', '/api/games'),
+  playGame: (id: string, launch: boolean) => request<{ session: GameSession }>('POST', `/api/games/${encodeURIComponent(id)}/play`, { launch }),
+  stopGame: () => request<{ stopped: boolean }>('POST', '/api/games/stop'),
+  pingGame: (id: string) => request<{ results: PingResult[] }>('POST', '/api/games/ping', { id }),
+  tasks: (sort: ProcessSort = 'cpu', limit = 80) => request<Usage>('GET', `/api/tasks?sort=${sort}&limit=${limit}`),
+  endTask: (name: string) => request<{ ended: number }>('POST', '/api/tasks/end', { name }),
+  setTaskPriority: (name: string, priority: Priority) => request<{ changed: number }>('POST', '/api/tasks/priority', { name, priority }),
+  media: () => request<{ state: MediaState | null; nowMs: number; audio: AudioInfo }>('GET', '/api/media'),
+  mediaControl: (action: MediaAction, positionMs = 0) => request<{ ok: boolean }>('POST', '/api/media/control', { action, positionMs: Math.max(0, Math.round(positionMs)) }),
+  mediaLyrics: () => request<{ key: string | null; lyrics: LyricsStatus }>('GET', '/api/media/lyrics'),
+  mediaAudio: (patch: { level?: number; muted?: boolean; bass?: number; treble?: number; eqEnabled?: boolean }) => request<AudioInfo>('POST', '/api/media/audio', patch),
+  sound: () => request<Mixer>('GET', '/api/sound'),
+  soundMaster: (patch: { level?: number; muted?: boolean }) => request<Mixer>('POST', '/api/sound/master', patch),
+  soundApp: (key: string, patch: { level?: number; muted?: boolean }) => request<Mixer>('POST', '/api/sound/app', { key, ...patch }),
+  soundMic: (muted: boolean) => request<Mixer>('POST', '/api/sound/mic', { muted }),
+  openApps: () => request<{ apps: OpenApp[] }>('GET', '/api/open-apps'),
+  closeApp: (key: string) => request<{ windows: number }>('POST', '/api/open-apps/close', { key }),
+  openAppIcon: (key: string) => request<{ icon: string | null }>('GET', `/api/open-apps/icon?key=${encodeURIComponent(key)}`),
+  /** Object URL of the cover art (revoke when done). */
+  mediaArt: async (id: string): Promise<string> => {
+    const res = await fetch(`/api/media/art?id=${encodeURIComponent(id)}`, { headers: { authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) throw new Error('no artwork');
+    return URL.createObjectURL(await res.blob());
+  },
   launch: (id: string) => request<{ launched: string }>('POST', `/api/apps/${id}/launch`),
 
   notes: (kind?: NoteKind, q = '') => request<{ notes: Note[]; claudeFolder: boolean }>('GET', `/api/notes?${kind ? `kind=${kind}&` : ''}q=${encodeURIComponent(q)}`),
@@ -485,6 +567,10 @@ export interface ScreenStats {
   maxWidth: number;
   control: boolean;
   monitor: MonitorInfo | null;
+  /** the PC paused sharing (nothing is captured) */
+  paused?: boolean;
+  /** the PC shares a single window instead of the display */
+  window?: boolean;
 }
 
 /** Messages the viewer sends (see capture/stream.rs `ViewerMessage`). */

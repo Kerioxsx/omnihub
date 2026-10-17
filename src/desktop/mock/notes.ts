@@ -7,7 +7,7 @@ import { DAY, NOW } from './rng';
 
 let seq = 0;
 const nid = () => `note-${(++seq).toString(36)}-${Date.now().toString(36).slice(-4)}`;
-const FOLDER = 'C:\\Users\\Alex\\Documents\\Claude Ideas';
+const FOLDER = 'C:\\Users\\Player\\Documents\\Claude Ideas';
 
 type Seed = [kind: Note['kind'], title: string, body: string, tags: string[], pinned: boolean, color: string | null, createdAgo: number, updatedAgo: number, exported: string | null, exportedAgo: number | null];
 
@@ -166,7 +166,7 @@ Let the user accept suggestions with one click.`,
 - Mobile companion goes to beta with **HTTPS on by default**
 
 ### Action items
-- [ ] Alex: write the cleanup risk copy
+- [ ] Me: write the cleanup risk copy
 - [ ] Priya: threat model for remote control
 - [ ] Jordan: perf budget for the treemap (60 fps at 1500 tiles)`,
     ['work', 'meetings'],
@@ -195,6 +195,8 @@ const notes: Note[] = SEEDS.map(([kind, title, body, tags, pinned, color, c, u, 
   updated: Math.floor(NOW - u * DAY),
   exportedPath: exported,
   exportedAt: exAgo == null ? null : Math.floor(NOW - exAgo * DAY),
+  remindAt: null,
+  reminded: false,
 }));
 
 // ---------- Claude folder ----------
@@ -282,7 +284,7 @@ export function noteSave(input: NoteInput): Note {
     n = find(input.id);
     Object.assign(n, { kind: input.kind, title: input.title, body: input.body, tags: [...input.tags], pinned: input.pinned, color: input.color ?? null, updated: now });
   } else {
-    n = { id: nid(), kind: input.kind, title: input.title, body: input.body, tags: [...input.tags], pinned: input.pinned, color: input.color ?? null, created: now, updated: now, exportedPath: null, exportedAt: null };
+    n = { id: nid(), kind: input.kind, title: input.title, body: input.body, tags: [...input.tags], pinned: input.pinned, color: input.color ?? null, created: now, updated: now, exportedPath: null, exportedAt: null, remindAt: null, reminded: false };
     notes.push(n);
   }
   emit('notes:changed', { id: n.id });
@@ -353,3 +355,24 @@ export function folderRead(path: string): string {
   if (!f) throw new Error('The system cannot find the file specified. (os error 2)');
   return f.content;
 }
+
+export function noteRemind(id: string, at: number | null): Note {
+  const n = find(id);
+  n.remindAt = at;
+  n.reminded = false;
+  emit('notes:changed', { id });
+  return { ...n, tags: [...n.tags] };
+}
+
+// Fire due reminders like the app's background watcher does.
+if (typeof window !== 'undefined')
+  setInterval(() => {
+    const now = Math.floor(Date.now() / 1000);
+    for (const n of notes) {
+      if (n.remindAt != null && n.remindAt <= now && !n.reminded) {
+        n.reminded = true;
+        const snippet = n.body.split('\n').map((l) => l.trim()).find((l) => l && !l.startsWith('#')) ?? '';
+        emit('notes:reminder', { id: n.id, title: n.title, snippet: snippet.slice(0, 140), kind: n.kind });
+      }
+    }
+  }, 3000);

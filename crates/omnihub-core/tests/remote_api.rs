@@ -154,7 +154,7 @@ fn companion_server_end_to_end() {
         assert_eq!(std::fs::read(fx.incoming.join("video.mp4")).unwrap(), data);
 
         // PC -> phone inbox, announced on the event socket.
-        let offered = fx.core.remote.send_to_phone(&[fx.share.join("hello.txt").to_string_lossy().to_string()], None).unwrap();
+        let offered = fx.core.remote.send_to_phone(&[fx.share.join("hello.txt").to_string_lossy().to_string()], None, &fx.core.outbox_dir()).unwrap();
         let mut saw = std::collections::HashSet::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
         while !(saw.contains("inbox:new") && saw.contains("transfer:done")) && tokio::time::Instant::now() < deadline {
@@ -167,6 +167,24 @@ fn companion_server_end_to_end() {
         assert!(saw.contains("transfer:done"), "{saw:?}");
         let inbox: Value = c.get(format!("{base}/api/inbox")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
         assert_eq!(inbox["items"][0]["id"], offered[0].id);
+
+        // Text and links are listed with their text and have nothing to download.
+        let text = fx.core.remote.send_text("https://example.com/x", None).unwrap();
+        let inbox: Value = c.get(format!("{base}/api/inbox")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(inbox["items"][0]["kind"], "text");
+        assert_eq!(inbox["items"][0]["text"], "https://example.com/x");
+        let r = c.post(format!("{base}/api/inbox/{}/ticket", text.id)).header("authorization", &auth).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        fx.core.remote.unsend(&text.id);
+
+        // Folders are zipped before they are offered; the zip goes when the offer does.
+        let folder = fx.core.remote.send_to_phone(&[fx.share.to_string_lossy().to_string()], None, &fx.core.outbox_dir()).unwrap();
+        assert!(folder[0].name.ends_with(".zip"));
+        let t: Value = c.post(format!("{base}/api/inbox/{}/ticket", folder[0].id)).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let zip = c.get(format!("{base}{}", t["url"].as_str().unwrap())).send().await.unwrap().bytes().await.unwrap();
+        assert_eq!(&zip[..2], b"PK");
+        fx.core.remote.unsend(&folder[0].id);
+        assert!(!folder[0].path.exists());
 
         // Power: destructive actions need confirmation and get a countdown.
         let r = c.post(format!("{base}/api/power")).json(&json!({ "action": "shutdown" })).header("authorization", &auth).send().await.unwrap();
@@ -277,4 +295,254 @@ fn https_and_phone_vault() {
     });
     drop(rt);
     fx.core.remote.stop();
+}
+
+/// Music from the phone: what's playing (the pretend player), artwork,
+/// controls, synced lyrics and the live `media:state` event.
+#[test]
+fn music_from_the_phone() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = AppCore::new(AppPaths::at(&dir.path().join("home")).unwrap(), CoreOptions { fake_media: true, vault_dpapi: Some(false), ..Default::default() }).unwrap();
+    let port = free_port();
+    core.update_settings(&json!({ "remote": { "enabled": true, "port": port, "tls": false, "bind": "localhost" } })).unwrap();
+    core.media.start(|| false);
+    let base = format!("http://127.0.0.1:{port}");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let pairing = core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        let info: Value = c.get(format!("{base}/api/info")).send().await.unwrap().json().await.unwrap();
+        assert_eq!(info["features"]["media"], true);
+
+        tokio::time::sleep(Duration::from_millis(700)).await;
+        let m: Value = c.get(format!("{base}/api/media")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let st = &m["state"];
+        assert_eq!((st["title"].as_str(), st["artist"].as_str(), st["playing"].as_bool()), (Some("Daylight Drive"), Some("The Test Signals"), Some(true)));
+        assert_eq!(st["positionSource"], "player");
+        assert!(m["nowMs"].as_i64().unwrap() > 0);
+        assert!(m["audio"]["eq"]["status"]["available"].is_boolean());
+
+        // Artwork by id.
+        let art = c.get(format!("{base}/api/media/art")).query(&[("id", st["art"].as_str().unwrap())]).header("authorization", &auth).send().await.unwrap();
+        assert_eq!(art.status(), StatusCode::OK);
+        assert_eq!(art.headers()["content-type"], "image/png");
+        assert!(art.bytes().await.unwrap().starts_with(b"\x89PNG"));
+        assert_eq!(c.get(format!("{base}/api/media/art?id=nope")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::NOT_FOUND);
+
+        // Lyrics, timed.
+        let l: Value = c.get(format!("{base}/api/media/lyrics")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(l["lyrics"]["status"], "ready");
+        // The test LRC: the first line at 0:12, each word timed.
+        assert_eq!(l["lyrics"]["lyrics"]["lines"][0]["ms"], 12000);
+        assert_eq!(l["lyrics"]["lyrics"]["lines"][0]["words"][1]["text"], "down ");
+
+        // Pausing reaches the phone as an event.
+        let t: Value = c.post(format!("{base}/api/ticket")).header("authorization", &auth).json(&json!({ "purpose": "socket" })).send().await.unwrap().json().await.unwrap();
+        let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/api/ws?ticket={}", t["ticket"].as_str().unwrap())).await.unwrap();
+        let r = c.post(format!("{base}/api/media/control")).header("authorization", &auth).json(&json!({ "action": "pause" })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::OK);
+        let paused = tokio::time::timeout(Duration::from_secs(5), async {
+            while let Some(Ok(msg)) = ws.next().await {
+                if let Message::Text(t) = msg {
+                    let v: Value = serde_json::from_str(&t).unwrap();
+                    if v["topic"] == "media:state" && v["payload"]["state"]["playing"] == false {
+                        return v;
+                    }
+                }
+            }
+            panic!("socket closed");
+        })
+        .await
+        .expect("a media:state event");
+        assert!(paused["payload"]["nowMs"].as_i64().is_some());
+        // Seek, next track.
+        c.post(format!("{base}/api/media/control")).header("authorization", &auth).json(&json!({ "action": "seek", "positionMs": 60000 })).send().await.unwrap();
+        c.post(format!("{base}/api/media/control")).header("authorization", &auth).json(&json!({ "action": "next" })).send().await.unwrap();
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let m: Value = c.get(format!("{base}/api/media")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(m["state"]["title"], "Night Loop");
+        assert_eq!(c.post(format!("{base}/api/media/control")).header("authorization", &auth).json(&json!({ "action": "explode" })).send().await.unwrap().status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+        // Turned off on the PC: refused.
+        core.update_settings(&json!({ "media": { "allowPhone": false } })).unwrap();
+        assert_eq!(c.get(format!("{base}/api/media")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+        let _ = ws.close(None).await;
+    });
+    core.remote.stop();
+}
+
+/// The volume mixer, microphone, calls and closing apps from the phone
+/// (the pretend mixer and window list).
+#[test]
+fn sound_calls_and_open_apps_from_the_phone() {
+    let dir = tempfile::tempdir().unwrap();
+    let core = AppCore::new(AppPaths::at(&dir.path().join("home")).unwrap(), CoreOptions { fake_media: true, vault_dpapi: Some(false), ..Default::default() }).unwrap();
+    let port = free_port();
+    core.update_settings(&json!({ "remote": { "enabled": true, "port": port, "tls": false, "bind": "localhost" } })).unwrap();
+    let base = format!("http://127.0.0.1:{port}");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let pairing = core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        let post = |path: &str, body: Value| c.post(format!("{base}{path}")).header("authorization", &auth).json(&body).send();
+        let app = |m: &Value, key: &str| m["apps"].as_array().unwrap().iter().find(|a| a["key"] == key).cloned().unwrap();
+
+        // Who is in a call, and the mixer.
+        let m: Value = c.get(format!("{base}/api/sound")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(m["calls"][0]["name"], "Discord");
+        assert_eq!(m["mic"]["muted"], false);
+        assert_eq!(app(&m, "system")["name"], "System sounds");
+
+        // Deafen Discord, turn Spotify down, mute the microphone, set the PC's volume.
+        let m: Value = post("/api/sound/app", json!({ "key": "discord.exe", "muted": true })).await.unwrap().json().await.unwrap();
+        assert_eq!(app(&m, "discord.exe")["muted"], true);
+        let m: Value = post("/api/sound/app", json!({ "key": "spotify.exe", "level": 0.2 })).await.unwrap().json().await.unwrap();
+        assert!((app(&m, "spotify.exe")["level"].as_f64().unwrap() - 0.2).abs() < 1e-6);
+        let m: Value = post("/api/sound/mic", json!({ "muted": true })).await.unwrap().json().await.unwrap();
+        assert_eq!(m["mic"]["muted"], true);
+        let m: Value = post("/api/sound/master", json!({ "level": 0.3 })).await.unwrap().json().await.unwrap();
+        assert!((m["master"]["level"].as_f64().unwrap() - 0.3).abs() < 1e-6);
+        assert_eq!(post("/api/sound/mic", json!({})).await.unwrap().status(), StatusCode::BAD_REQUEST);
+        assert_eq!(post("/api/sound/app", json!({ "key": "nothing.exe", "muted": true })).await.unwrap().status(), StatusCode::BAD_REQUEST);
+
+        // Open apps: close Spotify politely; Explorer is never quit.
+        let l: Value = c.get(format!("{base}/api/open-apps")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let apps = l["apps"].as_array().unwrap();
+        assert!(apps.iter().any(|a| a["name"] == "Spotify" && a["canQuit"] == true));
+        assert!(apps.iter().any(|a| a["key"] == "explorer.exe" && a["canQuit"] == false));
+        assert!(apps.iter().all(|a| a.get("path").is_none()), "paths stay on the PC");
+        let r: Value = post("/api/open-apps/close", json!({ "key": "spotify.exe" })).await.unwrap().json().await.unwrap();
+        assert_eq!(r["windows"], 1);
+        let l: Value = c.get(format!("{base}/api/open-apps")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert!(!l["apps"].as_array().unwrap().iter().any(|a| a["key"] == "spotify.exe"));
+        assert_eq!(post("/api/open-apps/close", json!({ "key": "spotify.exe" })).await.unwrap().status(), StatusCode::BAD_REQUEST);
+        let i: Value = c.get(format!("{base}/api/open-apps/icon?key=discord.exe")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert!(i["icon"].is_null());
+
+        let audit: Vec<String> = core.audit.list(100, 0).into_iter().map(|e| e.action).collect();
+        assert!(audit.iter().any(|a| a == "app.close") && audit.iter().any(|a| a == "microphone.mute"), "{audit:?}");
+
+        // Turned off on the PC: refused.
+        core.update_settings(&json!({ "media": { "allowPhone": false }, "remote": { "allowTasks": false } })).unwrap();
+        assert_eq!(c.get(format!("{base}/api/sound")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+        assert_eq!(c.get(format!("{base}/api/open-apps")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+    });
+    omnihub_core::media::mixer::reset_fake();
+    omnihub_core::system::open_apps::reset_fake();
+    core.remote.stop();
+}
+
+/// Tasks from the phone: CPU/memory of the whole PC and per program,
+/// priority and "End task" on a program started for the test.
+#[test]
+fn tasks_from_the_phone() {
+    let f = setup(false);
+    // A harmless program with a name nothing else uses.
+    let (src, args): (std::path::PathBuf, Vec<&str>) = if cfg!(windows) { (r"C:\Windows\System32\PING.EXE".into(), vec!["-n", "120", "127.0.0.1"]) } else { (std::path::PathBuf::from("/bin/sleep"), vec!["120"]) };
+    let exe = f._dir.path().join(if cfg!(windows) { "omnihub-sleeper.exe" } else { "omnihub-sleeper" });
+    std::fs::copy(&src, &exe).unwrap();
+    let mut child = std::process::Command::new(&exe).args(&args).stdout(std::process::Stdio::null()).spawn().unwrap();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let base = &f.base;
+        let pairing = f.core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        let info: Value = c.get(format!("{base}/api/info")).send().await.unwrap().json().await.unwrap();
+        assert_eq!(info["features"]["tasks"], true);
+
+        let u: Value = c.get(format!("{base}/api/tasks?sort=memory&limit=5")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let list = u["processes"].as_array().unwrap();
+        assert!(!list.is_empty() && list.len() <= 5);
+        assert!(list.windows(2).all(|w| w[0]["memory"].as_u64() >= w[1]["memory"].as_u64()));
+        assert!(u["memoryTotal"].as_u64().unwrap() > 0 && u["cores"].as_u64().unwrap() > 0);
+        assert!(u["gpuSupported"].is_boolean() && u["gpus"].is_array());
+        for k in ["cpu", "gpu", "gpuMemory", "disk", "count", "canEnd"] {
+            assert!(!list[0][k].is_null(), "{k} missing");
+        }
+
+        let u: Value = c.get(format!("{base}/api/tasks?sort=name&limit=500")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let sleeper = u["processes"].as_array().unwrap().iter().find(|g| g["name"].as_str().unwrap().starts_with("omnihub-sleeper")).expect("test program listed").clone();
+        assert_eq!(sleeper["canEnd"], true);
+        let name = sleeper["name"].as_str().unwrap();
+
+        let r = c.post(format!("{base}/api/tasks/priority")).header("authorization", &auth).json(&json!({ "name": name, "priority": "belowNormal" })).send().await.unwrap();
+        assert_eq!(r.status(), if cfg!(windows) { StatusCode::OK } else { StatusCode::BAD_REQUEST });
+        // Windows' own processes are never touched.
+        let r = c.post(format!("{base}/api/tasks/end")).header("authorization", &auth).json(&json!({ "name": "csrss.exe" })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+
+        let r: Value = c.post(format!("{base}/api/tasks/end")).header("authorization", &auth).json(&json!({ "name": name })).send().await.unwrap().json().await.unwrap();
+        assert_eq!(r["ended"], 1);
+
+        f.core.update_settings(&json!({ "remote": { "allowTasks": false } })).unwrap();
+        assert_eq!(c.get(format!("{base}/api/tasks")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+    });
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while child.try_wait().unwrap().is_none() {
+        assert!(std::time::Instant::now() < deadline, "the program was not ended");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    f.core.remote.stop();
+}
+
+/// Games from the phone: list profiles, boost (without launching), stop,
+/// and a ping test against the profile's own host.
+#[test]
+fn games_from_the_phone() {
+    let f = setup(false);
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let ping_port = l.local_addr().unwrap().port();
+    std::thread::spawn(move || for _ in l.incoming() {});
+    let mut p = f.core.games.create(omnihub_core::games::GameKind::Custom);
+    p.name = "Phone game".into();
+    p.ping_host = Some(format!("127.0.0.1:{ping_port}"));
+    // Leave the machine running the tests alone.
+    p.boost = omnihub_core::games::Boost { power_plan: omnihub_core::games::tweaks::PowerPlan::Keep, silence_notifications: false, game_mode: false, gpu_high_performance: false, wifi_low_latency: false, ..Default::default() };
+    let p = f.core.games.save(p).unwrap().profile;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let base = &f.base;
+        let pairing = f.core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        let info: Value = c.get(format!("{base}/api/info")).send().await.unwrap().json().await.unwrap();
+        assert_eq!(info["features"]["games"], true);
+
+        let g: Value = c.get(format!("{base}/api/games")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(g["profiles"][0]["name"], "Phone game");
+        assert_eq!(g["profiles"][0]["canLaunch"], false);
+        assert!(g["session"].is_null());
+
+        let r: Value = c.post(format!("{base}/api/games/{}/play", p.id)).header("authorization", &auth).json(&json!({ "launch": false })).send().await.unwrap().json().await.unwrap();
+        assert_eq!(r["session"]["name"], "Phone game");
+        let mut phase = Value::Null;
+        for _ in 0..50 {
+            let g: Value = c.get(format!("{base}/api/games")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+            phase = g["session"]["phase"].clone();
+            if phase == "boosted" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert_eq!(phase, "boosted");
+        // A second boost is refused while one runs.
+        assert_eq!(c.post(format!("{base}/api/games/{}/play", p.id)).header("authorization", &auth).send().await.unwrap().status(), StatusCode::BAD_REQUEST);
+        let r: Value = c.post(format!("{base}/api/games/stop")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(r["stopped"], true);
+
+        let r: Value = c.post(format!("{base}/api/games/ping")).header("authorization", &auth).json(&json!({ "id": p.id })).send().await.unwrap().json().await.unwrap();
+        assert_eq!(r["results"][0]["received"], 10, "{r}");
+        assert!(r["results"][0]["avgMs"].as_f64().is_some());
+
+        f.core.update_settings(&json!({ "remote": { "allowAppLaunch": false } })).unwrap();
+        assert_eq!(c.get(format!("{base}/api/games")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+    });
+    f.core.remote.stop();
 }

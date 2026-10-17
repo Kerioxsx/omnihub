@@ -1,11 +1,13 @@
 import { AnimatePresence, motion } from 'motion/react';
+import { createPortal } from 'react-dom';
 import { CircleCheck, CircleAlert, Info } from 'lucide-react';
 import { useToasts } from '../state';
 import { cx } from '../lib/util';
 
 export function Toasts({ aboveTabs }: { aboveTabs: boolean }) {
   const { toasts, dismiss } = useToasts();
-  return (
+  // At the top level, so toasts also show over full-screen views (the screen viewer).
+  return createPortal(
     <div
       className={cx('pointer-events-none fixed inset-x-0 z-[70] flex flex-col items-center gap-2 px-3', aboveTabs ? 'bottom-tabbar' : 'bottom-[calc(var(--safe-bottom)+16px)]')}
       aria-live="polite"
@@ -48,6 +50,7 @@ export function Toasts({ aboveTabs }: { aboveTabs: boolean }) {
           </motion.div>
         ))}
       </AnimatePresence>
-    </div>
+    </div>,
+    document.body,
   );
 }

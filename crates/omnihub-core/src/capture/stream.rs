@@ -403,6 +403,139 @@ impl FrameSource for GdiSource {
     }
 }
 
+// ---------- privacy: pause, or share one window ----------
+
+static PAUSED: AtomicBool = AtomicBool::new(false);
+static SHARED_WINDOW: Mutex<Option<u32>> = parking_lot::const_mutex(None);
+
+/// Pause every screen share: nothing is captured, viewers are told.
+pub fn set_paused(on: bool) {
+    PAUSED.store(on, Ordering::Relaxed);
+}
+
+pub fn paused() -> bool {
+    PAUSED.load(Ordering::Relaxed)
+}
+
+/// Show viewers only this window (None = the display they chose).
+pub fn set_shared_window(id: Option<u32>) {
+    *SHARED_WINDOW.lock() = id;
+}
+
+pub fn shared_window() -> Option<u32> {
+    *SHARED_WINDOW.lock()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowInfo {
+    pub id: u32,
+    pub title: String,
+    pub app: String,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Windows that can be shared on their own (visible, titled, not tiny).
+pub fn windows() -> Vec<WindowInfo> {
+    if fake_screen() {
+        return Vec::new();
+    }
+    #[cfg(windows)]
+    {
+        let me = std::process::id();
+        xcap::Window::all()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|w| !w.is_minimized().unwrap_or(true) && w.pid().ok() != Some(me))
+            .filter_map(|w| {
+                let (id, title, width, height) = (w.id().ok()?, w.title().ok()?, w.width().ok()?, w.height().ok()?);
+                (!title.trim().is_empty() && width >= 200 && height >= 150).then(|| WindowInfo { id, title, app: w.app_name().unwrap_or_default(), width, height })
+            })
+            .collect()
+    }
+    #[cfg(not(windows))]
+    Vec::new()
+}
+
+/// One window, captured on its own; its position is tracked so remote
+/// input lands in it.
+#[cfg(windows)]
+pub struct WindowSource {
+    window: xcap::Window,
+    info: MonitorInfo,
+    frame: Frame,
+    last: Option<Instant>,
+}
+
+#[cfg(windows)]
+impl WindowSource {
+    pub fn new(id: u32) -> std::io::Result<Self> {
+        let window = xcap::Window::all().map_err(|e| std::io::Error::other(e.to_string()))?.into_iter().find(|w| w.id().ok() == Some(id)).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "the shared window was closed"))?;
+        let info = MonitorInfo { index: usize::MAX, name: window.title().unwrap_or_default(), x: 0, y: 0, width: 0, height: 0, primary: false };
+        Ok(WindowSource { window, info, frame: Frame { width: 0, height: 0, stride: 0, data: Vec::new(), cursor: None }, last: None })
+    }
+}
+
+#[cfg(windows)]
+impl FrameSource for WindowSource {
+    fn last(&self) -> Option<&Frame> {
+        self.last.map(|_| &self.frame)
+    }
+
+    fn next_frame(&mut self, timeout: Duration) -> std::io::Result<bool> {
+        let period = Duration::from_millis(1000 / 20);
+        if let Some(l) = self.last {
+            if l.elapsed() < period {
+                std::thread::sleep((period - l.elapsed()).min(timeout));
+                if l.elapsed() < period {
+                    return Ok(false);
+                }
+            }
+        }
+        self.last = Some(Instant::now());
+        if self.window.is_minimized().unwrap_or(false) {
+            return Ok(false);
+        }
+        let img = self.window.capture_image().map_err(|_| std::io::Error::new(std::io::ErrorKind::NotFound, "the shared window was closed"))?;
+        let (w, h) = img.dimensions();
+        self.info.x = self.window.x().unwrap_or(self.info.x);
+        self.info.y = self.window.y().unwrap_or(self.info.y);
+        (self.info.width, self.info.height) = (w, h);
+        let mut data = img.into_raw();
+        for px in data.as_chunks_mut::<4>().0 {
+            px.swap(0, 2); // RGBA -> BGRA
+        }
+        self.frame = Frame { width: w, height: h, stride: w as usize * 4, data, cursor: None };
+        use windows::Win32::Foundation::POINT;
+        use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+        let mut p = POINT::default();
+        if unsafe { GetCursorPos(&mut p) }.is_ok() {
+            let (x, y) = (p.x - self.info.x, p.y - self.info.y);
+            if x >= 0 && y >= 0 && (x as u32) < w && (y as u32) < h {
+                self.frame.cursor = Some((x, y));
+            }
+        }
+        Ok(true)
+    }
+
+    fn monitor(&self) -> MonitorInfo {
+        self.info.clone()
+    }
+}
+
+fn open_window_source(id: u32) -> std::io::Result<Box<dyn FrameSource>> {
+    #[cfg(windows)]
+    {
+        Ok(Box::new(WindowSource::new(id)?))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = id;
+        Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "window sharing is only implemented on Windows"))
+    }
+}
+
 pub fn fake_screen() -> bool {
     std::env::var("OMNIHUB_FAKE_SCREEN").is_ok_and(|v| v == "1") || !cfg!(windows)
 }
@@ -604,7 +737,12 @@ impl StreamControl {
 /// Capture/encode loop. Sends complete messages through `tx` until stopped
 /// or the receiver goes away.
 pub fn run_capture(monitor: usize, ctl: Arc<StreamControl>, tx: tokio::sync::mpsc::Sender<Vec<u8>>) -> std::io::Result<()> {
-    let mut source = open_source(monitor)?;
+    let open = |window: Option<u32>| match window {
+        Some(id) => open_window_source(id),
+        None => open_source(monitor),
+    };
+    let mut window = shared_window();
+    let mut source = open(window)?;
     *ctl.monitor.lock() = Some(source.monitor());
     let mut enc = JpegEncoder::default();
     let mut seq = 0u32;
@@ -613,10 +751,27 @@ pub fn run_capture(monitor: usize, ctl: Arc<StreamControl>, tx: tokio::sync::mps
     let mut pending_change = true;
     let mut last_keepalive = Instant::now();
     while !ctl.stop.load(Ordering::Relaxed) && !tx.is_closed() {
+        // Paused: capture nothing at all (the viewer shows a notice).
+        if paused() {
+            std::thread::sleep(Duration::from_millis(150));
+            pending_change = true;
+            continue;
+        }
+        // The PC switched between "whole display" and one window.
+        if shared_window() != window {
+            window = shared_window();
+            source = open(window)?;
+            *ctl.monitor.lock() = Some(source.monitor());
+            pending_change = true;
+        }
         let params = ctl.params.lock().clone();
         let period = Duration::from_millis(1000 / params.fps.max(1) as u64);
         if source.next_frame(Duration::from_millis(30))? {
             pending_change = true;
+            if window.is_some() {
+                // A window moves; input must follow it.
+                *ctl.monitor.lock() = Some(source.monitor());
+            }
         }
         // Static screens still get a frame every couple of seconds so the
         // viewer knows the connection is alive.
@@ -871,8 +1026,35 @@ mod tests {
         assert_eq!(&m[20..], b"JPEG");
     }
 
+    /// The pause switch is global: capture tests take turns.
+    static CAPTURE_TESTS: Mutex<()> = parking_lot::const_mutex(());
+
+    #[test]
+    fn pausing_stops_capture() {
+        let _turn = CAPTURE_TESTS.lock();
+        let ctl = StreamControl::new(&preset("saver"));
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        set_paused(true);
+        let c2 = ctl.clone();
+        let th = std::thread::spawn(move || run_capture(0, c2, tx));
+        std::thread::sleep(Duration::from_millis(500));
+        assert!(rx.try_recv().is_err(), "nothing is sent while paused");
+        set_paused(false);
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let mut got = None;
+        while got.is_none() && Instant::now() < deadline {
+            got = rx.try_recv().ok();
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(got.is_some(), "frames resume");
+        ctl.stop.store(true, Ordering::Relaxed);
+        drop(rx);
+        th.join().unwrap().unwrap();
+    }
+
     #[test]
     fn capture_loop_respects_backpressure() {
+        let _turn = CAPTURE_TESTS.lock();
         let ctl = StreamControl::new(&preset("saver"));
         let (tx, mut rx) = tokio::sync::mpsc::channel(8);
         let c2 = ctl.clone();

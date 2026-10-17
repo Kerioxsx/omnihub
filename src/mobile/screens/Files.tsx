@@ -58,6 +58,12 @@ interface FilesPrefs {
   showHidden: boolean;
   /** Per-folder view choice; folders without one pick automatically. */
   views: Record<string, 'list' | 'grid'>;
+  /** Tiles per row in the grid. */
+  gridCols: 2 | 3 | 4;
+  /** Smaller list rows, more files on screen. */
+  compact: boolean;
+  setGridCols: (n: 2 | 3 | 4) => void;
+  setCompact: (v: boolean) => void;
   setPath: (p: string | null) => void;
   setSort: (k: SortKey, desc: boolean) => void;
   setShowHidden: (v: boolean) => void;
@@ -74,7 +80,7 @@ function loadPrefs(): Partial<FilesPrefs> {
 }
 function savePrefs(s: FilesPrefs) {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ sort: s.sort, desc: s.desc, showHidden: s.showHidden }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ sort: s.sort, desc: s.desc, showHidden: s.showHidden, gridCols: s.gridCols, compact: s.compact }));
   } catch {
     /* ignore */
   }
@@ -86,7 +92,17 @@ export const useFiles = create<FilesPrefs>((set, get) => ({
   desc: false,
   showHidden: false,
   views: {},
+  gridCols: 3,
+  compact: false,
   ...loadPrefs(),
+  setGridCols: (gridCols) => {
+    set({ gridCols });
+    savePrefs(get());
+  },
+  setCompact: (compact) => {
+    set({ compact });
+    savePrefs(get());
+  },
   setPath: (path) => set({ path }),
   setSort: (sort, desc) => {
     set({ sort, desc });
@@ -403,7 +419,7 @@ export function FilesScreen({ active }: { active: boolean }) {
                   <Empty icon={<FolderOpen size={30} />} title="This folder is empty" body={uploadsOn ? 'Tap + to send files from your phone here.' : undefined} />
                 )
               ) : view === 'grid' ? (
-                <div className="mt-3 grid grid-cols-3 gap-1.5">
+                <div className={cx('mt-3 grid gap-1.5', prefs.gridCols === 2 ? 'grid-cols-2' : prefs.gridCols === 4 ? 'grid-cols-4' : 'grid-cols-3')}>
                   {entries.map((e) => (
                     <GridTile key={e.path} entry={e} selected={selected.has(e.path)} selecting={selecting} onOpen={() => openEntry(e)} onLongPress={() => startSelect(e)} />
                   ))}
@@ -411,7 +427,7 @@ export function FilesScreen({ active }: { active: boolean }) {
               ) : (
                 <div className="mt-2 -mx-2">
                   {entries.map((e) => (
-                    <EntryRow key={e.path} entry={e} selected={selected.has(e.path)} selecting={selecting} onOpen={() => openEntry(e)} onLongPress={() => startSelect(e)} />
+                    <EntryRow key={e.path} entry={e} compact={prefs.compact} selected={selected.has(e.path)} selecting={selecting} onOpen={() => openEntry(e)} onLongPress={() => startSelect(e)} />
                   ))}
                 </div>
               )}
@@ -522,15 +538,21 @@ function Thumb({ path, size, className, fallback }: { path: string; size: number
   );
 }
 
-function EntryRow({ entry: e, selected, selecting, onOpen, onLongPress }: { entry: FsEntry; selected: boolean; selecting: boolean; onOpen: () => void; onLongPress: () => void }) {
+function EntryRow({ entry: e, compact, selected, selecting, onOpen, onLongPress }: { entry: FsEntry; compact: boolean; selected: boolean; selecting: boolean; onOpen: () => void; onLongPress: () => void }) {
   const lp = useLongPress(onLongPress, onOpen);
   const isImage = kindOf(e.name, e.kind) === 'image';
   return (
-    <button {...lp} className={cx('press flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left', selected ? 'bg-accent-soft' : 'active:bg-surface-2', selecting && e.isDir && 'opacity-40')}>
-      {isImage ? <Thumb path={e.path} size={128} className="h-11 w-11 shrink-0 rounded-xl" fallback={<FileIcon name={e.name} kind={e.kind} />} /> : <FileIcon name={e.name} kind={e.kind} />}
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[15px] font-semibold">{e.name}</div>
-        <div className="truncate text-[13px] text-dim">
+    <button {...lp} className={cx('press flex w-full items-center rounded-2xl px-2 text-left', compact ? 'gap-2.5 py-1' : 'gap-3 py-2', selected ? 'bg-accent-soft' : 'active:bg-surface-2', selecting && e.isDir && 'opacity-40')}>
+      {compact ? (
+        <FileIcon name={e.name} kind={e.kind} size={22} />
+      ) : isImage ? (
+        <Thumb path={e.path} size={128} className="h-11 w-11 shrink-0 rounded-xl" fallback={<FileIcon name={e.name} kind={e.kind} />} />
+      ) : (
+        <FileIcon name={e.name} kind={e.kind} />
+      )}
+      <div className={cx('min-w-0 flex-1', compact && 'flex items-baseline gap-2')}>
+        <div className={cx('truncate font-semibold', compact ? 'min-w-0 flex-1 text-[14px]' : 'text-[15px]')}>{e.name}</div>
+        <div className={cx('truncate text-dim', compact ? 'shrink-0 text-[12px] tabular-nums' : 'text-[13px]')}>
           {e.isDir ? (e.size != null ? `${formatBytes(e.size)} · ` : '') : `${formatBytes(e.size)} · `}
           {formatRelative(e.modified)}
         </div>
@@ -687,6 +709,26 @@ function OptionsSheet({ open, onClose, view, path }: { open: boolean; onClose: (
                 { value: 'grid', label: <><LayoutGrid size={16} /> Grid</> },
               ]}
             />
+          </div>
+        )}
+        {view === 'grid' ? (
+          <div>
+            <div className="mb-2 text-[13px] font-semibold text-dim">Tiles per row</div>
+            <Segmented
+              value={String(p.gridCols) as '2' | '3' | '4'}
+              onChange={(v) => p.setGridCols(Number(v) as 2 | 3 | 4)}
+              options={[
+                { value: '2', label: 'Big · 2' },
+                { value: '3', label: '3' },
+                { value: '4', label: 'Small · 4' },
+              ]}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3">
+            <List size={18} className="text-dim" />
+            <div className="flex-1 text-[15px] font-medium">Compact list</div>
+            <Switch on={p.compact} onChange={p.setCompact} label="Compact list" />
           </div>
         )}
         <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3">

@@ -375,6 +375,21 @@ fn render_icon(_app: &AppInfo) -> Option<Vec<u8>> {
     None
 }
 
+/// The icon of an executable as a PNG data URL (open apps on the phone).
+pub fn exe_icon_data_url(path: &str) -> Option<String> {
+    #[cfg(windows)]
+    {
+        use base64::Engine;
+        let png = win::icon_png(path, 64)?;
+        Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        None
+    }
+}
+
 /// The app catalogue with an icon cache on disk.
 pub struct AppLibrary {
     cache_dir: PathBuf,

@@ -7,6 +7,7 @@ import { api } from '../api';
 import { useEvent } from '../lib/hooks';
 import { currentRoute, navigate } from '../lib/router';
 import { useLive } from '../state/live';
+import { useSend } from '../state/send';
 import { useSettings } from '../state/settings';
 import { useStorage } from '../state/storage';
 import { toast } from '../state/toasts';
@@ -15,7 +16,20 @@ export function GlobalEvents() {
   useEffect(() => {
     const live = useLive.getState();
     void Promise.allSettled([live.refreshRemote(), live.refreshDevices(), live.refreshVault(), live.refreshPower(), useStorage.getState().loadVolumes()]);
+    // Started from Explorer's "Send to → OmniHub (phone)".
+    void api.app.takePendingSend().then((paths) => paths.length && useSend.getState().openFiles(paths), () => undefined);
+    // The previous run ended without a normal exit: offer what is known.
+    void api.app.lastCrash().then((report) => {
+      if (!report) return;
+      toast.warn('OmniHub closed unexpectedly last time', 'Copy the details and send them along with what you were doing, so it can be fixed.', {
+        key: 'last-crash',
+        duration: 60_000,
+        action: { label: 'Copy details', run: () => void navigator.clipboard?.writeText(report).then(() => toast.success('Details copied')) },
+      });
+    }, () => undefined);
   }, []);
+  useEvent<string[]>('send:files', () => void api.app.takePendingSend().then((paths) => paths.length && useSend.getState().openFiles(paths), () => undefined));
+  useEvent<{ device: string; chars: number }>('clipboard:from-phone', (p) => toast.success(`Text from ${p.device} copied`, `${p.chars} characters are on the clipboard — paste with Ctrl+V.`));
 
   // storage
   useEvent<JobProgress>('storage:progress', (p) => useStorage.getState().onProgress(p));
@@ -60,6 +74,13 @@ export function GlobalEvents() {
     if (p.reason !== 'manual') toast.info('Vault locked', p.reason === 'idle' ? 'Locked automatically after inactivity.' : p.reason === 'session' ? 'Windows was locked.' : undefined);
   });
   useEvent('vault:unlocked', () => void useLive.getState().refreshVault());
+  useEvent<{ id: string; title: string; snippet: string }>('notes:reminder', (p) =>
+    toast.info(`Reminder: ${p.title || 'Untitled note'}`, p.snippet || undefined, { action: { label: 'Open', run: () => navigate('notes', { id: p.id }) } }),
+  );
+  useEvent<{ browser: string }>('browser:unlock-request', (p) => {
+    navigate('vault');
+    toast.info(`${p.browser} wants to fill a login`, 'Unlock the vault here, then go back to the browser.');
+  });
 
   // misc
   useEvent<Settings>('settings:changed', (s) => useSettings.getState().set(s));
@@ -95,5 +116,26 @@ export function ThemeController() {
   useEffect(() => {
     document.documentElement.classList.toggle('reduce-motion', !!reduced);
   }, [reduced]);
+  // Interface size: CSS zoom on the root scales layout like browser zoom.
+  const scale = useSettings((s) => s.settings?.general.uiScale ?? 100);
+  useEffect(() => {
+    const z = Math.min(150, Math.max(80, scale)) / 100;
+    document.documentElement.style.zoom = z === 1 ? '' : String(z);
+  }, [scale]);
+  // Ctrl+= / Ctrl+- / Ctrl+0 change it from anywhere.
+  useEffect(() => {
+    const steps = [80, 90, 100, 110, 125, 150];
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const cur = useSettings.getState().settings?.general.uiScale ?? 100;
+      const i = steps.indexOf(cur) < 0 ? 2 : steps.indexOf(cur);
+      const next = e.key === '=' || e.key === '+' ? steps[Math.min(steps.length - 1, i + 1)] : e.key === '-' ? steps[Math.max(0, i - 1)] : e.key === '0' ? 100 : null;
+      if (next == null) return;
+      e.preventDefault();
+      if (next !== cur) void useSettings.getState().update({ general: { uiScale: next } });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   return null;
 }

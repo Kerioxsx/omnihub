@@ -5,8 +5,8 @@ import { create } from 'zustand';
 import type { InboxItem, PendingPower } from '@shared/types';
 import { client, type ServerInfo, type SocketStatus } from './client';
 
-export type Tab = 'home' | 'files' | 'screen' | 'power' | 'more';
-export const TAB_ORDER: Tab[] = ['home', 'files', 'screen', 'power', 'more'];
+export type Tab = 'home' | 'files' | 'music' | 'screen' | 'power' | 'more';
+export const TAB_ORDER: Tab[] = ['home', 'files', 'music', 'screen', 'power', 'more'];
 
 interface AppState {
   info: ServerInfo | null;

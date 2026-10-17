@@ -31,7 +31,64 @@ npm run dev:mobile                  # http://<your-ip>:1421, proxies /api to por
 Debug builds read the embedded phone app from `dist-mobile/` at runtime, so
 `npm run build:mobile` is enough after UI changes. `--dry-run-power` logs
 power actions instead of performing them. On Linux the screen stream is an
-animated test pattern (`OMNIHUB_FAKE_SCREEN=1` forces it on Windows).
+animated test pattern (`OMNIHUB_FAKE_SCREEN=1` forces it on Windows), and
+`OMNIHUB_FAKE_MEDIA=1` plays two pretend songs with timed lyrics so the
+Music tab works without Windows' media sessions.
+
+`--home DIR` keeps all data in one folder (seed `DIR/data/games.json` to try
+the phone's Games screen). The headless server reads commands on stdin:
+`send <path>` / `text <words>` (offer to phones), `pair`, `vault-create|
+unlock|lock|list <…>`, `vault-add <entry JSON>`, `browser on|off`,
+`browser-allow|browser-deny` (answer an extension's pairing request) and
+`screen-pause`.
+
+### Browser extension
+
+Load `browser-extension/` unpacked (`brave://extensions` → Developer mode →
+Load unpacked); its key in `manifest.json` pins the extension ID the native
+host allows. With the app (or the headless server with `browser on`)
+running, the extension pairs and fills. The app's executable doubles as the
+native-messaging host (`browser_host` is a thin standalone build of it); on
+Windows browsers run a copy of it from `data/browser` (see Updates below).
+
+### Games
+
+`cargo test -p omnihub-core --test games` runs a whole boost with stand-in
+programs (close an app, launch, follow, restore, reopen). The Windows-only
+tweaks report "Windows only" elsewhere; on Windows the tests leave the power
+plan and other system settings alone. Roblox detection and flag writing are
+tested against a temporary folder (`GameHub::set_roblox_roots`).
+
+Game settings files (`games/configs.rs`) are edited with `games/ini.rs`,
+which changes single values and keeps every other byte (comments, order,
+line endings, UTF-16). Keys a game is known to read are added when missing;
+the rest change only when the file has them. The installed-games scan
+(`games/library.rs`) reads Epic manifests, Steam's `libraryfolders.vdf` and
+app manifests, Riot's product settings, `.minecraft` and Roblox; tests and
+`GameHub::set_test_paths` point both at temporary folders. PC tweaks
+(`games/pc.rs`) keep the previous value of everything they change in
+`data/pc-tweaks.json`; GPU scheduling, the global timer and the multimedia
+settings go through the elevated helper (`--omnihub-helper pc-admin hags+|hags-`,
+`timer <1|->`, `mm <index|-> <responsiveness|->`).
+
+Boost modes are `Boost::with_mode` (Competitive, Quality, Custom); `save()`
+re-applies the mode, so the switches a mode sets can't drift. The FPS meter
+(`games/fps.rs`) parses PresentMon's CSV from stdout into a frame-time
+histogram; its tests and `tests/games.rs` use a shell script standing in for
+PresentMon (`GameHub::set_fps_test_tool`). `.github/workflows/presentmon.yml`
+fetches PresentMon, runs it with the app's exact arguments (a unit test checks
+the workflow lists every one), and the release builds its SHA-256 into the app
+(`OMNIHUB_PRESENTMON_SHA256`). Lag under load (`ping::load_test`) is tested
+against a local HTTP server.
+
+### Music
+
+The Music page and the full-screen player (`components/music/FullPlayer.tsx`)
+share `lib/nowPlaying.ts` with Home's card. The lyric that is being sung is
+filled per frame without React renders (styles written in a
+`requestAnimationFrame` loop); the lines move with springs whose delay grows
+below the current line. In demo mode the made-up songs time every word and
+have an instrumental break after the eighth line.
 
 ### Storage engine against NTFS images
 
@@ -71,6 +128,70 @@ does not match the version in `tauri.conf.json`, and a version whose tag
 already points to another commit. Running it again for the released commit
 rebuilds and replaces the files.
 
+### Updates
+
+`update.rs` asks `OMNIHUB_UPDATE_URL` (default: GitHub's latest-release API
+for this repository), and installs with the NSIS installer's `/P /R /UPDATE`
+(passive, reopen the app, update mode). Where OmniHub runs decides how
+(`install_kind`): a folder the user can write gets the setup as is; one
+only administrators can write gets `msiexec /i … /passive` when Windows
+lists an MSI install, otherwise the setup through UAC with
+`/OHELEVATED /D=<folder>`. A release therefore has to keep the asset names
+the Release workflow produces (`OmniHub_<version>_x64-setup.exe`,
+`SHA256SUMS.txt`). Its tests run against a local HTTP server.
+
+The setup installs per user without administrator rights, so on its own it
+cannot replace a copy in Program Files ("Error writing to file").
+`src-tauri/installer-hooks.nsh` (`NSIS_HOOK_PREINSTALL`) checks that the
+install folder is writable and otherwise runs the same setup again through
+UAC, passive or silent like the first run, with `/OHELEVATED` so an
+elevated run that still cannot write stops instead of asking again. The
+hook then closes every running `omnihub.exe` (asking first in the full
+wizard), and `src-tauri/wix/close-running.wxs` does the same for the MSI
+before `InstallValidate`: a running OmniHub keeps its executable locked,
+and Windows Installer stops with error 1310 "Error writing to file". Check
+the hook compiles with `makensis` (NSIS 3) and a small script that
+includes `LogicLib.nsh`, `FileFunc.nsh`, declares `PassiveMode`,
+`UpdateMode` and `NoShortcutMode` and inserts the macro in a section.
+
+Two things keep OmniHub from locking itself: the app leaves on
+`WM_QUERYENDSESSION`/`WM_ENDSESSION` (sign-out, shutdown, and the Restart
+Manager installers use; `system/session_end.rs`) instead of hiding to the
+tray, and browsers start a copy of the executable for the extension
+(`data/browser/omnihub-host-<version>.exe`, `browser/register.rs`), which
+starts the installed app from `app-path.txt` on `launch-app`.
+
+Automatic installs wait until the window is hidden (tray) and nothing is
+running (game boost, screen viewers, AirPlay receiver, phone transfers); the
+shell tells the updater whether the window is open (`Updater::set_in_use`).
+Installs that need administrator approval (`Updater::needs_approval`) never
+start on their own; the sidebar offers them.
+`data/last-version.txt` lets the first start after an update say so.
+
+### Crash reports
+
+`crashlog.rs` keeps `logs/running.marker` while the app runs and removes it
+on a normal exit (`RunEvent::Exit`). If the next start finds it, it writes
+`logs/last-crash.txt` (end of `omnihub.log` plus Windows Error Reporting
+summaries for OmniHub, WebView2 and uxplay) and the window offers to copy
+it. Panics are written to the log, and UxPlay's output is logged with the
+`uxplay` target.
+
+## Website
+
+`site/` is the project website: plain HTML, CSS and JavaScript with no
+build step, served by GitHub Pages at <https://kerioxsx.github.io/omnihub/>.
+Preview it with `python3 -m http.server -d site 8000`. The `Website`
+workflow (`.github/workflows/pages.yml`) copies `site/` to the `gh-pages`
+branch on every push to `main` that touches it, or when run by hand.
+
+The download buttons ask GitHub for the latest release and link straight
+to its `x64-setup.exe` (they fall back to the Releases page), so a new
+release needs no website change. Screenshots in `site/assets/shots/` are
+WebP captures of the app with its demo data (desktop) and of the phone app
+talking to a headless server; the fonts are self-hosted under the SIL Open
+Font License.
+
 ## Adding a command
 
 1. Implement it in `omnihub-core` (with a test).
@@ -83,10 +204,12 @@ rebuilds and replaces the files.
 
 Core services publish on an in-process bus (`events.rs`); the shell forwards
 every event to the windows, the phone server forwards `transfer:*`,
-`inbox:*`, `power:*`, `notes:*` and `screen:*` to paired phones. Topics:
+`inbox:*`, `power:*`, `notes:*`, `media:*` and `games:*` to paired phones.
+Topics:
 `storage:progress|done|failed|deleted|dupes-done`, `screenshots:new|deleted|synced`,
 `notes:changed|exported|folder-changed`, `vault:locked|unlocked`,
 `remote:status|paired|devices`, `transfer:started|progress|done|cancelled`,
 `inbox:new`, `power:pending|cancelled|executed`, `screen:viewers`,
-`audit:new`, `settings:changed`; the shell adds `app:navigate` (tray) and
+`audit:new`, `settings:changed`, `media:state|lyrics`, `games:session`,
+`browser:clients|pair-request|pair-done`, `notes:reminder`; the shell adds `app:navigate` (tray) and
 `region:pending` (overlay).

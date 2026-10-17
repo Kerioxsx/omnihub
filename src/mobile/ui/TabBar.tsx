@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { House, FolderOpen, MonitorPlay, Power, Ellipsis } from 'lucide-react';
+import { House, FolderOpen, Music2, MonitorPlay, Power, Ellipsis } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useApp, type Tab } from '../state';
 import { cx, vibrate } from '../lib/util';
@@ -7,6 +7,7 @@ import { cx, vibrate } from '../lib/util';
 const ITEMS: { tab: Tab; label: string; icon: ReactNode }[] = [
   { tab: 'home', label: 'Home', icon: <House size={22} /> },
   { tab: 'files', label: 'Files', icon: <FolderOpen size={22} /> },
+  { tab: 'music', label: 'Music', icon: <Music2 size={22} /> },
   { tab: 'screen', label: 'Screen', icon: <MonitorPlay size={22} /> },
   { tab: 'power', label: 'Power', icon: <Power size={22} /> },
   { tab: 'more', label: 'More', icon: <Ellipsis size={22} /> },

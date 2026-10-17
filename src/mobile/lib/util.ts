@@ -208,3 +208,37 @@ export function limiter(n: number) {
     });
   };
 }
+
+/** Copy text; falls back to a hidden textarea where the Clipboard API is unavailable (plain HTTP). */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through */
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  ta.setSelectionRange(0, text.length);
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  ta.remove();
+  return ok;
+}
+
+/** An http(s) link if the text is one, for an "Open" button. */
+export function linkOf(text: string): string | null {
+  const t = text.trim();
+  return /^https?:\/\/\S+$/i.test(t) ? t : null;
+}

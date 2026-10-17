@@ -12,7 +12,10 @@
 │    notes     SQLite · Markdown export · Claude folder watcher                               │ │
 │    apps      registry · Get-StartApps · Appx · shell icons                                  │ │
 │    capture   screenshots library · DXGI/GDI capture · JPEG streamer · input · bridges       │ │
-│    system    elevation · power · clipboard · DPAPI · shell                                  │ │
+│    system    elevation · power · clipboard · DPAPI · shell · processes · GPU counters       │ │
+│    media     media sessions · lyrics (LRCLIB) · volume · Equalizer APO                      │ │
+│    games     profiles · boost/restore journal · Roblox flags · ping                         │ │
+│    browser   native-messaging host · pipe to the app · site matching · pairing              │ │
 │    remote    axum HTTPS/WS server for the phone ── serves dist-mobile (embedded)            │ │
 │    settings · db (SQLite) · audit · events (broadcast bus)                                  │ │
 │  └──────────────────────────────────────────────────────────────────────────────────────────┘ │
@@ -86,9 +89,187 @@ most two frames are in flight, so latency stays bounded on slow links (old
 frames are skipped, not queued). Quality and size adapt to the measured
 round trip.
 
+## Music, tasks and games
+
+`media/` polls Windows' media sessions (GSMTC) every 250 ms while music plays (750 ms otherwise, and quickly again for 3 s after a control) for the track,
+cover and position, and sends `media:state` with the PC's clock so the phone
+can line up time-synced lyrics (fetched from LRCLIB, cached per song) to
+within a frame. `system/procs.rs` groups processes by name; GPU figures come
+from the "GPU Engine" and "GPU Process Memory" performance counters (the
+busiest engine per program, like Task Manager) via `system/gpu.rs`.
+
+### My PC (`rig/`)
+
+`RigHub` owns `data/rig.json` and one worker thread that runs only while it
+is needed (lighting on, a fan profile other than Auto, or the page/case
+screen holding a lease) and otherwise exits. `specs.rs` parses SMBIOS and
+matches present USB ids; `openrgb.rs` is an OpenRGB SDK client (protocol 3:
+controller list, `SETCUSTOMMODE`, `UPDATELEDS`); `lighting.rs` holds the
+effects, which `src/desktop/lib/rig/effects.ts` repeats for the 3D preview
+(same values); `lhm.rs` reads LibreHardwareMonitor's `data.json` and sets
+controls; `fans.rs` holds the curves, floors and smoothing; `liquidctl.rs`
+runs liquidctl; `screens.rs` keeps the media library. The worker sends
+frames at 30 fps for moving effects (once a second otherwise), reads the
+sensors every 2 s, and pushes `rig:status` only while a view holds it. The
+shell adds the `casescreen` window (on the chosen monitor) and the
+`rigmedia://` protocol. The 3D view (`lib/rig/scene3d.ts`, three.js, loaded
+with the page) builds the PC from the specs and the user's description,
+draws every LED of a part in one instanced mesh, and pauses when hidden.
+
+### Aurora
+
+The music visuals are split so nothing time-critical waits on the network
+or the UI:
+
+- **Capture** (`media/visual/source.rs`): WASAPI loopback of the default
+  output, mixed to mono; a synthesised beat stands in with the pretend
+  player. Device changes are noticed every 2 s and the stream reopened.
+- **Analysis** (`media/visual/analyzer.rs`, `fft.rs`): 2048-point Hann
+  windows, hop of one display frame; RMS, bass (25–160 Hz), mids, highs and
+  16 log bands, each normalised by an adaptive peak follower and smoothed
+  with separate attack and release; beats from bass-weighted spectral flux
+  above a running mean + k·σ, with hysteresis and a 250 ms refractory
+  period; tempo from the median gap. Silence switches to a cheap path.
+- **Hub** (`media/visual/mod.rs`): one thread at 60 Hz, started by a lease
+  and stopped when the last lease expires; emits `audio:frame` while there
+  is sound (a heartbeat, then nothing, when quiet) and `audio:status`.
+  Track changes (`media:state`) reset the analysis.
+- **Lyrics service** (`media/lyrics.rs`, `media/mod.rs`): the user's `.lrc`
+  folder first (matched on tags or "Artist - Title" names, length within
+  8 s, lines that fit the track), then the cache, then LRCLIB. Lyrics are
+  stored per track key, so a new track never gets the last one's lines.
+- **Covers** (`media/artwork.rs`): the player's thumbnail is replaced by
+  the original-size copy from the iTunes catalogue (asked for at
+  10000×10000, which returns the master, usually 3000×3000) or Deezer
+  (1900×1900). Candidates from both are ranked by title, artist, length
+  and version words (a remix is not the original; "Dame Amor 2" is another
+  song), and the first whose picture looks like the thumbnail (16×16
+  comparison) is kept; cached in `data/covers` (key prefix `v3`). The art
+  id changes, so views refetch.
+- **Music videos** (`media/video.rs`): asked for by the player
+  (`media_video`), looked up once per song on YouTube's results page
+  (`ytInitialData` parsed, like a browser would get it) and kept only when
+  the channel is the artist's own (official artist badge, VEVO, or named
+  after the artist), the title names the song, and the upload is not a
+  lyric, audio, live, cover, remix, sped-up or vertical version. Music
+  videos rank before visualizers, the most viewed first; each is marked
+  *synced* when its length is within a few seconds of the song's. Answers
+  are cached in `data/videos` and announced with `media:video`.
+- **Video streams** (`media/stream.rs`, `media_video_stream`): for videos
+  YouTube will not embed, yt-dlp (`-g`, best video-only stream up to the
+  quality cap, AV1 avoided) with Deno as its JavaScript runtime; both
+  downloaded on first use and checked against their releases' SHA-256
+  lists; the address is cached for three hours.
+- **Animated covers** (`media/motion.rs`, `media_motion`): the web player's
+  key from music.apple.com's script (an `AMPWebPlay` JWT, kept until it
+  expires, renewed on 401), a catalogue search matched like covers, then
+  the album's `editorialVideo.motionDetailSquare` HLS playlist; cached in
+  `data/motion` and announced with `media:motion`.
+- **Lyrics sources** (`media/lyrics.rs`): LRCLIB (exact, then search), then
+  NetEase Cloud Music (search, matched by title, artist, length and
+  version; its credit lines dropped). Misses are cached for three days.
+- **Word timing** (`lib/aurora/timing.ts`): for lyrics that only time
+  lines, words are spread over each line by syllables (opt-out); real word
+  timestamps always win.
+- **Frontend** (`src/desktop/lib/aurora`, `components/aurora`): one
+  animation loop per view drives two WebGL canvases — the scene (the cover
+  art with glitch slices, channel split, a fisheye lens, beat pulses and
+  spray-paint edges, or palette fields) and the edge light (a rounded-rect
+  distance field with edge, inner highlight, glow and bloom layers, which
+  skips pixels away from the edge). Audio frames land in a shared object
+  read per frame, so sound never re-renders React. Palettes are extracted
+  from the cover with k-means in OKLab and eased between songs in OKLab.
+  The lyrics overlay follows the player's clock (`useNowPlaying`), steps
+  word by word only with word timestamps, and renders only when the line or
+  word changes. Words leaving the stack fade where they stood, each on its
+  own timer and at most three at once (motion's AnimatePresence removes
+  leaving children only when all have finished, which never happens while
+  words keep coming).
+- **Cinema backdrop** (`components/aurora/AuroraBackdrop.tsx`,
+  `lib/aurora/cinema.ts`, `youtube.ts`, `motion.ts`, `coverLook.ts`):
+  behind the lyrics, in order, the music video, the album's animated cover
+  (hls.js, over the still one; it rests while a video shows), the
+  visualizer (only without an animated cover), the full-size cover, or the
+  light show above (which then draws the animated cover's frames as its
+  texture). The cover shows whole (a square as big as the screen's shorter
+  side, its edges feathered into a blurred, enlarged copy) or fills the
+  screen. The video plays in the youtube-nocookie embed inside OmniHub's
+  relay page (`site/player.html` on GitHub Pages: YouTube answers error 150
+  to local origins), muted, steered with the IFrame API's postMessage
+  protocol, or, when YouTube still refuses (error, or never starts), as its
+  own stream in a `<video>` driven through the same interface
+  (`DirectLink`); a sync loop compares
+  the player's reported time with the song's (plus a per-video offset the
+  user can nudge, kept in local storage), seeks beyond 1 s of drift and
+  sets the rate to 0.94/1.06 between 0.12 s and 1 s. The quality cap is the
+  iframe's device-pixel size. When YouTube refuses a video (embedding off,
+  removed) the next candidate is tried, then the cover. The cover is drawn
+  full size with a slow drift, cropped around its detail (`coverLook`:
+  per-row detail and brightness from a 48×48 copy); the same study picks
+  the calmest band for the lyrics and how bright it is there, which sets
+  the scrim, the frosted patch and the text's shadow. Lyric ink is a light
+  tone of the most colourful palette colour (OKLab), its shadow a deep one.
+  Corner light is four radial gradients in the palette's colours, scaled by
+  the bass.
+- **Emojis** (`lib/aurora/emoji.ts`): a word list (with simple lemmas and
+  phrases) maps lyric words to emojis; a planner picks at most one per line
+  and spaces them out (*Some*: any line with a picturable word, a common
+  one like "love" or "amor" every other line; *Lots*: every line that has
+  one), never the same twice running, and never two lines in a row
+  without one (a line with nothing to picture gets a sparkle, a note…).
+  English and Spanish (accents dropped, plurals and the commonest verb
+  forms). The pictures are Fluent Emoji: plain one-colour SVGs in
+  `public/emoji/plain`, drawn as a mask over the lyric ink (the default),
+  or 3D WebPs in `public/emoji/3d`; both rebuilt by `scripts/emoji-3d.py`.
+- **Video matching** (`media/align.rs`): onset envelopes (log-band spectral
+  flux, 50/s) of the video's soundtrack (yt-dlp + symphonia) and of the
+  live loopback (tapped from `VisualHub`, mapped to song time through
+  playback checkpoints) are cross-correlated (normalised, ±1 s exclusion for
+  the runner-up); a clear fit twice in a row is the offset, cached per video
+  and song length and announced with `media:videoSync`. The user's own
+  nudge wins over it.
+- **App mirror** (`media/mirror.rs`): the playing app's window (Spotify,
+  Apple Music) is captured at ~12 fps; a 160-px grey copy tracks per-pixel
+  change; the largest dense moving block (not text) is the picture, settled
+  over a few detections, cropped and JPEG-encoded; the window fetches it
+  with `media_mirror_frame` (binary). A picture that stops moving while the
+  song plays means the app stopped drawing ("hidden"). Its video beats
+  YouTube's; its Canvas beats Apple's cover.
+- **Your font & emoji pack** (`media/look.rs`, `lib/aurora/textures.ts`): the
+  user's font and emoji pack (a zip of pictures, or an emoji font) are copied
+  into `data/aurora-look` and read back as data URLs (fonts as `@font-face`).
+  Pictures are kept under a normalised name (lower case, words joined by
+  `_`, non-ASCII as code points: `🔥.png` and `1F525.png` are both `1f525`).
+  With *Your pack* as the emoji look, each emoji is drawn as the pack's
+  picture for the word ("apple" → `apple.png`), else for its code points
+  (`1f525`, `emoji_u1f525`), else for one of its names
+  (`lib/aurora/emojiNames.ts`, generated by `scripts/emoji-names.py`: CLDR
+  names and GitHub/Discord short codes; packs' usual prefixes and suffixes
+  like `_3d` are ignored), else for a Minecraft item (❤️ →
+  `heart_pottery_sherd`); an emoji font draws them all; else the plain emoji.
+  Pixel art (blocks of a 16/24/32-pixel icon) is drawn without smoothing.
+- **Screen glow** (`src-tauri/src/ambient.rs`, `pages/overlay/AmbientOverlay.tsx`):
+  a transparent, click-through, always-on-top window per chosen monitor,
+  placed in physical pixels on the monitor or its work area; a watcher
+  follows settings, monitors, full-screen apps (`SHQueryUserNotificationState`)
+  and game boosts once a second.
+
+`games/` keeps profiles in `games.json`. Play runs a session on its own
+thread: each step (close apps, power plan, notifications, per-game registry
+settings, admin-only settings in one helper call, Wi-Fi low-latency handle,
+Roblox flags, launch) is recorded as it happens and in a journal on disk;
+the thread then follows the game's process and restores everything when it
+exits or on Stop. Boost modes (Competitive, Quality, Custom) decide which
+switches are on; Quality never touches the game's own settings. While the
+game runs, `games/fps.rs` runs PresentMon on its process and sends
+`games:fps` once a second (to the phone too); the session's summary is kept
+per profile. The ping helper uses `IcmpSendEcho` (no admin) and TCP connect
+timing for `host:port` targets; lag under load pings while saturating the
+line with downloads, then uploads.
+
 ## Desktop shell
 
-`src-tauri` registers about 100 commands (`commands.rs`) that call into `AppCore`,
+`src-tauri` registers about 160 commands (`commands.rs`) that call into `AppCore`,
 forwards every core event to the windows (and shows a notification for a
 few when the window is hidden), owns the tray menu and the global hotkeys,
 and manages the region-capture overlay window. Closing the window hides it
