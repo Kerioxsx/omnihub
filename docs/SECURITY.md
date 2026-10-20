@@ -262,8 +262,7 @@ and lets a phone do some of that. This is what protects each part.
   window, written only encrypted, and sent only in the `Authorization`
   header to `gen.pollinations.ai` (and `enter.pollinations.ai` to read the
   account's user name). What is sent: the packs' icons (256 px PNGs) and a
-  prompt with the mix's name, cleaned of quotes, brackets and control
-  characters. Connecting, disconnecting and each painted cover are in the
+  fixed prompt; the mix's name isn't sent. Connecting, disconnecting and each painted cover are in the
   audit log. OmniHub ships no key of its own.
 - The Minecraft mixer adds a profile to `launcher_profiles.json` (a backup is
   kept as `launcher_profiles.json.omnihub-backup`) and a folder under
@@ -488,8 +487,8 @@ internet only for:
 - **Animated covers** (Aurora, on by default, can be turned off): the title
   and artist go to Apple Music's catalogue (see Aurora above).
 - **Mix covers**: the packs' icons from Modrinth's CDN; and, only after you
-  connect your own Pollinations account, the icons and the mix's name to
-  Pollinations (see Mods and Claude).
+  connect your own Pollinations account, the icons to Pollinations (see
+  Mods and Claude).
 - **Chats** (only when you use them): your conversation with Claude goes to
   Anthropic's API and with ChatGPT's models to OpenAI's API, with your own
   keys. Claude Code and Codex talk to their own services themselves.

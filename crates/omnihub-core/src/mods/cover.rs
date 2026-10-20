@@ -367,19 +367,16 @@ fn key_ok(key: &str) -> bool {
     key.starts_with("sk_") && (20..=400).contains(&key.len()) && key.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
 }
 
-fn plain_name(name: &str) -> String {
-    let kept: String = name.chars().map(|c| if c.is_control() { ' ' } else { c }).filter(|c| !matches!(c, '"' | '\\' | '<' | '>')).take(60).collect();
-    kept.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// What the image model is asked for.
-pub fn prompt(name: &str, n: usize) -> String {
-    let name = plain_name(name);
-    let named = if name.is_empty() { String::new() } else { format!(" called \"{name}\"") };
+/// What the image model is asked for. The mix's name isn't in it (models
+/// paint names as garbled lettering); only the packs' icons say what to blend.
+pub fn prompt(n: usize) -> String {
+    let which = if n == 2 { "both".to_string() } else { format!("all {n}") };
     format!(
-        "Make one new square cover picture for a Minecraft modpack{named} by blending these {n} modpack icons into a single picture, as if the packs were merged into one. \
-         Combine their main subjects, colours and mood into one scene. Keep the art style of the icons: pixel art stays pixel art. \
-         Bold and easy to read when small, centered. No text, letters, numbers, logos, watermarks or borders."
+        "Fuse these {n} Minecraft modpack icons into one single new emblem for a square icon. \
+         Take the main shape or symbol of each icon and merge them into one object, so {which} are clearly recognisable in it, \
+         mixing their colours and materials evenly. Keep the art style of the icons (pixel art stays pixel art). \
+         Centered, bold and readable when small, on a simple background in their colours. \
+         Absolutely no text, letters, words, numbers or logos anywhere in the picture, and no border or frame."
     )
 }
 
@@ -567,7 +564,7 @@ impl Pollinations {
     }
 
     /// One new picture painted from the packs' tiles (PNGs), as a SIZE×SIZE PNG.
-    pub fn blend(&self, tiles: &[Vec<u8>], name: &str) -> Result<Vec<u8>, String> {
+    pub fn blend(&self, tiles: &[Vec<u8>]) -> Result<Vec<u8>, String> {
         use base64::Engine;
         let key = self.key().ok_or("Connect your Pollinations account first.")?;
         if tiles.is_empty() {
@@ -575,7 +572,7 @@ impl Pollinations {
         }
         let images: Vec<Value> = tiles.iter().take(MOST).map(|t| json!({ "image_url": format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(t)) })).collect();
         let seed = (chrono::Utc::now().timestamp_subsec_nanos() % 2_000_000_000) as i64;
-        let body = json!({ "model": MODEL, "prompt": prompt(name, images.len()), "image": images, "size": "1024x1024", "n": 1, "response_format": "b64_json", "seed": seed });
+        let body = json!({ "model": MODEL, "prompt": prompt(images.len()), "image": images, "size": "1024x1024", "n": 1, "response_format": "b64_json", "seed": seed });
         let (status, v) = self.post(&format!("{}/v1/images/edits", self.gen), &body, Some(key.as_str()))?;
         if status != 200 {
             let said = v["error"]["message"].as_str().or(v["error"].as_str()).or(v["message"].as_str()).unwrap_or("").chars().take(200).collect::<String>();
@@ -696,10 +693,29 @@ mod tests {
         std::fs::write(dir.join("cover-placeholder.png"), png(&blend(&[placeholder("Create Plus"), placeholder("Speed")]))).unwrap();
     }
 
+    /// One real painted cover, by hand only: OMNIHUB_POLLINATIONS_KEY (the
+    /// user's own key, never stored) and OMNIHUB_COVER_SAMPLES (a folder of icons).
     #[test]
-    fn prompt_keeps_the_name_plain() {
-        let p = prompt("Speed \"+\" Create\n<b>", 2);
-        assert!(p.contains("called \"Speed + Create b\"") && p.contains("2 modpack icons") && p.contains("No text"), "{p}");
+    #[ignore]
+    fn real_pollinations_cover() {
+        let (Ok(key), Ok(dir)) = (std::env::var("OMNIHUB_POLLINATIONS_KEY"), std::env::var("OMNIHUB_COVER_SAMPLES")) else { return };
+        let dir = std::path::PathBuf::from(dir);
+        let mut icons: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "webp" || x == "png") && !p.file_name().unwrap().to_string_lossy().starts_with("cover")).collect();
+        icons.sort();
+        let tiles: Vec<Vec<u8>> = icons.iter().take(2).map(|p| png(&image::imageops::resize(&tile(&decode(&std::fs::read(p).unwrap()).unwrap()), 256, 256, FilterType::Triangle))).collect();
+        let t = tempfile::tempdir().unwrap();
+        let p = Pollinations::new(t.path());
+        *p.test_key.lock() = Some(key);
+        let out = p.blend(&tiles).unwrap();
+        assert_eq!(decode(&out).unwrap().dimensions(), (SIZE, SIZE));
+        std::fs::write(dir.join("cover-ai.png"), out).unwrap();
+    }
+
+    #[test]
+    fn prompt_names_no_pack_and_asks_for_no_lettering() {
+        let p = prompt(2);
+        assert!(p.contains("these 2 Minecraft modpack icons") && p.contains("both are clearly recognisable") && p.contains("no text"), "{p}");
+        assert!(prompt(3).contains("all 3 are"));
     }
 
     #[test]
@@ -730,10 +746,9 @@ mod tests {
                     }
                     let body: Value = serde_json::from_slice(&r.body).unwrap();
                     assert_eq!(body["model"], MODEL);
-                    assert_eq!(body["image"].as_array().unwrap().len(), 2);
                     assert!(body["image"][0]["image_url"].as_str().unwrap().starts_with("data:image/png;base64,"));
-                    assert!(body["prompt"].as_str().unwrap().contains("called \"Speed + Create"));
-                    if body["prompt"].as_str().unwrap().contains("Broke") {
+                    assert!(body["prompt"].as_str().unwrap().contains("Fuse these"));
+                    if body["image"].as_array().unwrap().len() == 3 {
                         return Some((402, "application/json", br#"{"error":{"message":"insufficient pollen"}}"#.to_vec()));
                     }
                     ok(json!({ "created": 1, "data": [{ "b64_json": made_b64 }] }))
@@ -744,7 +759,7 @@ mod tests {
         let t = tempfile::tempdir().unwrap();
         let p = Pollinations::with(t.path(), &s.base, &s.base);
         assert!(!p.status().connected);
-        assert_eq!(p.blend(&[vec![1]], "x").unwrap_err(), "Connect your Pollinations account first.");
+        assert_eq!(p.blend(&[vec![1]]).unwrap_err(), "Connect your Pollinations account first.");
 
         let si = p.sign_in().unwrap();
         assert_eq!(si.user_code, "ABCD-1234");
@@ -758,10 +773,11 @@ mod tests {
         assert!(!saved.contains("sk_userkey"), "the key is never written in the clear");
 
         let tiles = vec![png(&tile(&solid([200, 40, 40]))), png(&tile(&solid([40, 40, 200])))];
-        let out = decode(&p.blend(&tiles, "Speed + Create").unwrap()).unwrap();
+        let out = decode(&p.blend(&tiles).unwrap()).unwrap();
         assert_eq!(out.dimensions(), (SIZE, SIZE));
         assert!(near(out.get_pixel(200, 200), [30, 160, 90], 3));
-        assert!(p.blend(&tiles, "Speed + Create Broke").unwrap_err().contains("no Pollen left"));
+        let three = vec![tiles[0].clone(), tiles[1].clone(), tiles[0].clone()];
+        assert!(p.blend(&three).unwrap_err().contains("no Pollen left"));
 
         assert!(p.set_key("sk-ant-api03-not-pollinations").unwrap_err().contains("sk_"));
         assert!(p.set_key("sk_has spaces in it oh no").is_err());

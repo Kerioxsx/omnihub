@@ -3,7 +3,7 @@
 **Covers for mixed Minecraft modpacks.** Everything else stays as it was.
 
 - **A cover for every mix.** When you mix modpacks (Mods → Minecraft), the mix gets a picture made from its packs' own icons: each icon whole, on a wash of its colours, with soft seams between the packs, and pixel art kept crisp. It's made on your PC, needs no account, and becomes the mix's icon in the Minecraft Launcher instead of the crafting table.
-- **AI blend.** Press **AI blend** and Pollinations' image model paints one new picture from the packs' icons, as if they were merged. It uses your own Pollinations account: approve OmniHub on Pollinations' page (and set how much it may spend), or paste your own key. Only the icons and the mix's name are sent, and each picture costs about 0.005 Pollen.
+- **AI blend.** Press **AI blend** and Pollinations' image model paints one new picture from the packs' icons, as if they were merged. It uses your own Pollinations account: approve OmniHub on Pollinations' page (and set how much it may spend), or paste your own key. Only the packs' icons are sent, each picture costs about 0.005 Pollen, and each try paints a different one.
 - **Blend again** goes back to the plain blend, and **Save the picture** saves it as a PNG.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.

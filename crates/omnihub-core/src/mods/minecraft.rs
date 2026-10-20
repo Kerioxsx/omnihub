@@ -975,7 +975,7 @@ impl Mixer {
     pub fn ai_cover(&self, id: &str, p: &super::cover::Pollinations) -> Result<Vec<u8>, String> {
         let mut m = self.mix(id)?;
         let tiles: Vec<Vec<u8>> = self.tiles(&m).iter().map(|t| super::cover::png(&image::imageops::resize(t, 256, 256, image::imageops::FilterType::Triangle))).collect();
-        let png = p.blend(&tiles, &m.name)?;
+        let png = p.blend(&tiles)?;
         std::fs::write(self.mdir(id)?.join("cover.png"), &png).map_err(|e| e.to_string())?;
         m.cover = Some("ai".into());
         self.keep_mix(&m)?;

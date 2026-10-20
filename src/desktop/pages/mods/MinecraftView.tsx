@@ -78,7 +78,7 @@ function PollinationsModal({ open, onClose, onConnected }: { open: boolean; onCl
     }
   };
   return (
-    <Modal open={open} onClose={onClose} title="Paint covers with Pollinations" description="Pollinations’ image model paints one new picture from your packs’ icons. It uses your own Pollinations account, and each picture costs about 0.005 Pollen from it. Only the icons and the mix’s name are sent." icon={Sparkles} size="md">
+    <Modal open={open} onClose={onClose} title="Paint covers with Pollinations" description="Pollinations’ image model paints one new picture from your packs’ icons. It uses your own Pollinations account, and each picture costs about 0.005 Pollen from it. Only the packs’ icons are sent. Each try paints a different picture." icon={Sparkles} size="md">
       <div className="space-y-4">
         {code ? (
           <div className="space-y-3 rounded-xl border border-accent/40 bg-accent-soft/40 px-4 py-4 text-center">
