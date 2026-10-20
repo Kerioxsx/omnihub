@@ -68,6 +68,8 @@ pub struct AppCore {
     pub rig: Arc<crate::rig::RigHub>,
     /// Govee lights on the network (and through Govee's cloud with a key).
     pub govee: Arc<crate::govee::GoveeHub>,
+    /// Games' mods, Claude's mod maker and Minecraft modpacks.
+    pub mods: Arc<crate::mods::ModHub>,
     browser_integration: bool,
     /// Drives already warned about (root → when), so each warns once a day.
     low_space_warned: parking_lot::Mutex<std::collections::HashMap<String, i64>>,
@@ -90,6 +92,8 @@ impl AppCore {
         vault.set_auto_lock(s.vault.auto_lock_minutes);
         let procs = Arc::new(crate::system::procs::ProcessMonitor::new());
         let media = crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media);
+        let games = crate::games::GameHub::new(&paths.data, events.clone(), procs.clone());
+        let mods = crate::mods::ModHub::new(&paths.data, events.clone(), games.clone(), procs.clone());
         let visual = crate::media::visual::VisualHub::new(events.clone(), opts.fake_media || std::env::var("OMNIHUB_FAKE_MEDIA").is_ok_and(|v| v == "1"));
         let core = Arc::new(AppCore {
             notes: Notes::new(db.clone(), events.clone()),
@@ -101,7 +105,8 @@ impl AppCore {
             thumbs: crate::thumbs::Thumbs::default(),
             browser: crate::browser::BrowserBridge::new(db.clone(), events.clone()),
             browser_integration: opts.browser_integration,
-            games: crate::games::GameHub::new(&paths.data, events.clone(), procs.clone()),
+            games,
+            mods,
             updater: Arc::new(crate::update::Updater::new(&paths.cache, &paths.data, events.clone())),
             procs,
             media: media.clone(),

@@ -1866,3 +1866,291 @@ export interface GoveeStatus {
   palette: string[];
   sleepUntil: number | null;
 }
+
+// ---------- Mods (0.10.0) ----------
+
+export type ModEngine = 'unityMono' | 'unityIl2cpp' | 'unreal' | 'love' | 'rage' | 'source' | 'source2' | 'godot' | 'gameMaker' | 'renPy' | 'rpgMaker' | 'creation' | 'unknown';
+export type LoaderKind = 'bepInEx' | 'bepInExIl2cpp' | 'melonLoader' | 'lovely' | 'scriptHookV' | 'scriptHookVDotNet' | 'ue4ss';
+export type ModMethod = 'bepInEx' | 'bepInExIl2cpp' | 'melon' | 'melonLegacy' | 'lovely' | 'gta' | 'unreal' | 'files' | 'none';
+export type MakerKind = 'steamodded' | 'lovely' | 'shvdnScript' | 'ue4ssLua' | 'bepInExPlugin' | 'melonMod' | 'files';
+export type ModRoot = 'game' | 'data';
+export type ModSort = 'downloads' | 'rating' | 'updated' | 'name';
+
+export interface ModNote {
+  tone: 'info' | 'warn' | 'bad';
+  text: string;
+  link: string | null;
+}
+
+export interface ModLoaderInfo {
+  kind: LoaderKind;
+  label: string;
+  installed: boolean;
+  managed: boolean;
+  auto: boolean;
+  link: string | null;
+}
+
+export interface MakerInfo {
+  available: boolean;
+  kind: MakerKind | null;
+  label: string;
+  why: string | null;
+}
+
+export interface ModGame {
+  key: string;
+  name: string;
+  source: 'steam' | 'epic' | 'folder';
+  appId: number | null;
+  dir: string;
+  exe: string | null;
+  engine: ModEngine;
+  engineLabel: string;
+  antiCheat: string[];
+  onlineOnly: boolean;
+  method: ModMethod;
+  methodLabel: string;
+  loaders: ModLoaderInfo[];
+  thunderstore: string | null;
+  tsLoader: string | null;
+  tsInstalls: boolean;
+  dataDir: string | null;
+  mods: number;
+  enabledMods: number;
+  image: string | null;
+  notes: ModNote[];
+  maker: MakerInfo;
+}
+
+export type ModSource = { type: 'thunderstore'; fullName: string; url: string } | { type: 'file'; name: string } | { type: 'claude'; project: string } | { type: 'github'; repo: string };
+
+export interface ModDeployed {
+  root: ModRoot;
+  path: string;
+  size: number;
+  replaced: boolean;
+}
+
+export interface InstalledMod {
+  id: string;
+  game: string;
+  name: string;
+  version: string;
+  author: string;
+  description: string;
+  icon: string;
+  source: ModSource;
+  enabled: boolean;
+  loader: LoaderKind | null;
+  dependency: boolean;
+  installedAt: number;
+  gameDir: string;
+  dataDir: string | null;
+  files: ModDeployed[];
+  created: [ModRoot, string][];
+  moved: [ModRoot, string][];
+  update: string | null;
+}
+
+export interface TsPackage {
+  fullName: string;
+  name: string;
+  owner: string;
+  description: string;
+  icon: string;
+  version: string;
+  downloadUrl: string;
+  dependencies: string[];
+  downloads: number;
+  rating: number;
+  categories: string[];
+  updated: string;
+  deprecated: boolean;
+  nsfw: boolean;
+  pinned: boolean;
+  website: string;
+  size: number;
+  url: string;
+}
+
+export interface BrowsePackage extends TsPackage {
+  installed: string | null;
+  isLoader: boolean;
+  managerLink: string;
+}
+
+export interface ModBrowse {
+  packages: BrowsePackage[];
+  total: number;
+  loading: boolean;
+  progress: [number, number] | null;
+  error: string | null;
+  categories: string[];
+}
+
+export interface WorkshopItem {
+  id: string;
+  title: string;
+  image: string;
+  size: number;
+  updated: number;
+  url: string;
+}
+
+export interface ClaudeSettings {
+  apiSecret: string;
+  model: string;
+  effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  web: boolean;
+  hasKey: boolean;
+}
+
+export interface ClaudeUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  webSearches: number;
+}
+
+export type MakerStatus = 'idle' | 'working' | 'waiting' | 'error';
+
+export interface MakerProject {
+  id: string;
+  game: string;
+  gameName: string;
+  name: string;
+  kind: MakerKind;
+  created: number;
+  updated: number;
+  status: MakerStatus;
+  ready: boolean;
+  version: number;
+  summary: string;
+  howToUse: string;
+  installed: string | null;
+  installedVersion: number;
+  usage: ClaudeUsage;
+  cost: number;
+  model: string;
+  web: boolean;
+  approval: { id: string; what: string } | null;
+  error: string | null;
+}
+
+export interface MakerItem {
+  kind: 'user' | 'text' | 'note' | 'tool' | 'web' | 'notice';
+  text: string;
+  detail?: string;
+  tone?: 'info' | 'warn' | 'bad' | 'good';
+  at: number;
+}
+
+export interface MakerView {
+  project: MakerProject;
+  items: MakerItem[];
+  files: { path: string; size: number }[];
+}
+
+export interface MakerDelta {
+  project: string;
+  kind: 'text' | 'note' | 'tool' | 'web' | 'fallback';
+  text: string;
+}
+
+export type McLoader = 'fabric' | 'quilt' | 'forge' | 'neoforge';
+
+export interface McPackFile {
+  path: string;
+  sha1: string;
+  sha512: string;
+  size: number;
+  urls: string[];
+  client: boolean;
+  local: string | null;
+}
+
+export interface McSource {
+  id: string;
+  name: string;
+  kind: { type: 'modrinth'; project: string; version: string } | { type: 'file'; path: string } | { type: 'folder'; path: string };
+  icon: string | null;
+  mc: string;
+  loader: string;
+  loaderVersion: string;
+  files: McPackFile[];
+  overrides: number;
+}
+
+export type McEntryStatus = 'kept' | 'updated' | 'dependency' | 'asIs' | 'missing' | 'conflict';
+
+export interface McEntry {
+  project: string | null;
+  title: string;
+  icon: string | null;
+  folder: string;
+  version: string;
+  file: McPackFile | null;
+  from: string[];
+  status: McEntryStatus;
+  note: string | null;
+}
+
+export interface McMix {
+  id: string;
+  name: string;
+  mc: string;
+  loader: string;
+  loaderVersion: string;
+  sources: string[];
+  entries: McEntry[];
+  clashes: string[];
+  problems: string[];
+  installable: boolean;
+}
+
+export interface McPackHit {
+  project: string;
+  slug: string;
+  title: string;
+  description: string;
+  icon: string | null;
+  downloads: number;
+  versions: string[];
+  loaders: string[];
+}
+
+export interface McPackVersion {
+  id: string;
+  name: string;
+  number: string;
+  mc: string[];
+  loaders: string[];
+  date: string;
+}
+
+export interface McInstalled {
+  name: string;
+  profile: string;
+  dir: string;
+  versionId: string;
+  mc: string;
+  loader: string;
+  mods: number;
+  at: number;
+}
+
+export interface McStatus {
+  found: boolean;
+  dir: string | null;
+  sources: McSource[];
+  installed: McInstalled[];
+}
+
+export interface ModProgress {
+  game: string;
+  text: string;
+  done: number;
+  total: number;
+}

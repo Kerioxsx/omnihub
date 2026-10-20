@@ -283,6 +283,38 @@ command, `src/mobile/client.ts` speaks the phone API. Outside Tauri the
 desktop UI runs against an in-memory mock (`src/desktop/mock`), which is how
 it is developed and screenshotted on any OS.
 
+## Mods
+
+`mods/` is the mod manager. `detect.rs` reads a game folder's names (never
+its contents) for its engine, mod loaders and anti-cheat. `thunderstore.rs`
+reads Thunderstore's ecosystem schema (games by Steam app id, their loaders
+and loader packages) and a community's package listing (gzip chunks, each
+reduced to the latest version as it arrives), searches it and resolves
+dependencies. `install.rs` unpacks (zip, 7z, folders), plans where each file
+goes for the loader (`Layout`: BepInEx's r2modman rules, MelonLoader,
+Lovely, GTA, Unreal, a loader's own package…), deploys with backups and
+rollback, and switches mods off and on. `workshop.rs` lists Steam Workshop
+items. `ModHub` ties these to the games from `games::library`, keeps the
+installed mods in `data/mods/state.json` and emits `mods:changed`,
+`mods:progress` and `mods:listing`.
+
+`mods/maker.rs` is the mod maker: a project per mod (a conversation kept
+append-only, exactly as the API returned it, and a folder of files),
+an agent loop over the Messages API (`claude/api.rs`: raw HTTPS, server-sent
+events reassembled into content blocks, retries, refusals, fallbacks) with
+client tools confined to the game (read-only) and the project folder
+(writable), plus web search and fetch. `claude/mod.rs` keeps the key (DPAPI),
+model and effort, and prices usage. Builds of C# projects go through a
+checked `dotnet build`, after the user approves. Installing a project hands
+its folder (or its built assembly) to `ModHub::install_made`.
+
+`mods/minecraft.rs` mixes Minecraft modpacks with Modrinth's API: packs come
+from Modrinth, .mrpack files or instance folders; mods are matched by SHA-1,
+moved to the chosen version with `version_files/update`, dependencies added,
+incompatibilities resolved by pack order, overrides merged; the result is
+written as a .mrpack or installed as a Minecraft Launcher profile (Fabric or
+Quilt version JSON from their meta services).
+
 ## Lights (Govee)
 
 `govee/` drives Govee lights: `lan.rs` (scan, JSON commands, `razer` frames

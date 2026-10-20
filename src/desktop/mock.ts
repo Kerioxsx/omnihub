@@ -3,13 +3,14 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { CaptureKind, ConfigGame, ConfigOptions, DeepPartial, GameKind, GameProfile, RobloxFlags, TweakId, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
+import type { ModSort, CaptureKind, ConfigGame, ConfigOptions, DeepPartial, GameKind, GameProfile, RobloxFlags, TweakId, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
 import * as games from './mock/games';
 import { rig } from './mock/rig';
 import { govee } from './mock/govee';
+import { modsMock as mm } from './mock/mods';
 import * as optimize from './mock/optimize';
 import * as updates from './mock/update';
 
@@ -328,6 +329,46 @@ const handlers: Record<string, Handler> = {
   airplay_place: () => undefined,
   airplay_firewall: () => remote.airplayFirewall(),
   airplay_fix_firewall: () => remote.airplayFixFirewall(),
+
+  // mods
+  mods_games: () => mm.games(),
+  mods_list: (a) => mm.list(str(a, 'key')),
+  mods_browse: (a) => mm.browse(str(a, 'key'), str(a, 'query'), optStr(a, 'category'), str(a, 'sort') as ModSort, num(a, 'offset', 0), num(a, 'limit', 30)),
+  mods_install_package: (a) => mm.installPackage(str(a, 'key'), str(a, 'fullName')),
+  mods_install_file: (a) => mm.installFile(str(a, 'key'), str(a, 'path')),
+  mods_install_loader: (a) => mm.installLoader(str(a, 'key'), str(a, 'kind')),
+  mods_set_enabled: (a) => mm.setEnabled(str(a, 'id'), bool(a, 'on')),
+  mods_set_all: (a) => mm.setAll(str(a, 'key'), bool(a, 'on')),
+  mods_uninstall: (a) => mm.uninstall(str(a, 'id')),
+  mods_update: (a) => mm.update(str(a, 'id')),
+  mods_workshop: (a) => mm.workshop(str(a, 'key')),
+  mods_add_folder: (a) => mm.addFolder(str(a, 'name'), str(a, 'dir')),
+  mods_remove_folder: (a) => mm.removeFolder(str(a, 'key')),
+  claude_settings: () => mm.claudeSettings(),
+  claude_update: (a) => mm.claudeUpdate(obj(a, 'patch')),
+  claude_set_key: (a) => mm.claudeSetKey(str(a, 'key')),
+  claude_test: () => mm.claudeTest(),
+  maker_projects: (a) => mm.projects(optStr(a, 'game')),
+  maker_create: (a) => mm.create(str(a, 'game'), str(a, 'text')),
+  maker_send: (a) => mm.send(str(a, 'id'), str(a, 'text')),
+  maker_stop: (a) => mm.stop(str(a, 'id')),
+  maker_approve: () => mm.approve(),
+  maker_view: (a) => mm.view(str(a, 'id')),
+  maker_file: (a) => mm.file(str(a, 'id'), str(a, 'path')),
+  maker_delete: (a) => mm.remove(str(a, 'id')),
+  maker_rename: (a) => mm.rename(str(a, 'id'), str(a, 'name')),
+  maker_install: (a) => mm.install(str(a, 'id')),
+  mc_status: () => mm.mcStatus(),
+  mc_search: (a) => mm.mcSearch(str(a, 'query')),
+  mc_versions: (a) => mm.mcVersions(str(a, 'project')),
+  mc_add_modrinth: (a) => mm.mcAddModrinth(str(a, 'project'), str(a, 'version')),
+  mc_add_file: (a) => mm.mcAddFile(str(a, 'path')),
+  mc_add_folder: (a) => mm.mcAddFolder(str(a, 'path')),
+  mc_remove_source: (a) => mm.mcRemoveSource(str(a, 'id')),
+  mc_plan: (a) => mm.mcPlan(str(a, 'name'), strList(a, 'ids'), str(a, 'mc'), str(a, 'loader')),
+  mc_export: () => mm.mcExport(),
+  mc_install: (a) => mm.mcInstall(str(a, 'id')),
+  mc_uninstall: (a) => mm.mcUninstall(str(a, 'profile')),
 };
 
 const FAST = new Set(['vault_strength', 'vault_touch', 'vault_status', 'system_stats', 'vault_generate', 'storage_progress', 'storage_duplicates_progress', 'remote_status']);

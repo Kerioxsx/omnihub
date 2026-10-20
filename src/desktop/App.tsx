@@ -20,6 +20,7 @@ import { PAGE_IDS, type RouteId, navigate, useRoute } from './lib/router';
 import { AppsPage } from './pages/apps/AppsPage';
 import { GamesPage } from './pages/games/GamesPage';
 import { LightsPage } from './pages/lights/LightsPage';
+import { ModsPage } from './pages/mods/ModsPage';
 import { RigPage } from './pages/rig/RigPage';
 import { MusicPage } from './pages/music/MusicPage';
 import { PlayerHost } from './components/music/PlayerHost';
@@ -45,6 +46,7 @@ const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen'>, Comp
   music: MusicPage,
   tasks: TasksPage,
   games: GamesPage,
+  mods: ModsPage,
   rig: RigPage,
   lights: LightsPage,
   vault: VaultPage,

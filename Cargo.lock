@@ -3113,6 +3113,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lzma-rust2"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1c46f3fcd2e888afdb01a07efc071cb21300e07c68d32c3e8b01b5c8cb1fcaa"
+
+[[package]]
 name = "mac-notification-sys"
 version = "0.6.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3834,7 +3840,7 @@ dependencies = [
 
 [[package]]
 name = "omnihub"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "omnihub-core",
@@ -3859,7 +3865,7 @@ dependencies = [
 
 [[package]]
 name = "omnihub-core"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3875,6 +3881,7 @@ dependencies = [
  "crossbeam-channel",
  "dirs 7.0.0",
  "fast_image_resize",
+ "flate2",
  "futures-util",
  "gethostname",
  "hex",
@@ -3898,6 +3905,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sevenz-rust2",
  "sha1 0.11.0",
  "sha2 0.11.0",
  "socket2",
@@ -4248,6 +4256,12 @@ name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
+
+[[package]]
+name = "ppmd-rust"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "494b4379484fc92217cc7d9e3a532375b1d01a61889ec8333025dc3b0377af56"
 
 [[package]]
 name = "ppv-lite86"
@@ -5172,6 +5186,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "170fb83ab34de17dc69aa7c67482b22218ddb85da56546f9bd6b929e32a05930"
 dependencies = [
  "stable_deref_trait",
+]
+
+[[package]]
+name = "sevenz-rust2"
+version = "0.24.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f0c68c0e8289bfd09e49ef433e8de02c7c464afc1d7f5a275c99749a880e301"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "js-sys",
+ "lzma-rust2",
+ "ppmd-rust",
+ "wasm-bindgen",
 ]
 
 [[package]]

@@ -4,6 +4,7 @@
 mod commands;
 mod ambient;
 mod govee;
+mod mods;
 mod overlay;
 mod rest;
 mod rig;
@@ -453,6 +454,44 @@ pub fn run(args: Vec<String>) {
             govee::govee_monitors,
             govee::govee_firewall,
             govee::govee_fix_firewall,
+            mods::mods_games,
+            mods::mods_list,
+            mods::mods_browse,
+            mods::mods_install_package,
+            mods::mods_install_file,
+            mods::mods_install_loader,
+            mods::mods_set_enabled,
+            mods::mods_set_all,
+            mods::mods_uninstall,
+            mods::mods_update,
+            mods::mods_workshop,
+            mods::mods_add_folder,
+            mods::mods_remove_folder,
+            mods::claude_settings,
+            mods::claude_update,
+            mods::claude_set_key,
+            mods::claude_test,
+            mods::maker_projects,
+            mods::maker_create,
+            mods::maker_send,
+            mods::maker_stop,
+            mods::maker_approve,
+            mods::maker_view,
+            mods::maker_file,
+            mods::maker_delete,
+            mods::maker_rename,
+            mods::maker_install,
+            mods::mc_status,
+            mods::mc_search,
+            mods::mc_versions,
+            mods::mc_add_modrinth,
+            mods::mc_add_file,
+            mods::mc_add_folder,
+            mods::mc_remove_source,
+            mods::mc_plan,
+            mods::mc_export,
+            mods::mc_install,
+            mods::mc_uninstall,
         ])
         .build(tauri::generate_context!())
         .expect("error while starting OmniHub")

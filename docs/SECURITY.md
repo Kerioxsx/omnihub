@@ -203,6 +203,56 @@ and lets a phone do some of that. This is what protects each part.
   `ClientSettings\ClientAppSettings.json`, where OmniHub writes Fast Flags
   (keeping any flags it did not write).
 
+## Mods and Claude
+
+- Mods are only ever written inside the game's install folder and, for games
+  that load mods from there, the game's own folder in `%AppData%` (Balatro's
+  `Mods`). Every path from an archive, a Thunderstore package or Claude is
+  normalised and refused if it would leave its folder (`..`, drive letters,
+  device names). Archives are unpacked with size and file-count limits; RAR
+  is refused rather than handed to an external tool.
+- Every game file a mod replaces is copied to `data/mods/backups/<mod>` first;
+  switching a mod off moves its files to `data/mods/off/<mod>` and puts the
+  originals back; removing it deletes its files and the folders it created.
+  A mod can't overwrite another installed mod's files. Nothing changes while
+  the game is running.
+- Downloads: Thunderstore packages (size checked against the listing),
+  GitHub release assets for Script Hook V .NET and UE4SS (checked against the
+  SHA-256 GitHub publishes), and Minecraft files from the hosts a .mrpack may
+  use (cdn.modrinth.com, github.com, raw.githubusercontent.com, gitlab.com),
+  each checked against its published SHA-512/SHA-1 before it's kept.
+  Script Hook V itself is never downloaded by OmniHub (its licence forbids
+  redistribution): the user downloads it and adds the zip.
+- Online competitive games (a fixed list of Steam app ids and the competitive
+  games OmniHub already knows) get no mod installs and no mod maker. Games
+  with anti-cheat files in their folder get a warning.
+- Claude (the mod maker) runs with the user's Anthropic API key, stored with
+  DPAPI (entropy `omnihub-claude`), never returned to the window, never
+  written by a settings patch, and sent only in the `x-api-key` header to
+  `https://api.anthropic.com`. Adding, replacing or removing it is in the
+  audit log.
+- Claude's tools are confined: it can list, read and search the game's
+  install folder and its mod data folder (read-only, 8 MB per file), and write,
+  edit or delete files only in the project's own folder
+  (`data/mods/maker/<project>/mod`, at most 300 files and 20 MB, no file types
+  Windows runs: .exe, .dll, .asi, .bat, .cmd, .ps1, .vbs, .msi, .lnk, .reg…).
+  It has no shell and runs no programs. C# mods are built with `dotnet build`
+  only after the user approves each build, and only when the project passes
+  checks: one SDK-style .csproj, no targets, tasks, imports, build events,
+  `.props`/`.targets`/`NuGet.config`/`Directory.Build.*` files, packages only
+  from a short allow-list (BepInEx, UnityEngine.Modules, HarmonyX,
+  MelonLoader, reference assemblies) and package sources only BepInEx's own.
+  Builds stop after five minutes. Only the mod's own assembly is installed.
+- Claude's instructions make it build single-player and offline mods only, never
+  cheats, anti-cheat or DRM bypasses, or anything that collects data or runs
+  programs. Its conversation is kept on this PC (`data/mods/maker`), and
+  only that conversation and the files it chooses to read are sent to
+  Anthropic.
+- The Minecraft mixer adds a profile to `launcher_profiles.json` (a backup is
+  kept as `launcher_profiles.json.omnihub-backup`) and a folder under
+  `.minecraft\omnihub`; removing a mix removes both. It refuses to run while
+  the Minecraft Launcher is open.
+
 ## Lights (Govee)
 
 - Local network only, unless the user adds a Govee API key: discovery is the

@@ -356,6 +356,61 @@ export const api = {
     firewall: () => call<T.FirewallReport>('govee_firewall'),
     fixFirewall: () => call<T.FirewallReport>('govee_fix_firewall'),
   },
+
+  /** Mods for the Steam library (and Epic, and added folders): a mod manager, Thunderstore and the Workshop. */
+  mods: {
+    games: () => call<T.ModGame[]>('mods_games'),
+    list: (key: string) => call<T.InstalledMod[]>('mods_list', { key }),
+    /** `mods:listing` events follow while a game's Thunderstore list loads, then `mods:changed`. */
+    browse: (key: string, query: string, category: string | null, sort: T.ModSort, offset = 0, limit = 30) => call<T.ModBrowse>('mods_browse', { key, query, category, sort, offset, limit }),
+    installPackage: (key: string, fullName: string) => call<T.InstalledMod[]>('mods_install_package', { key, fullName }),
+    installFile: (key: string, path: string) => call<T.InstalledMod>('mods_install_file', { key, path }),
+    installLoader: (key: string, kind: T.LoaderKind) => call<T.InstalledMod>('mods_install_loader', { key, kind }),
+    setEnabled: (id: string, on: boolean) => call<void>('mods_set_enabled', { id, on }),
+    setAll: (key: string, on: boolean) => call<number>('mods_set_all', { key, on }),
+    uninstall: (id: string) => call<void>('mods_uninstall', { id }),
+    update: (id: string) => call<T.InstalledMod>('mods_update', { id }),
+    workshop: (key: string) => call<T.WorkshopItem[]>('mods_workshop', { key }),
+    addFolder: (name: string, dir: string) => call<T.ModGame>('mods_add_folder', { name, dir }),
+    removeFolder: (key: string) => call<void>('mods_remove_folder', { key }),
+  },
+
+  /** Claude with the user's own Anthropic API key (never shown to the window). */
+  claude: {
+    settings: () => call<T.ClaudeSettings>('claude_settings'),
+    update: (patch: Partial<T.ClaudeSettings>) => call<T.ClaudeSettings>('claude_update', { patch }),
+    setKey: (key: string) => call<void>('claude_set_key', { key }),
+    test: () => call<void>('claude_test'),
+  },
+
+  /** Claude making mods: `maker:delta` streams text, `maker:changed` says when to reload. */
+  maker: {
+    projects: (game: string | null = null) => call<T.MakerProject[]>('maker_projects', { game }),
+    create: (game: string, text: string) => call<T.MakerProject>('maker_create', { game, text }),
+    send: (id: string, text: string) => call<void>('maker_send', { id, text }),
+    stop: (id: string) => call<void>('maker_stop', { id }),
+    approve: (id: string, yes: boolean) => call<void>('maker_approve', { id, yes }),
+    view: (id: string) => call<T.MakerView>('maker_view', { id }),
+    file: (id: string, path: string) => call<string>('maker_file', { id, path }),
+    remove: (id: string) => call<void>('maker_delete', { id }),
+    rename: (id: string, name: string) => call<T.MakerProject>('maker_rename', { id, name }),
+    install: (id: string) => call<T.MakerProject>('maker_install', { id }),
+  },
+
+  /** Minecraft (Java) modpacks, mixed. */
+  minecraft: {
+    status: () => call<T.McStatus>('mc_status'),
+    search: (query: string, offset = 0) => call<{ hits: T.McPackHit[]; total: number }>('mc_search', { query, offset }),
+    versions: (project: string) => call<T.McPackVersion[]>('mc_versions', { project }),
+    addModrinth: (project: string, version: string) => call<T.McSource>('mc_add_modrinth', { project, version }),
+    addFile: (path: string) => call<T.McSource>('mc_add_file', { path }),
+    addFolder: (path: string) => call<T.McSource>('mc_add_folder', { path }),
+    removeSource: (id: string) => call<void>('mc_remove_source', { id }),
+    plan: (name: string, ids: string[], mc: string, loader: T.McLoader) => call<T.McMix>('mc_plan', { name, ids, mc, loader }),
+    exportPack: (id: string, path: string) => call<void>('mc_export', { id, path }),
+    install: (id: string) => call<T.McInstalled>('mc_install', { id }),
+    uninstall: (profile: string) => call<void>('mc_uninstall', { profile }),
+  },
 };
 
 export type Api = typeof api;
