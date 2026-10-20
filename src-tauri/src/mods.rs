@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use omnihub_core::claude::ClaudeSettings;
 use omnihub_core::core::AppCore;
+use omnihub_core::mods::cover::{self, PollStatus, SignIn};
 use omnihub_core::mods::detect::LoaderKind;
 use omnihub_core::mods::maker::{Project, View};
 use omnihub_core::mods::minecraft::{Installed, Mix, PackHit, PackVersion, Source};
@@ -279,4 +280,75 @@ pub async fn mc_install(core: Core<'_>, id: String) -> Res<Installed> {
 #[tauri::command]
 pub async fn mc_uninstall(core: Core<'_>, profile: String) -> Res<()> {
     run!(core, |c| c.mods.minecraft.uninstall(&profile))
+}
+
+// ---------- mix covers ----------
+
+/// The mix's cover (made from its packs' pictures the first time).
+#[tauri::command]
+pub async fn mc_cover(core: Core<'_>, id: String) -> Res<String> {
+    run!(core, |c| c.mods.minecraft.cover(&id).map(|p| cover::data_url(&p)))
+}
+
+/// Blend the packs' pictures into the cover again, on this PC.
+#[tauri::command]
+pub async fn mc_remake_cover(core: Core<'_>, id: String) -> Res<String> {
+    run!(core, |c| c.mods.minecraft.remake_cover(&id).map(|p| cover::data_url(&p)))
+}
+
+/// Have Pollinations paint a cover from the packs' pictures, with the user's own account.
+#[tauri::command]
+pub async fn mc_ai_cover(core: Core<'_>, id: String) -> Res<String> {
+    run!(core, |c| {
+        let r = c.mods.minecraft.ai_cover(&id, &c.mods.pollinations);
+        c.audit.record("desktop", "minecraft.aiCover", &id, r.is_ok());
+        r.map(|p| cover::data_url(&p))
+    })
+}
+
+#[tauri::command]
+pub async fn mc_save_cover(core: Core<'_>, id: String, path: String) -> Res<()> {
+    run!(core, |c| std::fs::write(&path, c.mods.minecraft.cover(&id)?).map_err(|e| e.to_string()))
+}
+
+#[tauri::command]
+pub async fn pollinations_status(core: Core<'_>) -> Res<PollStatus> {
+    Ok(core.mods.pollinations.status())
+}
+
+/// Start signing in to Pollinations: the user approves OmniHub on its site.
+#[tauri::command]
+pub async fn pollinations_sign_in(core: Core<'_>) -> Res<SignIn> {
+    run!(core, |c| c.mods.pollinations.sign_in())
+}
+
+/// Whether the sign-in was approved yet.
+#[tauri::command]
+pub async fn pollinations_check(core: Core<'_>) -> Res<PollStatus> {
+    run!(core, |c| {
+        if c.mods.pollinations.check_sign_in()? {
+            c.audit.record("desktop", "pollinations.key", "signed in", true);
+        }
+        Ok(c.mods.pollinations.status())
+    })
+}
+
+/// The user's own Pollinations secret key: kept encrypted for this Windows account; empty forgets it.
+#[tauri::command]
+pub async fn pollinations_set_key(core: Core<'_>, key: String) -> Res<PollStatus> {
+    run!(core, |c| {
+        let had = c.mods.pollinations.has_key();
+        let r = c.mods.pollinations.set_key(&key);
+        c.audit.record("desktop", "pollinations.key", if key.trim().is_empty() { "removed" } else if had { "replaced" } else { "added" }, r.is_ok());
+        r.map(|_| c.mods.pollinations.status())
+    })
+}
+
+#[tauri::command]
+pub async fn pollinations_forget(core: Core<'_>) -> Res<PollStatus> {
+    run!(core, |c| {
+        let r = c.mods.pollinations.forget();
+        c.audit.record("desktop", "pollinations.key", "removed", r.is_ok());
+        r.map(|_| c.mods.pollinations.status())
+    })
 }

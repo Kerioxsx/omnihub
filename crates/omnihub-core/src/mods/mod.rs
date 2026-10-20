@@ -8,6 +8,7 @@
 //! Online competitive games are left alone: changing their files breaks
 //! their anti-cheat rules. Games with anti-cheat get a plain warning.
 
+pub mod cover;
 pub mod detect;
 pub mod install;
 pub mod maker;
@@ -362,6 +363,8 @@ pub struct ModHub {
     pub maker: maker::Maker,
     /// Minecraft modpacks, mixed.
     pub minecraft: minecraft::Mixer,
+    /// The user's own Pollinations account, for painted mix covers.
+    pub pollinations: cover::Pollinations,
 }
 
 /// Where the hub talks to (real sites, or pretend ones in tests).
@@ -374,6 +377,8 @@ pub struct Endpoints {
     pub modrinth: String,
     pub fabric_meta: String,
     pub quilt_meta: String,
+    pub pollinations_gen: String,
+    pub pollinations_enter: String,
     /// %AppData% (Roaming), for games that keep mods there (and .minecraft).
     pub roaming: Option<PathBuf>,
 }
@@ -388,6 +393,8 @@ impl Default for Endpoints {
             modrinth: minecraft::MODRINTH.into(),
             fabric_meta: minecraft::FABRIC_META.into(),
             quilt_meta: minecraft::QUILT_META.into(),
+            pollinations_gen: cover::GEN.into(),
+            pollinations_enter: cover::ENTER.into(),
             roaming: dirs::config_dir(),
         }
     }
@@ -407,6 +414,7 @@ impl ModHub {
         Arc::new(ModHub {
             maker: maker::Maker::new(&dir.join("maker"), events.clone(), claude.clone()),
             minecraft: minecraft::Mixer::new(&dir.join("minecraft"), minecraft::Modrinth::new(&ep.modrinth, &ep.fabric_meta, &ep.quilt_meta), mc_dir),
+            pollinations: cover::Pollinations::with(data_dir, &ep.pollinations_gen, &ep.pollinations_enter),
             dir,
             events,
             games,

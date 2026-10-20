@@ -145,6 +145,12 @@ pub struct Mix {
     pub problems: Vec<String>,
     /// It can go straight into the Minecraft Launcher (Fabric, Quilt).
     pub installable: bool,
+    /// The packs' ids, in the same order as `sources`.
+    #[serde(default)]
+    pub source_ids: Vec<String>,
+    /// How its cover was made: `blend` (here) or `ai` (Pollinations).
+    #[serde(default)]
+    pub cover: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -414,6 +420,15 @@ impl Modrinth {
         Err(last)
     }
 
+    /// A pack's picture from Modrinth's CDN (at most 8 MB).
+    pub fn picture(&self, url: &str) -> Result<Vec<u8>, String> {
+        if !(url.starts_with("https://cdn.modrinth.com/") || url.starts_with(&format!("{}/", self.base))) {
+            return Err("Pictures only come from Modrinth.".into());
+        }
+        let res = self.agent.get(url).header("User-Agent", Self::ua()).call().map_err(|e| format!("Couldn't reach Modrinth: {e}"))?;
+        Self::read(res, 8 << 20)
+    }
+
     /// The newest stable Fabric or Quilt loader for a Minecraft version.
     pub fn latest_loader(&self, loader: &str, mc: &str) -> Result<String, String> {
         let url = match loader {
@@ -439,6 +454,36 @@ impl Modrinth {
 }
 
 /// Read a .mrpack: its index and how many override files it has.
+/// The picture an instance folder keeps: Prism Launcher's icon (named in
+/// instance.cfg), Modrinth App's (in profile.json), or an icon.png beside it.
+fn folder_icon(path: &Path) -> Option<Vec<u8>> {
+    let small = |p: &Path| std::fs::metadata(p).ok().filter(|m| m.is_file() && m.len() <= 8 << 20).and_then(|_| std::fs::read(p).ok());
+    let roots: Vec<PathBuf> = [Some(path.to_path_buf()), path.parent().map(Path::to_path_buf)].into_iter().flatten().collect();
+    for r in &roots {
+        for n in ["icon.png", "pack.png"] {
+            if let Some(b) = small(&r.join(n)) {
+                return Some(b);
+            }
+        }
+        if let Ok(cfg) = std::fs::read_to_string(r.join("instance.cfg")) {
+            let key = cfg.lines().find_map(|l| l.strip_prefix("iconKey=")).map(str::trim).filter(|k| !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')));
+            if let (Some(key), Some(icons)) = (key, r.parent().and_then(Path::parent).map(|p| p.join("icons"))) {
+                for ext in ["png", "jpg", "jpeg", "gif", "webp"] {
+                    if let Some(b) = small(&icons.join(format!("{key}.{ext}"))) {
+                        return Some(b);
+                    }
+                }
+            }
+        }
+        if let Some(icon) = std::fs::read(r.join("profile.json")).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).and_then(|v| v["icon_path"].as_str().map(PathBuf::from)) {
+            if let Some(b) = small(&icon) {
+                return Some(b);
+            }
+        }
+    }
+    None
+}
+
 pub fn read_mrpack(bytes: &[u8]) -> Result<(Value, usize), String> {
     let mut z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|_| "That isn't a .mrpack (zip) file.".to_string())?;
     let mut idx = String::new();
@@ -865,9 +910,76 @@ impl Mixer {
             clashes,
             problems,
             installable: matches!(loader, "fabric" | "quilt"),
+            source_ids: sources.iter().map(|s| s.id.clone()).collect(),
+            cover: None,
         };
         std::fs::write(md.join("mix.json"), serde_json::to_vec_pretty(&mix).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
         Ok(mix)
+    }
+
+    fn keep_mix(&self, m: &Mix) -> Result<(), String> {
+        std::fs::write(self.mdir(&m.id)?.join("mix.json"), serde_json::to_vec_pretty(m).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+    }
+
+    /// A pack's own picture: Modrinth's icon, or one an instance folder has.
+    fn icon_of(&self, s: &Source) -> Option<Vec<u8>> {
+        let cache = self.sdir(&s.id).ok()?.join("icon");
+        if let Ok(b) = std::fs::read(&cache) {
+            return Some(b).filter(|b| super::cover::decode(b).is_some());
+        }
+        let bytes = match (&s.icon, &s.kind) {
+            (Some(url), _) => self.api.picture(url).ok(),
+            (None, SourceKind::Folder { path }) => folder_icon(Path::new(path)),
+            _ => None,
+        }?;
+        super::cover::decode(&bytes)?;
+        let _ = std::fs::write(&cache, &bytes);
+        Some(bytes)
+    }
+
+    /// Each pack of a mix as a cover tile, in order.
+    fn tiles(&self, m: &Mix) -> Vec<image::RgbaImage> {
+        let all = self.sources();
+        let list: Vec<Source> = if m.source_ids.is_empty() {
+            m.sources.iter().filter_map(|n| all.iter().find(|s| &s.name == n).cloned()).collect()
+        } else {
+            m.source_ids.iter().filter_map(|id| all.iter().find(|s| &s.id == id).cloned()).collect()
+        };
+        let mut out: Vec<image::RgbaImage> = list.iter().map(|s| self.icon_of(s).and_then(|b| super::cover::decode(&b)).map(|i| super::cover::tile(&i)).unwrap_or_else(|| super::cover::placeholder(&s.name))).collect();
+        if out.is_empty() {
+            out = m.sources.iter().map(|n| super::cover::placeholder(n)).collect();
+        }
+        out
+    }
+
+    /// The mix's cover (PNG), made from its packs' pictures the first time.
+    pub fn cover(&self, id: &str) -> Result<Vec<u8>, String> {
+        match std::fs::read(self.mdir(id)?.join("cover.png")) {
+            Ok(b) => Ok(b),
+            Err(_) => self.remake_cover(id),
+        }
+    }
+
+    /// Blend the packs' pictures into the cover again, here.
+    pub fn remake_cover(&self, id: &str) -> Result<Vec<u8>, String> {
+        let mut m = self.mix(id)?;
+        let png = super::cover::png(&super::cover::blend(&self.tiles(&m)));
+        std::fs::write(self.mdir(id)?.join("cover.png"), &png).map_err(|e| e.to_string())?;
+        m.cover = Some("blend".into());
+        self.keep_mix(&m)?;
+        Ok(png)
+    }
+
+    /// Have Pollinations paint one new cover from the packs' pictures, with
+    /// the user's own account.
+    pub fn ai_cover(&self, id: &str, p: &super::cover::Pollinations) -> Result<Vec<u8>, String> {
+        let mut m = self.mix(id)?;
+        let tiles: Vec<Vec<u8>> = self.tiles(&m).iter().map(|t| super::cover::png(&image::imageops::resize(t, 256, 256, image::imageops::FilterType::Triangle))).collect();
+        let png = p.blend(&tiles, &m.name)?;
+        std::fs::write(self.mdir(id)?.join("cover.png"), &png).map_err(|e| e.to_string())?;
+        m.cover = Some("ai".into());
+        self.keep_mix(&m)?;
+        Ok(png)
     }
 
     pub fn mix(&self, id: &str) -> Result<Mix, String> {
@@ -987,7 +1099,8 @@ impl Mixer {
         let key = format!("omnihub-{}", dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or(slug));
         let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
         let java = format!("-Xmx{memory_gb}G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M");
-        let entry = json!({ "name": m.name, "type": "custom", "created": now, "lastUsed": now, "lastVersionId": version_id, "gameDir": dir.to_string_lossy(), "icon": "Crafting_Table", "javaArgs": java });
+        let icon = self.cover(id).ok().and_then(|c| super::cover::launcher_icon(&c)).unwrap_or_else(|| "Crafting_Table".into());
+        let entry = json!({ "name": m.name, "type": "custom", "created": now, "lastUsed": now, "lastVersionId": version_id, "gameDir": dir.to_string_lossy(), "icon": icon, "javaArgs": java });
         let mut wrote = false;
         for file in ["launcher_profiles.json", "launcher_profiles_microsoft_store.json"] {
             let p = mc_dir.join(file);
@@ -1171,6 +1284,13 @@ mod tests {
         assert_eq!(idx["files"].as_array().unwrap().len(), 5);
         assert_eq!(n, 3, "Speed's sodium.json, create.toml and options.txt");
 
+        // Its cover: the two packs (no icons in .mrpack files) blended, kept with the mix.
+        let cover = mixer.cover(&mix.id).unwrap();
+        assert_eq!(crate::mods::cover::decode(&cover).unwrap().dimensions(), (crate::mods::cover::SIZE, crate::mods::cover::SIZE));
+        assert_eq!(mixer.mix(&mix.id).unwrap().cover.as_deref(), Some("blend"));
+        assert_eq!(mixer.mix(&mix.id).unwrap().source_ids, [sa.id.clone(), sb.id.clone()]);
+        assert_eq!(mixer.cover(&mix.id).unwrap(), cover, "made once, then kept");
+
         // Into the Minecraft Launcher.
         let mut steps = 0;
         let inst = mixer.install(&mix.id, &mut |_, _, _| steps += 1, 6).unwrap();
@@ -1183,6 +1303,7 @@ mod tests {
         let p = &lp["profiles"][&inst.profile];
         assert_eq!((p["lastVersionId"].as_str(), p["type"].as_str()), (Some("fabric-loader-0.16.9-1.21.1"), Some("custom")));
         assert!(p["javaArgs"].as_str().unwrap().starts_with("-Xmx6G"));
+        assert!(p["icon"].as_str().unwrap().starts_with("data:image/png;base64,"), "the mix's cover, not the crafting table");
         assert!(lp["profiles"]["abc"].is_object(), "the user's own profiles stay");
         assert!(mc_dir.join("launcher_profiles.json.omnihub-backup").is_file());
         assert!(steps > 5);
@@ -1202,5 +1323,31 @@ mod tests {
         assert!(mixer.api.download(&["https://evil.example/x.jar".into()], "", "").unwrap_err().contains("host"));
         assert_eq!(version_cmp("26.1", "1.21.10"), std::cmp::Ordering::Greater);
         assert_eq!(version_cmp("1.21.10", "1.21.9"), std::cmp::Ordering::Greater);
+    }
+
+    #[test]
+    fn pack_pictures_come_from_modrinth_or_the_instance_folder() {
+        let t = tempfile::tempdir().unwrap();
+        let pic = crate::mods::cover::png(&image::RgbaImage::from_pixel(64, 64, image::Rgba([10, 200, 30, 255])));
+        // Prism Launcher: instances/<name>/.minecraft, its icon named in instance.cfg.
+        let inst = t.path().join("PrismLauncher/instances/Skyblock");
+        std::fs::create_dir_all(inst.join(".minecraft/mods")).unwrap();
+        std::fs::create_dir_all(t.path().join("PrismLauncher/icons")).unwrap();
+        std::fs::write(inst.join("instance.cfg"), "[General]\niconKey=sky_icon\nname=Skyblock\n").unwrap();
+        std::fs::write(t.path().join("PrismLauncher/icons/sky_icon.png"), &pic).unwrap();
+        assert_eq!(folder_icon(&inst).as_deref(), Some(pic.as_slice()));
+        assert_eq!(folder_icon(&inst.join(".minecraft")).as_deref(), Some(pic.as_slice()), "from inside its .minecraft too");
+        // An icon key that tries to leave the icons folder is ignored.
+        std::fs::write(inst.join("instance.cfg"), "iconKey=../../secret\n").unwrap();
+        assert!(folder_icon(&inst).is_none());
+        // Modrinth App: profile.json's icon_path.
+        let mra = t.path().join("ModrinthApp/profiles/Vanilla+");
+        std::fs::create_dir_all(&mra).unwrap();
+        std::fs::write(t.path().join("cached.png"), &pic).unwrap();
+        std::fs::write(mra.join("profile.json"), json!({ "icon_path": t.path().join("cached.png") }).to_string()).unwrap();
+        assert!(folder_icon(&mra).is_some());
+
+        let m = Modrinth::new("http://127.0.0.1:9", "http://127.0.0.1:9", "http://127.0.0.1:9");
+        assert!(m.picture("https://evil.example/icon.png").unwrap_err().contains("only come from Modrinth"));
     }
 }

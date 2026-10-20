@@ -436,6 +436,20 @@ export const api = {
     exportPack: (id: string, path: string) => call<void>('mc_export', { id, path }),
     install: (id: string) => call<T.McInstalled>('mc_install', { id }),
     uninstall: (profile: string) => call<void>('mc_uninstall', { profile }),
+    /** The mix's cover as a data: address (blended from its packs the first time). */
+    cover: (id: string) => call<string>('mc_cover', { id }),
+    remakeCover: (id: string) => call<string>('mc_remake_cover', { id }),
+    aiCover: (id: string) => call<string>('mc_ai_cover', { id }),
+    saveCover: (id: string, path: string) => call<void>('mc_save_cover', { id, path }),
+  },
+
+  /** The user's own Pollinations account, for painted mix covers. */
+  pollinations: {
+    status: () => call<T.PollStatus>('pollinations_status'),
+    signIn: () => call<T.PollSignIn>('pollinations_sign_in'),
+    check: () => call<T.PollStatus>('pollinations_check'),
+    setKey: (key: string) => call<T.PollStatus>('pollinations_set_key', { key }),
+    forget: () => call<T.PollStatus>('pollinations_forget'),
   },
 };
 

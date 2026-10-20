@@ -248,6 +248,23 @@ and lets a phone do some of that. This is what protects each part.
   programs. Its conversation is kept on this PC (`data/mods/maker`), and
   only that conversation and the files it chooses to read are sent to
   Anthropic.
+- Mix covers are made on this PC from the packs' own icons: Modrinth's
+  (downloaded only from `cdn.modrinth.com`, at most 8 MB), or one an
+  instance folder keeps (Prism Launcher's named in `instance.cfg`, whose
+  name may not hold a path; Modrinth App's `icon_path`; an `icon.png`).
+  Pictures are decoded with size limits (4096 px, 16 MB). The cover becomes
+  the launcher profile's icon as a `data:` PNG.
+- **AI blend** is only used when the user connects their own Pollinations
+  account: by approving OmniHub on Pollinations' own page (the device
+  sign-in; OmniHub only opens `enter.pollinations.ai` pages, and the user
+  sets the spending cap there), or by pasting their own `sk_` key. The key
+  is kept with DPAPI (entropy `omnihub-pollinations`), never sent to the
+  window, written only encrypted, and sent only in the `Authorization`
+  header to `gen.pollinations.ai` (and `enter.pollinations.ai` to read the
+  account's user name). What is sent: the packs' icons (256 px PNGs) and a
+  prompt with the mix's name, cleaned of quotes, brackets and control
+  characters. Connecting, disconnecting and each painted cover are in the
+  audit log. OmniHub ships no key of its own.
 - The Minecraft mixer adds a profile to `launcher_profiles.json` (a backup is
   kept as `launcher_profiles.json.omnihub-backup`) and a folder under
   `.minecraft\omnihub`; removing a mix removes both. It refuses to run while
@@ -470,6 +487,9 @@ internet only for:
   directly with yt-dlp (see Aurora above).
 - **Animated covers** (Aurora, on by default, can be turned off): the title
   and artist go to Apple Music's catalogue (see Aurora above).
+- **Mix covers**: the packs' icons from Modrinth's CDN; and, only after you
+  connect your own Pollinations account, the icons and the mix's name to
+  Pollinations (see Mods and Claude).
 - **Chats** (only when you use them): your conversation with Claude goes to
   Anthropic's API and with ChatGPT's models to OpenAI's API, with your own
   keys. Claude Code and Codex talk to their own services themselves.

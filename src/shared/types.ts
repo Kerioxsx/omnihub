@@ -2120,6 +2120,28 @@ export interface McMix {
   clashes: string[];
   problems: string[];
   installable: boolean;
+  /** The packs' ids, in the same order as `sources`. */
+  sourceIds: string[];
+  /** How its cover was made: blended here, or painted by Pollinations. */
+  cover: 'blend' | 'ai' | null;
+}
+
+/** The user's own Pollinations account, for painted mix covers. */
+export interface PollStatus {
+  connected: boolean;
+  user: string | null;
+  via: 'signIn' | 'key' | null;
+  connectedAt: number | null;
+  /** A sign-in is waiting to be approved on Pollinations' site. */
+  waiting: boolean;
+}
+
+export interface PollSignIn {
+  userCode: string;
+  /** Pollinations' approval page with the code filled in. */
+  url: string;
+  expiresIn: number;
+  interval: number;
 }
 
 export interface McPackHit {

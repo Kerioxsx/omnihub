@@ -315,6 +315,17 @@ incompatibilities resolved by pack order, overrides merged; the result is
 written as a .mrpack or installed as a Minecraft Launcher profile (Fabric or
 Quilt version JSON from their meta services).
 
+Mix covers (`mods/cover.rs`): each pack's icon (Modrinth's, or an instance
+folder's) becomes a square tile (pixel art enlarged block by block), then
+`blend` gives each pack its own part (a soft diagonal for two, wedges for
+three to six) filled with a blurred wash of its colours, with its icon whole
+as a rounded tile with a shadow. The cover is kept as the mix's
+`cover.png` and written into the launcher profile as a `data:` PNG.
+`Pollinations` is the optional painted version: the device sign-in
+(`/api/device/code`, `/api/device/token`) or a pasted `sk_` key under DPAPI,
+then `/v1/images/edits` with `black-forest-labs/flux.2-klein-4b` and the
+tiles as inline images.
+
 ## Chats
 
 `chats/` brings conversations together. `ChatHub` lists OmniHub's own chats

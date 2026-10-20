@@ -12,6 +12,7 @@ import { rig } from './mock/rig';
 import { govee } from './mock/govee';
 import { modsMock as mm } from './mock/mods';
 import { chatsMock as cm, openaiMock as om } from './mock/chats';
+import { pollMock } from './mock/mcCover';
 import * as optimize from './mock/optimize';
 import * as updates from './mock/update';
 
@@ -386,6 +387,15 @@ const handlers: Record<string, Handler> = {
   mc_export: () => mm.mcExport(),
   mc_install: (a) => mm.mcInstall(str(a, 'id')),
   mc_uninstall: (a) => mm.mcUninstall(str(a, 'profile')),
+  mc_cover: (a) => mm.mcCover(str(a, 'id')),
+  mc_remake_cover: (a) => mm.mcRemakeCover(str(a, 'id')),
+  mc_ai_cover: (a) => mm.mcAiCover(str(a, 'id'), pollMock.status().connected),
+  mc_save_cover: () => undefined,
+  pollinations_status: () => pollMock.status(),
+  pollinations_sign_in: () => pollMock.signIn(),
+  pollinations_check: () => pollMock.check(),
+  pollinations_set_key: (a) => pollMock.setKey(str(a, 'key')),
+  pollinations_forget: () => pollMock.forget(),
 };
 
 const FAST = new Set(['vault_strength', 'vault_touch', 'vault_status', 'system_stats', 'vault_generate', 'storage_progress', 'storage_duplicates_progress', 'remote_status']);

@@ -1,10 +1,12 @@
 // Minecraft modpacks, mixed: packs from Modrinth, .mrpack files or
 // installed instances; one Minecraft version and loader; the mix with every
 // mod once (updated to fit, dependencies added, clashes sorted), saved as a
-// .mrpack or installed as a Minecraft Launcher profile.
+// .mrpack or installed as a Minecraft Launcher profile. Each mix gets a cover:
+// its packs' icons blended here, or painted by Pollinations with the user's
+// own account.
 
-import type { McEntry, McEntryStatus, McLoader, McMix, McPackHit, McPackVersion, McStatus } from '@shared/types';
-import { ArrowLeft, Blocks, Download, FilePlus2, FolderOpen, FolderPlus, Play, Plus, Save, Search, Trash2, Wand2 } from 'lucide-react';
+import type { McEntry, McEntryStatus, McLoader, McMix, McPackHit, McPackVersion, McStatus, PollSignIn, PollStatus } from '@shared/types';
+import { ArrowLeft, Blocks, Download, ExternalLink, FilePlus2, FolderOpen, FolderPlus, ImageDown, KeyRound, LogOut, Play, Plus, RefreshCw, Save, Search, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -19,6 +21,166 @@ import { navigate } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
 import { count, ProgressLine, useModProgress } from './shared';
+
+/** Connect the user's own Pollinations account: approve on its site, or paste a key. */
+function PollinationsModal({ open, onClose, onConnected }: { open: boolean; onClose: () => void; onConnected: (s: PollStatus) => void }) {
+  const [code, setCode] = useState<PollSignIn | null>(null);
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!open) setCode(null);
+  }, [open]);
+  useEffect(() => {
+    if (!code) return;
+    let stop = false;
+    const tick = async () => {
+      if (stop) return;
+      try {
+        const s = await api.pollinations.check();
+        if (s.connected) {
+          toast.success('Pollinations connected', s.user ? `Signed in as ${s.user}.` : undefined);
+          onConnected(s);
+          return;
+        }
+      } catch (e) {
+        toast.error('Not connected', errorText(e));
+        setCode(null);
+        return;
+      }
+      setTimeout(() => void tick(), code.interval * 1000);
+    };
+    const t = setTimeout(() => void tick(), code.interval * 1000);
+    return () => {
+      stop = true;
+      clearTimeout(t);
+    };
+  }, [code, onConnected]);
+  const start = async () => {
+    setBusy(true);
+    try {
+      const c = await api.pollinations.signIn();
+      setCode(c);
+      void api.app.openUrl(c.url);
+    } catch (e) {
+      toast.error('Couldn’t start the sign-in', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const save = async () => {
+    try {
+      const s = await api.pollinations.setKey(key.trim());
+      setKey('');
+      toast.success('Key saved');
+      onConnected(s);
+    } catch (e) {
+      toast.error('Key not saved', errorText(e));
+    }
+  };
+  return (
+    <Modal open={open} onClose={onClose} title="Paint covers with Pollinations" description="Pollinations’ image model paints one new picture from your packs’ icons. It uses your own Pollinations account, and each picture costs about 0.005 Pollen from it. Only the icons and the mix’s name are sent." icon={Sparkles} size="md">
+      <div className="space-y-4">
+        {code ? (
+          <div className="space-y-3 rounded-xl border border-accent/40 bg-accent-soft/40 px-4 py-4 text-center">
+            <div className="text-[12.5px] text-dim">Approve OmniHub on Pollinations’ page (it opened in your browser), with this code:</div>
+            <div className="font-mono text-[26px] font-semibold tracking-[0.2em] text-fg">{code.userCode}</div>
+            <div className="flex items-center justify-center gap-2 text-[12px] text-dim">
+              <Spinner size={13} /> Waiting for you to approve it… You can set how much Pollen OmniHub may spend there.
+            </div>
+            <Button size="sm" variant="ghost" icon={ExternalLink} onClick={() => void api.app.openUrl(code.url)}>
+              Open the page again
+            </Button>
+          </div>
+        ) : (
+          <Button variant="primary" icon={Sparkles} className="w-full" disabled={busy} onClick={() => void start()}>
+            Sign in with Pollinations
+          </Button>
+        )}
+        <div className="space-y-2 rounded-xl border border-line px-4 py-3">
+          <div className="text-[12.5px] font-medium text-fg">Or use your own secret key</div>
+          <div className="flex gap-2">
+            <TextInput type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk_…" icon={KeyRound} className="flex-1" aria-label="Pollinations secret key" autoComplete="off" />
+            <Button size="sm" variant="secondary" disabled={!key.trim()} onClick={() => void save()}>
+              Save
+            </Button>
+          </div>
+          <div className="text-[11.5px] text-faint">From enter.pollinations.ai → Keys. It’s kept encrypted for your Windows account and sent only to Pollinations.</div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** The mix's picture: blended from its packs here, or painted by Pollinations. */
+function MixCover({ mix }: { mix: McMix }) {
+  const [src, setSrc] = useState<string | null>(null);
+  const [busy, setBusy] = useState<'blend' | 'ai' | null>(null);
+  const [kind, setKind] = useState(mix.cover);
+  const [poll, setPoll] = useState<PollStatus | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  useEffect(() => {
+    setSrc(null);
+    void api.minecraft.cover(mix.id).then((c) => (setSrc(c), setKind((k) => k ?? 'blend')), (e: unknown) => toast.error('No cover', errorText(e)));
+  }, [mix.id]);
+  useEffect(() => void api.pollinations.status().then(setPoll, () => undefined), []);
+  const paint = async () => {
+    setBusy('ai');
+    try {
+      setSrc(await api.minecraft.aiCover(mix.id));
+      setKind('ai');
+    } catch (e) {
+      toast.error('No painted cover', errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const again = async () => {
+    setBusy('blend');
+    try {
+      setSrc(await api.minecraft.remakeCover(mix.id));
+      setKind('blend');
+    } finally {
+      setBusy(null);
+    }
+  };
+  const savePic = async () => {
+    const path = await api.app.saveFile('Save the cover', `${mix.name.replace(/[^\w\s+-]/g, '').trim() || 'Mix'}.png`);
+    if (path) await api.minecraft.saveCover(mix.id, path).then(() => toast.success('Saved'), (e: unknown) => toast.error('Not saved', errorText(e)));
+  };
+  const connected = !!poll?.connected;
+  return (
+    <div className="flex items-center gap-3">
+      <div className="relative h-[104px] w-[104px] shrink-0 overflow-hidden rounded-2xl bg-surface-2 shadow-sm ring-1 ring-line">
+        {src ? <img src={src} alt={`Cover for ${mix.name}`} className="h-full w-full object-cover" /> : <div className="grid h-full w-full place-items-center"><Spinner /></div>}
+        {busy && (
+          <div className="absolute inset-0 grid place-items-center bg-black/45">
+            <Spinner />
+          </div>
+        )}
+        {kind === 'ai' && !busy && <span className="absolute bottom-1 right-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">AI</span>}
+      </div>
+      <div className="flex flex-col gap-1">
+        <Button size="sm" variant="secondary" icon={Sparkles} disabled={!!busy || !src} onClick={() => (connected ? void paint() : setConnecting(true))} title="Pollinations paints one new picture from the packs’ icons, with your own account.">
+          {busy === 'ai' ? 'Painting…' : 'AI blend'}
+        </Button>
+        <div className="flex gap-1">
+          <IconButton icon={RefreshCw} label={kind === 'ai' ? 'Back to the plain blend' : 'Blend again'} size="sm" disabled={!!busy} onClick={() => void again()} />
+          <IconButton icon={ImageDown} label="Save the picture" size="sm" disabled={!src} onClick={() => void savePic()} />
+          {connected && <IconButton icon={LogOut} label={`Disconnect Pollinations${poll?.user ? ` (${poll.user})` : ''}`} size="sm" onClick={() => void api.pollinations.forget().then(setPoll)} />}
+        </div>
+      </div>
+      <PollinationsModal
+        open={connecting}
+        onClose={() => setConnecting(false)}
+        onConnected={(s) => {
+          setPoll(s);
+          setConnecting(false);
+          void paint();
+        }}
+      />
+    </div>
+  );
+}
 
 const LOADERS: { value: McLoader; label: string }[] = [
   { value: 'fabric', label: 'Fabric' },
@@ -335,7 +497,8 @@ export function MinecraftView() {
 
         {mix && (
           <Card className="overflow-hidden">
-            <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
+            <div className="flex flex-wrap items-center gap-4 border-b border-line px-5 py-4">
+              <MixCover mix={mix} />
               <div className="min-w-0 flex-1">
                 <div className="text-[15px] font-semibold text-fg">{mix.name}</div>
                 <div className="text-[12.5px] text-dim">

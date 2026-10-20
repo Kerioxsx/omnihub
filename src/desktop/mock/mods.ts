@@ -4,6 +4,7 @@
 
 import type { BrowsePackage, ClaudeSettings, InstalledMod, MakerItem, MakerProject, MakerView, McEntry, McInstalled, McMix, McPackHit, McPackVersion, McSource, ModBrowse, ModGame, ModNote, ModSort, TsPackage, WorkshopItem } from '@shared/types';
 import { emit } from './bus';
+import { blendCover, packIcon, paintedCover } from './mcCover';
 
 const now = Date.now();
 const DAY = 86_400_000;
@@ -226,11 +227,13 @@ function mcFiles(names: string[]): McSource['files'] {
 }
 
 let mcSources: McSource[] = [
-  { id: 's1', name: 'Fabulously Optimized', kind: { type: 'modrinth', project: '1KVo5zza', version: 'N276l2ON' }, icon: null, mc: '1.21.1', loader: 'fabric', loaderVersion: '0.16.9', files: mcFiles(['sodium', 'iris', 'lithium', 'entityculling', 'modmenu', 'zoomify', 'continuity', 'cull-leaves', 'ferritecore', 'immediatelyfast']), overrides: 62 },
-  { id: 's2', name: 'Cobblemon Official Modpack', kind: { type: 'modrinth', project: 'Jkb29YJU', version: 'aB12cD34' }, icon: null, mc: '1.21.1', loader: 'fabric', loaderVersion: '0.16.5', files: mcFiles(['cobblemon', 'fabric-api', 'sodium', 'jei', 'jade', 'journeymap', 'waystones', 'balm', 'yigd', 'storagedrawers']), overrides: 31 },
+  { id: 's1', name: 'Fabulously Optimized', kind: { type: 'modrinth', project: '1KVo5zza', version: 'N276l2ON' }, icon: packIcon('Fabulously Optimized'), mc: '1.21.1', loader: 'fabric', loaderVersion: '0.16.9', files: mcFiles(['sodium', 'iris', 'lithium', 'entityculling', 'modmenu', 'zoomify', 'continuity', 'cull-leaves', 'ferritecore', 'immediatelyfast']), overrides: 62 },
+  { id: 's2', name: 'Cobblemon Official Modpack', kind: { type: 'modrinth', project: 'Jkb29YJU', version: 'aB12cD34' }, icon: packIcon('Cobblemon Official Modpack'), mc: '1.21.1', loader: 'fabric', loaderVersion: '0.16.5', files: mcFiles(['cobblemon', 'fabric-api', 'sodium', 'jei', 'jade', 'journeymap', 'waystones', 'balm', 'yigd', 'storagedrawers']), overrides: 31 },
 ];
 const mcInstalled: McInstalled[] = [];
 let mcMix: McMix | null = null;
+const mcCovers = new Map<string, string>();
+const mixIcons = () => (mcMix?.sourceIds ?? []).map((id) => mcSources.find((s) => s.id === id)).map((s) => s?.icon ?? packIcon(s?.name ?? 'Pack'));
 
 function entry(title: string, status: McEntry['status'], from: string[], version: string, note: string | null = null, folder = 'mods'): McEntry {
   return { project: title.toLowerCase(), title, icon: null, folder, version, file: status === 'missing' || status === 'conflict' ? null : { path: `${folder}/${title}.jar`, sha1: '', sha512: '', size: 0, urls: [], client: true, local: null }, from, status, note };
@@ -406,7 +409,7 @@ export const modsMock = {
   },
 
   mcStatus: () => ({ found: true, dir: 'C:\\Users\\Player\\AppData\\Roaming\\.minecraft', sources: mcSources, installed: mcInstalled }),
-  mcSearch: (query: string) => ({ hits: mcHits.filter((h) => !query || `${h.title} ${h.description}`.toLowerCase().includes(query.toLowerCase())), total: mcHits.length }),
+  mcSearch: (query: string) => ({ hits: mcHits.filter((h) => !query || `${h.title} ${h.description}`.toLowerCase().includes(query.toLowerCase())).map((h) => ({ ...h, icon: h.icon ?? packIcon(h.title) })), total: mcHits.length }),
   mcVersions: (project: string): McPackVersion[] => {
     const h = mcHits.find((x) => x.project === project)!;
     return h.versions.slice().reverse().map((mc, i) => ({ id: `${project}${i}`, name: `${h.title} ${6 - i}.0 for ${mc}`, number: `${6 - i}.0.0`, mc: [mc], loaders: h.loaders, date: new Date(now - i * 30 * DAY).toISOString() }));
@@ -414,12 +417,12 @@ export const modsMock = {
   mcAddModrinth(project: string, version: string): McSource {
     const h = mcHits.find((x) => x.project === project)!;
     const v = modsMock.mcVersions(project).find((x) => x.id === version)!;
-    const s: McSource = { id: `s${Date.now()}`, name: h.title, kind: { type: 'modrinth', project, version }, icon: h.icon, mc: v.mc[0], loader: h.loaders[0], loaderVersion: h.loaders[0] === 'forge' ? '47.3.0' : '0.16.9', files: mcFiles(['create', 'jei', 'jade', 'appleskin', 'farmersdelight']), overrides: 18 };
+    const s: McSource = { id: `s${Date.now()}`, name: h.title, kind: { type: 'modrinth', project, version }, icon: h.icon ?? packIcon(h.title), mc: v.mc[0], loader: h.loaders[0], loaderVersion: h.loaders[0] === 'forge' ? '47.3.0' : '0.16.9', files: mcFiles(['create', 'jei', 'jade', 'appleskin', 'farmersdelight']), overrides: 18 };
     mcSources.push(s);
     return s;
   },
   mcAddFile(path: string): McSource {
-    const s: McSource = { id: `s${Date.now()}`, name: path.split(/[\\/]/).pop()!.replace(/\.mrpack$/, ''), kind: { type: 'file', path }, icon: null, mc: '1.21.1', loader: 'fabric', loaderVersion: '0.16.9', files: mcFiles(['sodium', 'lithium']), overrides: 4 };
+    const s: McSource = { id: `s${Date.now()}`, name: path.split(/[\\/]/).pop()!.replace(/\.mrpack$/, ''), kind: { type: 'file', path }, icon: packIcon(path), mc: '1.21.1', loader: 'fabric', loaderVersion: '0.16.9', files: mcFiles(['sodium', 'lithium']), overrides: 4 };
     mcSources.push(s);
     return s;
   },
@@ -452,7 +455,8 @@ export const modsMock = {
       entry('JEI', 'conflict', [b], '', "Doesn't run alongside Roughly Enough Items, which stays."),
       entry('Fresh Animations', 'kept', [a], '1.9.3', null, 'resourcepacks'),
     ];
-    mcMix = { id: `mix${Date.now()}`, name: name || n.join(' + '), mc, loader, loaderVersion: '0.16.9', sources: n, entries, clashes: [`config/sodium-options.json: kept ${a}'s, not ${b}'s`, `options.txt: kept ${a}'s, not ${b}'s`], problems: [], installable: loader === 'fabric' || loader === 'quilt' };
+    mcMix = { id: `mix${Date.now()}`, name: name || n.join(' + '), mc, loader, loaderVersion: '0.16.9', sources: n, entries, clashes: [`config/sodium-options.json: kept ${a}'s, not ${b}'s`, `options.txt: kept ${a}'s, not ${b}'s`], problems: [], installable: loader === 'fabric' || loader === 'quilt', sourceIds: src.map((s) => s.id), cover: null };
+    mcCovers.delete(mcMix.id);
     return mcMix;
   },
   mcExport: () => undefined,
@@ -463,6 +467,25 @@ export const modsMock = {
     const inst: McInstalled = { name: m.name, profile: `omnihub-${id}`, dir: `C:\\Users\\Player\\AppData\\Roaming\\.minecraft\\omnihub\\${m.name.replace(/\W+/g, '_')}`, versionId: `fabric-loader-${m.loaderVersion}-${m.mc}`, mc: m.mc, loader: m.loader, mods: files.length, at: Date.now() };
     mcInstalled.push(inst);
     return inst;
+  },
+  async mcCover(id: string): Promise<string> {
+    const have = mcCovers.get(id);
+    if (have) return have;
+    return modsMock.mcRemakeCover(id);
+  },
+  async mcRemakeCover(id: string): Promise<string> {
+    const c = await blendCover(mixIcons());
+    mcCovers.set(id, c);
+    if (mcMix) mcMix.cover = 'blend';
+    return c;
+  },
+  async mcAiCover(id: string, connected: boolean): Promise<string> {
+    if (!connected) throw 'Connect your Pollinations account first.';
+    await new Promise((r) => setTimeout(r, 1400));
+    const c = await paintedCover(mixIcons());
+    mcCovers.set(id, c);
+    if (mcMix) mcMix.cover = 'ai';
+    return c;
   },
   mcUninstall(profile: string): void {
     const i = mcInstalled.findIndex((x) => x.profile === profile);

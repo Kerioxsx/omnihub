@@ -1,15 +1,10 @@
 ## New in this version
 
-**Chats: Claude, ChatGPT, Claude Code and Codex in one place, and on your phone.** Everything else stays as it was.
+**Covers for mixed Minecraft modpacks.** Everything else stays as it was.
 
-- **Every conversation together.** The new **Chats** page lists your chats with Claude and ChatGPT in OmniHub, and the conversations **Claude Code** and **Codex** keep on your PC, newest first, with search.
-- **Keep texting any of them.** Open a conversation and send the next message; the answer streams in as it's written, with the steps it takes ("Ran npm test", "Edited main.rs"). Claude Code and Codex run in the conversation's own project folder with your own sign-in, and you choose how much they may do: plan only, ask first, edit files or auto for Claude Code; read only or edit the project for Codex. They never run with permissions skipped.
-- **Start new ones.** A chat with Claude or ChatGPT (with your own Anthropic or OpenAI API key, kept encrypted for your Windows account), or Claude Code or Codex in any project folder.
-- **From your phone.** A new **Chats** tab in the phone app: the same list, each conversation full screen like a messaging app, new chats, and Stop. You can turn chats, and running Claude Code and Codex from the phone, off on the PC; from the phone they only start in folders they already work in.
-- **Ideas.** Save any message as an idea with one tap. Ideas are notes, so they also show in Notes (and in your Claude folder if ideas go there), and **Ask Claude** starts a chat about one.
-- **Usage.** Claude Code: today, this week and this month in tokens and what the same use would cost on the API, the current 5-hour window, and when a limit you reached resets. Codex: how much of your 5-hour and weekly limits is used and when they reset. And what your API keys spent in OmniHub (chats and the mod maker). Links open your plans' own usage pages.
-
-Chats in the ChatGPT and Claude apps live in your accounts online, not on your PC, so they aren't in OmniHub.
+- **A cover for every mix.** When you mix modpacks (Mods → Minecraft), the mix gets a picture made from its packs' own icons: each icon whole, on a wash of its colours, with soft seams between the packs, and pixel art kept crisp. It's made on your PC, needs no account, and becomes the mix's icon in the Minecraft Launcher instead of the crafting table.
+- **AI blend.** Press **AI blend** and Pollinations' image model paints one new picture from the packs' icons, as if they were merged. It uses your own Pollinations account: approve OmniHub on Pollinations' page (and set how much it may spend), or paste your own key. Only the icons and the mix's name are sent, and each picture costs about 0.005 Pollen.
+- **Blend again** goes back to the plain blend, and **Save the picture** saves it as a PNG.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

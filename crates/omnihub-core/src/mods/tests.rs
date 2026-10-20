@@ -211,7 +211,7 @@ pub fn fixture() -> Fixture {
     let games = crate::games::GameHub::new(&data, events.clone(), procs.clone());
     games.set_roblox_roots(vec![]);
     games.set_test_paths(vec![], crate::games::library::Roots { steam: Some(steam.clone()), ..Default::default() });
-    let ep = Endpoints { thunderstore: server.base.clone(), github: format!("{}/gh", server.base), steam_api: server.base.clone(), claude: server.base.clone(), modrinth: server.base.clone(), fabric_meta: server.base.clone(), quilt_meta: server.base.clone(), roaming: Some(roaming.clone()) };
+    let ep = Endpoints { thunderstore: server.base.clone(), github: format!("{}/gh", server.base), steam_api: server.base.clone(), claude: server.base.clone(), modrinth: server.base.clone(), fabric_meta: server.base.clone(), quilt_meta: server.base.clone(), pollinations_gen: server.base.clone(), pollinations_enter: server.base.clone(), roaming: Some(roaming.clone()) };
     let hub = ModHub::with(&data, events, games, procs, ep);
     hub.refresh_schema().unwrap();
     Fixture { _t: t, hub, server, steam, roaming }

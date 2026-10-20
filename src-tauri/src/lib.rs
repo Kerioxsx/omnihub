@@ -509,6 +509,15 @@ pub fn run(args: Vec<String>) {
             mods::mc_export,
             mods::mc_install,
             mods::mc_uninstall,
+            mods::mc_cover,
+            mods::mc_remake_cover,
+            mods::mc_ai_cover,
+            mods::mc_save_cover,
+            mods::pollinations_status,
+            mods::pollinations_sign_in,
+            mods::pollinations_check,
+            mods::pollinations_set_key,
+            mods::pollinations_forget,
         ])
         .build(tauri::generate_context!())
         .expect("error while starting OmniHub")
