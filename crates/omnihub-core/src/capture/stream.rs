@@ -170,7 +170,7 @@ pub mod dxgi {
     }
 
     /// The nth output across all adapters, with its adapter.
-    fn find_output(index: usize) -> std::io::Result<(IDXGIAdapter1, IDXGIOutput1, MonitorInfo)> {
+    pub(crate) fn find_output(index: usize) -> std::io::Result<(IDXGIAdapter1, IDXGIOutput1, MonitorInfo)> {
         unsafe {
             let factory: IDXGIFactory1 = CreateDXGIFactory1().map_err(err)?;
             let mut n = 0usize;

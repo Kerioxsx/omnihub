@@ -13,6 +13,7 @@ pub mod crashlog;
 pub mod db;
 pub mod events;
 pub mod games;
+pub mod govee;
 pub mod helper;
 pub mod media;
 pub mod notes;

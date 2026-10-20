@@ -3,6 +3,7 @@
 
 mod commands;
 mod ambient;
+mod govee;
 mod overlay;
 mod rest;
 mod rig;
@@ -97,6 +98,7 @@ pub fn run(args: Vec<String>) {
     }
     let core = AppCore::new(paths, CoreOptions::default()).expect("cannot open the OmniHub database");
     let rig_hub = core.rig.clone();
+    let govee_hub = core.govee.clone();
     #[cfg(windows)]
     let session_logs = logs_dir.clone();
 
@@ -433,6 +435,24 @@ pub fn run(args: Vec<String>) {
             rig::rig_media_add,
             rig::rig_media_remove,
             rig::rig_displays,
+            govee::govee_settings,
+            govee::govee_update,
+            govee::govee_update_light,
+            govee::govee_hold,
+            govee::govee_scan,
+            govee::govee_set_key,
+            govee::govee_control,
+            govee::govee_identify,
+            govee::govee_presets,
+            govee::govee_save_preset,
+            govee::govee_delete_preset,
+            govee::govee_apply_preset,
+            govee::govee_save_timer,
+            govee::govee_delete_timer,
+            govee::govee_sleep,
+            govee::govee_monitors,
+            govee::govee_firewall,
+            govee::govee_fix_firewall,
         ])
         .build(tauri::generate_context!())
         .expect("error while starting OmniHub")
@@ -441,6 +461,8 @@ pub fn run(args: Vec<String>) {
             if let tauri::RunEvent::Exit = event {
                 // Fans OmniHub drives go back to the hardware's own control.
                 rig_hub.shutdown();
+                // Streaming Govee lights go back to their own modes.
+                govee_hub.shutdown();
                 omnihub_core::crashlog::end_session(&logs_dir);
             }
         });

@@ -111,7 +111,7 @@ pub fn hue(h: f32) -> Rgb {
 }
 
 /// A point (0–1) along the colours, end to end (`wrap`: back to the first).
-fn along(colors: &[Rgb], x: f32, wrap: bool) -> Rgb {
+pub fn along(colors: &[Rgb], x: f32, wrap: bool) -> Rgb {
     match colors.len() {
         0 => Rgb(255, 255, 255),
         1 => colors[0],

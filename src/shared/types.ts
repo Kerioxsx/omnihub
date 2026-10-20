@@ -1726,3 +1726,143 @@ export interface RigDisplay {
   scale: number;
   primary: boolean;
 }
+
+// ---------- Govee lights ----------
+
+export type GoveeMode = 'color' | 'white' | 'effect' | 'screen' | 'music' | 'scene' | 'deviceMusic';
+export type GoveeZone = 'whole' | 'left' | 'right' | 'top' | 'bottom' | 'around' | 'across';
+export type MusicStyle = 'pulse' | 'spectrum' | 'flow';
+
+/** What lights show. */
+export interface GoveeLook {
+  mode: GoveeMode;
+  /** color: "#rrggbb" */
+  color: string;
+  /** white: 2000–9000 K */
+  kelvin: number;
+  effect: LightEffect;
+  colors: string[];
+  speed: number;
+  /** screen: the monitor's name ('' = the main one) */
+  monitor: string;
+  smoothness: number;
+  saturation: number;
+  skipDark: boolean;
+  style: MusicStyle;
+  albumColors: boolean;
+  sensitivity: number;
+  /** scene: each light's own scene of this name */
+  scene: string;
+  /** deviceMusic: the light's own music mode by name */
+  deviceMusic: string;
+}
+
+export interface GoveeLightSettings {
+  id: string;
+  name: string;
+  control: boolean;
+  follow: boolean;
+  look: GoveeLook;
+  on: boolean;
+  brightness: number;
+  /** 0 = what Govee says (or 10) */
+  segments: number;
+  stream: 'segments' | 'single';
+  zone: GoveeZone;
+  reverse: boolean;
+  gradient: boolean;
+}
+
+export interface GoveePreset {
+  id: string;
+  name: string;
+  look: GoveeLook;
+  brightness: number | null;
+}
+
+export type TimerAction = 'on' | 'off' | 'preset' | 'brightness';
+
+export interface GoveeTimer {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** "07:30" */
+  at: string;
+  /** 1 = Monday … 7 = Sunday; empty = every day */
+  days: number[];
+  action: TimerAction;
+  preset: string;
+  brightness: number;
+  /** device ids; empty = all */
+  lights: string[];
+  /** minutes to fade in or out */
+  fade: number;
+}
+
+export interface GoveeSettings {
+  enabled: boolean;
+  on: boolean;
+  brightness: number;
+  look: GoveeLook;
+  lights: GoveeLightSettings[];
+  presets: GoveePreset[];
+  preset: string;
+  timers: GoveeTimer[];
+  /** always empty in the window */
+  apiSecret: string;
+  manual: string[];
+}
+
+export interface GoveeChoice {
+  name: string;
+  value: unknown;
+}
+
+export interface GoveeExtra {
+  kind: 'toggle' | 'range' | 'choice';
+  type: string;
+  instance: string;
+  label: string;
+  min: number | null;
+  max: number | null;
+  unit: string | null;
+  choices: GoveeChoice[];
+  /** volume, speaker, white noise */
+  sound: boolean;
+}
+
+export interface GoveeLight {
+  id: string;
+  sku: string;
+  name: string;
+  ip: string | null;
+  lan: boolean;
+  cloud: boolean;
+  on: boolean | null;
+  brightness: number | null;
+  color: string | null;
+  kelvin: number | null;
+  segments: number | null;
+  kelvinRange: [number, number] | null;
+  scenes: GoveeChoice[];
+  diyScenes: GoveeChoice[];
+  snapshots: GoveeChoice[];
+  musicModes: GoveeChoice[];
+  extras: GoveeExtra[];
+  values: Record<string, unknown>;
+  streaming: boolean;
+  message: string | null;
+}
+
+export interface GoveeStatus {
+  lan: LinkState;
+  lanMessage: string | null;
+  cloud: LinkState;
+  cloudMessage: string | null;
+  hasKey: boolean;
+  lights: GoveeLight[];
+  screenMessage: string | null;
+  musicMessage: string | null;
+  palette: string[];
+  sleepUntil: number | null;
+}

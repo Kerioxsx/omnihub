@@ -332,6 +332,30 @@ export const api = {
     removeMedia: (id: string) => call<void>('rig_media_remove', { id }),
     displays: () => call<T.RigDisplay[]>('rig_displays'),
   },
+
+  /** Govee lights: on the network (LAN Control) and, with a key, Govee's cloud. */
+  govee: {
+    settings: () => call<T.GoveeSettings>('govee_settings'),
+    update: (patch: T.DeepPartial<T.GoveeSettings>) => call<T.GoveeSettings>('govee_update', { patch }),
+    updateLight: (id: string, patch: T.DeepPartial<T.GoveeLightSettings>) => call<T.GoveeSettings>('govee_update_light', { id, patch }),
+    /** The page is open (call every few seconds); `govee:status` and `govee:frame` events follow. */
+    hold: () => call<T.GoveeStatus>('govee_hold'),
+    scan: () => call<void>('govee_scan'),
+    /** Kept encrypted for this Windows account; empty removes it. */
+    setKey: (key: string) => call<void>('govee_set_key', { key }),
+    control: (id: string, capType: string, instance: string, value: unknown) => call<void>('govee_control', { id, capType, instance, value }),
+    identify: (id: string) => call<void>('govee_identify', { id }),
+    presets: () => call<T.GoveePreset[]>('govee_presets'),
+    savePreset: (preset: T.GoveePreset) => call<T.GoveePreset>('govee_save_preset', { preset }),
+    deletePreset: (id: string) => call<void>('govee_delete_preset', { id }),
+    applyPreset: (id: string, lights: string[] = []) => call<T.GoveeSettings>('govee_apply_preset', { id, lights }),
+    saveTimer: (timer: T.GoveeTimer) => call<T.GoveeTimer>('govee_save_timer', { timer }),
+    deleteTimer: (id: string) => call<void>('govee_delete_timer', { id }),
+    sleep: (minutes: number | null) => call<T.GoveeStatus>('govee_sleep', { minutes }),
+    monitors: () => call<T.MonitorInfo[]>('govee_monitors'),
+    firewall: () => call<T.FirewallReport>('govee_firewall'),
+    fixFirewall: () => call<T.FirewallReport>('govee_fix_firewall'),
+  },
 };
 
 export type Api = typeof api;

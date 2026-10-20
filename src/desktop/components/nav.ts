@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Activity, Camera, Cpu, Gamepad2, HardDrive, House, LayoutGrid, LockKeyhole, Music2, NotebookPen, ScreenShare, Settings, Smartphone } from 'lucide-react';
+import { Activity, Camera, Cpu, Gamepad2, HardDrive, House, LayoutGrid, Lightbulb, LockKeyhole, Music2, NotebookPen, ScreenShare, Settings, Smartphone } from 'lucide-react';
 import type { RouteId } from '../lib/router';
 
 export interface NavItem {
@@ -22,6 +22,7 @@ export const NAV: NavItem[] = [
   { id: 'rig', label: 'My PC', icon: Cpu, description: 'Your PC in 3D: lighting, fan profiles and screens', group: 'performance' },
   { id: 'vault', label: 'Vault', icon: LockKeyhole, description: 'Encrypted passwords and secrets', group: 'security' },
   { id: 'phone', label: 'Phone', icon: Smartphone, description: 'Companion server, pairing and transfers', group: 'devices' },
+  { id: 'lights', label: 'Lights', icon: Lightbulb, description: 'Govee lights: colours, screen and music sync, presets and timers', group: 'devices' },
   { id: 'screen', label: 'Screen share', icon: ScreenShare, description: 'Stream your PC or mirror an Android phone', group: 'devices' },
   { id: 'settings', label: 'Settings', icon: Settings, description: 'Appearance, privacy and behaviour', group: 'app' },
 ];

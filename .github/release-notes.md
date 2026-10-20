@@ -1,14 +1,15 @@
 ## New in this version
 
-More speed for Fortnite and Roblox, and a check for the most common FPS loss on a fast PC. Everything from 0.8.0 stays as it was.
+**Lights: control every Govee light OmniHub finds.** Everything else stays as it was.
 
-- **Fortnite: NVIDIA Reflex set for you.** Optimize (and every Competitive launch) now sets Fortnite's own *NVIDIA Reflex Low Latency* to **On + Boost** (or On, or Off: your choice), and turns off its *GPU crash debugging*, *latency markers* and *latency flash*, testing aids that cost frames while on.
-- **Fortnite: DirectX 12's heaviest features off with Lowest quality.** Nanite geometry, Lumen global illumination and reflections, temporal anti-aliasing / super resolution and landscape detail go to their lowest, for when you play in DirectX 12 rather than Performance mode.
-- **Roblox: the graphics slider at its lowest.** Roblox's *Automatic* graphics picks near the top on a fast PC; with *Lowest graphics quality* on, OmniHub sets the slider to 1 in Roblox's own settings file.
-- **Roblox: one more Fast Flag from Roblox's allowlist.** *Lighting worked out once* (part of the Max FPS preset) stops Roblox re-lighting the world as things move.
-- **Memory at the speed it is sold at.** Optimize PC now says when your memory runs slower than its kit is sold at, for example DDR5-6000 running at 4800 because EXPO or XMP is off in the BIOS. That is often the biggest free gain in processor-bound games like Fortnite and Roblox. OmniHub only reads the speed; the switch is in your BIOS, and the page shows the way there.
+- **Every light on your network.** Govee lights with *LAN Control* on (Govee Home app → the light → settings) are found by themselves, with no account and no cloud. Switch them on and off, set the brightness, a colour or a white from warm to cool, for all of them at once or one by one, and give each its own name. Tap the eye to make a light blink so you know which one it is.
+- **They follow your screen, live.** Each light takes its colours from its place around the screen (all around for a TV or monitor backlight, a side, the top, across) up to 30 times a second, eased so changes glide instead of flicker. Instant for games, very smooth for films. Black bars don't dim them, and a vividness slider makes colours pop. The graphics card shrinks the screen first, so it costs almost nothing, and nothing is saved.
+- **They dance to your music.** Whatever this PC plays, in any app: the lights take the album cover's colours and pulse on the beats (*Pulse*), show the sound from bass to treble along the light (*Spectrum*), or flow at the song's tempo with flashes on the beat (*Flow*), with a sensitivity slider.
+- **Effects and presets.** Rainbow wave, spectrum, flow and breathing in your colours at your speed, plus one-click presets: Movie, Gaming, Party, Spectrum, Flow, Rainbow, Chill, Ocean, Focus, Reading and Night light. Save your own too.
+- **Timers.** Wake up to the lights fading in, have them fade out at bedtime, or switch to a preset or a brightness on chosen days. There's also a sleep timer (15–90 minutes, fading out over the last minute).
+- **With your Govee API key (optional):** each light's own scenes, DIY scenes and snapshots, its own microphone music modes, and its own settings such as gradient, night light and, on lights that have a speaker, the volume. OmniHub shows whatever each light reports. Paste the key under Lights → Setup (get it in the Govee Home app: Profile → Settings → Apply for API Key). It's kept encrypted for your Windows account and only ever sent to Govee.
 
-Each of these changes only what the game already saved in its settings file; a key a game update renames is left alone. "Put back mine" still restores your own file. Windows security settings (Memory Integrity, Defender) stay untouched.
+**Privacy:** live colours go straight from this PC to the lights on your network (UDP 4001–4003). The Govee cloud is only used with your key, and only for the light's own scenes and settings. If Windows Firewall blocks the lights' answers, Lights → Setup shows it and can add the rule (it asks for administrator approval once).
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

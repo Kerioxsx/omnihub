@@ -9,6 +9,7 @@ import { scene } from './mock/art';
 import * as core from './mock/core';
 import * as games from './mock/games';
 import { rig } from './mock/rig';
+import { govee } from './mock/govee';
 import * as optimize from './mock/optimize';
 import * as updates from './mock/update';
 
@@ -55,6 +56,24 @@ const handlers: Record<string, Handler> = {
   rig_media_add: () => rig.addMedia(),
   rig_media_remove: (a) => rig.removeMedia(str(a, 'id')),
   rig_displays: () => rig.displays(),
+  govee_settings: () => govee.settings(),
+  govee_update: (a) => govee.update(obj(a, 'patch')),
+  govee_update_light: (a) => govee.updateLight(str(a, 'id'), obj(a, 'patch')),
+  govee_hold: () => govee.hold(),
+  govee_scan: () => govee.scan(),
+  govee_set_key: (a) => govee.setKey(str(a, 'key')),
+  govee_control: (a) => govee.control(str(a, 'id'), str(a, 'instance'), a.value),
+  govee_identify: (a) => govee.identify(str(a, 'id')),
+  govee_presets: () => govee.presets(),
+  govee_save_preset: (a) => govee.savePreset(obj(a, 'preset')),
+  govee_delete_preset: (a) => govee.deletePreset(str(a, 'id')),
+  govee_apply_preset: (a) => govee.applyPreset(str(a, 'id'), strList(a, 'lights')),
+  govee_save_timer: (a) => govee.saveTimer(obj(a, 'timer')),
+  govee_delete_timer: (a) => govee.deleteTimer(str(a, 'id')),
+  govee_sleep: (a) => govee.sleep(typeof a.minutes === 'number' ? a.minutes : null),
+  govee_monitors: () => govee.monitors(),
+  govee_firewall: () => govee.firewall(),
+  govee_fix_firewall: () => govee.fixFirewall(),
   games_list: () => games.list(),
   games_create: (a) => games.create(str(a, 'kind') as GameKind),
   games_save: (a) => games.save(obj<GameProfile>(a, 'profile')),

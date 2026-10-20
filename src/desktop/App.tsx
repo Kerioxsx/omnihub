@@ -19,6 +19,7 @@ import { useMediaQuery, useStoredState } from './lib/hooks';
 import { PAGE_IDS, type RouteId, navigate, useRoute } from './lib/router';
 import { AppsPage } from './pages/apps/AppsPage';
 import { GamesPage } from './pages/games/GamesPage';
+import { LightsPage } from './pages/lights/LightsPage';
 import { RigPage } from './pages/rig/RigPage';
 import { MusicPage } from './pages/music/MusicPage';
 import { PlayerHost } from './components/music/PlayerHost';
@@ -45,6 +46,7 @@ const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen'>, Comp
   tasks: TasksPage,
   games: GamesPage,
   rig: RigPage,
+  lights: LightsPage,
   vault: VaultPage,
   phone: PhonePage,
   screen: ScreenPage,

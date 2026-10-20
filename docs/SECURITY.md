@@ -203,6 +203,31 @@ and lets a phone do some of that. This is what protects each part.
   `ClientSettings\ClientAppSettings.json`, where OmniHub writes Fast Flags
   (keeping any flags it did not write).
 
+## Lights (Govee)
+
+- Local network only, unless the user adds a Govee API key: discovery is the
+  documented LAN API scan (multicast to 239.255.255.250:4001 from each local
+  network, plus any addresses the user adds), answers arrive on UDP 4002,
+  commands go to the light's UDP 4003. Live colours use the `razer`
+  (DreamView) sub-protocol to the same port. Nothing is sent to other hosts.
+- Windows Firewall: the page checks whether answers on UDP 4002 get through
+  and can add an allow rule for OmniHub on private and domain networks (the
+  same `firewall-allow` helper as the phone companion, one UAC prompt).
+- Screen sync reads the chosen monitor through Desktop Duplication and keeps
+  only a grid of about 100 × 60 average colours, overwritten every frame;
+  nothing is stored or sent except the lights' colours.
+- Music sync uses the same sound analysis as the music visuals (levels and
+  beats only, nothing recorded) and the current song's cover from the media
+  module, reduced to five colours in memory.
+- The Govee API key is optional. It is stored with DPAPI for the Windows user
+  (entropy `omnihub-govee`), never shown to the window again, never in
+  logs, and sent only in the `Govee-API-Key` header to
+  `https://openapi.api.govee.com`. Settings patches from the window cannot
+  write it. Adding, replacing or removing it is in the audit log.
+- Cloud commands are queued one at a time and spaced ~0.5 s apart (Govee
+  allows about two a second per light); a dragged slider sends only its last
+  value.
+
 ## My PC: lighting, fans, screens and specs
 
 - Specs are read, never written: the firmware's SMBIOS table
