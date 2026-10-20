@@ -4,6 +4,7 @@
 mod commands;
 mod ambient;
 mod govee;
+mod chats;
 mod mods;
 mod overlay;
 mod rest;
@@ -454,6 +455,22 @@ pub fn run(args: Vec<String>) {
             govee::govee_monitors,
             govee::govee_firewall,
             govee::govee_fix_firewall,
+            chats::chats_list,
+            chats::chats_view,
+            chats::chats_send,
+            chats::chats_create,
+            chats::chats_stop,
+            chats::chats_rename,
+            chats::chats_delete,
+            chats::chats_folders,
+            chats::chats_tools,
+            chats::chats_usage,
+            chats::ideas_list,
+            chats::ideas_save,
+            chats::openai_settings,
+            chats::openai_update,
+            chats::openai_set_key,
+            chats::openai_models,
             mods::mods_games,
             mods::mods_list,
             mods::mods_browse,

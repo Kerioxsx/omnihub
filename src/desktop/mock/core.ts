@@ -43,6 +43,7 @@ export const settings: Settings = {
   media: { allowPhone: true, lyricsOnline: true, eqEnabled: false, bassDb: 0, trebleDb: 0, lrcFolder: null, hiresArt: true },
   visuals: structuredClone(DEFAULT_VISUALS),
   updates: { check: true, autoInstall: true },
+  chats: { allowPhone: true, phoneAgents: true, claudeMode: 'acceptEdits', codexSandbox: 'workspace-write' },
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {

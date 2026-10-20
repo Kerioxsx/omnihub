@@ -3,7 +3,7 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { ModSort, CaptureKind, ConfigGame, ConfigOptions, DeepPartial, GameKind, GameProfile, RobloxFlags, TweakId, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
+import type { ChatSource, NewChatKind, ModSort, CaptureKind, ConfigGame, ConfigOptions, DeepPartial, GameKind, GameProfile, RobloxFlags, TweakId, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
@@ -11,6 +11,7 @@ import * as games from './mock/games';
 import { rig } from './mock/rig';
 import { govee } from './mock/govee';
 import { modsMock as mm } from './mock/mods';
+import { chatsMock as cm, openaiMock as om } from './mock/chats';
 import * as optimize from './mock/optimize';
 import * as updates from './mock/update';
 
@@ -344,6 +345,22 @@ const handlers: Record<string, Handler> = {
   mods_workshop: (a) => mm.workshop(str(a, 'key')),
   mods_add_folder: (a) => mm.addFolder(str(a, 'name'), str(a, 'dir')),
   mods_remove_folder: (a) => mm.removeFolder(str(a, 'key')),
+  chats_list: () => cm.list(),
+  chats_view: (a) => cm.view(str(a, 'source') as ChatSource, str(a, 'id')),
+  chats_send: (a) => cm.send(str(a, 'source') as ChatSource, str(a, 'id'), str(a, 'text')),
+  chats_create: (a) => cm.create(str(a, 'kind') as NewChatKind, str(a, 'text'), optStr(a, 'folder')),
+  chats_stop: (a) => cm.stop(str(a, 'source') as ChatSource, str(a, 'id')),
+  chats_rename: (a) => cm.rename(str(a, 'id'), str(a, 'title')),
+  chats_delete: (a) => cm.remove(str(a, 'id')),
+  chats_folders: () => cm.folders(),
+  chats_tools: () => cm.tools(),
+  chats_usage: () => cm.usage(),
+  ideas_list: () => cm.ideas(),
+  ideas_save: (a) => cm.saveIdea(str(a, 'text'), optStr(a, 'from')),
+  openai_settings: () => om.settings(),
+  openai_update: (a) => om.update(obj(a, 'patch')),
+  openai_set_key: (a) => om.setKey(str(a, 'key')),
+  openai_models: () => om.models(),
   claude_settings: () => mm.claudeSettings(),
   claude_update: (a) => mm.claudeUpdate(obj(a, 'patch')),
   claude_set_key: (a) => mm.claudeSetKey(str(a, 'key')),

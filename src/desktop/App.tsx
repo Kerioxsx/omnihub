@@ -21,6 +21,7 @@ import { AppsPage } from './pages/apps/AppsPage';
 import { GamesPage } from './pages/games/GamesPage';
 import { LightsPage } from './pages/lights/LightsPage';
 import { ModsPage } from './pages/mods/ModsPage';
+import { ChatsPage } from './pages/chats/ChatsPage';
 import { RigPage } from './pages/rig/RigPage';
 import { MusicPage } from './pages/music/MusicPage';
 import { PlayerHost } from './components/music/PlayerHost';
@@ -47,6 +48,7 @@ const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen'>, Comp
   tasks: TasksPage,
   games: GamesPage,
   mods: ModsPage,
+  chats: ChatsPage,
   rig: RigPage,
   lights: LightsPage,
   vault: VaultPage,

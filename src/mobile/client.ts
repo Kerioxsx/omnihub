@@ -2,7 +2,7 @@
 // (crates/omnihub-core/src/remote/api.rs). The phone app is served by that
 // server, so every URL is same-origin.
 
-import type { Device, Note, NoteKind, PendingPower, PowerAction, InboxItem, EntrySummary, MonitorInfo, Preset } from '@shared/types';
+import type { ChatFolder, ChatSource, ChatSummary, ChatTools, ChatView, ClaudeCodeMode, CodexSandbox, Device, NewChatKind, Note, NoteKind, PendingPower, PowerAction, InboxItem, EntrySummary, MonitorInfo, Preset, UsageReport } from '@shared/types';
 
 const TOKEN_KEY = 'omnihub.token';
 const NAME_KEY = 'omnihub.deviceName';
@@ -93,7 +93,7 @@ export interface ServerInfo {
   tls: boolean;
   paired: boolean;
   pairingOpen: boolean;
-  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean; games?: boolean };
+  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean; games?: boolean; chats?: boolean; chatAgents?: boolean };
 }
 
 export interface FsEntry {
@@ -254,6 +254,16 @@ export const client = {
   notes: (kind?: NoteKind, q = '') => request<{ notes: Note[]; claudeFolder: boolean }>('GET', `/api/notes?${kind ? `kind=${kind}&` : ''}q=${encodeURIComponent(q)}`),
   note: (id: string) => request<Note>('GET', `/api/notes/${id}`),
   createNote: (n: { title: string; body: string; kind: NoteKind; tags?: string[]; sendToClaude?: boolean }) => request<Note>('POST', '/api/notes', n),
+
+  chats: () => request<{ chats: ChatSummary[]; tools: ChatTools; agents: boolean; claudeMode: ClaudeCodeMode; codexSandbox: CodexSandbox }>('GET', '/api/chats'),
+  chat: (source: ChatSource, id: string) => request<ChatView>('GET', `/api/chats/${source}/${encodeURIComponent(id)}`),
+  chatSend: (source: ChatSource, id: string, text: string, mode = '') => request<{ ok: boolean }>('POST', `/api/chats/${source}/${encodeURIComponent(id)}/send`, { text, mode }),
+  chatStop: (source: ChatSource, id: string) => request<{ ok: boolean }>('POST', `/api/chats/${source}/${encodeURIComponent(id)}/stop`),
+  chatNew: (kind: NewChatKind, text: string, folder: string | null, mode = '') => request<ChatSummary>('POST', '/api/chats/new', { kind, text, folder, mode }),
+  chatFolders: () => request<ChatFolder[]>('GET', '/api/chats/folders'),
+  chatUsage: () => request<UsageReport>('GET', '/api/chats/usage'),
+  ideas: () => request<Note[]>('GET', '/api/ideas'),
+  saveIdea: (text: string, from: string | null = null) => request<Note>('POST', '/api/ideas', { text, from }),
 
   screenInfo: () => request<{ monitors: MonitorInfo[]; presets: Preset[]; allowControl: boolean; defaultPreset: string }>('GET', '/api/screen/info'),
 

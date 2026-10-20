@@ -846,6 +846,18 @@ export interface Settings {
     check: boolean;
     autoInstall: boolean;
   };
+  chats: ChatSettings;
+}
+
+export interface ChatSettings {
+  /** Paired phones may read the chats and send messages. */
+  allowPhone: boolean;
+  /** Paired phones may run Claude Code and Codex on this PC. */
+  phoneAgents: boolean;
+  /** Claude Code's permission mode unless a message picks another. */
+  claudeMode: ClaudeCodeMode;
+  /** Codex's sandbox unless a message picks another. */
+  codexSandbox: CodexSandbox;
 }
 
 // ---------- Aurora: music-reactive light, scene and lyrics ----------
@@ -2153,4 +2165,133 @@ export interface ModProgress {
   text: string;
   done: number;
   total: number;
+}
+
+// ---------- Chats ----------
+
+/** OmniHub's own chats, Claude Code's and Codex's conversations on this PC. */
+export type ChatSource = 'omni' | 'claudeCode' | 'codex';
+export type ChatRole = 'user' | 'assistant' | 'tools' | 'notice';
+export type ClaudeCodeMode = 'plan' | 'default' | 'acceptEdits' | 'auto';
+export type CodexSandbox = 'read-only' | 'workspace-write';
+export type NewChatKind = 'claude' | 'openai' | 'claudeCode' | 'codex';
+
+export interface ChatMessage {
+  role: ChatRole;
+  text: string;
+  /** Unix seconds */
+  at: number;
+  tools?: string[];
+  tone?: 'info' | 'warn' | 'bad';
+}
+
+export interface ChatSummary {
+  source: ChatSource;
+  id: string;
+  title: string;
+  preview: string;
+  updated: number;
+  /** The folder a Claude Code or Codex conversation works in. */
+  folder: string | null;
+  model: string | null;
+  /** OmniHub's own chats: claude or openai. */
+  provider: 'claude' | 'openai' | null;
+  branch: string | null;
+  running: boolean;
+}
+
+export interface ChatLive {
+  prompt: string;
+  text: string;
+  tools: string[];
+  note: string;
+  started: number;
+}
+
+export interface ChatView {
+  summary: ChatSummary;
+  messages: ChatMessage[];
+  /** Older messages weren't included. */
+  earlier: boolean;
+  live: ChatLive | null;
+  /** Changed in the last two minutes, not through OmniHub: probably open on the PC. */
+  busyElsewhere: boolean;
+}
+
+export interface ChatDelta {
+  source: ChatSource;
+  id: string;
+  kind: 'text' | 'tool' | 'note' | 'notice' | 'done' | 'error';
+  text: string;
+}
+
+export interface ChatFolder {
+  path: string;
+  name: string;
+  last: number;
+  claudeCode: boolean;
+  codex: boolean;
+}
+
+export interface ChatTool {
+  installed: boolean;
+  path: string | null;
+  version: string | null;
+  hasChats: boolean;
+}
+
+export interface ChatTools {
+  claudeCode: ChatTool;
+  codex: ChatTool;
+  claudeKey: boolean;
+  openaiKey: boolean;
+}
+
+export interface OpenAiSettings {
+  model: string;
+  effort: 'default' | 'low' | 'medium' | 'high';
+  web: boolean;
+  hasKey: boolean;
+}
+
+export interface UsageTokens {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  /** US dollars (Claude Code: what the same tokens would cost on the API). */
+  cost: number;
+}
+
+export interface UsageDay extends UsageTokens {
+  date: string;
+}
+
+export interface UsagePeriod {
+  today: UsageTokens;
+  week: UsageTokens;
+  month: UsageTokens;
+  days: UsageDay[];
+}
+
+export interface UsageLimit {
+  name: string;
+  usedPercent: number | null;
+  reached: boolean;
+  resetsAt: number | null;
+}
+
+export interface AgentUsage {
+  found: boolean;
+  period: UsagePeriod;
+  window: { start: number; end: number; tokens: UsageTokens } | null;
+  limits: UsageLimit[];
+  limitsAt: number | null;
+  plan: string | null;
+}
+
+export interface UsageReport {
+  omni: { claude: UsagePeriod; openai: UsagePeriod; maker: UsageTokens };
+  claudeCode: AgentUsage;
+  codex: AgentUsage;
 }

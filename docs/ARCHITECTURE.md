@@ -315,6 +315,31 @@ incompatibilities resolved by pack order, overrides merged; the result is
 written as a .mrpack or installed as a Minecraft Launcher profile (Fabric or
 Quilt version JSON from their meta services).
 
+## Chats
+
+`chats/` brings conversations together. `ChatHub` lists OmniHub's own chats
+(`data/chats/omni/<id>.json`) with Claude (through `claude/api.rs`, the same
+client as the mod maker) or OpenAI (`openai.rs`: the Responses API streamed,
+`store: false`, the key under DPAPI), and the conversations Claude Code and
+Codex keep on the PC. `claude_code.rs` reads `projects/*/<session>.jsonl`
+(titles, the user's own prompts without reminders or tool output, answers,
+tool calls as one-line labels) and reads `claude -p --output-format
+stream-json --include-partial-messages`; `codex.rs` reads
+`sessions/**/rollout-*.jsonl` (and `.jsonl.zst`, with `ruzstd`), the
+`session_index.jsonl` names, and `codex exec --json` events. `agent.rs` runs
+either program (message on stdin, no window, the process tree stopped on
+Stop) and finds it on PATH, in the registry's PATH and the installers'
+folders. Long transcripts are read from their start and end for the list
+and from their last 24 MB for a conversation. Answers stream as
+`chats:delta` (`text`, `tool`, `note`, `notice`, then `done` or `error`);
+`chats:changed` says when to reload. `usage.rs` adds up Claude Code's token
+counts by hour (reading only new lines of each file, the scan state kept in
+`data/chats/usage-scan.json`), prices them at API rates, works out the
+current 5-hour window and the last limit Claude Code noted, and reads
+Codex's `token_count` events (its totals and the plan's rate limits).
+OmniHub's own use goes into a ledger per day. The phone reaches all of this
+through `/api/chats*` and `/api/ideas`.
+
 ## Lights (Govee)
 
 `govee/` drives Govee lights: `lan.rs` (scan, JSON commands, `razer` frames

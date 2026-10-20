@@ -26,6 +26,29 @@ pub struct Settings {
     pub media: MediaSettings,
     pub updates: UpdateSettings,
     pub visuals: VisualSettings,
+    pub chats: ChatSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ChatSettings {
+    /// Paired phones may read the chats and send messages.
+    pub allow_phone: bool,
+    /// Paired phones may run Claude Code and Codex on this PC.
+    pub phone_agents: bool,
+    /// The permission mode Claude Code gets unless a message picks another
+    /// (`plan`, `default`, `acceptEdits` or `auto`; never one that skips
+    /// permissions).
+    pub claude_mode: String,
+    /// Codex's sandbox unless a message picks another (`read-only` or
+    /// `workspace-write`).
+    pub codex_sandbox: String,
+}
+
+impl Default for ChatSettings {
+    fn default() -> Self {
+        ChatSettings { allow_phone: true, phone_agents: true, claude_mode: "acceptEdits".into(), codex_sandbox: "workspace-write".into() }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -22,6 +22,7 @@ import { ScreenScreen } from './screens/Screen';
 import { PowerScreen } from './screens/Power';
 import { MusicScreen } from './screens/Music';
 import { MoreScreen, type MorePage } from './screens/More';
+import { ChatsScreen } from './screens/Chats';
 
 type Phase = 'boot' | 'pair' | 'ready' | 'unreachable';
 
@@ -145,6 +146,7 @@ export function App() {
   if (info && !info.features.screen) hidden.push('screen');
   if (info && !info.features.power) hidden.push('power');
   if (info && !info.features.media) hidden.push('music');
+  if (info && !info.features.chats) hidden.push('chats');
   useEffect(() => {
     if (hidden.includes(tab)) setTab('home');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -218,6 +220,7 @@ export function App() {
       <ConnectionBanner />
       <main className="absolute inset-0 overflow-hidden">
         {panel('home', <HomeScreen active={tab === 'home'} openMore={(p) => (setMorePage(p), setTab('more'))} />)}
+        {!hidden.includes('chats') && panel('chats', <ChatsScreen active={tab === 'chats'} />)}
         {panel('files', <FilesScreen active={tab === 'files'} />)}
         {!hidden.includes('music') && panel('music', <MusicScreen active={tab === 'music'} />)}
         {!hidden.includes('screen') && panel('screen', <ScreenScreen active={tab === 'screen'} />)}

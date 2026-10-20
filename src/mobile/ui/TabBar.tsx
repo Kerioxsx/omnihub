@@ -1,11 +1,12 @@
 import { motion } from 'motion/react';
-import { House, FolderOpen, Music2, MonitorPlay, Power, Ellipsis } from 'lucide-react';
+import { House, FolderOpen, Music2, MonitorPlay, Power, Ellipsis, MessagesSquare } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useApp, type Tab } from '../state';
 import { cx, vibrate } from '../lib/util';
 
 const ITEMS: { tab: Tab; label: string; icon: ReactNode }[] = [
   { tab: 'home', label: 'Home', icon: <House size={22} /> },
+  { tab: 'chats', label: 'Chats', icon: <MessagesSquare size={22} /> },
   { tab: 'files', label: 'Files', icon: <FolderOpen size={22} /> },
   { tab: 'music', label: 'Music', icon: <Music2 size={22} /> },
   { tab: 'screen', label: 'Screen', icon: <MonitorPlay size={22} /> },
@@ -15,6 +16,7 @@ const ITEMS: { tab: Tab; label: string; icon: ReactNode }[] = [
 
 export function TabBar({ hidden, badges }: { hidden: Tab[]; badges: Partial<Record<Tab, number>> }) {
   const { tab, setTab } = useApp();
+  const shown = ITEMS.filter((i) => !hidden.includes(i.tab));
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-glass backdrop-blur-2xl backdrop-saturate-150"
@@ -22,7 +24,7 @@ export function TabBar({ hidden, badges }: { hidden: Tab[]; badges: Partial<Reco
       aria-label="Sections"
     >
       <div className="mx-auto flex h-[var(--tabbar-h)] max-w-[640px] items-stretch px-2">
-        {ITEMS.filter((i) => !hidden.includes(i.tab)).map((i) => {
+        {shown.map((i) => {
           const active = i.tab === tab;
           const badge = badges[i.tab] ?? 0;
           return (
@@ -35,7 +37,7 @@ export function TabBar({ hidden, badges }: { hidden: Tab[]; badges: Partial<Reco
               aria-current={active ? 'page' : undefined}
               className={cx('relative flex flex-1 flex-col items-center justify-center gap-1 transition-colors', active ? 'text-fg' : 'text-faint')}
             >
-              <div className="relative grid h-8 w-14 place-items-center">
+              <div className={cx('relative grid h-8 place-items-center', shown.length > 6 ? 'w-12' : 'w-14')}>
                 {active && (
                   <motion.div
                     layoutId="tab-pill"

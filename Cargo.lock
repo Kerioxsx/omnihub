@@ -3840,7 +3840,7 @@ dependencies = [
 
 [[package]]
 name = "omnihub"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "omnihub-core",
@@ -3865,7 +3865,7 @@ dependencies = [
 
 [[package]]
 name = "omnihub-core"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3889,6 +3889,7 @@ dependencies = [
  "if-addrs",
  "image",
  "jpeg-encoder",
+ "libc",
  "lz4_flex",
  "mime_guess",
  "notify",
@@ -3903,6 +3904,7 @@ dependencies = [
  "rusqlite",
  "rust-embed",
  "rustls",
+ "ruzstd",
  "serde",
  "serde_json",
  "sevenz-rust2",
@@ -4866,6 +4868,15 @@ name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+
+[[package]]
+name = "ruzstd"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7c1c839d570d835527c9a5e4db7cb2198683a988cb9d7293fc8674e6bd58fc8"
+dependencies = [
+ "twox-hash",
+]
 
 [[package]]
 name = "ryu"

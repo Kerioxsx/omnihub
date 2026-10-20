@@ -546,3 +546,75 @@ fn games_from_the_phone() {
     });
     f.core.remote.stop();
 }
+
+#[test]
+fn chats_from_the_phone() {
+    // Claude Code's and Codex's folders for this test only.
+    let homes = tempfile::tempdir().unwrap();
+    let claude_home = homes.path().join("claude");
+    let proj = homes.path().join("shop");
+    std::fs::create_dir_all(&proj).unwrap();
+    let id = "5d5e2c1e-8f39-4c39-9a71-0b6d2a6e9f10";
+    let file = claude_home.join("projects").join("-shop").join(format!("{id}.jsonl"));
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    let line = |v: Value| format!("{v}\n");
+    let cwd = proj.to_string_lossy().to_string();
+    let hour_ago = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+    std::fs::write(
+        &file,
+        line(json!({"type": "user", "cwd": cwd, "timestamp": hour_ago, "message": {"role": "user", "content": "Make the checkout faster"}}))
+            + &line(json!({"type": "assistant", "cwd": cwd, "timestamp": hour_ago, "message": {"id": "m1", "model": "claude-opus-5-5", "content": [{"type": "text", "text": "Done: it caches prices now."}], "usage": {"input_tokens": 5, "output_tokens": 7}}})),
+    )
+    .unwrap();
+    std::env::set_var("CLAUDE_CONFIG_DIR", &claude_home);
+    std::env::set_var("CODEX_HOME", homes.path().join("codex"));
+    let f = setup(false);
+    std::env::remove_var("CLAUDE_CONFIG_DIR");
+    std::env::remove_var("CODEX_HOME");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let base = &f.base;
+        let pairing = f.core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        let info: Value = c.get(format!("{base}/api/info")).send().await.unwrap().json().await.unwrap();
+        assert_eq!((info["features"]["chats"].clone(), info["features"]["chatAgents"].clone()), (json!(true), json!(true)));
+
+        let l: Value = c.get(format!("{base}/api/chats")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let chat = l["chats"].as_array().unwrap().iter().find(|c| c["id"] == id).unwrap().clone();
+        assert_eq!((chat["source"].clone(), chat["title"].clone(), chat["folder"].clone()), (json!("claudeCode"), json!("Make the checkout faster"), json!(cwd)));
+        assert_eq!(l["claudeMode"], "acceptEdits");
+        let v: Value = c.get(format!("{base}/api/chats/claudeCode/{id}")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(v["messages"][1]["text"], "Done: it caches prices now.");
+        assert_eq!(c.get(format!("{base}/api/chats/nope/{id}")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::NOT_FOUND);
+        let folders: Value = c.get(format!("{base}/api/chats/folders")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(folders[0]["path"], json!(cwd));
+
+        // No key yet; and from the phone, agents only start in folders they already know.
+        let r = c.post(format!("{base}/api/chats/new")).header("authorization", &auth).json(&json!({ "kind": "claude", "text": "hi" })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        assert!(r.text().await.unwrap().contains("Anthropic API key"));
+        let other = f._dir.path().to_string_lossy().to_string();
+        let r = c.post(format!("{base}/api/chats/new")).header("authorization", &auth).json(&json!({ "kind": "claudeCode", "folder": other, "text": "hi", "mode": "acceptEdits" })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        assert!(r.text().await.unwrap().contains("already work in"));
+
+        let n: Value = c.post(format!("{base}/api/ideas")).header("authorization", &auth).json(&json!({ "text": "Sell mods\nas a bundle", "from": "Claude Code · Checkout" })).send().await.unwrap().json().await.unwrap();
+        assert_eq!((n["kind"].clone(), n["title"].clone()), (json!("idea"), json!("Sell mods")));
+        let ideas: Value = c.get(format!("{base}/api/ideas")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(ideas[0]["id"], n["id"]);
+
+        let u: Value = c.get(format!("{base}/api/chats/usage")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(u["claudeCode"]["found"], true);
+        assert_eq!(u["claudeCode"]["period"]["days"][0]["output"], 7);
+
+        f.core.update_settings(&json!({ "chats": { "phoneAgents": false } })).unwrap();
+        let r = c.post(format!("{base}/api/chats/claudeCode/{id}/send")).header("authorization", &auth).json(&json!({ "text": "go on" })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        f.core.update_settings(&json!({ "chats": { "allowPhone": false } })).unwrap();
+        assert_eq!(c.get(format!("{base}/api/chats")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+        assert_eq!(c.get(format!("{base}/api/ideas")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+    });
+    f.core.remote.stop();
+}

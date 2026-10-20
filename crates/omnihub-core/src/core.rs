@@ -70,6 +70,8 @@ pub struct AppCore {
     pub govee: Arc<crate::govee::GoveeHub>,
     /// Games' mods, Claude's mod maker and Minecraft modpacks.
     pub mods: Arc<crate::mods::ModHub>,
+    /// Chats with Claude and ChatGPT's models, and Claude Code and Codex conversations.
+    pub chats: Arc<crate::chats::ChatHub>,
     browser_integration: bool,
     /// Drives already warned about (root → when), so each warns once a day.
     low_space_warned: parking_lot::Mutex<std::collections::HashMap<String, i64>>,
@@ -94,6 +96,7 @@ impl AppCore {
         let media = crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media);
         let games = crate::games::GameHub::new(&paths.data, events.clone(), procs.clone());
         let mods = crate::mods::ModHub::new(&paths.data, events.clone(), games.clone(), procs.clone());
+        let chats = crate::chats::ChatHub::new(&paths.data, events.clone(), mods.claude.clone());
         let visual = crate::media::visual::VisualHub::new(events.clone(), opts.fake_media || std::env::var("OMNIHUB_FAKE_MEDIA").is_ok_and(|v| v == "1"));
         let core = Arc::new(AppCore {
             notes: Notes::new(db.clone(), events.clone()),
@@ -107,6 +110,7 @@ impl AppCore {
             browser_integration: opts.browser_integration,
             games,
             mods,
+            chats,
             updater: Arc::new(crate::update::Updater::new(&paths.cache, &paths.data, events.clone())),
             procs,
             media: media.clone(),

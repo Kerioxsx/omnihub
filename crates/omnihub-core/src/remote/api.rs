@@ -103,6 +103,14 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/apps/{id}/launch", post(app_launch))
         .route("/api/notes", get(notes_list).post(notes_create))
         .route("/api/notes/{id}", get(notes_get))
+        .route("/api/chats", get(chats_list))
+        .route("/api/chats/new", post(chats_new))
+        .route("/api/chats/folders", get(chats_folders))
+        .route("/api/chats/usage", get(chats_usage))
+        .route("/api/chats/{source}/{id}", get(chats_view))
+        .route("/api/chats/{source}/{id}/send", post(chats_send))
+        .route("/api/chats/{source}/{id}/stop", post(chats_stop))
+        .route("/api/ideas", get(ideas_list).post(ideas_save))
         .route("/api/screen/info", get(screen_info))
         .route("/api/vault/session", post(vault_session).delete(vault_end))
         .route("/api/vault/entries", get(vault_entries))
@@ -186,6 +194,8 @@ struct Features {
     media: bool,
     tasks: bool,
     games: bool,
+    chats: bool,
+    chat_agents: bool,
 }
 
 fn features(core: &AppCore, tls: bool) -> Features {
@@ -202,6 +212,8 @@ fn features(core: &AppCore, tls: bool) -> Features {
         tasks: s.remote.allow_tasks,
         games: s.remote.allow_app_launch,
         media: s.media.allow_phone,
+        chats: s.chats.allow_phone,
+        chat_agents: s.chats.allow_phone && s.chats.phone_agents,
     }
 }
 
@@ -960,6 +972,137 @@ async fn notes_create(State(core): State<Ctx>, Extension(dev): Extension<Device>
     Ok(Json(note))
 }
 
+// ---------- chats ----------
+
+fn chats_allowed(core: &AppCore) -> ApiResult<()> {
+    if !core.settings.get().chats.allow_phone {
+        return Err(ApiError::forbidden("chats are not shared with the phone (Settings → Chats)"));
+    }
+    Ok(())
+}
+
+fn chat_source(s: &str) -> ApiResult<crate::chats::Source> {
+    crate::chats::Source::parse(s).ok_or_else(|| ApiError::not_found("no such chat"))
+}
+
+/// Running Claude Code or Codex from a phone: allowed in Settings, and
+/// only in folders they already work in.
+fn agents_allowed(core: &AppCore) -> ApiResult<()> {
+    let s = core.settings.get().chats;
+    if !s.phone_agents {
+        return Err(ApiError::forbidden("running Claude Code and Codex from the phone is turned off (Settings → Chats)"));
+    }
+    Ok(())
+}
+
+async fn chats_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    chats_allowed(&core)?;
+    let c = core.clone();
+    let (list, tools) = tokio::task::spawn_blocking(move || (c.chats.list(), c.chats.tools())).await?;
+    let s = core.settings.get().chats;
+    Ok(Json(json!({ "chats": list, "tools": tools, "agents": s.phone_agents, "claudeMode": s.claude_mode, "codexSandbox": s.codex_sandbox })))
+}
+
+async fn chats_view(State(core): State<Ctx>, UrlPath((source, id)): UrlPath<(String, String)>) -> ApiResult<Json<crate::chats::ChatView>> {
+    chats_allowed(&core)?;
+    let source = chat_source(&source)?;
+    let c = core.clone();
+    tokio::task::spawn_blocking(move || c.chats.view(source, &id)).await?.map(Json).map_err(ApiError::not_found)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatSend {
+    text: String,
+    #[serde(default)]
+    mode: String,
+}
+
+async fn chats_send(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath((source, id)): UrlPath<(String, String)>, Json(m): Json<ChatSend>) -> ApiResult<Json<serde_json::Value>> {
+    chats_allowed(&core)?;
+    let source = chat_source(&source)?;
+    if source != crate::chats::Source::Omni {
+        agents_allowed(&core)?;
+    }
+    let c = core.clone();
+    let mode = m.mode.clone();
+    let r = tokio::task::spawn_blocking(move || c.chats.send(source, &id, &m.text, &m.mode)).await?;
+    if source != crate::chats::Source::Omni {
+        core.audit.record(&actor(&dev), "chats.agent", &format!("{} {mode}", source.label()), r.is_ok());
+    }
+    r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn chats_stop(State(core): State<Ctx>, UrlPath((source, id)): UrlPath<(String, String)>) -> ApiResult<Json<serde_json::Value>> {
+    chats_allowed(&core)?;
+    core.chats.stop(chat_source(&source)?, &id);
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatNew {
+    kind: crate::chats::NewKind,
+    #[serde(default)]
+    folder: Option<String>,
+    text: String,
+    #[serde(default)]
+    mode: String,
+}
+
+async fn chats_new(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(n): Json<ChatNew>) -> ApiResult<Json<crate::chats::ChatSummary>> {
+    chats_allowed(&core)?;
+    let agent = matches!(n.kind, crate::chats::NewKind::ClaudeCode | crate::chats::NewKind::Codex);
+    if agent {
+        agents_allowed(&core)?;
+    }
+    let c = core.clone();
+    let folder = n.folder.clone();
+    let r = tokio::task::spawn_blocking(move || {
+        if agent && !n.folder.as_deref().is_some_and(|f| c.chats.known_folder(f)) {
+            return Err("From the phone, pick one of the folders Claude Code or Codex already work in.".to_string());
+        }
+        c.chats.create(n.kind, n.folder.as_deref(), &n.text, &n.mode)
+    })
+    .await?;
+    if agent {
+        core.audit.record(&actor(&dev), "chats.agent", &format!("new in {}", folder.unwrap_or_default()), r.is_ok());
+    }
+    r.map(Json).map_err(ApiError::bad)
+}
+
+async fn chats_folders(State(core): State<Ctx>) -> ApiResult<Json<Vec<crate::chats::Folder>>> {
+    chats_allowed(&core)?;
+    let c = core.clone();
+    Ok(Json(tokio::task::spawn_blocking(move || c.chats.folders()).await?))
+}
+
+async fn chats_usage(State(core): State<Ctx>) -> ApiResult<Json<crate::chats::usage::Report>> {
+    chats_allowed(&core)?;
+    let c = core.clone();
+    Ok(Json(tokio::task::spawn_blocking(move || c.chats.usage_report(crate::chats::ChatHub::maker_tokens(&c.mods.maker.projects(None)))).await?))
+}
+
+async fn ideas_list(State(core): State<Ctx>) -> ApiResult<Json<Vec<crate::notes::Note>>> {
+    chats_allowed(&core)?;
+    Ok(Json(core.notes.list(&crate::notes::NoteFilter { kind: Some(crate::notes::NoteKind::Idea), limit: Some(300), ..Default::default() })?))
+}
+
+#[derive(Deserialize)]
+struct IdeaNew {
+    text: String,
+    #[serde(default)]
+    from: Option<String>,
+}
+
+async fn ideas_save(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(i): Json<IdeaNew>) -> ApiResult<Json<crate::notes::Note>> {
+    chats_allowed(&core)?;
+    let n = crate::chats::save_idea(&core, &i.text, i.from.as_deref()).map_err(ApiError::bad)?;
+    core.audit.record(&actor(&dev), "ideas.save", &n.title, true);
+    Ok(Json(n))
+}
+
 // ---------- vault ----------
 
 fn vault_allowed(core: &AppCore) -> ApiResult<()> {
@@ -1070,7 +1213,7 @@ fn for_phone(ev: &crate::events::Event, device_id: &str) -> bool {
     if ev.topic == "inbox:removed" {
         return true;
     }
-    ["power:", "notes:", "media:", "games:"].iter().any(|p| ev.topic.starts_with(p))
+    ["power:", "notes:", "media:", "games:", "chats:"].iter().any(|p| ev.topic.starts_with(p))
 }
 
 async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws: WebSocketUpgrade) -> ApiResult<Response> {
@@ -1088,7 +1231,7 @@ async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws
             tokio::select! {
                 ev = events.recv() => {
                     let Ok(ev) = ev else { continue };
-                    if !for_phone(&ev, &device_id) {
+                    if !for_phone(&ev, &device_id) || (ev.topic.starts_with("chats:") && !core.settings.get().chats.allow_phone) {
                         continue;
                     }
                     let text = serde_json::to_string(&ev).unwrap_or_default();

@@ -460,6 +460,8 @@
 
   const PHONES = [
     ['phone-home', 'Home', 'CPU, memory, drives and what’s playing, live.'],
+    ['phone-chats', 'Chats', 'Claude, ChatGPT, Claude Code and Codex conversations from your PC.'],
+    ['phone-chat', 'Keep texting', 'Message Claude Code in its project and watch it work.'],
     ['phone-music', 'Music', 'Cover art and controls for whatever plays on the PC.'],
     ['phone-lyrics', 'Lyrics', 'Full-screen lyrics in time — tap a line to jump there.'],
     ['phone-sound', 'Volume & calls', 'Every app’s volume, mute your mic, Mute mic and Deafen for a Discord call.'],

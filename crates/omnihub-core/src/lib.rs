@@ -8,6 +8,7 @@ pub mod apps;
 pub mod audit;
 pub mod browser;
 pub mod capture;
+pub mod chats;
 pub mod claude;
 pub mod core;
 pub mod crashlog;

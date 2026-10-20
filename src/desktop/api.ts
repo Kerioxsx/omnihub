@@ -397,6 +397,32 @@ export const api = {
     install: (id: string) => call<T.MakerProject>('maker_install', { id }),
   },
 
+  /** Chats: `chats:delta` streams answers, `chats:changed` says when to reload. */
+  chats: {
+    list: () => call<T.ChatSummary[]>('chats_list'),
+    view: (source: T.ChatSource, id: string) => call<T.ChatView>('chats_view', { source, id }),
+    send: (source: T.ChatSource, id: string, text: string, mode = '') => call<void>('chats_send', { source, id, text, mode }),
+    create: (kind: T.NewChatKind, text: string, folder: string | null = null, mode = '') => call<T.ChatSummary>('chats_create', { kind, folder, text, mode }),
+    stop: (source: T.ChatSource, id: string) => call<void>('chats_stop', { source, id }),
+    rename: (id: string, title: string) => call<void>('chats_rename', { id, title }),
+    remove: (id: string) => call<void>('chats_delete', { id }),
+    folders: () => call<T.ChatFolder[]>('chats_folders'),
+    tools: () => call<T.ChatTools>('chats_tools'),
+    usage: () => call<T.UsageReport>('chats_usage'),
+  },
+
+  ideas: {
+    list: () => call<T.Note[]>('ideas_list'),
+    save: (text: string, from: string | null = null) => call<T.Note>('ideas_save', { text, from }),
+  },
+
+  openai: {
+    settings: () => call<T.OpenAiSettings>('openai_settings'),
+    update: (patch: Partial<T.OpenAiSettings>) => call<T.OpenAiSettings>('openai_update', { patch }),
+    setKey: (key: string) => call<void>('openai_set_key', { key }),
+    models: () => call<string[]>('openai_models'),
+  },
+
   /** Minecraft (Java) modpacks, mixed. */
   minecraft: {
     status: () => call<T.McStatus>('mc_status'),

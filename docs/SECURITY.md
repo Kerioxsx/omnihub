@@ -253,6 +253,38 @@ and lets a phone do some of that. This is what protects each part.
   `.minecraft\omnihub`; removing a mix removes both. It refuses to run while
   the Minecraft Launcher is open.
 
+## Chats
+
+- OmniHub's own chats use the Claude key above, or the user's OpenAI API
+  key, kept the same way: DPAPI (entropy `omnihub-openai`), never returned to
+  the window, never written by a settings patch, sent only in the
+  `Authorization` header to `https://api.openai.com`, with additions and
+  removals in the audit log. Conversations are kept on this PC
+  (`data/chats/omni`); each message sends the conversation so far, and
+  OpenAI requests ask it not to store them (`store: false`).
+- Claude Code's and Codex's conversations are read from the files they keep
+  (`~/.claude/projects`, `~/.codex/sessions`, or `CLAUDE_CONFIG_DIR` /
+  `CODEX_HOME`), read-only. OmniHub never reads their sign-in or credential
+  files and never calls their services itself: to send a message it runs the
+  installed `claude` or `codex` program, which uses the user's own sign-in.
+- Those runs: one process per message, in the conversation's own folder,
+  without a console window; the message goes on standard input, never on the
+  command line, so nothing typed can become a flag. Claude Code gets one of
+  `plan`, `default`, `acceptEdits` or `auto` (never `bypassPermissions`), and
+  anything that would need the user's OK is refused by Claude Code and listed
+  afterwards; Codex gets the `read-only` or `workspace-write` sandbox (never
+  full access). One run per conversation at a time; Stop ends the whole
+  process tree. Each run is in the audit log (`chats.agent`).
+- From a paired phone: chats are shared unless turned off (Chats → Keys and
+  access); running Claude Code or Codex can be turned off on its own, and a
+  phone can only start them in folders they already work in. When chats
+  aren't shared, no chat events go to phones either.
+- Ideas are ordinary notes (kind Idea) and follow the notes' rules (and the
+  Claude folder export, when ideas go there).
+- Usage is added up on this PC from the same files and OmniHub's own counts;
+  no account pages or private APIs are read. The links open the providers'
+  own usage pages in the browser.
+
 ## Lights (Govee)
 
 - Local network only, unless the user adds a Govee API key: discovery is the
@@ -438,6 +470,9 @@ internet only for:
   directly with yt-dlp (see Aurora above).
 - **Animated covers** (Aurora, on by default, can be turned off): the title
   and artist go to Apple Music's catalogue (see Aurora above).
+- **Chats** (only when you use them): your conversation with Claude goes to
+  Anthropic's API and with ChatGPT's models to OpenAI's API, with your own
+  keys. Claude Code and Codex talk to their own services themselves.
 - **Breach check** (Vault → Health, only when you run it): the first five
   characters of each password's SHA-1 go to Have I Been Pwned's range API
   (k-anonymity); passwords never leave the PC.
