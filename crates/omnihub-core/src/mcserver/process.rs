@@ -251,17 +251,20 @@ impl Proc {
             let (level, msg) = split(&text);
             let said = read(msg);
             // OmniHub's own questions and their answers stay out of the console.
+            // The answers are handed over once the line has been taken in below,
+            // so whoever asked sees what it changed.
             let mut quiet = false;
+            let mut answers = Vec::new();
             {
                 let mut ws = self.waiters.lock();
                 ws.retain(|w| {
                     if (w.want)(msg) {
                         quiet = true;
-                        let _ = w.tx.send(Some(msg.to_string()));
+                        answers.push((w.tx.clone(), Some(msg.to_string())));
                     }
                     if (w.end)(msg) {
                         quiet = true;
-                        let _ = w.tx.send(None);
+                        answers.push((w.tx.clone(), None));
                         return false;
                     }
                     true
@@ -281,6 +284,9 @@ impl Proc {
                 }
             }
             on_line(&line, &said);
+            for (tx, a) in answers {
+                let _ = tx.send(a);
+            }
         }
     }
 
