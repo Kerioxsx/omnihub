@@ -65,7 +65,7 @@ pub fn fix() -> Fix {
     let events = EventBus::new();
     let procs = Arc::new(crate::system::procs::ProcessMonitor::new());
     let games = crate::games::GameHub::new(&data, events.clone(), procs.clone());
-    let mods = crate::mods::ModHub::with(&data, events.clone(), games, procs, crate::mods::Endpoints { modrinth: web.base.clone(), fabric_meta: web.base.clone(), quilt_meta: web.base.clone(), roaming: Some(t.path().join("Roaming")), ..Default::default() });
+    let mods = crate::mods::ModHub::with(&data, events.clone(), games, procs, crate::mods::Endpoints { modrinth: web.base.clone(), fabric_meta: web.base.clone(), quilt_meta: web.base.clone(), roaming: Some(t.path().join("Roaming")), home: Some(t.path().join("home")), ..Default::default() });
     let w = &web.base;
     let ep = Endpoints {
         web: install::Endpoints { piston: w.clone(), fill: w.clone(), fabric_meta: w.clone(), quilt_meta: w.clone(), quilt_maven: w.clone(), forge_maven: w.clone(), forge_files: w.clone(), neo_maven: w.clone(), adoptium: w.clone() },
@@ -141,6 +141,44 @@ fn makes_vanilla_paper_and_fabric_servers() {
     assert!(!f.data.join("x.jar").exists() && !f.data.join("x.part").exists());
     h.delete(&fab.server.id, true).unwrap();
     assert!(!fd.exists());
+}
+
+/// A modpack Prism Launcher installed becomes a server: its loader and
+/// version, its server-side mods (from this PC), settings and picture.
+#[test]
+fn makes_a_server_from_another_launchers_modpack() {
+    let f = fix();
+    let h = &f.hub;
+    let inst = f._t.path().join("Roaming/PrismLauncher/instances/Friends");
+    let game = inst.join(".minecraft");
+    std::fs::create_dir_all(game.join("mods")).unwrap();
+    std::fs::create_dir_all(game.join("config")).unwrap();
+    std::fs::write(inst.join("instance.cfg"), "name=Friends pack\niconKey=friends\n").unwrap();
+    std::fs::write(inst.join("mmc-pack.json"), r#"{"components":[{"uid":"net.minecraft","version":"26.3"},{"uid":"net.fabricmc.fabric-loader","version":"0.19.5"}]}"#).unwrap();
+    let icons = f._t.path().join("Roaming/PrismLauncher/icons");
+    std::fs::create_dir_all(&icons).unwrap();
+    std::fs::write(icons.join("friends.png"), crate::mods::cover::png(&image::RgbaImage::from_pixel(32, 32, image::Rgba([1, 2, 3, 255])))).unwrap();
+    let lithium = crate::mods::tests::zip_of(&[("fabric.mod.json", br#"{"id":"lithium","environment":"*"}"#)]);
+    let zoom = crate::mods::tests::zip_of(&[("fabric.mod.json", br#"{"id":"zoomify","environment":"client"}"#)]);
+    std::fs::write(game.join("mods/lithium.jar"), &lithium).unwrap();
+    std::fs::write(game.join("mods/zoomify.jar"), &zoom).unwrap();
+    std::fs::write(game.join("config/lithium.properties"), b"mixin.ai=true").unwrap();
+    std::fs::write(game.join("options.txt"), b"fov:0.5").unwrap();
+
+    let packs = h.mods.minecraft.launcher_packs();
+    assert_eq!(packs.len(), 1);
+    let v = h.create(NewServer { from: Some(FromPack::Launcher { id: packs[0].id.clone() }), mc: String::new(), ..new("Friends", Flavor::Vanilla) }).unwrap();
+    wait("install from the pack", 20, || state(h, &v.server.id) == State::Stopped);
+    let s = h.server(&v.server.id).unwrap();
+    assert_eq!((s.flavor, s.mc.as_str(), s.loader.as_str(), s.from.as_deref()), (Flavor::Fabric, "26.3", "0.19.5", Some("Prism Launcher: Friends pack")));
+    let d = PathBuf::from(&s.dir);
+    assert_eq!(std::fs::read(d.join("mods/lithium.jar")).unwrap(), lithium);
+    assert!(!d.join("mods/zoomify.jar").exists(), "client-only mods stay off");
+    assert_eq!(std::fs::read(d.join("config/lithium.properties")).unwrap(), b"mixin.ai=true");
+    assert!(!d.join("options.txt").exists());
+    assert!(d.join("server-icon.png").is_file());
+    assert!(std::fs::read(game.join("mods/zoomify.jar")).is_ok(), "the launcher's own files are left alone");
+    assert!(h.create(NewServer { from: Some(FromPack::Launcher { id: "0".repeat(16) }), ..new("Gone", Flavor::Vanilla) }).unwrap_err().contains("isn't there"));
 }
 
 #[test]

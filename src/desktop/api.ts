@@ -431,6 +431,14 @@ export const api = {
     addModrinth: (project: string, version: string) => call<T.McSource>('mc_add_modrinth', { project, version }),
     addFile: (path: string) => call<T.McSource>('mc_add_file', { path }),
     addFolder: (path: string) => call<T.McSource>('mc_add_folder', { path }),
+    /** Modpacks Prism Launcher, CurseForge and the Modrinth App installed (looked for again). */
+    launcherPacks: () => call<T.McLauncherPacks>('mc_launcher_packs'),
+    /** That modpack's picture as a data: address, if it has one. */
+    launcherIcon: (id: string) => call<string | null>('mc_launcher_icon', { id }),
+    addLauncherPack: (id: string) => call<T.McSource>('mc_add_launcher_pack', { id }),
+    /** Also look in this folder (a launcher's folder, its instances folder or one instance). */
+    addLauncherPlace: (path: string) => call<T.McLauncherPacks>('mc_add_launcher_place', { path }),
+    removeLauncherPlace: (path: string) => call<T.McLauncherPacks>('mc_remove_launcher_place', { path }),
     removeSource: (id: string) => call<void>('mc_remove_source', { id }),
     plan: (name: string, ids: string[], mc: string, loader: T.McLoader) => call<T.McMix>('mc_plan', { name, ids, mc, loader }),
     exportPack: (id: string, path: string) => call<void>('mc_export', { id, path }),

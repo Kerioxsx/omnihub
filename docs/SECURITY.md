@@ -264,6 +264,18 @@ and lets a phone do some of that. This is what protects each part.
   account's user name). What is sent: the packs' icons (256 px PNGs) and a
   fixed prompt; the mix's name isn't sent. Connecting, disconnecting and each painted cover are in the
   audit log. OmniHub ships no key of its own.
+- **Installed modpacks** (`mods/launchers.rs`): OmniHub reads where Prism
+  Launcher (and PolyMC), CurseForge and the Modrinth App keep their modpacks
+  (`%AppData%\PrismLauncher` and its `InstanceDir`, `%USERPROFILE%\curseforge\minecraft\Instances`
+  and the old `Documents\Curse` folder, `%AppData%\ModrinthApp`), plus folders
+  the user adds (kept in `data/mods/minecraft/places.json`). It never writes
+  there: `instance.cfg`, `mmc-pack.json` and `minecraftinstance.json` are read
+  (the last at most 64 MB), and the Modrinth App's `app.db` is opened with
+  SQLite's read-only flag (its folder names are checked like pack paths, so a
+  row can't point outside `profiles`). Icon keys may not hold a path. Mixing
+  one copies its mods and configs into OmniHub's mixer; a server made from one
+  gets copies too. Their SHA-1s go to Modrinth (as for any instance folder) to
+  find Modrinth's copies and leave client-only mods off servers.
 - The Minecraft mixer adds a profile to `launcher_profiles.json` (a backup is
   kept as `launcher_profiles.json.omnihub-backup`) and a folder under
   `.minecraft\omnihub`; removing a mix removes both. It refuses to run while

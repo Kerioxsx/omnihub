@@ -432,6 +432,7 @@
     ['send', 'Lag under load', 'Pings while the line is busy, grades it A+ to F and tells you what fixes it — usually the router, a cable, or a paused download.'],
     ['tasks', 'Optimize this PC', 'Monitor at its full refresh rate, Ultimate power plan, no background game recording, GPU scheduling and more — each one checked and undoable.'],
     ['server', 'Minecraft servers, 24/7', 'Vanilla, Paper, Fabric, Quilt, Forge or NeoForge on your PC: players and their inventories, a live map, mods and plugins, backups — from your phone too.'],
+    ['apps', 'Your installed modpacks', 'Prism Launcher, CurseForge and the Modrinth App modpacks on this PC, with version, loader and mods — mix one, or host it as a server in a click.'],
     ['shield', 'Friends without a paid account', 'Let everyone join your server if you like: OmniHub guards your operators, so nobody can take over with your name.'],
     ['apps', 'Finds your games', 'Epic, Steam, Riot, Roblox and Minecraft games on this PC, ready to add with one click.'],
     ['music', 'Aurora', 'The song’s cover as a music-reactive visual, a neon edge light in its colours, and huge lyrics word by word — full screen or on the Music page.'],

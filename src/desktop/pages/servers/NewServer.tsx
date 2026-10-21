@@ -1,9 +1,10 @@
 // Making a server: a fresh world of any type and version, or one made from
-// a Modrinth modpack, one of the user's mixes, or a .mrpack file. The EULA
+// a Modrinth modpack, one of the user's mixes, a modpack another launcher
+// installed (Prism Launcher, CurseForge, Modrinth App), or a .mrpack file. The EULA
 // is the user's to accept; nothing starts until they do.
 
-import type { McMix, McPackHit, McPackVersion, SrvDifficulty, SrvFlavor, SrvFrom, SrvGamemode, SrvNew } from '@shared/types';
-import { Blocks, ExternalLink, FileArchive, Globe, Package, Server, Sparkles } from 'lucide-react';
+import type { McLauncherPack, McMix, McPackHit, McPackVersion, SrvDifficulty, SrvFlavor, SrvFrom, SrvGamemode, SrvNew } from '@shared/types';
+import { Blocks, ExternalLink, FileArchive, Globe, HardDrive, Package, Server, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
@@ -14,11 +15,14 @@ import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { useDebounced } from '../../lib/hooks';
 import { toast } from '../../state/toasts';
+import { LauncherBadge, LauncherIcon, loaderText } from '../mods/InstalledPacks';
 import { EVERYONE_NOTE, FLAVORS, JoinChoice, flavorLabel } from './shared';
 
-type Source = 'fresh' | 'modpack' | 'mix' | 'file';
+type Source = 'fresh' | 'modpack' | 'mix' | 'installed' | 'file';
 
 const LOADER_FLAVOR: Record<string, SrvFlavor> = { fabric: 'fabric', quilt: 'quilt', forge: 'forge', neoforge: 'neoForge' };
+/** An installed modpack's server type: its loader's, or vanilla with none. */
+const launcherFlavor = (p: McLauncherPack): SrvFlavor | null => (p.loader ? (LOADER_FLAVOR[p.loader] ?? null) : 'vanilla');
 
 function memoryHint(mb: number, flavor: SrvFlavor, modded: boolean): string {
   if (modded || flavor === 'fabric' || flavor === 'forge' || flavor === 'neoForge' || flavor === 'quilt') return mb < 4096 ? 'Modded servers usually need 4 GB or more.' : 'Enough for most modpacks; big ones like 8 GB.';
@@ -51,6 +55,8 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
   const [mixes, setMixes] = useState<McMix[] | null>(null);
   const [mixId, setMixId] = useState('');
   const [file, setFile] = useState('');
+  const [installed, setInstalled] = useState<McLauncherPack[] | null>(null);
+  const [installedId, setInstalledId] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -62,6 +68,9 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
     } else if (preset?.type === 'file') {
       setSource('file');
       setFile(preset.path);
+    } else if (preset?.type === 'launcher') {
+      setSource('installed');
+      setInstalledId(preset.id);
     }
   }, [open, preset]);
 
@@ -101,8 +110,17 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
     }, () => setMixes([]));
   }, [open, source]);
 
+  useEffect(() => {
+    if (open && source === 'installed') void api.minecraft.launcherPacks().then((d) => {
+      const ok = d.packs.filter((p) => p.mc && launcherFlavor(p));
+      setInstalled(ok);
+      setInstalledId((cur) => (ok.some((p) => p.id === cur) ? cur : (ok[0]?.id ?? '')));
+    }, () => setInstalled([]));
+  }, [open, source]);
+
   const pv = packVersions?.find((v) => v.id === packVersion);
   const mix = mixes?.find((m) => m.id === mixId);
+  const inst = installed?.find((p) => p.id === installedId);
   const modded = source !== 'fresh';
   useEffect(() => {
     setMemory(modded ? 6144 : flavor === 'vanilla' || flavor === 'paper' ? 3072 : 6144);
@@ -115,15 +133,19 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
       return l ? { flavor: LOADER_FLAVOR[l], mc: pv.mc[0] ?? '' } : null;
     }
     if (source === 'mix' && mix) return LOADER_FLAVOR[mix.loader] ? { flavor: LOADER_FLAVOR[mix.loader], mc: mix.mc } : null;
+    if (source === 'installed' && inst) {
+      const f = launcherFlavor(inst);
+      return f ? { flavor: f, mc: inst.mc } : null;
+    }
     if (source === 'file' && file) return { flavor: 'fabric', mc: '' };
     return null;
-  }, [source, mc, flavor, pv, mix, file]);
+  }, [source, mc, flavor, pv, mix, inst, file]);
 
-  const defaultName = source === 'modpack' ? pack?.title : source === 'mix' ? mix?.name : source === 'file' ? file.split(/[\\/]/).pop()?.replace(/\.mrpack$/i, '') : undefined;
+  const defaultName = source === 'modpack' ? pack?.title : source === 'mix' ? mix?.name : source === 'installed' ? inst?.name : source === 'file' ? file.split(/[\\/]/).pop()?.replace(/\.mrpack$/i, '') : undefined;
 
   const make = async () => {
     if (!target) return;
-    const from: SrvFrom | undefined = source === 'modpack' && pack ? { type: 'modrinth', project: pack.project, version: packVersion } : source === 'mix' ? { type: 'mix', id: mixId } : source === 'file' ? { type: 'file', path: file } : undefined;
+    const from: SrvFrom | undefined = source === 'modpack' && pack ? { type: 'modrinth', project: pack.project, version: packVersion } : source === 'mix' ? { type: 'mix', id: mixId } : source === 'installed' ? { type: 'launcher', id: installedId } : source === 'file' ? { type: 'file', path: file } : undefined;
     const req: SrvNew = { name: (name.trim() || defaultName || 'My server').slice(0, 60), flavor: target.flavor, mc: target.mc, memoryMb: memory, eula, onlineMode, maxPlayers, whitelist, gamemode, difficulty, seed: seed.trim() || undefined, from, start };
     setSaving(true);
     try {
@@ -171,6 +193,7 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
             { value: 'fresh', label: 'A new world', icon: Globe },
             { value: 'modpack', label: 'A modpack', icon: Package },
             { value: 'mix', label: 'One of my mixes', icon: Blocks },
+            { value: 'installed', label: 'Installed modpack', icon: HardDrive },
             { value: 'file', label: 'A .mrpack file', icon: FileArchive },
           ]}
         />
@@ -273,6 +296,36 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
                 ))}
               </Select>
             </Field>
+          ))}
+
+        {source === 'installed' &&
+          (installed === null ? (
+            <Spinner />
+          ) : installed.length === 0 ? (
+            <Callout tone="info" icon={HardDrive}>
+              No modpacks from Prism Launcher, CurseForge or the Modrinth App were found. If they’re in another folder, add it on the Mods page (Minecraft → Installed on this PC).
+            </Callout>
+          ) : (
+            <div className="space-y-2">
+              <div className="grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
+                {installed.map((p) => (
+                  <button key={p.id} type="button" onClick={() => setInstalledId(p.id)} className={cx('flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left', installedId === p.id ? 'border-accent bg-accent-soft' : 'border-line hover:bg-surface-2')}>
+                    <LauncherIcon p={p} size={36} />
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-medium text-fg">{p.name}</div>
+                      <div className="truncate text-[11.5px] text-dim">
+                        {p.mc} · {loaderText(p)} · {p.mods} mods
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {inst && (
+                <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-faint">
+                  <LauncherBadge p={inst} /> Its mods are copied from {inst.gameDir}; the ones that only run in the game itself stay off the server, and its configs come along. The modpack itself isn’t changed.
+                </div>
+              )}
+            </div>
           ))}
 
         {source === 'file' && (

@@ -315,6 +315,18 @@ incompatibilities resolved by pack order, overrides merged; the result is
 written as a .mrpack or installed as a Minecraft Launcher profile (Fabric or
 Quilt version JSON from their meta services).
 
+`mods/launchers.rs` finds the modpacks other launchers installed: Prism
+Launcher, PolyMC and MultiMC (`instance.cfg` as a Qt settings file, the
+loader and version from `mmc-pack.json`'s components, the icon by `iconKey`
+in the icons folder its settings name), CurseForge (`minecraftinstance.json`:
+`baseModLoader`'s name, then its type) and the Modrinth App (`app.db`, read
+only: the `instances` table and the content set each uses since mid-2026, the
+`profiles` table before that, `profile.json` files before 2024; its folder
+moves with `settings.custom_dir`). Each gets a stable id (a hash of its game
+folder). `Mixer::add_launcher_pack` adds one as a pack with the launcher's
+version and loader; `FromPack::Launcher` makes a server from one (its jars
+read locally, `config`, `defaultconfigs`, `kubejs` and `global_packs` along).
+
 Mix covers (`mods/cover.rs`): each pack's icon (Modrinth's, or an instance
 folder's) becomes a square tile (pixel art enlarged block by block), then
 `blend` gives each pack its own part (a soft diagonal for two, wedges for

@@ -1,16 +1,13 @@
 ## New in this version
 
-**Host Minecraft servers on your PC, 24/7** — a new **Servers** tab, and the same on your phone.
+**See the modpacks you already have** — Prism Launcher, CurseForge and the Modrinth App.
 
-- **Make a server in one go**: vanilla, Paper (plugins), Fabric, Quilt, Forge or NeoForge, any Minecraft version they support. OmniHub downloads the server and the right Java for it and checks every file. Or make it **from a Modrinth modpack, a .mrpack file or one of your mixes**: only the mods a server needs are installed (client-only mods like shaders and minimaps are left out).
-- **24/7**: servers start with OmniHub (even with the window closed), restart if they crash, keep the PC awake while they run, back up the world on a schedule, and stop cleanly (world saved) when the PC shuts down.
-- **Players**: who's on and where (X, Y, Z and the world), their **inventory** (give anything, take a stack away), health and food, game mode, teleport (to a spot, spawn or another player), heal, feed, a private message, kick and ban. The **whitelist**, operators and bans, and the **player limit**.
-- **Who can join**: paid Minecraft accounts only, or **everyone, also players without a paid account** (free launchers). Minecraft can't check names then, so OmniHub guards your operators: someone with an operator's name is only an operator when they join from a place (address) you allowed, and an attempt from somewhere new is kicked and waits for your OK, with a notification on the PC and the phone. Switching moves everyone's whitelist, operator and ban entries and their saved things to the new kind of account, so nobody loses anything.
-- **Live map**: the world from above, drawn by OmniHub from the server's own files (every server type, nothing uploaded), with players moving on it. Follow a player, zoom, Overworld, Nether and the End.
-- **Mods, plugins and data packs** from Modrinth (with what they need), from a file, on/off/remove. **Claude makes data packs and Paper plugins** for your server with your Anthropic key (plugins are compiled only when you allow it).
-- **Friends over the internet**: the address to share, a one-click firewall rule, the router port opened for you (UPnP), and a plain warning when your internet provider shares one address between homes (then a port can't be opened).
-- **Console** with commands, every setting of server.properties, backups you can restore, memory and Java.
-- **From your phone** (More → Minecraft servers): start, stop and restart, players with their location and inventory (give, heal, teleport, kick…), the whitelist, the player limit, who can join, approve an operator's new place, the live map (pinch to zoom) and the console. It can be turned off in Phone → Permissions.
+- **Mods → Minecraft → Installed on this PC** lists every modpack those launchers installed (also PolyMC and MultiMC): its picture, its Minecraft version and mod loader, how many mods it has (and how many are turned off), the modpack and version it came from, and when you last played it. Filter by launcher or search.
+- **Mix** any of them with other packs: its mods and configs are copied into the mixer, and its version and loader come from the launcher, so it works even when a mod isn't on Modrinth.
+- **Host it as a server** (or New server → *Installed modpack*): the server gets the same loader and version, the pack's mods straight from your PC (the ones that only run in the game itself are left out) and its configs.
+- OmniHub only reads those folders; nothing in them is changed. Moved your instances or CurseForge folder to another drive? **Look in a folder** finds them there, and keeps looking there.
+
+Also in 0.12.0: host Minecraft servers on your PC 24/7 (a new **Servers** tab, also on your phone), with players' locations and inventories, the whitelist, a live map, mods and plugins, and players without a paid account if you choose.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

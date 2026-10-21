@@ -4,6 +4,7 @@
 
 import type { SrvAction, SrvBackup, SrvContent, SrvFlavor, SrvHit, SrvKind, SrvLine, SrvMap, SrvNet, SrvNew, SrvOnline, SrvPatch, SrvPlayer, SrvPlayers, SrvView, SrvWaiting } from '@shared/types';
 import { emit } from './bus';
+import { launchersMock } from './launchers';
 import { packIcon } from './mcCover';
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -350,7 +351,9 @@ export const serversMock = {
     if (!req.eula) throw 'A Minecraft server only runs once you accept Minecraft’s EULA (aka.ms/MinecraftEULA).';
     const id = `s${Date.now()}`;
     const port = 25565 + servers.length;
-    const from = req.from?.type === 'mix' ? 'Mix: Create + Cobblemon' : req.from?.type === 'modrinth' ? 'Modpack' : req.from ? 'Modpack: from a file' : null;
+    const lp = req.from?.type === 'launcher' ? launchersMock.get(req.from.id) : undefined;
+    if (req.from?.type === 'launcher' && !lp) throw new Error('That modpack isn’t there any more.');
+    const from = lp ? `${lp.launcherName}: ${lp.name}` : req.from?.type === 'mix' ? 'Mix: Create + Cobblemon' : req.from?.type === 'modrinth' ? 'Modpack' : req.from ? 'Modpack: from a file' : null;
     const s = base({ id, name: req.name, flavor: req.from?.type === 'mix' ? 'neoForge' : req.flavor, mc: req.mc || '26.1.2', state: 'installing', port, lan: `192.168.1.42:${port}`, memoryMb: req.memoryMb ?? 4096, maxPlayers: req.maxPlayers ?? 10, whitelist: req.whitelist, onlineMode: req.onlineMode, from, backupHours: 24, lastBackup: 0, created: now(), eulaAt: now(), launch: null });
     servers.push(s);
     contents[id] = [];

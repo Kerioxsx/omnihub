@@ -32,6 +32,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.12.1
+
+- **Your installed modpacks**: Mods → Minecraft lists the modpacks Prism Launcher (and PolyMC, MultiMC), CurseForge and the Modrinth App installed, with their version, loader, mods and when you last played. Mix any of them with other packs, or host one as a server in one click. Folders are only read; a launcher kept on another drive can be added.
+
 ## New in 0.12.0
 
 - **Minecraft server hosting** (a new Servers tab): make a vanilla, Paper, Fabric, Quilt, Forge or NeoForge server, or one from a modpack or your mix, and keep it running 24/7 on this PC. Players with their location and inventory, the whitelist, the player limit, a live map, mods, plugins and data packs (also made by Claude), backups, and friends joining over the internet. **Players without a paid Minecraft account can join** if you choose: OmniHub then keeps your operators safe (an operator's name from a new place waits for your OK). Everything also works from the phone (More → Minecraft servers).

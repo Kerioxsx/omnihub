@@ -19,6 +19,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use super::launchers;
+
 pub const MODRINTH: &str = "https://api.modrinth.com";
 pub const FABRIC_META: &str = "https://meta.fabricmc.net";
 pub const QUILT_META: &str = "https://meta.quiltmc.org";
@@ -86,6 +88,8 @@ pub enum SourceKind {
     Modrinth { project: String, version: String },
     File { path: String },
     Folder { path: String },
+    /// A modpack another launcher installed ("Prism Launcher", its instance folder).
+    Launcher { launcher: String, path: String },
 }
 
 /// A pack added to a mix.
@@ -622,23 +626,42 @@ fn pack_target(index: &Value) -> (String, String, String) {
     (mc, "vanilla".into(), String::new())
 }
 
+/// The .jar files in a folder (not the turned-off .jar.disabled ones).
+fn jars_in(dir: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)?.flatten().map(|e| e.path()).filter(|p| p.is_file() && p.extension().is_some_and(|x| x.eq_ignore_ascii_case("jar"))).collect();
+    v.sort();
+    Ok(v)
+}
+
 fn sha_pair(b: &[u8]) -> (String, String) {
     use sha1::Digest as _;
     (hex::encode(sha1::Sha1::digest(b)), hex::encode(sha2::Sha512::digest(b)))
 }
 
 /// Folders of an instance that are carried into a mix.
+/// Files beside the mods (configs and the like): where they go, and what's in them.
+pub type Extras = Vec<(String, Vec<u8>)>;
+
 const KEEP: &[&str] = &["config", "defaultconfigs", "kubejs", "resourcepacks", "shaderpacks", "global_packs", "options.txt", "servers.dat"];
 
 pub struct Mixer {
     dir: PathBuf,
     pub api: Modrinth,
     minecraft: Option<PathBuf>,
+    /// Where other launchers keep their modpacks.
+    places: launchers::Places,
+    /// What was found there the last time.
+    found: parking_lot::Mutex<Vec<launchers::Instance>>,
 }
 
 impl Mixer {
     pub fn new(dir: &Path, api: Modrinth, minecraft: Option<PathBuf>) -> Mixer {
-        Mixer { dir: dir.to_path_buf(), api, minecraft }
+        Mixer { dir: dir.to_path_buf(), api, minecraft, places: launchers::Places::default(), found: Default::default() }
+    }
+
+    /// Look for other launchers' modpacks in these places.
+    pub fn looking_in(self, places: launchers::Places) -> Mixer {
+        Mixer { places, ..self }
     }
 
     pub fn minecraft_dir(&self) -> Option<&Path> {
@@ -726,8 +749,16 @@ impl Mixer {
     pub fn add_folder(&self, path: &str) -> Result<Source, String> {
         let root = Path::new(path);
         let root = if root.join(".minecraft").is_dir() { root.join(".minecraft") } else if root.join("minecraft").join("mods").is_dir() { root.join("minecraft") } else { root.to_path_buf() };
-        let mods = if root.join("mods").is_dir() { root.join("mods") } else { root.clone() };
-        let jars: Vec<PathBuf> = std::fs::read_dir(&mods).map_err(|e| format!("Couldn't open it: {e}"))?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("jar"))).collect();
+        let name = Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Instance".into());
+        self.add_dir(&root, name, SourceKind::Folder { path: path.into() }, None)
+    }
+
+    /// A game folder's mods and settings as a pack. With `target` (version,
+    /// loader, loader version) known, Modrinth is only asked for its copies of
+    /// the mods, and the pack is added even when it can't be reached.
+    fn add_dir(&self, root: &Path, name: String, kind: SourceKind, target: Option<(String, String, String)>) -> Result<Source, String> {
+        let mods = if root.join("mods").is_dir() { root.join("mods") } else { root.to_path_buf() };
+        let jars = jars_in(&mods).map_err(|e| format!("Couldn't open it: {e}"))?;
         if jars.is_empty() {
             return Err("There are no mods (.jar files) in that folder or its mods folder.".into());
         }
@@ -738,8 +769,12 @@ impl Mixer {
             let name = j.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             files.push(PackFile { path: format!("mods/{name}"), sha1, sha512, size: b.len() as u64, urls: vec![], client: true, server: true, local: Some(j.to_string_lossy().into_owned()) });
         }
+        let known = match (self.api.by_hash(&files.iter().map(|f| f.sha1.clone()).collect::<Vec<_>>()), &target) {
+            (Ok(k), _) => k,
+            (Err(_), Some(_)) => HashMap::new(),
+            (Err(e), None) => return Err(e),
+        };
         // Version and loader: what most of its mods are made for.
-        let known = self.api.by_hash(&files.iter().map(|f| f.sha1.clone()).collect::<Vec<_>>())?;
         let mut votes: HashMap<(String, String), usize> = HashMap::new();
         for f in &mut files {
             if let Some(v) = known.get(&f.sha1) {
@@ -753,7 +788,13 @@ impl Mixer {
                 }
             }
         }
-        let ((mc, loader), _) = votes.into_iter().max_by(|a, b| a.1.cmp(&b.1).then(version_cmp(&a.0 .0, &b.0 .0))).ok_or("None of its mods are on Modrinth, so its version can't be worked out.")?;
+        let (mc, loader, loader_version) = match target {
+            Some(t) => t,
+            None => {
+                let ((mc, loader), _) = votes.into_iter().max_by(|a, b| a.1.cmp(&b.1).then(version_cmp(&a.0 .0, &b.0 .0))).ok_or("None of its mods are on Modrinth, so its version can't be worked out.")?;
+                (mc, loader, String::new())
+            }
+        };
         let id = uuid::Uuid::new_v4().simple().to_string();
         let over = self.sdir(&id)?.join("overrides");
         std::fs::create_dir_all(&over).map_err(|e| e.to_string())?;
@@ -765,7 +806,7 @@ impl Mixer {
                 n += 1;
             } else if p.is_dir() {
                 for e in walkdir::WalkDir::new(&p).follow_links(false).into_iter().flatten().filter(|e| e.file_type().is_file()) {
-                    let rel = e.path().strip_prefix(&root).unwrap_or(e.path());
+                    let rel = e.path().strip_prefix(root).unwrap_or(e.path());
                     let out = over.join(rel);
                     std::fs::create_dir_all(out.parent().unwrap_or(&over)).map_err(|e| e.to_string())?;
                     std::fs::copy(e.path(), &out).map_err(|e| e.to_string())?;
@@ -773,10 +814,105 @@ impl Mixer {
                 }
             }
         }
-        let name = Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Instance".into());
-        let s = Source { id, name, kind: SourceKind::Folder { path: path.into() }, icon: None, mc, loader, loader_version: String::new(), files, overrides: n };
+        let s = Source { id, name, kind, icon: None, mc, loader, loader_version, files, overrides: n };
         self.keep_source(&s)?;
         Ok(s)
+    }
+
+    /// Folders the user added for other launchers' modpacks.
+    pub fn launcher_places(&self) -> Vec<String> {
+        std::fs::read(self.dir.join("places.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+    }
+
+    fn keep_places(&self, v: &[String]) -> Result<(), String> {
+        std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+        std::fs::write(self.dir.join("places.json"), serde_json::to_vec_pretty(v).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+    }
+
+    /// Modpacks Prism Launcher, CurseForge and the Modrinth App installed, looked for again.
+    pub fn launcher_packs(&self) -> Vec<launchers::Instance> {
+        let places = launchers::Places { extra: self.launcher_places().into_iter().map(PathBuf::from).collect(), ..self.places.clone() };
+        let v = launchers::find(&places);
+        *self.found.lock() = v.clone();
+        v
+    }
+
+    pub fn launcher_pack(&self, id: &str) -> Result<launchers::Instance, String> {
+        if let Some(i) = self.found.lock().iter().find(|i| i.id == id) {
+            return Ok(i.clone());
+        }
+        self.launcher_packs().into_iter().find(|i| i.id == id).ok_or_else(|| "That modpack isn't there any more.".into())
+    }
+
+    /// The modpack's picture as a PNG, at most 128 pixels across.
+    pub fn launcher_icon(&self, id: &str) -> Option<Vec<u8>> {
+        let img = super::cover::decode(&launchers::icon(&self.launcher_pack(id).ok()?)?)?;
+        let img = if img.width().max(img.height()) > 128 { image::imageops::resize(&img, 128, 128, image::imageops::FilterType::Triangle) } else { img };
+        Some(super::cover::png(&img))
+    }
+
+    /// Also look in this folder (a launcher's folder, its instances folder or one instance).
+    pub fn add_launcher_place(&self, path: &str) -> Result<Vec<launchers::Instance>, String> {
+        let p = PathBuf::from(path);
+        if launchers::find(&launchers::Places { extra: vec![p], ..Default::default() }).is_empty() {
+            return Err("There are no Prism Launcher, CurseForge or Modrinth App modpacks in that folder.".into());
+        }
+        let mut v = self.launcher_places();
+        if !v.iter().any(|x| x == path) {
+            v.push(path.into());
+            self.keep_places(&v)?;
+        }
+        Ok(self.launcher_packs())
+    }
+
+    pub fn remove_launcher_place(&self, path: &str) -> Result<Vec<launchers::Instance>, String> {
+        let mut v = self.launcher_places();
+        v.retain(|x| x != path);
+        self.keep_places(&v)?;
+        Ok(self.launcher_packs())
+    }
+
+    /// Add a modpack another launcher installed, with the version and loader it says it uses.
+    pub fn add_launcher_pack(&self, id: &str) -> Result<Source, String> {
+        let i = self.launcher_pack(id)?;
+        let target = (!i.mc.is_empty() && !i.loader.is_empty()).then(|| (i.mc.clone(), i.loader.clone(), i.loader_version.clone()));
+        let s = self.add_dir(Path::new(&i.game_dir), i.name.clone(), SourceKind::Launcher { launcher: i.launcher_name.clone(), path: i.path.clone() }, target)?;
+        if let Some(b) = launchers::icon(&i) {
+            let _ = std::fs::write(self.sdir(&s.id)?.join("icon"), b);
+        }
+        Ok(s)
+    }
+
+    /// An installed modpack's mods (its files on this PC, those Modrinth says
+    /// don't run on servers marked so) and its server-side settings.
+    pub fn launcher_server_parts(&self, i: &launchers::Instance) -> Result<(Vec<PackFile>, Extras), String> {
+        let game = Path::new(&i.game_dir);
+        let mut files = Vec::new();
+        for j in jars_in(&game.join("mods")).unwrap_or_default() {
+            let b = std::fs::read(&j).map_err(|e| e.to_string())?;
+            let (sha1, sha512) = sha_pair(&b);
+            let name = j.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            files.push(PackFile { path: format!("mods/{name}"), sha1, sha512, size: b.len() as u64, urls: vec![], client: true, server: true, local: Some(j.to_string_lossy().into_owned()) });
+        }
+        if let Ok(known) = self.api.identify(&files.iter().map(|f| f.sha1.clone()).collect::<Vec<_>>()) {
+            let ids: Vec<String> = known.values().map(|(p, _)| p.clone()).collect::<HashSet<_>>().into_iter().collect();
+            let meta = if ids.is_empty() { HashMap::new() } else { self.api.project_meta(&ids).unwrap_or_default() };
+            for f in &mut files {
+                if known.get(&f.sha1).and_then(|(p, _)| meta.get(p)).is_some_and(|m| m.server_side == "unsupported") {
+                    f.server = false;
+                }
+            }
+        }
+        let mut over = Vec::new();
+        for k in ["config", "defaultconfigs", "kubejs", "global_packs"] {
+            let d = game.join(k);
+            for rel in super::install::files_in(&d) {
+                if let Ok(b) = std::fs::read(d.join(&rel)) {
+                    over.push((format!("{k}/{rel}"), b));
+                }
+            }
+        }
+        Ok((files, over))
     }
 
     /// Work out the mix of `sources` (in priority order) for `mc` and `loader`.
@@ -1023,7 +1159,7 @@ impl Mixer {
         }
         let bytes = match (&s.icon, &s.kind) {
             (Some(url), _) => self.api.picture(url).ok(),
-            (None, SourceKind::Folder { path }) => folder_icon(Path::new(path)),
+            (None, SourceKind::Folder { path } | SourceKind::Launcher { path, .. }) => folder_icon(Path::new(path)),
             _ => None,
         }?;
         super::cover::decode(&bytes)?;
@@ -1465,5 +1601,56 @@ mod tests {
 
         let m = Modrinth::new("http://127.0.0.1:9", "http://127.0.0.1:9", "http://127.0.0.1:9");
         assert!(m.picture("https://evil.example/icon.png").unwrap_err().contains("only come from Modrinth"));
+    }
+
+    #[test]
+    fn modpacks_other_launchers_installed_join_mixes() {
+        let t = tempfile::tempdir().unwrap();
+        let roaming = t.path().join("Roaming");
+        let inst = roaming.join("PrismLauncher/instances/Create");
+        let pic = crate::mods::cover::png(&image::RgbaImage::from_pixel(300, 300, image::Rgba([10, 200, 30, 255])));
+        std::fs::create_dir_all(inst.join(".minecraft/mods")).unwrap();
+        std::fs::create_dir_all(inst.join(".minecraft/config")).unwrap();
+        std::fs::create_dir_all(roaming.join("PrismLauncher/icons")).unwrap();
+        std::fs::write(roaming.join("PrismLauncher/icons/create.png"), &pic).unwrap();
+        std::fs::write(inst.join("instance.cfg"), "name=Create Above\niconKey=create\n").unwrap();
+        std::fs::write(inst.join("mmc-pack.json"), r#"{"components":[{"uid":"net.minecraft","version":"1.20.1"},{"uid":"net.minecraftforge","version":"47.2.0"}]}"#).unwrap();
+        std::fs::write(inst.join(".minecraft/mods/create.jar"), b"create").unwrap();
+        std::fs::write(inst.join(".minecraft/mods/off.jar.disabled"), b"off").unwrap();
+        std::fs::write(inst.join(".minecraft/config/create.toml"), b"x=1").unwrap();
+        std::fs::write(inst.join(".minecraft/options.txt"), b"fov:1").unwrap();
+        // Modrinth can't be reached: the pack still comes in, as its launcher says it is.
+        let dead = "http://127.0.0.1:9";
+        let mixer = Mixer::new(&t.path().join("mc"), Modrinth::new(dead, dead, dead), None).looking_in(launchers::Places { roaming: Some(roaming), ..Default::default() });
+        let found = mixer.launcher_packs();
+        assert_eq!(found.len(), 1);
+        let i = &found[0];
+        assert_eq!((i.mods, i.disabled), (1, 1));
+        let png = mixer.launcher_icon(&i.id).unwrap();
+        assert_eq!(crate::mods::cover::decode(&png).unwrap().width(), 128);
+        let s = mixer.add_launcher_pack(&i.id).unwrap();
+        assert_eq!((s.name.as_str(), s.mc.as_str(), s.loader.as_str(), s.loader_version.as_str(), s.files.len(), s.overrides), ("Create Above", "1.20.1", "forge", "47.2.0", 1, 2));
+        assert_eq!(s.kind, SourceKind::Launcher { launcher: "Prism Launcher".into(), path: i.path.clone() });
+        assert_eq!(s.files[0].local.as_deref(), inst.join(".minecraft/mods/create.jar").to_str());
+        assert!(mixer.icon_of(&s).is_some(), "its picture is kept for the mix's cover");
+        // A folder added by hand (no version known) still needs Modrinth.
+        assert!(mixer.add_folder(inst.to_str().unwrap()).is_err());
+        // For a server: its mods and settings (not options.txt).
+        let (files, over) = mixer.launcher_server_parts(i).unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(over.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), ["config/create.toml"]);
+        assert!(mixer.launcher_pack("0000000000000000").unwrap_err().contains("isn't there"));
+
+        // Other folders to look in.
+        let other = t.path().join("Elsewhere/CurseForge/Instances/Pack");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("minecraftinstance.json"), r#"{"name":"Pack","gameVersion":"1.21.1","baseModLoader":{"name":"neoforge-21.1.77","type":6}}"#).unwrap();
+        assert!(mixer.add_launcher_place(t.path().to_str().unwrap()).unwrap_err().contains("no Prism"));
+        let dir = t.path().join("Elsewhere/CurseForge").to_string_lossy().into_owned();
+        assert_eq!(mixer.add_launcher_place(&dir).unwrap().len(), 2);
+        assert_eq!(mixer.add_launcher_place(&dir).unwrap().len(), 2, "added once");
+        assert_eq!(mixer.launcher_places(), [dir.as_str()]);
+        assert_eq!(mixer.remove_launcher_place(&dir).unwrap().len(), 1);
+        assert!(mixer.launcher_places().is_empty());
     }
 }

@@ -175,6 +175,8 @@ pub enum FromPack {
     Modrinth { project: String, version: String },
     Mix { id: String },
     File { path: String },
+    /// A modpack Prism Launcher, CurseForge or the Modrinth App installed.
+    Launcher { id: String },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -616,6 +618,16 @@ impl ServerHub {
                 loader = v;
                 from_label = Some(format!("Modpack: {}", idx["name"].as_str().unwrap_or("pack")));
             }
+            Some(FromPack::Launcher { id }) => {
+                let i = self.mods.minecraft.launcher_pack(id)?;
+                flavor = Flavor::from_loader(&i.loader).ok_or("That modpack's loader can't run as a server.")?;
+                if i.mc.is_empty() {
+                    return Err(format!("{} doesn't say which Minecraft version that modpack is for.", i.launcher_name));
+                }
+                mc = i.mc.clone();
+                loader = i.loader_version.clone();
+                from_label = Some(format!("{}: {}", i.launcher_name, i.name));
+            }
             Some(FromPack::Modrinth { .. }) => from_label = Some("Modpack".into()),
             None => {}
         }
@@ -741,6 +753,13 @@ impl ServerHub {
                 let over = content::folder_files(&self.mods.minecraft.overrides_dir(mix)?);
                 icon = self.mods.minecraft.cover(mix).ok();
                 pack = Some((files.into_iter().map(|(_, f)| f).collect(), over, m.name.clone(), "mix".into()));
+            }
+            Some(FromPack::Launcher { id: from }) => {
+                self.set_work(id, "Reading the modpack's mods", 0, 0);
+                let i = self.mods.minecraft.launcher_pack(from)?;
+                let (files, over) = self.mods.minecraft.launcher_server_parts(&i)?;
+                icon = crate::mods::launchers::icon(&i);
+                pack = (!files.is_empty()).then(|| (files, over, i.name.clone(), "pack".into()));
             }
             None => {}
         }

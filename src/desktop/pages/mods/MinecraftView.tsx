@@ -1,5 +1,6 @@
-// Minecraft modpacks, mixed: packs from Modrinth, .mrpack files or
-// installed instances; one Minecraft version and loader; the mix with every
+// Minecraft modpacks, mixed: packs from Modrinth, .mrpack files, modpacks
+// Prism Launcher, CurseForge and the Modrinth App installed, or instance
+// folders; one Minecraft version and loader; the mix with every
 // mod once (updated to fit, dependencies added, clashes sorted), saved as a
 // .mrpack or installed as a Minecraft Launcher profile. Each mix gets a cover:
 // its packs' icons blended here, or painted by Pollinations with the user's
@@ -20,6 +21,7 @@ import { useDebounced } from '../../lib/hooks';
 import { navigate } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
+import { InstalledPacks, loaderText } from './InstalledPacks';
 import { count, ProgressLine, useModProgress } from './shared';
 
 /** Connect the user's own Pollinations account: approve on its site, or paste a key. */
@@ -421,6 +423,13 @@ export function MinecraftView() {
       <AddFromModrinth open={adding} onClose={() => setAdding(false)} onAdded={load} />
       <div className="space-y-4">
         {st && !st.found && <Callout tone="info">Minecraft (Java Edition) wasn’t found on this PC. You can still mix packs and save them as a .mrpack.</Callout>}
+        <InstalledPacks
+          sources={st?.sources ?? []}
+          onAdded={(s) => {
+            setChosen((c) => [...c, s.id]);
+            load();
+          }}
+        />
         <Card>
           <CardHeader
             icon={Blocks}
@@ -435,8 +444,8 @@ export function MinecraftView() {
                 <Button size="sm" variant="secondary" icon={FilePlus2} onClick={() => void addFile()}>
                   .mrpack file
                 </Button>
-                <Button size="sm" variant="secondary" icon={FolderPlus} onClick={() => void addFolder()}>
-                  Installed instance
+                <Button size="sm" variant="secondary" icon={FolderPlus} onClick={() => void addFolder()} title="An instance from another launcher (ATLauncher, GDLauncher…), or any folder with a mods folder.">
+                  Instance folder
                 </Button>
               </div>
             }
@@ -452,10 +461,12 @@ export function MinecraftView() {
                   <input type="checkbox" checked={chosen.includes(s.id)} onChange={(e) => setChosen((c) => (e.target.checked ? [...c, s.id] : c.filter((x) => x !== s.id)))} aria-label={`Mix ${s.name}`} className="h-4 w-4 accent-[var(--accent)]" />
                   <span className="w-5 text-center font-mono text-[11.5px] text-faint">{chosen.includes(s.id) ? chosen.indexOf(s.id) + 1 : i + 1}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13.5px] font-semibold text-fg">{s.name}</div>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-[13.5px] font-semibold text-fg">{s.name}</span>
+                      {s.kind.type === 'launcher' && <Badge tone="neutral">{s.kind.launcher}</Badge>}
+                    </div>
                     <div className="text-[11.5px] text-faint">
-                      Minecraft {s.mc} · {s.loader}
-                      {s.loaderVersion ? ` ${s.loaderVersion}` : ''} · {s.files.length} files · {s.overrides} configs and extras
+                      Minecraft {s.mc} · {loaderText(s)} · {s.files.length} files · {s.overrides} configs and extras
                     </div>
                   </div>
                   <IconButton icon={Trash2} label={`Remove ${s.name}`} onClick={() => void api.minecraft.removeSource(s.id).then(load)} />

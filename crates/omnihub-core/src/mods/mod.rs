@@ -11,6 +11,7 @@
 pub mod cover;
 pub mod detect;
 pub mod install;
+pub mod launchers;
 pub mod maker;
 pub mod minecraft;
 pub mod thunderstore;
@@ -392,6 +393,8 @@ pub struct Endpoints {
     pub pollinations_enter: String,
     /// %AppData% (Roaming), for games that keep mods there (and .minecraft).
     pub roaming: Option<PathBuf>,
+    /// The user's folder (CurseForge keeps its instances there).
+    pub home: Option<PathBuf>,
 }
 
 impl Default for Endpoints {
@@ -407,6 +410,7 @@ impl Default for Endpoints {
             pollinations_gen: cover::GEN.into(),
             pollinations_enter: cover::ENTER.into(),
             roaming: dirs::config_dir(),
+            home: dirs::home_dir(),
         }
     }
 }
@@ -424,7 +428,7 @@ impl ModHub {
         let mc_dir = ep.roaming.as_ref().map(|r| r.join(".minecraft"));
         Arc::new(ModHub {
             maker: maker::Maker::new(&dir.join("maker"), events.clone(), claude.clone()),
-            minecraft: minecraft::Mixer::new(&dir.join("minecraft"), minecraft::Modrinth::new(&ep.modrinth, &ep.fabric_meta, &ep.quilt_meta), mc_dir),
+            minecraft: minecraft::Mixer::new(&dir.join("minecraft"), minecraft::Modrinth::new(&ep.modrinth, &ep.fabric_meta, &ep.quilt_meta), mc_dir).looking_in(launchers::Places { roaming: ep.roaming.clone(), home: ep.home.clone(), extra: vec![] }),
             pollinations: cover::Pollinations::with(data_dir, &ep.pollinations_gen, &ep.pollinations_enter),
             dir,
             events,

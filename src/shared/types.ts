@@ -2087,13 +2087,45 @@ export interface McPackFile {
 export interface McSource {
   id: string;
   name: string;
-  kind: { type: 'modrinth'; project: string; version: string } | { type: 'file'; path: string } | { type: 'folder'; path: string };
+  kind: { type: 'modrinth'; project: string; version: string } | { type: 'file'; path: string } | { type: 'folder'; path: string } | { type: 'launcher'; launcher: string; path: string };
   icon: string | null;
   mc: string;
   loader: string;
   loaderVersion: string;
   files: McPackFile[];
   overrides: number;
+}
+
+export type McLauncher = 'prism' | 'curseforge' | 'modrinth';
+
+/** A modpack Prism Launcher (or PolyMC/MultiMC), CurseForge or the Modrinth App installed. */
+export interface McLauncherPack {
+  id: string;
+  launcher: McLauncher;
+  /** "Prism Launcher", "PolyMC", "MultiMC", "CurseForge", "Modrinth App". */
+  launcherName: string;
+  name: string;
+  path: string;
+  /** Where its mods/ and config/ are. */
+  gameDir: string;
+  mc: string;
+  /** Empty for plain Minecraft. */
+  loader: string;
+  loaderVersion: string;
+  mods: number;
+  /** Turned off in the launcher. */
+  disabled: number;
+  /** The modpack it was installed from, with its version. */
+  pack: string | null;
+  /** Unix seconds. */
+  lastPlayed: number | null;
+  hasIcon: boolean;
+}
+
+export interface McLauncherPacks {
+  packs: McLauncherPack[];
+  /** Folders the user added to look in. */
+  places: string[];
 }
 
 export type McEntryStatus = 'kept' | 'updated' | 'dependency' | 'asIs' | 'missing' | 'conflict';
@@ -2381,7 +2413,7 @@ export interface SrvView extends SrvServer {
   lan: string | null;
 }
 
-export type SrvFrom = { type: 'modrinth'; project: string; version: string } | { type: 'mix'; id: string } | { type: 'file'; path: string };
+export type SrvFrom = { type: 'modrinth'; project: string; version: string } | { type: 'mix'; id: string } | { type: 'file'; path: string } | { type: 'launcher'; id: string };
 
 export interface SrvNew {
   name: string;

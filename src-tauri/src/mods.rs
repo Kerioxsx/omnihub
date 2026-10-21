@@ -8,6 +8,7 @@ use omnihub_core::claude::ClaudeSettings;
 use omnihub_core::core::AppCore;
 use omnihub_core::mods::cover::{self, PollStatus, SignIn};
 use omnihub_core::mods::detect::LoaderKind;
+use omnihub_core::mods::launchers::Instance;
 use omnihub_core::mods::maker::{Project, View};
 use omnihub_core::mods::minecraft::{Installed, Mix, PackHit, PackVersion, Source};
 use omnihub_core::mods::thunderstore::Sort;
@@ -244,6 +245,43 @@ pub async fn mc_add_file(core: Core<'_>, path: String) -> Res<Source> {
 #[tauri::command]
 pub async fn mc_add_folder(core: Core<'_>, path: String) -> Res<Source> {
     run!(core, |c| c.mods.minecraft.add_folder(&path))
+}
+
+/// Modpacks Prism Launcher, CurseForge and the Modrinth App installed, and
+/// the folders the user added to look in.
+#[derive(Serialize)]
+pub struct LauncherPacks {
+    packs: Vec<Instance>,
+    places: Vec<String>,
+}
+
+fn launcher_packs(c: &AppCore, packs: Vec<Instance>) -> LauncherPacks {
+    LauncherPacks { packs, places: c.mods.minecraft.launcher_places() }
+}
+
+#[tauri::command]
+pub async fn mc_launcher_packs(core: Core<'_>) -> Res<LauncherPacks> {
+    run!(core, |c| Ok::<_, String>(launcher_packs(&c, c.mods.minecraft.launcher_packs())))
+}
+
+#[tauri::command]
+pub async fn mc_launcher_icon(core: Core<'_>, id: String) -> Res<Option<String>> {
+    run!(core, |c| Ok::<_, String>(c.mods.minecraft.launcher_icon(&id).map(|b| cover::data_url(&b))))
+}
+
+#[tauri::command]
+pub async fn mc_add_launcher_pack(core: Core<'_>, id: String) -> Res<Source> {
+    run!(core, |c| c.mods.minecraft.add_launcher_pack(&id))
+}
+
+#[tauri::command]
+pub async fn mc_add_launcher_place(core: Core<'_>, path: String) -> Res<LauncherPacks> {
+    run!(core, |c| c.mods.minecraft.add_launcher_place(&path).map(|v| launcher_packs(&c, v)))
+}
+
+#[tauri::command]
+pub async fn mc_remove_launcher_place(core: Core<'_>, path: String) -> Res<LauncherPacks> {
+    run!(core, |c| c.mods.minecraft.remove_launcher_place(&path).map(|v| launcher_packs(&c, v)))
 }
 
 #[tauri::command]

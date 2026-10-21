@@ -65,10 +65,11 @@ export function ServersPage() {
   const [making, setMaking] = useState(false);
   const [preset, setPreset] = useState<SrvFrom | null>(null);
 
-  // "Host as a server" from the modpack mixer.
+  // "Host as a server" from the modpack mixer or an installed modpack.
   useEffect(() => {
-    if (fromParam?.startsWith('mix:')) {
-      setPreset({ type: 'mix', id: fromParam.slice(4) });
+    const [kind, rest] = [fromParam?.split(':')[0], fromParam?.slice(fromParam.indexOf(':') + 1) ?? ''];
+    if ((kind === 'mix' || kind === 'launcher') && rest) {
+      setPreset({ type: kind, id: rest });
       setMaking(true);
       navigate('servers');
     }

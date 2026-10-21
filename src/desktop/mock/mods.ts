@@ -4,6 +4,7 @@
 
 import type { BrowsePackage, ClaudeSettings, InstalledMod, MakerItem, MakerProject, MakerView, McEntry, McInstalled, McMix, McPackHit, McPackVersion, McSource, ModBrowse, ModGame, ModNote, ModSort, TsPackage, WorkshopItem } from '@shared/types';
 import { emit } from './bus';
+import { launchersMock } from './launchers';
 import { blendCover, packIcon, paintedCover } from './mcCover';
 import { serversMock } from './servers';
 
@@ -441,6 +442,19 @@ export const modsMock = {
     return s;
   },
   mcAddFolder: (path: string) => modsMock.mcAddFile(`${path}\\instance.mrpack`),
+  mcLauncherPacks: () => launchersMock.list(),
+  mcLauncherIcon: (id: string) => launchersMock.icon(id),
+  mcAddLauncherPack(id: string): McSource {
+    const p = launchersMock.get(id);
+    if (!p) throw new Error('That modpack isn’t there any more.');
+    if (!p.mods) throw new Error('There are no mods (.jar files) in that folder or its mods folder.');
+    const names = ['create', 'jei', 'jade', 'appleskin', 'farmersdelight', 'sodium', 'waystones', 'storagedrawers', 'ftb-quests', 'mekanism'];
+    const s: McSource = { id: `s${Date.now()}`, name: p.name, kind: { type: 'launcher', launcher: p.launcherName, path: p.path }, icon: launchersMock.icon(id), mc: p.mc, loader: p.loader, loaderVersion: p.loaderVersion, files: mcFiles(names.slice(0, Math.min(names.length, p.mods))), overrides: 40 };
+    mcSources.push(s);
+    return s;
+  },
+  mcAddLauncherPlace: (path: string) => launchersMock.addPlace(path),
+  mcRemoveLauncherPlace: (path: string) => launchersMock.removePlace(path),
   mcRemoveSource(id: string): void {
     mcSources = mcSources.filter((s) => s.id !== id);
   },
