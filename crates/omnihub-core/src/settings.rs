@@ -782,6 +782,8 @@ pub struct RemoteSettings {
     pub allow_clipboard: bool,
     /// Paired phones may see what's running and end tasks.
     pub allow_tasks: bool,
+    /// Paired phones may run the Minecraft servers and manage their players.
+    pub allow_servers: bool,
     /// "Send to → OmniHub (phone)" in Explorer's right-click menu.
     pub send_to_menu: bool,
 }
@@ -807,6 +809,7 @@ impl Default for RemoteSettings {
             device_name: gethostname::gethostname().to_string_lossy().to_string(),
             allow_clipboard: true,
             allow_tasks: true,
+            allow_servers: true,
             send_to_menu: true,
         }
     }

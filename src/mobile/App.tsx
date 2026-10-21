@@ -122,6 +122,9 @@ export function App() {
           if (payload?.reason !== 'replaced' && had && !power.cancelling) toast.info(`${had.label} cancelled`, 'Cancelled on the PC.');
           break;
         }
+        case 'mcserver:guard':
+          toast.error(`${payload?.name ?? 'Someone'} wants in on ${payload?.server ?? 'your server'}`, 'That name is an operator and joined from a new place, so it was kept out. Allow it in More → Minecraft servers → Players if it’s really them.');
+          break;
         case 'power:executed': {
           power.setPending(null);
           const a = payload?.action as PowerAction;

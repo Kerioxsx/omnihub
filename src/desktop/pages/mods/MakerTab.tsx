@@ -27,7 +27,12 @@ const IDEAS: Record<string, string[]> = {
   melonMod: ['Show my FPS on screen', 'A key to skip the intro', 'Make the day longer'],
   files: ['Raise the max stack size of items', 'Make the camera field of view wider', 'Turn off the screen shake'],
   lovely: ['Speed up the game’s animations', 'Change the colours of the menu', 'Show a counter on screen'],
+  datapack: ['A recipe to craft saddles from leather', 'Give every new player a starter kit', 'Mobs drop a little more XP', 'A /spawn-style teleport sign at spawn'],
+  paperPlugin: ['A /home command to save and go back to one place', 'Welcome players by name and show who’s online', 'A /spawn command with a short cooldown', 'Keep inventory when you die, but lose half your XP'],
 };
+
+/** What Claude makes for: a game (from the Mods page) or a Minecraft server. */
+export type MakerTarget = Pick<ModGame, 'key' | 'name'> & { maker: Pick<ModGame['maker'], 'kind' | 'label'>; server?: boolean };
 
 function ItemLine({ it }: { it: MakerItem }) {
   if (it.kind === 'user') {
@@ -89,7 +94,7 @@ function Conversation({ view, live, note }: { view: MakerView; live: string; not
   );
 }
 
-function ProjectSide({ view, onChanged }: { view: MakerView; onChanged: () => void }) {
+function ProjectSide({ view, onChanged, server }: { view: MakerView; onChanged: () => void; server?: boolean }) {
   const p = view.project;
   const [file, setFile] = useState<{ path: string; text: string } | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -98,7 +103,7 @@ function ProjectSide({ view, onChanged }: { view: MakerView; onChanged: () => vo
     setInstalling(true);
     try {
       await api.maker.install(p.id);
-      toast.success(p.installed ? 'Updated' : 'Installed', 'Start the game to try it.');
+      toast.success(p.installed ? 'Updated' : 'Installed', server ? (p.kind === 'paperPlugin' ? 'Restart the server to load it.' : 'It’s live on the server.') : 'Start the game to try it.');
       onChanged();
     } catch (e) {
       toast.error('Not installed', errorText(e));
@@ -143,7 +148,7 @@ function ProjectSide({ view, onChanged }: { view: MakerView; onChanged: () => vo
         {p.summary && <div className="text-[12.5px] text-fg">{p.summary}</div>}
         {p.howToUse && (
           <div className="rounded-lg bg-surface-2/60 px-3 py-2 text-[12px] text-dim">
-            <span className="font-medium text-fg">In the game: </span>
+            <span className="font-medium text-fg">{server ? 'For players: ' : 'In the game: '}</span>
             {p.howToUse}
           </div>
         )}
@@ -176,7 +181,7 @@ function ProjectSide({ view, onChanged }: { view: MakerView; onChanged: () => vo
   );
 }
 
-export function MakerTab({ game, onSettings }: { game: ModGame; onSettings: () => void }) {
+export function MakerTab({ game, onSettings }: { game: MakerTarget; onSettings: () => void }) {
   const [projects, setProjects] = useState<MakerProject[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
   const [view, setView] = useState<MakerView | null>(null);
@@ -272,7 +277,7 @@ export function MakerTab({ game, onSettings }: { game: ModGame; onSettings: () =
     <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_280px]">
       <div className="space-y-1.5">
         <Button variant={current === 'new' ? 'primary' : 'secondary'} icon={Plus} className="w-full" onClick={() => setCurrent('new')}>
-          New mod
+          {game.server ? (game.maker.kind === 'paperPlugin' ? 'New plugin' : 'New data pack') : 'New mod'}
         </Button>
         {projects.map((x) => (
           <div key={x.id} className={cx('group flex items-center gap-1 rounded-xl border px-3 py-2', current === x.id ? 'border-accent/50 bg-accent-soft' : 'border-transparent hover:bg-surface-2/60')}>
@@ -293,9 +298,11 @@ export function MakerTab({ game, onSettings }: { game: ModGame; onSettings: () =
                 <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-accent-soft text-accent">
                   <Bot size={24} />
                 </div>
-                <div className="text-[15px] font-semibold text-fg">What should the mod do?</div>
+                <div className="text-[15px] font-semibold text-fg">{game.server ? `What should the ${game.maker.kind === 'paperPlugin' ? 'plugin' : 'data pack'} do?` : 'What should the mod do?'}</div>
                 <div className="mx-auto mt-1 max-w-md text-[12.5px] text-dim">
-                  Claude makes {game.maker.label} for {game.name}: it reads the game’s files, looks up how its mods work, writes the mod, and you install it with one click.
+                  {game.server
+                    ? `Claude makes ${game.maker.label} for ${game.name}: it reads the server’s files and logs, looks up how this Minecraft version works, writes it, and you install it with one click.`
+                    : `Claude makes ${game.maker.label} for ${game.name}: it reads the game’s files, looks up how its mods work, writes the mod, and you install it with one click.`}
                 </div>
               </div>
               <div className="flex flex-wrap justify-center gap-2">
@@ -342,7 +349,7 @@ export function MakerTab({ game, onSettings }: { game: ModGame; onSettings: () =
               }
             }}
             rows={2}
-            placeholder={current === 'new' || !view ? 'Describe the mod…' : 'Tell Claude what happened, or what to change…'}
+            placeholder={current === 'new' || !view ? (game.server ? 'Describe what it should do…' : 'Describe the mod…') : 'Tell Claude what happened, or what to change…'}
             className="min-h-[44px] flex-1 resize-none"
             aria-label="Message to Claude"
             disabled={working || sending}
@@ -359,7 +366,13 @@ export function MakerTab({ game, onSettings }: { game: ModGame; onSettings: () =
         </div>
       </Card>
 
-      <div>{view && current !== 'new' ? <ProjectSide view={view} onChanged={loadView} /> : <Callout tone="info">Claude only writes in the mod’s own folder and reads the game without changing it. Mods it makes are for single-player and offline play.</Callout>}</div>
+      <div>
+        {view && current !== 'new' ? (
+          <ProjectSide view={view} onChanged={loadView} server={game.server} />
+        ) : (
+          <Callout tone="info">{game.server ? 'Claude only writes in the project’s own folder and reads the server without changing it. Plugins are compiled only when you allow it.' : 'Claude only writes in the mod’s own folder and reads the game without changing it. Mods it makes are for single-player and offline play.'}</Callout>
+        )}
+      </div>
     </div>
   );
 }

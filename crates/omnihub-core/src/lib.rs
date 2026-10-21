@@ -17,6 +17,7 @@ pub mod events;
 pub mod games;
 pub mod govee;
 pub mod helper;
+pub mod mcserver;
 pub mod media;
 pub mod mods;
 pub mod notes;

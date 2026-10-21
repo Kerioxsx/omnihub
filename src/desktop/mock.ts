@@ -3,7 +3,7 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { ChatSource, NewChatKind, ModSort, CaptureKind, ConfigGame, ConfigOptions, DeepPartial, GameKind, GameProfile, RobloxFlags, TweakId, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
+import type { SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, ChatSource, NewChatKind, ModSort, CaptureKind, ConfigGame, ConfigOptions, DeepPartial, GameKind, GameProfile, RobloxFlags, TweakId, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
@@ -13,6 +13,7 @@ import { govee } from './mock/govee';
 import { modsMock as mm } from './mock/mods';
 import { chatsMock as cm, openaiMock as om } from './mock/chats';
 import { pollMock } from './mock/mcCover';
+import { serversMock as sv } from './mock/servers';
 import * as optimize from './mock/optimize';
 import * as updates from './mock/update';
 
@@ -391,11 +392,49 @@ const handlers: Record<string, Handler> = {
   mc_remake_cover: (a) => mm.mcRemakeCover(str(a, 'id')),
   mc_ai_cover: (a) => mm.mcAiCover(str(a, 'id'), pollMock.status().connected),
   mc_save_cover: () => undefined,
+  mc_mixes: () => mm.mcMixes(),
   pollinations_status: () => pollMock.status(),
   pollinations_sign_in: () => pollMock.signIn(),
   pollinations_check: () => pollMock.check(),
   pollinations_set_key: (a) => pollMock.setKey(str(a, 'key')),
   pollinations_forget: () => pollMock.forget(),
+  srv_list: () => sv.list(),
+  srv_get: (a) => sv.get(str(a, 'id')),
+  srv_versions: (a) => sv.versions(str(a, 'flavor') as SrvFlavor),
+  srv_create: (a) => sv.create(obj<SrvNew>(a, 'server')),
+  srv_adopt: (a) => sv.adopt(str(a, 'path')),
+  srv_update: (a) => sv.update(str(a, 'id'), obj<SrvPatch>(a, 'patch')),
+  srv_delete: (a) => sv.remove(str(a, 'id')),
+  srv_start: (a) => sv.start(str(a, 'id')),
+  srv_stop: (a) => sv.stop(str(a, 'id')),
+  srv_restart: (a) => sv.restart(str(a, 'id')),
+  srv_kill: (a) => sv.kill(str(a, 'id')),
+  srv_console: (a) => sv.console(str(a, 'id'), a.after === null || a.after === undefined ? null : num(a, 'after')),
+  srv_command: (a) => sv.command(str(a, 'id'), str(a, 'text')),
+  srv_properties: (a) => sv.properties(str(a, 'id')),
+  srv_set_properties: (a) => sv.setProperties(str(a, 'id'), obj<[string, string][]>(a, 'changes')),
+  srv_set_icon: (a) => sv.setIcon(str(a, 'id')),
+  srv_players: (a) => sv.players(str(a, 'id')),
+  srv_player: (a) => sv.player(str(a, 'id'), str(a, 'name')),
+  srv_act: (a) => sv.act(str(a, 'id'), str(a, 'name'), obj<SrvAction>(a, 'action')),
+  srv_whitelist: (a) => sv.whitelist(str(a, 'id'), bool(a, 'on')),
+  srv_watch: (a) => sv.watch(str(a, 'id')),
+  srv_map: (a) => sv.map(str(a, 'id'), str(a, 'dim')),
+  srv_map_tile: (a) => sv.mapTile(str(a, 'id'), str(a, 'dim'), num(a, 'x'), num(a, 'z')),
+  srv_content: (a) => sv.content(str(a, 'id')),
+  srv_identify: (a) => sv.identify(str(a, 'id')),
+  srv_search: (a) => sv.search(str(a, 'id'), str(a, 'kind') as SrvKind, str(a, 'query')),
+  srv_install: (a) => sv.install(str(a, 'id'), str(a, 'kind') as SrvKind, str(a, 'project')),
+  srv_add_file: (a) => sv.addFile(str(a, 'id'), str(a, 'path')),
+  srv_set_content: (a) => sv.setContent(str(a, 'id'), str(a, 'file'), bool(a, 'on')),
+  srv_remove_content: (a) => sv.removeContent(str(a, 'id'), str(a, 'file')),
+  srv_backups: (a) => sv.backups(str(a, 'id')),
+  srv_backup: (a) => sv.backup(str(a, 'id')),
+  srv_restore: (a) => sv.restore(str(a, 'id'), str(a, 'name')),
+  srv_delete_backup: (a) => sv.removeBackup(str(a, 'id'), str(a, 'name')),
+  srv_network: (a) => sv.network(str(a, 'id')),
+  srv_set_upnp: (a) => sv.setUpnp(str(a, 'id'), bool(a, 'on')),
+  srv_fix_firewall: (a) => sv.fixFirewall(str(a, 'id')),
 };
 
 const FAST = new Set(['vault_strength', 'vault_touch', 'vault_status', 'system_stats', 'vault_generate', 'storage_progress', 'storage_duplicates_progress', 'remote_status']);

@@ -2,7 +2,7 @@
 // (crates/omnihub-core/src/remote/api.rs). The phone app is served by that
 // server, so every URL is same-origin.
 
-import type { ChatFolder, ChatSource, ChatSummary, ChatTools, ChatView, ClaudeCodeMode, CodexSandbox, Device, NewChatKind, Note, NoteKind, PendingPower, PowerAction, InboxItem, EntrySummary, MonitorInfo, Preset, UsageReport } from '@shared/types';
+import type { SrvAction, SrvLine, SrvMap, SrvPlayer, SrvPlayers, SrvView, ChatFolder, ChatSource, ChatSummary, ChatTools, ChatView, ClaudeCodeMode, CodexSandbox, Device, NewChatKind, Note, NoteKind, PendingPower, PowerAction, InboxItem, EntrySummary, MonitorInfo, Preset, UsageReport } from '@shared/types';
 
 const TOKEN_KEY = 'omnihub.token';
 const NAME_KEY = 'omnihub.deviceName';
@@ -93,7 +93,7 @@ export interface ServerInfo {
   tls: boolean;
   paired: boolean;
   pairingOpen: boolean;
-  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean; games?: boolean; chats?: boolean; chatAgents?: boolean };
+  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean; games?: boolean; chats?: boolean; chatAgents?: boolean; servers?: boolean };
 }
 
 export interface FsEntry {
@@ -229,6 +229,18 @@ export const client = {
   playGame: (id: string, launch: boolean) => request<{ session: GameSession }>('POST', `/api/games/${encodeURIComponent(id)}/play`, { launch }),
   stopGame: () => request<{ stopped: boolean }>('POST', '/api/games/stop'),
   pingGame: (id: string) => request<{ results: PingResult[] }>('POST', '/api/games/ping', { id }),
+  servers: () => request<SrvView[]>('GET', '/api/servers'),
+  serverRun: (id: string, what: 'start' | 'stop' | 'restart') => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/${what}`),
+  serverPlayers: (id: string) => request<SrvPlayers>('GET', `/api/servers/${encodeURIComponent(id)}/players`),
+  serverPlayer: (id: string, name: string) => request<SrvPlayer>('GET', `/api/servers/${encodeURIComponent(id)}/player/${encodeURIComponent(name)}`),
+  serverAct: (id: string, name: string, action: SrvAction) => request<{ reply: string }>('POST', `/api/servers/${encodeURIComponent(id)}/act`, { name, action }),
+  serverWhitelist: (id: string, on: boolean) => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/whitelist`, { on }),
+  serverJoin: (id: string, everyone: boolean) => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/join`, { everyone }),
+  serverMaxPlayers: (id: string, players: number) => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/max-players`, { players }),
+  serverConsole: (id: string, after?: number) => request<SrvLine[]>('GET', `/api/servers/${encodeURIComponent(id)}/console${after != null ? `?after=${after}` : ''}`),
+  serverCommand: (id: string, text: string) => request<{ ok: boolean }>('POST', `/api/servers/${encodeURIComponent(id)}/command`, { text }),
+  serverMap: (id: string, dim: string) => request<SrvMap>('GET', `/api/servers/${encodeURIComponent(id)}/map?dim=${dim}`),
+  serverTile: (id: string, dim: string, x: number, z: number) => request<{ url: string }>('GET', `/api/servers/${encodeURIComponent(id)}/map/tile?dim=${dim}&x=${x}&z=${z}`),
   tasks: (sort: ProcessSort = 'cpu', limit = 80) => request<Usage>('GET', `/api/tasks?sort=${sort}&limit=${limit}`),
   endTask: (name: string) => request<{ ended: number }>('POST', '/api/tasks/end', { name }),
   setTaskPriority: (name: string, priority: Priority) => request<{ changed: number }>('POST', '/api/tasks/priority', { name, priority }),

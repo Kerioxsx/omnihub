@@ -286,6 +286,11 @@ pub async fn mc_uninstall(core: Core<'_>, profile: String) -> Res<()> {
 
 /// The mix's cover (made from its packs' pictures the first time).
 #[tauri::command]
+pub async fn mc_mixes(core: Core<'_>) -> Res<Vec<Mix>> {
+    run!(core, |c| Ok(c.mods.minecraft.mixes()))
+}
+
+#[tauri::command]
 pub async fn mc_cover(core: Core<'_>, id: String) -> Res<String> {
     run!(core, |c| c.mods.minecraft.cover(&id).map(|p| cover::data_url(&p)))
 }

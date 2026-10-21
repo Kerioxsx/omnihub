@@ -26,8 +26,14 @@ struct Fixture {
 }
 
 fn setup(tls: bool) -> Fixture {
+    setup_with(tls, |_, _| {})
+}
+
+/// `prepare` gets the test folder and the app's data folder before the app starts.
+fn setup_with(tls: bool, prepare: impl FnOnce(&std::path::Path, &std::path::Path)) -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let paths = AppPaths::at(&dir.path().join("home")).unwrap();
+    prepare(dir.path(), &paths.data);
     let core = AppCore::new(
         paths,
         CoreOptions { dry_run_power: true, vault_kdf: Some(KdfParams { m_cost: 256, t_cost: 1, p_cost: 1 }), vault_dpapi: Some(false), ..Default::default() },
@@ -543,6 +549,105 @@ fn games_from_the_phone() {
 
         f.core.update_settings(&json!({ "remote": { "allowAppLaunch": false } })).unwrap();
         assert_eq!(c.get(format!("{base}/api/games")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+    });
+    f.core.remote.stop();
+}
+
+/// A Minecraft server from the phone: the list, players, whitelist, the
+/// player limit, a player's details, the console and map while it's off,
+/// and the permission switch.
+#[test]
+fn servers_from_the_phone() {
+    let f = setup_with(false, |root, data| {
+        let srv = root.join("Friends SMP");
+        std::fs::create_dir_all(srv.join("world")).unwrap();
+        std::fs::write(srv.join("server.properties"), "max-players=8\nwhite-list=false\nonline-mode=false\nlevel-name=world\nserver-port=25565\nmotd=Hello\n").unwrap();
+        std::fs::write(srv.join("whitelist.json"), r#"[{"uuid":"ab6ad2dc-6b14-3a2b-bc2e-f3ab0e1e5b4a","name":"Alex"}]"#).unwrap();
+        std::fs::write(srv.join("paper-1.21.4-232.jar"), b"not really a jar").unwrap();
+        let record = json!([{ "id": "smp", "name": "Friends SMP", "flavor": "paper", "mc": "1.21.4", "dir": srv.to_string_lossy(), "launch": { "type": "jar", "jar": "paper-1.21.4-232.jar" }, "javaMajor": 21, "memoryMb": 2048, "eulaAt": 1 }]);
+        std::fs::create_dir_all(data.join("mcserver")).unwrap();
+        std::fs::write(data.join("mcserver").join("servers.json"), record.to_string()).unwrap();
+    });
+    let srv = f._dir.path().join("Friends SMP");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let base = &f.base;
+        let pairing = f.core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        let info: Value = c.get(format!("{base}/api/info")).send().await.unwrap().json().await.unwrap();
+        assert_eq!(info["features"]["servers"], true);
+        let get = |path: String| {
+            let c = c.clone();
+            let auth = auth.clone();
+            async move { c.get(format!("{base}{path}")).header("authorization", &auth).send().await.unwrap() }
+        };
+        let post = |path: String, body: Value| {
+            let c = c.clone();
+            let auth = auth.clone();
+            async move { c.post(format!("{base}{path}")).header("authorization", &auth).json(&body).send().await.unwrap() }
+        };
+
+        let list: Value = get("/api/servers".into()).await.json().await.unwrap();
+        assert_eq!(list[0]["name"], "Friends SMP", "{list}");
+        assert_eq!(list[0]["state"], "stopped");
+        assert_eq!(list[0]["maxPlayers"], 8);
+        assert_eq!(list[0]["whitelist"], false);
+
+        let pv: Value = get("/api/servers/smp/players".into()).await.json().await.unwrap();
+        assert_eq!(pv["whitelistOn"], false);
+        assert_eq!(pv["known"][0]["name"], "Alex");
+        assert_eq!(pv["known"][0]["whitelisted"], true);
+
+        // The whitelist and the player limit, written to server.properties.
+        let v: Value = post("/api/servers/smp/whitelist".into(), json!({ "on": true })).await.json().await.unwrap();
+        assert_eq!(v["whitelist"], true, "{v}");
+        let v: Value = post("/api/servers/smp/max-players".into(), json!({ "players": 20 })).await.json().await.unwrap();
+        assert_eq!(v["maxPlayers"], 20, "{v}");
+        let props = std::fs::read_to_string(srv.join("server.properties")).unwrap();
+        assert!(props.contains("white-list=true") && props.contains("max-players=20") && props.contains("motd=Hello"), "{props}");
+
+        // Who can join: paid accounts only, then everyone again (operators guarded).
+        let v: Value = post("/api/servers/smp/join".into(), json!({ "everyone": false })).await.json().await.unwrap();
+        assert_eq!(v["onlineMode"], true, "{v}");
+        let v: Value = post("/api/servers/smp/join".into(), json!({ "everyone": true })).await.json().await.unwrap();
+        assert_eq!(v["onlineMode"], false, "{v}");
+        let pv: Value = get("/api/servers/smp/players".into()).await.json().await.unwrap();
+        assert_eq!(pv["waiting"], json!([]));
+        let r: Value = post("/api/servers/smp/act".into(), json!({ "name": "Alex", "action": { "type": "allow", "place": "203.0.113.5" } })).await.json().await.unwrap();
+        assert!(r["reply"].as_str().unwrap().contains("can join"), "{r}");
+
+        // A friend added from the phone (offline mode: the name is enough).
+        let r = post("/api/servers/smp/act".into(), json!({ "name": "Steve", "action": { "type": "whitelist", "on": true } })).await;
+        assert_eq!(r.status(), StatusCode::OK);
+        let wl = std::fs::read_to_string(srv.join("whitelist.json")).unwrap();
+        assert!(wl.contains("Steve") && wl.contains("5627dd98-e6be-3c21-b8a8-e92344183641"), "{wl}");
+        // Things that need the server running say so.
+        let r = post("/api/servers/smp/act".into(), json!({ "name": "Steve", "action": { "type": "give", "item": "minecraft:diamond", "count": 1 } })).await;
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(post("/api/servers/smp/command".into(), json!({ "text": "list" })).await.status(), StatusCode::BAD_REQUEST);
+
+        let p: Value = get("/api/servers/smp/player/Alex".into()).await.json().await.unwrap();
+        assert_eq!(p["name"], "Alex");
+        assert_eq!(p["online"], false);
+        let lines: Value = get("/api/servers/smp/console".into()).await.json().await.unwrap();
+        assert!(lines.is_array());
+        let m: Value = get("/api/servers/smp/map?dim=overworld".into()).await.json().await.unwrap();
+        assert_eq!(m["regions"], json!([]));
+        assert_eq!(m["supported"], true);
+        assert_eq!(get("/api/servers/smp/map/tile?dim=overworld&x=0&z=0".into()).await.status(), StatusCode::NOT_FOUND);
+        assert_eq!(get("/api/servers/nope/players".into()).await.status(), StatusCode::NOT_FOUND);
+        assert_eq!(post("/api/servers/nope/stop".into(), json!({})).await.status(), StatusCode::BAD_REQUEST);
+
+        // What the phone did is in the activity log.
+        let audit = f.core.audit.list(50, 0);
+        assert!(audit.iter().any(|a| a.action == "mcserver.whitelist"), "{audit:?}");
+
+        f.core.update_settings(&json!({ "remote": { "allowServers": false } })).unwrap();
+        assert_eq!(get("/api/servers".into()).await.status(), StatusCode::FORBIDDEN);
+        let info: Value = c.get(format!("{base}/api/info")).send().await.unwrap().json().await.unwrap();
+        assert_eq!(info["features"]["servers"], false);
     });
     f.core.remote.stop();
 }

@@ -6,7 +6,7 @@
 // own account.
 
 import type { McEntry, McEntryStatus, McLoader, McMix, McPackHit, McPackVersion, McStatus, PollSignIn, PollStatus } from '@shared/types';
-import { ArrowLeft, Blocks, Download, ExternalLink, FilePlus2, FolderOpen, FolderPlus, ImageDown, KeyRound, LogOut, Play, Plus, RefreshCw, Save, Search, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { ArrowLeft, Blocks, Download, ExternalLink, FilePlus2, FolderOpen, FolderPlus, ImageDown, KeyRound, LogOut, Play, Plus, RefreshCw, Save, Search, Server, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -507,6 +507,9 @@ export function MinecraftView() {
               </div>
               <Button variant="secondary" icon={Save} onClick={() => void save()}>
                 Save as .mrpack
+              </Button>
+              <Button variant="secondary" icon={Server} onClick={() => navigate('servers', { from: `mix:${mix.id}` })} title="Host this mix as a Minecraft server on this PC (only the mods servers use).">
+                Host as a server
               </Button>
               <Button variant="primary" icon={Play} disabled={!mix.installable || !st?.found || installing} onClick={() => void install()} title={mix.installable ? undefined : 'Forge and NeoForge mixes: save as .mrpack and open it in Modrinth App or Prism Launcher.'}>
                 {installing ? 'Installing…' : 'Install in the Minecraft Launcher'}

@@ -5,6 +5,7 @@ mod commands;
 mod ambient;
 mod govee;
 mod chats;
+mod mcserver;
 mod mods;
 mod overlay;
 mod rest;
@@ -62,6 +63,10 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
             format!("{} is almost full", payload["root"].as_str().unwrap_or("A drive").trim_end_matches('\\')),
             format!("Only {} left. Open OmniHub to see what takes the space.", omnihub_core::storage::format_bytes(payload["free"].as_u64().unwrap_or(0))),
         )),
+        "mcserver:guard" => Some((
+            format!("{} wants in on {}", payload["name"].as_str().unwrap_or("Someone"), payload["server"].as_str().unwrap_or("your server")),
+            "That name is an operator and joined from a new place, so it was kept out. Open OmniHub (Servers → Players) to allow it.".into(),
+        )),
         "screen:viewers" => payload.as_array().filter(|v| !v.is_empty()).map(|v| ("Screen is being shared".into(), format!("{} viewing your screen.", v[0]["device"].as_str().unwrap_or("A phone")))),
         _ => None,
     }
@@ -101,6 +106,7 @@ pub fn run(args: Vec<String>) {
     let core = AppCore::new(paths, CoreOptions::default()).expect("cannot open the OmniHub database");
     let rig_hub = core.rig.clone();
     let govee_hub = core.govee.clone();
+    let server_hub = core.mcserver.clone();
     #[cfg(windows)]
     let session_logs = logs_dir.clone();
 
@@ -170,7 +176,12 @@ pub fn run(args: Vec<String>) {
             shortcuts::register(&handle);
             // The installer closes and reopens OmniHub; leave cleanly first.
             let exit_handle = handle.clone();
-            core.updater.set_exit(move || exit_handle.exit(0));
+            let servers = core.mcserver.clone();
+            core.updater.set_exit(move || {
+                // Servers running now come back after the update.
+                servers.remember_running();
+                exit_handle.exit(0)
+            });
             // Automatic updates wait while the window is open (it would close on you).
             let window_handle = handle.clone();
             core.updater.set_in_use(move || window_handle.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false)));
@@ -201,6 +212,8 @@ pub fn run(args: Vec<String>) {
                     omnihub_core::system::session_end::watch(hwnd.0 as isize, move || {
                         tracing::info!("Windows asked OmniHub to close");
                         c.remote.stop();
+                        // Minecraft servers save their worlds first (Windows waits a few seconds).
+                        c.mcserver.shutdown(Duration::from_secs(8));
                         omnihub_core::crashlog::end_session(&session_logs);
                         h.exit(0);
                     });
@@ -509,6 +522,7 @@ pub fn run(args: Vec<String>) {
             mods::mc_export,
             mods::mc_install,
             mods::mc_uninstall,
+            mods::mc_mixes,
             mods::mc_cover,
             mods::mc_remake_cover,
             mods::mc_ai_cover,
@@ -518,6 +532,43 @@ pub fn run(args: Vec<String>) {
             mods::pollinations_check,
             mods::pollinations_set_key,
             mods::pollinations_forget,
+            mcserver::srv_list,
+            mcserver::srv_get,
+            mcserver::srv_versions,
+            mcserver::srv_create,
+            mcserver::srv_adopt,
+            mcserver::srv_update,
+            mcserver::srv_delete,
+            mcserver::srv_start,
+            mcserver::srv_stop,
+            mcserver::srv_restart,
+            mcserver::srv_kill,
+            mcserver::srv_console,
+            mcserver::srv_command,
+            mcserver::srv_properties,
+            mcserver::srv_set_properties,
+            mcserver::srv_set_icon,
+            mcserver::srv_players,
+            mcserver::srv_player,
+            mcserver::srv_act,
+            mcserver::srv_whitelist,
+            mcserver::srv_watch,
+            mcserver::srv_map,
+            mcserver::srv_map_tile,
+            mcserver::srv_content,
+            mcserver::srv_identify,
+            mcserver::srv_search,
+            mcserver::srv_install,
+            mcserver::srv_add_file,
+            mcserver::srv_set_content,
+            mcserver::srv_remove_content,
+            mcserver::srv_backups,
+            mcserver::srv_backup,
+            mcserver::srv_restore,
+            mcserver::srv_delete_backup,
+            mcserver::srv_network,
+            mcserver::srv_set_upnp,
+            mcserver::srv_fix_firewall,
         ])
         .build(tauri::generate_context!())
         .expect("error while starting OmniHub")
@@ -528,6 +579,8 @@ pub fn run(args: Vec<String>) {
                 rig_hub.shutdown();
                 // Streaming Govee lights go back to their own modes.
                 govee_hub.shutdown();
+                // Minecraft servers save their worlds and stop.
+                server_hub.shutdown(Duration::from_secs(25));
                 omnihub_core::crashlog::end_session(&logs_dir);
             }
         });

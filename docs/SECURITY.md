@@ -269,6 +269,85 @@ and lets a phone do some of that. This is what protects each part.
   `.minecraft\omnihub`; removing a mix removes both. It refuses to run while
   the Minecraft Launcher is open.
 
+## Minecraft servers
+
+- Servers OmniHub makes live in `data/mcserver/servers/<name>`, and the Java
+  it downloads in `data/mcserver/java`. A server added from elsewhere
+  ("adopt") stays in its own folder, and removing it from OmniHub never
+  deletes that folder.
+- Downloads, each checked before it's used: the vanilla server from Mojang
+  (`piston-meta.mojang.com`, against Mojang's SHA-1), Paper from PaperMC's
+  Fill API (SHA-256), Fabric's launcher from `meta.fabricmc.net` (HTTPS, with
+  the Minecraft server jar it needs fetched from Mojang and checked), Quilt's,
+  Forge's and NeoForge's installers from their Maven repositories (against
+  the checksums published beside them), Java (Eclipse Temurin) from Adoptium
+  (SHA-256), and mods, plugins and data packs from Modrinth (SHA-512).
+  Installers run once in the server's folder, with no window; Quilt's
+  installer fetches the Minecraft server itself.
+- A server starts only after the user accepts Minecraft's EULA (OmniHub then
+  writes `eula.txt`). It runs as the user, as a normal Java process with no
+  window; OmniHub talks to it through its console. Start-up flags the user
+  adds are JVM tuning only (`-X…`, `-XX:…`, `-D…`, `--add-…`): no `-jar`,
+  agents, argument files, boot class path, or `-XX:OnError` /
+  `-XX:OnOutOfMemoryError` (which would run a program).
+- Commands OmniHub sends for the user (give, teleport, kick, ban…) are built
+  from checked values: player names are 1–16 letters, digits or `_`, item
+  ids are `namespace:id`, numbers are finite, and text is one line.
+- **Who can join.** With "paid Minecraft accounts" (online mode) Mojang
+  checks every player. With "everyone" (online mode off) players without a
+  paid account can join, and Minecraft can't check names at all: anyone can
+  type anyone's name. OmniHub then guards the operators:
+  - It keeps the operator list itself (`.omnihub/guard.json` in the server's
+    folder; `ops.json` stays empty) and makes someone an operator only for a
+    visit from a place (network address) the owner allowed: where they last
+    played when the owner made them an operator, places the owner approved,
+    or this PC itself. They stop being an operator when they leave.
+  - An operator's name joining from anywhere else is kicked at once (it was
+    never an operator) and waits for the owner's OK on the PC or the phone;
+    the owner gets a notification. A login that was kept out is never
+    remembered as where that player plays.
+  - The same name joining again from elsewhere while the real player is on
+    replaces their session: that session stops being an operator first,
+    and the new one is kicked.
+  - Operators made in the game (`/op` by another operator) join the guard
+    when they leave, at the next login, or within a minute; operators typed
+    into OmniHub's console go through the guard directly.
+  - What this doesn't do: it doesn't protect ordinary players' names (anyone
+    could join as a friend and use their things), and addresses can be
+    shared (a household, a school). Keep the whitelist on, and for passwords
+    for everyone use a login plugin on Paper. The safest choice stays
+    "paid Minecraft accounts".
+  - Switching between the two moves the whitelist, operator and ban entries
+    and saved players to the other kind of UUID (made from the name, or
+    Mojang's, looked up by name at `api.mojang.com`) before the server
+    starts. Saved players are copied, never overwritten, so switching back
+    loses nothing.
+- **Friends over the internet.** OmniHub adds a Windows Firewall rule for
+  the server's `java.exe` only when the user clicks for it (through the
+  admin helper, which only adds rules for programs named `java.exe` or
+  `javaw.exe` and for the AirPlay receiver). It asks the router to forward the server's port (UPnP, a 24-hour
+  lease renewed while it runs) only when the user turns that on for a
+  server, and closes it when they turn it off. The public address shown is
+  asked of `api.ipify.org` when the user opens Network.
+- The **live map** is drawn on this PC from the world's region files, and
+  its pictures are kept in the server's `.omnihub/map`; nothing is sent
+  anywhere. Backups are zip files in the server's `backups` folder; restoring
+  one keeps the world it replaces beside it.
+- **Claude** makes data packs (files only: `pack.mcmeta` and `data/`, checked
+  before they're added) and Paper plugins. Plugins are compiled with `javac`
+  from OmniHub's own JDK, only after the user approves each build, with
+  annotation processing and class loading from the source path turned off
+  (`-proc:none -implicit:none`), the server's own libraries as the only class
+  path, and `JAVA_TOOL_OPTIONS`, `JDK_JAVAC_OPTIONS` and `_JAVA_OPTIONS`
+  cleared. The same file rules as for game mods apply.
+- **Phone.** Phone → Permissions → Minecraft servers (on by default) lets
+  paired phones start, stop and restart servers, manage players
+  (inventory, teleport, kick, ban, operators, whitelist, approving an
+  operator's new place), change the player limit and who can join, send
+  console commands and see the map. Every change is in the audit log. The
+  phone can't make or delete servers, add or remove content, change other
+  settings, or change Java and start-up flags.
+
 ## Chats
 
 - OmniHub's own chats use the Claude key above, or the user's OpenAI API
@@ -486,6 +565,11 @@ internet only for:
   directly with yt-dlp (see Aurora above).
 - **Animated covers** (Aurora, on by default, can be turned off): the title
   and artist go to Apple Music's catalogue (see Aurora above).
+- **Minecraft servers** (only when you make or run them): the server, its
+  loader and Java from Mojang, PaperMC, Fabric, Quilt, Forge, NeoForge and
+  Adoptium; content from Modrinth; player names from Mojang's API (servers
+  that check accounts); your public address from ipify, and the router (UPnP)
+  when you turn port opening on (see Minecraft servers).
 - **Mix covers**: the packs' icons from Modrinth's CDN; and, only after you
   connect your own Pollinations account, the icons to Pollinations (see
   Mods and Claude).

@@ -367,3 +367,45 @@ once, and fires timers on the local clock. Cloud calls run on a separate
 desktop on the GPU (Desktop Duplication → mipmapped copy → one small level
 read back), falling back to GDI capture.
 
+
+## Minecraft servers
+
+`mcserver/` hosts Minecraft servers. `install.rs` knows each server type's
+download site (Mojang's piston-meta, PaperMC's Fill API, Fabric and Quilt
+meta and Maven, Forge and NeoForge Maven, Adoptium for Java), checks every
+file against its published checksum, runs the loaders' installers, and
+works out how each server starts (`Launch`: a jar, or Forge/NeoForge's
+argument file) and which Java it needs (`Runtimes` keeps them in
+`data/mcserver/java`). `process.rs` runs the server with its console on
+pipes: each line is filed (`split`, `read` → `Said`: started, logged in from
+an address, joined, left, the player list, chat, a plain-words problem),
+and `Proc::ask` sends commands and collects their answers without showing
+them in the console. `props.rs` reads and writes `server.properties` the way
+Java does. `players.rs` keeps the whitelist, operators and bans, works out
+name-made UUIDs (MD5, as servers without account checks do), reads a
+player's saved file (`nbt.rs` reads NBT and the SNBT `data get entity`
+prints) into position, health and inventory, and asks Mojang's API for a
+name's UUID. `guard.rs` is for servers that let players without a paid
+account join: it holds the operators (`.omnihub/guard.json`) and the places
+each may join from, and moves lists and saved players between UUID kinds
+when the server switches. `map.rs` draws a region (512×512 blocks) from the
+Anvil files: chunk sections' palettes and packed block states, the
+`MOTION_BLOCKING` height map, a colour per block, height shading, water
+depth, a scan from below for the Nether; tiles are cached as PNGs in the
+server's `.omnihub/map`. `content.rs` adds mods, plugins and data packs
+(Modrinth, a file, a modpack's server-side files and overrides, or Claude's
+projects) and switches them off by moving them to `.omnihub/disabled`.
+`backup.rs` zips worlds (saving paused) and restores them. `net.rs` finds
+the PC's addresses, the public address, and talks UPnP (SSDP and SOAP) to
+the router.
+
+`ServerHub` keeps the servers in `data/mcserver/servers.json` and their live
+state in memory, ticks four times a second (crash restarts, a player list
+each minute, positions every two seconds while a window or phone looks,
+scheduled backups, the router lease, keeping the PC awake), and emits
+`mcserver:changed`, `mcserver:work`, `mcserver:console`, `mcserver:players`,
+`mcserver:content` and `mcserver:guard`. Servers that ran when OmniHub
+updated itself start again with it (`resume.json`), as do servers set to
+start with OmniHub, and ones left running by a crash are ended at start
+(`running.json`). The phone reaches
+it through `/api/servers*`.

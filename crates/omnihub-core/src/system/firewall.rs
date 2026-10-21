@@ -264,8 +264,8 @@ pub fn check(program: &Path, port: Option<u16>, proto: Proto, what: &str) -> Fir
     }
 }
 
-/// Programs the elevated helper may add firewall rules for: OmniHub itself
-/// and an UxPlay AirPlay receiver.
+/// Programs the elevated helper may add firewall rules for: OmniHub itself,
+/// an UxPlay AirPlay receiver, and Java (for Minecraft servers).
 pub fn helper_may_allow(program: &Path) -> bool {
     if !program.is_absolute() || !program.is_file() {
         return false;
@@ -274,7 +274,8 @@ pub fn helper_may_allow(program: &Path) -> bool {
         return false;
     }
     let name = program.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
-    if name == "uxplay.exe" {
+    // UxPlay (AirPlay) and the Java a Minecraft server runs with.
+    if matches!(name.as_str(), "uxplay.exe" | "java.exe" | "javaw.exe") {
         return true;
     }
     match (std::env::current_exe().and_then(|p| p.canonicalize()), program.canonicalize()) {

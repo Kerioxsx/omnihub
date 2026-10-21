@@ -1,10 +1,16 @@
 ## New in this version
 
-**Covers for mixed Minecraft modpacks.** Everything else stays as it was.
+**Host Minecraft servers on your PC, 24/7** — a new **Servers** tab, and the same on your phone.
 
-- **A cover for every mix.** When you mix modpacks (Mods → Minecraft), the mix gets a picture made from its packs' own icons: each icon whole, on a wash of its colours, with soft seams between the packs, and pixel art kept crisp. It's made on your PC, needs no account, and becomes the mix's icon in the Minecraft Launcher instead of the crafting table.
-- **AI blend.** Press **AI blend** and Pollinations' image model paints one new picture from the packs' icons, as if they were merged. It uses your own Pollinations account: approve OmniHub on Pollinations' page (and set how much it may spend), or paste your own key. Only the packs' icons are sent, each picture costs about 0.005 Pollen, and each try paints a different one.
-- **Blend again** goes back to the plain blend, and **Save the picture** saves it as a PNG.
+- **Make a server in one go**: vanilla, Paper (plugins), Fabric, Quilt, Forge or NeoForge, any Minecraft version they support. OmniHub downloads the server and the right Java for it and checks every file. Or make it **from a Modrinth modpack, a .mrpack file or one of your mixes**: only the mods a server needs are installed (client-only mods like shaders and minimaps are left out).
+- **24/7**: servers start with OmniHub (even with the window closed), restart if they crash, keep the PC awake while they run, back up the world on a schedule, and stop cleanly (world saved) when the PC shuts down.
+- **Players**: who's on and where (X, Y, Z and the world), their **inventory** (give anything, take a stack away), health and food, game mode, teleport (to a spot, spawn or another player), heal, feed, a private message, kick and ban. The **whitelist**, operators and bans, and the **player limit**.
+- **Who can join**: paid Minecraft accounts only, or **everyone, also players without a paid account** (free launchers). Minecraft can't check names then, so OmniHub guards your operators: someone with an operator's name is only an operator when they join from a place (address) you allowed, and an attempt from somewhere new is kicked and waits for your OK, with a notification on the PC and the phone. Switching moves everyone's whitelist, operator and ban entries and their saved things to the new kind of account, so nobody loses anything.
+- **Live map**: the world from above, drawn by OmniHub from the server's own files (every server type, nothing uploaded), with players moving on it. Follow a player, zoom, Overworld, Nether and the End.
+- **Mods, plugins and data packs** from Modrinth (with what they need), from a file, on/off/remove. **Claude makes data packs and Paper plugins** for your server with your Anthropic key (plugins are compiled only when you allow it).
+- **Friends over the internet**: the address to share, a one-click firewall rule, the router port opened for you (UPnP), and a plain warning when your internet provider shares one address between homes (then a port can't be opened).
+- **Console** with commands, every setting of server.properties, backups you can restore, memory and Java.
+- **From your phone** (More → Minecraft servers): start, stop and restart, players with their location and inventory (give, heal, teleport, kick…), the whitelist, the player limit, who can join, approve an operator's new place, the live map (pinch to zoom) and the console. It can be turned off in Phone → Permissions.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

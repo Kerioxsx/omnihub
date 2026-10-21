@@ -5,6 +5,7 @@
 import type { BrowsePackage, ClaudeSettings, InstalledMod, MakerItem, MakerProject, MakerView, McEntry, McInstalled, McMix, McPackHit, McPackVersion, McSource, ModBrowse, ModGame, ModNote, ModSort, TsPackage, WorkshopItem } from '@shared/types';
 import { emit } from './bus';
 import { blendCover, packIcon, paintedCover } from './mcCover';
+import { serversMock } from './servers';
 
 const now = Date.now();
 const DAY = 86_400_000;
@@ -191,16 +192,18 @@ function streamReply(id: string, text: string): void {
   const p = view.project;
   p.status = 'working';
   emit('maker:changed', { project: id });
-  const reply = `Looking at it now.\n\nDone: I updated the mod for “${text.slice(0, 60)}”. Press **Update** to install version ${p.version + 1}.`;
+  const server = p.game.startsWith('mcserver:');
+  const file = p.kind === 'datapack' ? 'mod/data/omnihub/function/load.mcfunction' : p.kind === 'paperPlugin' ? 'mod/src/dev/omnihub/demo/DemoPlugin.java' : 'mod/main.lua';
+  const reply = server ? `Done: ${p.kind === 'paperPlugin' ? 'the plugin' : 'the data pack'} for “${text.slice(0, 60)}” is ready for Minecraft. Press **Install** to put version ${p.version + 1} on the server.` : `Looking at it now.\n\nDone: I updated the mod for “${text.slice(0, 60)}”. Press **Update** to install version ${p.version + 1}.`;
   const words = reply.split(/(\s+)/);
   setTimeout(() => emit('maker:delta', { project: id, kind: 'note', text: 'Reading the mod and the game files it touches.' }), 300);
   setTimeout(() => {
-    view.items.push({ kind: 'note', text: 'Reading the mod and the game files it touches.', at: Date.now() }, { kind: 'tool', text: 'Read mod/main.lua', at: Date.now() });
+    view.items.push({ kind: 'note', text: server ? 'Checking this Minecraft version’s data pack format and commands.' : 'Reading the mod and the game files it touches.', at: Date.now() }, { kind: 'tool', text: server ? 'Read game/server.properties' : 'Read mod/main.lua', at: Date.now() });
     emit('maker:changed', { project: id });
   }, 900);
   words.forEach((w, i) => setTimeout(() => emit('maker:delta', { project: id, kind: 'text', text: w }), 1100 + i * 45));
   setTimeout(() => {
-    view.items.push({ kind: 'tool', text: 'Changed mod/main.lua', at: Date.now() }, { kind: 'tool', text: 'Finished the mod', at: Date.now() }, { kind: 'text', text: reply, at: Date.now() });
+    view.items.push({ kind: 'tool', text: `Wrote ${file}`, at: Date.now() }, { kind: 'tool', text: 'Finished the mod', at: Date.now() }, { kind: 'text', text: reply, at: Date.now() });
     p.status = 'idle';
     p.ready = true;
     p.version += 1;
@@ -232,6 +235,7 @@ let mcSources: McSource[] = [
 ];
 const mcInstalled: McInstalled[] = [];
 let mcMix: McMix | null = null;
+const DEMO_MIX: McMix = { id: 'mixdemo', name: 'Create + Cobblemon', mc: '26.1.2', loader: 'neoforge', loaderVersion: '26.1.2.122', sources: ['Create: Arcane Engineering', 'Cobblemon Official Modpack'], entries: [], clashes: [], problems: [], installable: false, sourceIds: [], cover: 'blend' };
 const mcCovers = new Map<string, string>();
 const mixIcons = () => (mcMix?.sourceIds ?? []).map((id) => mcSources.find((s) => s.id === id)).map((s) => s?.icon ?? packIcon(s?.name ?? 'Pack'));
 
@@ -357,12 +361,14 @@ export const modsMock = {
   projects: (gameKey: string | null) => Object.values(projects).map((v) => v.project).filter((p) => !gameKey || p.game === gameKey).sort((a, b) => b.updated - a.updated),
   create(gameKey: string, text: string): MakerProject {
     if (!claude.hasKey) throw 'Add your Anthropic API key first (Claude settings).';
-    const g = games.find((x) => x.key === gameKey)!;
+    const server = gameKey.startsWith('mcserver:');
+    const g = server ? { name: serversMock.serverName(gameKey), maker: { available: true, why: null, kind: (gameKey.endsWith(':plugin') ? 'paperPlugin' : 'datapack') as MakerProject['kind'] } } : games.find((x) => x.key === gameKey)!;
     if (!g.maker.available) throw g.maker.why;
     const id = `p${nextProject++}`;
     const p: MakerProject = { id, game: gameKey, gameName: g.name, name: text.split(/[.!?\n]/)[0].slice(0, 48) || 'New mod', kind: g.maker.kind!, created: Date.now(), updated: Date.now(), status: 'working', ready: false, version: 0, summary: '', howToUse: '', installed: null, installedVersion: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, webSearches: 0 }, cost: 0, model: claude.model, web: claude.web, approval: null, error: null };
-    projects[id] = { project: p, items: [{ kind: 'user', text, at: Date.now() }], files: [{ path: 'main.lua', size: 900 }] };
-    FILES[`${id}/main.lua`] = '-- Written by Claude in the demo\n';
+    const files = p.kind === 'datapack' ? [{ path: 'pack.mcmeta', size: 120 }, { path: 'data/omnihub/function/load.mcfunction', size: 340 }, { path: 'data/minecraft/tags/function/load.json', size: 60 }] : p.kind === 'paperPlugin' ? [{ path: 'plugin.yml', size: 210 }, { path: 'src/dev/omnihub/demo/DemoPlugin.java', size: 2400 }] : [{ path: 'main.lua', size: 900 }];
+    projects[id] = { project: p, items: [{ kind: 'user', text, at: Date.now() }], files };
+    for (const f of files) FILES[`${id}/${f.path}`] = f.path === 'pack.mcmeta' ? '{\n  "pack": { "description": "Made with Claude in OmniHub", "min_format": [121, 0], "max_format": [121, 0] }\n}\n' : '-- Written by Claude in the demo\n';
     streamReply(id, text);
     return p;
   },
@@ -394,6 +400,13 @@ export const modsMock = {
   async install(id: string): Promise<MakerProject> {
     const v = projects[id];
     const p = v.project;
+    if (p.game.startsWith('mcserver:')) {
+      p.installed = serversMock.addMade(p.game, p.name, p.kind === 'paperPlugin' ? 'paperPlugin' : 'datapack');
+      p.installedVersion = p.version;
+      v.items.push({ kind: 'notice', tone: 'good', text: `Installed version ${p.version} on the server. ${p.kind === 'paperPlugin' ? 'Restart the server to load it.' : 'It’s live now.'} Tell Claude here how it went.`, at: Date.now() });
+      emit('maker:changed', { project: id });
+      return p;
+    }
     await progress(p.game, ['Installing…'], () => {
       const prev = mods.find((m) => m.id === p.installed);
       if (prev) prev.version = `${p.version}`;
@@ -408,6 +421,7 @@ export const modsMock = {
     return p;
   },
 
+  mcMixes: (): McMix[] => [...(mcMix ? [mcMix] : []), DEMO_MIX].filter((m, i, all) => all.findIndex((x) => x.name === m.name) === i),
   mcStatus: () => ({ found: true, dir: 'C:\\Users\\Player\\AppData\\Roaming\\.minecraft', sources: mcSources, installed: mcInstalled }),
   mcSearch: (query: string) => ({ hits: mcHits.filter((h) => !query || `${h.title} ${h.description}`.toLowerCase().includes(query.toLowerCase())).map((h) => ({ ...h, icon: h.icon ?? packIcon(h.title) })), total: mcHits.length }),
   mcVersions: (project: string): McPackVersion[] => {

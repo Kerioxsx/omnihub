@@ -1,6 +1,6 @@
 import type { BrowseScope } from '@shared/types';
 import type { LucideIcon } from 'lucide-react';
-import { Activity, AppWindow, ClipboardPaste, FolderOpen, FolderPlus, KeyRound, MousePointer2, NotebookPen, Power, RotateCcw, ScreenShare, ShieldAlert, Upload, X } from 'lucide-react';
+import { Activity, AppWindow, ClipboardPaste, FolderOpen, FolderPlus, KeyRound, MousePointer2, NotebookPen, Power, RotateCcw, ScreenShare, Server, ShieldAlert, Upload, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { api } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -110,6 +110,7 @@ export function Permissions() {
           <Toggle icon={NotebookPen} title="Notes & ideas" hint="Read and write notes from the phone" checked={r.allowNotes} onChange={(v) => void update({ remote: { allowNotes: v } })} />
           <Toggle icon={ClipboardPaste} title="Clipboard" hint="Phones can put text on this PC's clipboard" checked={r.allowClipboard} onChange={(v) => void update({ remote: { allowClipboard: v } })} />
           <Toggle icon={Activity} title="Tasks" hint="See what's using the PC, change priority and end tasks" checked={r.allowTasks} onChange={(v) => void update({ remote: { allowTasks: v } })} />
+          <Toggle icon={Server} title="Minecraft servers" hint="Start and stop them, see players on the map, manage the whitelist and players" checked={r.allowServers} onChange={(v) => void update({ remote: { allowServers: v } })} />
           <Toggle icon={KeyRound} title="Vault access" hint={r.tls ? 'List and reveal entries after typing the master password on the phone' : 'Needs HTTPS — turn it on in Settings → Phone'} checked={s.vault.allowPhone && r.tls} disabled={!r.tls} tone="warn" onChange={(v) => void update({ vault: { allowPhone: v } })} />
         </div>
       </Card>

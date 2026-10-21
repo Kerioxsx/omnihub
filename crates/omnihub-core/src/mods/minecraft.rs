@@ -23,6 +23,10 @@ pub const MODRINTH: &str = "https://api.modrinth.com";
 pub const FABRIC_META: &str = "https://meta.fabricmc.net";
 pub const QUILT_META: &str = "https://meta.quiltmc.org";
 
+fn yes() -> bool {
+    true
+}
+
 /// Memory to give a modded Minecraft (GB): 4, 6 or 8 by the PC's RAM.
 pub fn memory_for_pc() -> u32 {
     let mut sys = sysinfo::System::new();
@@ -68,6 +72,9 @@ pub struct PackFile {
     pub urls: Vec<String>,
     /// The client needs it (false: server-only).
     pub client: bool,
+    /// Servers use it (false: client-only, left off servers).
+    #[serde(default = "yes")]
+    pub server: bool,
     /// A file on this PC (from an instance folder) rather than a download.
     #[serde(default)]
     pub local: Option<String>,
@@ -238,7 +245,7 @@ impl MrVersion {
 
     fn file(&self, folder: &str, client: bool) -> Option<PackFile> {
         let f = self.primary()?;
-        Some(PackFile { path: format!("{folder}/{}", f.filename), sha1: f.hashes.get("sha1").cloned().unwrap_or_default(), sha512: f.hashes.get("sha512").cloned().unwrap_or_default(), size: f.size, urls: vec![f.url.clone()], client, local: None })
+        Some(PackFile { path: format!("{folder}/{}", f.filename), sha1: f.hashes.get("sha1").cloned().unwrap_or_default(), sha512: f.hashes.get("sha512").cloned().unwrap_or_default(), size: f.size, urls: vec![f.url.clone()], client, server: true, local: None })
     }
 }
 
@@ -453,6 +460,92 @@ impl Modrinth {
     }
 }
 
+/// A Modrinth project as a search lists it (mods, plugins, data packs).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectHit {
+    pub project: String,
+    pub slug: String,
+    pub title: String,
+    pub description: String,
+    pub author: String,
+    pub icon: Option<String>,
+    pub downloads: u64,
+    pub categories: Vec<String>,
+    /// required, optional, unsupported, unknown
+    pub server_side: String,
+    pub client_side: String,
+}
+
+/// A project's version picked for a server: its file and the projects it needs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Release {
+    pub project: String,
+    pub number: String,
+    pub file: PackFile,
+    pub requires: Vec<String>,
+}
+
+/// A project's title, icon and where it runs.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectMeta {
+    pub title: String,
+    pub icon: Option<String>,
+    pub server_side: String,
+}
+
+impl Modrinth {
+    /// Search one kind of project (mod, plugin, datapack) with extra facets.
+    pub fn search_projects(&self, project_type: &str, query: &str, facets: &[Vec<String>], offset: usize) -> Result<(Vec<ProjectHit>, u64), String> {
+        let mut all = vec![vec![format!("project_type:{project_type}")]];
+        all.extend(facets.iter().filter(|f| !f.is_empty()).cloned());
+        let v = self.get(&format!("{}/v2/search?query={}&facets={}&index={}&limit=20&offset={offset}", self.base, percent_encoding::utf8_percent_encode(query, percent_encoding::NON_ALPHANUMERIC), Self::q(&json!(all)), if query.trim().is_empty() { "downloads" } else { "relevance" }))?;
+        let hits = v["hits"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|h| {
+                let s = |k: &str| h[k].as_str().unwrap_or_default().to_string();
+                ProjectHit { project: s("project_id"), slug: s("slug"), title: s("title"), description: s("description"), author: s("author"), icon: h["icon_url"].as_str().filter(|u| !u.is_empty()).map(String::from), downloads: h["downloads"].as_u64().unwrap_or(0), categories: h["categories"].as_array().into_iter().flatten().filter_map(|c| c.as_str().map(String::from)).collect(), server_side: s("server_side"), client_side: s("client_side") }
+            })
+            .collect();
+        Ok((hits, v["total_hits"].as_u64().unwrap_or(0)))
+    }
+
+    /// The newest version of a project for these loaders and Minecraft version.
+    pub fn newest(&self, project: &str, loaders: &[&str], mc: &str, folder: &str) -> Result<Option<Release>, String> {
+        let list = self.versions_for(project, mc, loaders)?;
+        let Some(v) = list.into_iter().find(|v| v.game_versions.iter().any(|g| g == mc)) else { return Ok(None) };
+        let Some(file) = v.file(folder, true) else { return Ok(None) };
+        let requires = v.dependencies.iter().filter(|d| d.dependency_type == "required").filter_map(|d| d.project_id.clone()).collect();
+        Ok(Some(Release { project: v.project_id.clone(), number: v.version_number.clone(), file, requires }))
+    }
+
+    /// Projects' titles, icons and whether they run on servers.
+    pub fn project_meta(&self, ids: &[String]) -> Result<HashMap<String, ProjectMeta>, String> {
+        let mut out = HashMap::new();
+        for chunk in ids.chunks(200) {
+            let v = self.get(&format!("{}/v2/projects?ids={}", self.base, Self::q(&json!(chunk))))?;
+            for p in v.as_array().into_iter().flatten() {
+                if let Some(id) = p["id"].as_str() {
+                    out.insert(id.to_string(), ProjectMeta { title: p["title"].as_str().unwrap_or(id).to_string(), icon: p["icon_url"].as_str().filter(|u| !u.is_empty()).map(String::from), server_side: p["server_side"].as_str().unwrap_or("unknown").to_string() });
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// Which project and version files are, by their SHA-1.
+    pub fn identify(&self, sha1s: &[String]) -> Result<HashMap<String, (String, String)>, String> {
+        Ok(self.by_hash(sha1s)?.into_iter().map(|(h, v)| (h, (v.project_id, v.version_number))).collect())
+    }
+
+    /// A modpack version's .mrpack, its title and icon.
+    pub fn mrpack(&self, project: &str, version: &str) -> Result<(Vec<u8>, String, Option<String>), String> {
+        self.pack_file(project, version)
+    }
+}
+
 /// Read a .mrpack: its index and how many override files it has.
 /// The picture an instance folder keeps: Prism Launcher's icon (named in
 /// instance.cfg), Modrinth App's (in profile.json), or an icon.png beside it.
@@ -510,6 +603,7 @@ fn pack_files(index: &Value) -> Vec<PackFile> {
                 size: f["fileSize"].as_u64().unwrap_or(0),
                 urls: f["downloads"].as_array().into_iter().flatten().filter_map(|u| u.as_str().map(String::from)).collect(),
                 client: f["env"]["client"].as_str() != Some("unsupported"),
+                server: f["env"]["server"].as_str() != Some("unsupported"),
                 local: None,
             })
         })
@@ -642,7 +736,7 @@ impl Mixer {
             let b = std::fs::read(j).map_err(|e| e.to_string())?;
             let (sha1, sha512) = sha_pair(&b);
             let name = j.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            files.push(PackFile { path: format!("mods/{name}"), sha1, sha512, size: b.len() as u64, urls: vec![], client: true, local: Some(j.to_string_lossy().into_owned()) });
+            files.push(PackFile { path: format!("mods/{name}"), sha1, sha512, size: b.len() as u64, urls: vec![], client: true, server: true, local: Some(j.to_string_lossy().into_owned()) });
         }
         // Version and loader: what most of its mods are made for.
         let known = self.api.by_hash(&files.iter().map(|f| f.sha1.clone()).collect::<Vec<_>>())?;
@@ -980,6 +1074,28 @@ impl Mixer {
         m.cover = Some("ai".into());
         self.keep_mix(&m)?;
         Ok(png)
+    }
+
+    /// A mix's merged config files (overrides/).
+    pub fn overrides_dir(&self, id: &str) -> Result<PathBuf, String> {
+        Ok(self.mdir(id)?.join("overrides"))
+    }
+
+    /// Mixes worked out so far, newest first (the newest of each name).
+    pub fn mixes(&self) -> Vec<Mix> {
+        let mut v: Vec<(std::time::SystemTime, Mix)> = std::fs::read_dir(self.dir.join("mixes"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| {
+                let p = e.path().join("mix.json");
+                let at = std::fs::metadata(&p).and_then(|m| m.modified()).ok()?;
+                Some((at, serde_json::from_slice::<Mix>(&std::fs::read(&p).ok()?).ok()?))
+            })
+            .collect();
+        v.sort_by_key(|x| std::cmp::Reverse(x.0));
+        let mut seen = HashSet::new();
+        v.into_iter().map(|(_, m)| m).filter(|m| seen.insert(m.name.to_lowercase())).collect()
     }
 
     pub fn mix(&self, id: &str) -> Result<Mix, String> {

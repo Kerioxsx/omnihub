@@ -30,6 +30,7 @@
 
   const ICONS = {
     home: '<path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+    server: '<rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/>',
     drive: '<path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01M10 16h.01"/>',
     treemap: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h9M12 3v18M12 15h9"/>',
     grew: '<path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>',
@@ -430,6 +431,8 @@
     ['tasks', 'FPS meter', 'Live FPS, 1% lows and stutters while you play, on the PC and your phone — measured with Intel PresentMon, results kept per game.'],
     ['send', 'Lag under load', 'Pings while the line is busy, grades it A+ to F and tells you what fixes it — usually the router, a cable, or a paused download.'],
     ['tasks', 'Optimize this PC', 'Monitor at its full refresh rate, Ultimate power plan, no background game recording, GPU scheduling and more — each one checked and undoable.'],
+    ['server', 'Minecraft servers, 24/7', 'Vanilla, Paper, Fabric, Quilt, Forge or NeoForge on your PC: players and their inventories, a live map, mods and plugins, backups — from your phone too.'],
+    ['shield', 'Friends without a paid account', 'Let everyone join your server if you like: OmniHub guards your operators, so nobody can take over with your name.'],
     ['apps', 'Finds your games', 'Epic, Steam, Riot, Roblox and Minecraft games on this PC, ready to add with one click.'],
     ['music', 'Aurora', 'The song’s cover as a music-reactive visual, a neon edge light in its colours, and huge lyrics word by word — full screen or on the Music page.'],
     ['screen', 'Glow around your screen', 'The same neon light around your monitor over every app — click-through, and out of the way of full-screen games.'],
@@ -468,6 +471,9 @@
     ['phone-open-apps', 'Open apps', 'Close any program on the PC — or quit it.'],
     ['phone-files', 'Files', 'Browse folders and photos, download or send to the PC.'],
     ['phone-games', 'Games', 'Start a game on the PC with its boost, watch its FPS, or test your ping.'],
+    ['phone-servers', 'Minecraft servers', 'Who can join, the whitelist and the player limit, and an operator’s new place to approve.'],
+    ['phone-servers-player', 'A player up close', 'Their inventory, health and game mode: give, heal, teleport or kick.'],
+    ['phone-servers-map', 'Server map', 'Your world from above, with everyone moving on it.'],
     ['phone-power', 'Power', 'Lock, sleep or shut down, with a countdown you can cancel.'],
   ];
   const carousel = $('[data-carousel]');

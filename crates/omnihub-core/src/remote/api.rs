@@ -111,6 +111,20 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/chats/{source}/{id}/send", post(chats_send))
         .route("/api/chats/{source}/{id}/stop", post(chats_stop))
         .route("/api/ideas", get(ideas_list).post(ideas_save))
+        .route("/api/servers", get(servers_list))
+        .route("/api/servers/{id}/start", post(servers_start))
+        .route("/api/servers/{id}/stop", post(servers_stop))
+        .route("/api/servers/{id}/restart", post(servers_restart))
+        .route("/api/servers/{id}/players", get(servers_players))
+        .route("/api/servers/{id}/player/{name}", get(servers_player))
+        .route("/api/servers/{id}/act", post(servers_act))
+        .route("/api/servers/{id}/whitelist", post(servers_whitelist))
+        .route("/api/servers/{id}/max-players", post(servers_max))
+        .route("/api/servers/{id}/join", post(servers_join))
+        .route("/api/servers/{id}/console", get(servers_console))
+        .route("/api/servers/{id}/command", post(servers_command))
+        .route("/api/servers/{id}/map", get(servers_map))
+        .route("/api/servers/{id}/map/tile", get(servers_tile))
         .route("/api/screen/info", get(screen_info))
         .route("/api/vault/session", post(vault_session).delete(vault_end))
         .route("/api/vault/entries", get(vault_entries))
@@ -196,6 +210,7 @@ struct Features {
     games: bool,
     chats: bool,
     chat_agents: bool,
+    servers: bool,
 }
 
 fn features(core: &AppCore, tls: bool) -> Features {
@@ -214,6 +229,7 @@ fn features(core: &AppCore, tls: bool) -> Features {
         media: s.media.allow_phone,
         chats: s.chats.allow_phone,
         chat_agents: s.chats.allow_phone && s.chats.phone_agents,
+        servers: s.remote.allow_servers,
     }
 }
 
@@ -972,6 +988,179 @@ async fn notes_create(State(core): State<Ctx>, Extension(dev): Extension<Device>
     Ok(Json(note))
 }
 
+// ---------- Minecraft servers ----------
+
+fn servers_allowed(core: &AppCore) -> ApiResult<()> {
+    if core.settings.get().remote.allow_servers {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("Minecraft servers aren't shared with the phone (Phone → Permissions on the PC)"))
+    }
+}
+
+async fn servers_list(State(core): State<Ctx>) -> ApiResult<Json<Vec<crate::mcserver::View>>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    Ok(Json(tokio::task::spawn_blocking(move || c.mcserver.list()).await?))
+}
+
+async fn servers_run(core: Ctx, dev: &Device, id: String, what: &'static str) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let sid = id.clone();
+    let r = tokio::task::spawn_blocking(move || match what {
+        "start" => c.mcserver.start(&sid),
+        "stop" => c.mcserver.stop(&sid),
+        _ => c.mcserver.restart(&sid),
+    })
+    .await?;
+    core.audit.record(&actor(dev), &format!("mcserver.{what}"), &id, r.is_ok());
+    r.map(Json).map_err(ApiError::bad)
+}
+
+async fn servers_start(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_run(core, &dev, id, "start").await
+}
+
+async fn servers_stop(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_run(core, &dev, id, "stop").await
+}
+
+async fn servers_restart(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_run(core, &dev, id, "restart").await
+}
+
+async fn servers_players(State(core): State<Ctx>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<crate::mcserver::PlayersView>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    // A phone looking at the players keeps their positions coming.
+    tokio::task::spawn_blocking(move || {
+        let r = c.mcserver.players(&id);
+        if r.is_ok() {
+            c.mcserver.watch(&id);
+        }
+        r
+    })
+    .await?
+    .map(Json)
+    .map_err(ApiError::not_found)
+}
+
+async fn servers_player(State(core): State<Ctx>, UrlPath((id, name)): UrlPath<(String, String)>) -> ApiResult<Json<crate::mcserver::PlayerView>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    tokio::task::spawn_blocking(move || c.mcserver.player(&id, &name)).await?.map(Json).map_err(ApiError::bad)
+}
+
+#[derive(Deserialize)]
+struct ServerAct {
+    name: String,
+    action: crate::mcserver::Action,
+}
+
+async fn servers_act(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ServerAct>) -> ApiResult<Json<serde_json::Value>> {
+    servers_allowed(&core)?;
+    let what: String = format!("{}: {:?}", req.name, req.action).chars().take(160).collect();
+    let c = core.clone();
+    let r = tokio::task::spawn_blocking(move || c.mcserver.act(&id, &req.name, req.action)).await?;
+    core.audit.record(&actor(&dev), "mcserver.player", &what, r.is_ok());
+    Ok(Json(json!({ "reply": r.map_err(ApiError::bad)? })))
+}
+
+#[derive(Deserialize)]
+struct ServerFlag {
+    on: bool,
+}
+
+async fn servers_whitelist(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ServerFlag>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let sid = id.clone();
+    let r = tokio::task::spawn_blocking(move || c.mcserver.set_whitelist(&sid, req.on)).await?;
+    core.audit.record(&actor(&dev), "mcserver.whitelist", &format!("{id}: {}", if req.on { "on" } else { "off" }), r.is_ok());
+    r.map(Json).map_err(ApiError::bad)
+}
+
+#[derive(Deserialize)]
+struct ServerMax {
+    players: u32,
+}
+
+async fn servers_max(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ServerMax>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let sid = id.clone();
+    let r = tokio::task::spawn_blocking(move || c.mcserver.set_properties(&sid, &[("max-players".into(), req.players.to_string())])).await?;
+    core.audit.record(&actor(&dev), "mcserver.settings", &format!("{id}: max-players {}", req.players), r.is_ok());
+    r.map(Json).map_err(ApiError::bad)
+}
+
+#[derive(Deserialize)]
+struct ServerJoin {
+    /// Players without a paid Minecraft account can join too.
+    everyone: bool,
+}
+
+async fn servers_join(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ServerJoin>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let sid = id.clone();
+    let r = tokio::task::spawn_blocking(move || c.mcserver.set_properties(&sid, &[("online-mode".into(), (!req.everyone).to_string())])).await?;
+    core.audit.record(&actor(&dev), "mcserver.settings", &format!("{id}: {}", if req.everyone { "everyone can join" } else { "paid accounts only" }), r.is_ok());
+    r.map(Json).map_err(ApiError::bad)
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct ConsoleQuery {
+    after: Option<u64>,
+}
+
+async fn servers_console(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Query(q): Query<ConsoleQuery>) -> ApiResult<Json<Vec<crate::mcserver::process::Line>>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let lines = tokio::task::spawn_blocking(move || c.mcserver.console(&id, q.after)).await?;
+    // The newest 400 at most (phones only show the end).
+    let skip = lines.len().saturating_sub(400);
+    Ok(Json(lines.into_iter().skip(skip).collect()))
+}
+
+#[derive(Deserialize)]
+struct ServerCommand {
+    text: String,
+}
+
+async fn servers_command(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ServerCommand>) -> ApiResult<Json<serde_json::Value>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let text = req.text.clone();
+    let r = tokio::task::spawn_blocking(move || c.mcserver.command_line(&id, &text)).await?;
+    core.audit.record(&actor(&dev), "mcserver.command", &req.text.chars().take(120).collect::<String>(), r.is_ok());
+    r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct MapQuery {
+    dim: Option<String>,
+    x: i32,
+    z: i32,
+}
+
+async fn servers_map(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Query(q): Query<MapQuery>) -> ApiResult<Json<crate::mcserver::MapInfo>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    tokio::task::spawn_blocking(move || c.mcserver.map_info(&id, q.dim.as_deref().unwrap_or("overworld"))).await?.map(Json).map_err(ApiError::bad)
+}
+
+async fn servers_tile(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Query(q): Query<MapQuery>) -> ApiResult<Json<serde_json::Value>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let url = tokio::task::spawn_blocking(move || c.mcserver.map_tile(&id, q.dim.as_deref().unwrap_or("overworld"), q.x, q.z)).await?.map_err(ApiError::not_found)?;
+    Ok(Json(json!({ "url": url })))
+}
+
 // ---------- chats ----------
 
 fn chats_allowed(core: &AppCore) -> ApiResult<()> {
@@ -1213,7 +1402,7 @@ fn for_phone(ev: &crate::events::Event, device_id: &str) -> bool {
     if ev.topic == "inbox:removed" {
         return true;
     }
-    ["power:", "notes:", "media:", "games:", "chats:"].iter().any(|p| ev.topic.starts_with(p))
+    ["power:", "notes:", "media:", "games:", "chats:"].iter().any(|p| ev.topic.starts_with(p)) || matches!(ev.topic.as_str(), "mcserver:changed" | "mcserver:players" | "mcserver:guard")
 }
 
 async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws: WebSocketUpgrade) -> ApiResult<Response> {
@@ -1231,7 +1420,7 @@ async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws
             tokio::select! {
                 ev = events.recv() => {
                     let Ok(ev) = ev else { continue };
-                    if !for_phone(&ev, &device_id) || (ev.topic.starts_with("chats:") && !core.settings.get().chats.allow_phone) {
+                    if !for_phone(&ev, &device_id) || (ev.topic.starts_with("chats:") && !core.settings.get().chats.allow_phone) || (ev.topic.starts_with("mcserver:") && !core.settings.get().remote.allow_servers) {
                         continue;
                     }
                     let text = serde_json::to_string(&ev).unwrap_or_default();

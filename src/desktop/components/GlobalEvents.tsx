@@ -74,6 +74,14 @@ export function GlobalEvents() {
     if (p.reason !== 'manual') toast.info('Vault locked', p.reason === 'idle' ? 'Locked automatically after inactivity.' : p.reason === 'session' ? 'Windows was locked.' : undefined);
   });
   useEvent('vault:unlocked', () => void useLive.getState().refreshVault());
+  // A Minecraft server kept an operator's name out (it joined from a new place).
+  useEvent<{ id: string; server: string; name: string; place: string }>('mcserver:guard', (p) =>
+    toast.warn(`${p.name} wants in on ${p.server}`, `That name is an operator and joined from a new place (${p.place}), so it was kept out. Allow it only if it’s really them.`, {
+      key: `guard:${p.id}:${p.name}`,
+      duration: 30_000,
+      action: { label: 'Open Players', run: () => navigate('servers', { id: p.id, tab: 'players' }) },
+    }),
+  );
   useEvent<{ id: string; title: string; snippet: string }>('notes:reminder', (p) =>
     toast.info(`Reminder: ${p.title || 'Untitled note'}`, p.snippet || undefined, { action: { label: 'Open', run: () => navigate('notes', { id: p.id }) } }),
   );

@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Activity, Camera, Cpu, Gamepad2, HardDrive, House, LayoutGrid, Lightbulb, LockKeyhole, MessagesSquare, Music2, NotebookPen, Puzzle, ScreenShare, Settings, Smartphone } from 'lucide-react';
+import { Activity, Camera, Cpu, Gamepad2, HardDrive, House, LayoutGrid, Lightbulb, LockKeyhole, MessagesSquare, Music2, NotebookPen, Puzzle, ScreenShare, Server, Settings, Smartphone } from 'lucide-react';
 import type { RouteId } from '../lib/router';
 
 export interface NavItem {
@@ -21,6 +21,7 @@ export const NAV: NavItem[] = [
   { id: 'tasks', label: 'Tasks', icon: Activity, description: 'CPU, memory, GPU and disk use of every program', group: 'performance' },
   { id: 'games', label: 'Games', icon: Gamepad2, description: 'Game boosts, Fortnite and PC optimizations, ping helper', group: 'performance' },
   { id: 'mods', label: 'Mods', icon: Puzzle, description: 'Mods for your Steam games, Minecraft modpack mixing, and Claude making mods', group: 'performance' },
+  { id: 'servers', label: 'Servers', icon: Server, description: 'Host Minecraft servers 24/7 on this PC: players, live map, mods, plugins, modpacks and backups', group: 'performance' },
   { id: 'rig', label: 'My PC', icon: Cpu, description: 'Your PC in 3D: lighting, fan profiles and screens', group: 'performance' },
   { id: 'vault', label: 'Vault', icon: LockKeyhole, description: 'Encrypted passwords and secrets', group: 'security' },
   { id: 'phone', label: 'Phone', icon: Smartphone, description: 'Companion server, pairing and transfers', group: 'devices' },

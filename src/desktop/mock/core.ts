@@ -35,6 +35,7 @@ export const settings: Settings = {
     deviceName: 'GAMING-PC',
     allowClipboard: true,
     allowTasks: true,
+    allowServers: true,
     sendToMenu: true,
   },
   screenshots: { dir: null, format: 'png', hotkeyRegion: 'Alt+Shift+S', hotkeyFull: 'Alt+Shift+A', hotkeyWindow: 'Alt+Shift+W', copyToClipboard: true },

@@ -113,6 +113,10 @@ pub enum MakerKind {
     MelonMod,
     /// Config, data or text files in the game folder.
     Files,
+    /// Minecraft servers: a data pack (functions, recipes, loot, world generation).
+    Datapack,
+    /// Paper servers: a plugin (Java, compiled with the JDK).
+    PaperPlugin,
 }
 
 impl MakerKind {
@@ -125,12 +129,19 @@ impl MakerKind {
             MakerKind::BepInExPlugin => "a BepInEx plugin (C#)",
             MakerKind::MelonMod => "a MelonLoader mod (C#)",
             MakerKind::Files => "game files (config, data, text)",
+            MakerKind::Datapack => "a data pack",
+            MakerKind::PaperPlugin => "a Paper plugin (Java)",
         }
     }
 
     /// Needs building with the .NET SDK.
     pub fn compiled(self) -> bool {
         matches!(self, MakerKind::BepInExPlugin | MakerKind::MelonMod)
+    }
+
+    /// Needs building before it's installed (.NET or Java).
+    pub fn built(self) -> bool {
+        self.compiled() || self == MakerKind::PaperPlugin
     }
 }
 
@@ -314,7 +325,7 @@ fn now() -> i64 {
     crate::db::now()
 }
 
-fn slug(s: &str) -> String {
+pub(crate) fn slug(s: &str) -> String {
     let mut out = String::new();
     for c in s.chars() {
         if c.is_ascii_alphanumeric() {

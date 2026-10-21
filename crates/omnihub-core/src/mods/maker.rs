@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use parking_lot::Mutex;
@@ -25,6 +25,7 @@ use super::{MakerKind, ModGame, ModHub};
 use crate::claude::api::{self, Delta, Usage};
 use crate::claude::Claude;
 use crate::events::EventBus;
+use crate::mcserver::ServerHub;
 
 /// Tool rounds Claude gets per message before it pauses.
 const MAX_ROUNDS: usize = 60;
@@ -142,6 +143,21 @@ pub struct View {
 /// Builds a C# project into a folder; returns the build's output.
 pub type Builder = Arc<dyn Fn(&Path, &Path) -> Result<String, String> + Send + Sync>;
 
+/// Compiles a plugin's Java: (javac, class path, sources, classes out, Java release).
+pub type JavaBuilder = Arc<dyn Fn(&Path, &[PathBuf], &Path, &Path, u32) -> Result<String, String> + Send + Sync>;
+
+/// A Minecraft server as a maker target: `mcserver:<id>:datapack` or `mcserver:<id>:plugin`.
+pub fn server_key(key: &str) -> Option<(String, MakerKind)> {
+    let rest = key.strip_prefix("mcserver:")?;
+    let (id, kind) = rest.rsplit_once(':')?;
+    let kind = match kind {
+        "datapack" => MakerKind::Datapack,
+        "plugin" => MakerKind::PaperPlugin,
+        _ => return None,
+    };
+    (!id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric())).then(|| (id.to_string(), kind))
+}
+
 struct Run {
     cancel: Arc<AtomicBool>,
     approval: Option<std::sync::mpsc::Sender<bool>>,
@@ -158,6 +174,10 @@ pub struct Maker {
     edit: Mutex<()>,
     /// Builds C# mods (replaced in tests).
     pub builder: Mutex<Builder>,
+    /// Builds Paper plugins (replaced in tests).
+    pub java_builder: Mutex<JavaBuilder>,
+    /// The Minecraft servers, for data packs and plugins.
+    servers: Mutex<Weak<ServerHub>>,
 }
 
 fn now() -> i64 {
@@ -325,6 +345,8 @@ fn tools(kind: MakerKind, web: bool, model: &str) -> Vec<Value> {
     ];
     if kind.compiled() {
         v.push(tool("build", "Build the C# project in mod/ with the .NET SDK (dotnet build). The user approves each build. Returns the compiler's output; fix any errors and build again before calling finish.", json!({}), &[]));
+    } else if kind == MakerKind::PaperPlugin {
+        v.push(tool("build", "Compile the plugin's Java (mod/src/**/*.java) against the server's Paper API with javac. The user approves each build. Returns the compiler's output; fix any errors and build again before calling finish.", json!({}), &[]));
     }
     if web {
         let t = crate::claude::traits(model);
@@ -360,7 +382,7 @@ fn system_prompt(g: &ModGame, kind: MakerKind, game_dir: &Path, unity: Option<&s
         MakerKind::Ue4ssLua => "You're making a Lua mod for UE4SS (an Unreal Engine script system). Your mod/ folder becomes ue4ss\\Mods\\<mod>\\ next to the game's program; the entry point is mod/Scripts/main.lua (OmniHub adds enabled.txt). Use UE4SS's Lua API (RegisterHook, NotifyOnNewObject, FindFirstOf, FindAllOf, RegisterKeyBind, ExecuteWithDelay; docs at docs.ue4ss.com). Class and property names come from the game: if a UE4SS object dump exists under the program folder, read it; otherwise ask the user to run the game once with UE4SS and use its live view. Read UE4SS.log next to the game's program after the user plays.",
         MakerKind::BepInExPlugin => "You're making a BepInEx 5 plugin (C#) for a Unity game. Write a small SDK-style project in mod/: one .csproj (Sdk=\"Microsoft.NET.Sdk\", TargetFramework netstandard2.1 — or net472 for older Unity — with PackageReferences only to BepInEx.Core 5.*, BepInEx.PluginInfoProps, UnityEngine.Modules (the game's Unity version) and HarmonyX, restored from https://nuget.bepinex.dev/v3/index.json via RestoreAdditionalProjectSources) and the plugin's .cs files (a class deriving from BaseUnityPlugin with [BepInPlugin], Harmony patches where needed). Reference the game's own code with <Reference Include=\"Assembly-CSharp\"><HintPath>…</HintPath><Private>false</Private></Reference> using the Managed folder below. No build steps, targets or scripts in the project: the build refuses them. Call build, fix every error, then finish. Read game/BepInEx/LogOutput.log after the user plays.",
         MakerKind::MelonMod => "You're making a MelonLoader mod (C#) for a Unity game. Write a small SDK-style project in mod/: one .csproj (Sdk=\"Microsoft.NET.Sdk\") referencing MelonLoader and the game's assemblies with HintPaths (game/MelonLoader/net6/MelonLoader.dll or net35; IL2CPP games: game/MelonLoader/Il2CppAssemblies/ after the game ran once with MelonLoader) and Private=false, and a class deriving from MelonMod with the MelonInfo and MelonGame attributes. No build steps, targets or scripts in the project: the build refuses them. Call build, fix every error, then finish. Read game/MelonLoader/Latest.log after the user plays.",
-        MakerKind::Files => "OmniHub doesn't know a script loader for this game, so mods are files: your mod/ folder is copied into the game's folder with the same paths (mod/Data/x.json replaces game/Data/x.json). Change the game's config, data, text or other plain files: read the game's file first, copy it into mod/ at the same path and change only what's needed.",
+        MakerKind::Files | MakerKind::Datapack | MakerKind::PaperPlugin => "OmniHub doesn't know a script loader for this game, so mods are files: your mod/ folder is copied into the game's folder with the same paths (mod/Data/x.json replaces game/Data/x.json). Change the game's config, data, text or other plain files: read the game's file first, copy it into mod/ at the same path and change only what's needed.",
     };
     let unity_line = unity.map(|u| format!("- Unity version: {u}\n")).unwrap_or_default();
     let managed_line = if kind == MakerKind::BepInExPlugin { format!("- The game's .NET assemblies (for HintPaths): {}\n", managed.display()) } else { String::new() };
@@ -453,9 +475,149 @@ fn dotnet_build(project: &Path, out: &Path) -> Result<String, String> {
     }
 }
 
+/// What Claude is told when making something for a Minecraft server.
+fn server_prompt(info: &Value, kind: MakerKind) -> String {
+    let s = |k: &str| info[k].as_str().unwrap_or_default().to_string();
+    let (name, mc, flavor, level) = (s("name"), s("mc"), s("flavor"), s("level"));
+    let format = info["packFormat"].as_str().map(|f| format!("This server's data pack format is {f}. ")).unwrap_or_default();
+    let java = info["java"].as_u64().unwrap_or(21);
+    let guide = if kind == MakerKind::Datapack {
+        format!("You're making a data pack. Your mod/ folder is the data pack: it becomes {level}/datapacks/omnihub-<name>/ on the server, and OmniHub runs /reload when it's installed. It needs mod/pack.mcmeta ({format}since 1.21.9 pack.mcmeta uses \"min_format\" and \"max_format\" instead of \"pack_format\"; check the right format for Minecraft {mc} on minecraft.wiki) and its contents under mod/data/<namespace>/: function/ (.mcfunction files; folder names are singular since 1.21), tags/function/load.json and tick.json (in the minecraft namespace) to run functions when it loads and every tick, recipe/, loot_table/, advancement/, predicate/, item_modifier/, worldgen/ and so on. Command syntax and item data (components) changed a lot in recent versions: look up the exact syntax for {mc} on minecraft.wiki rather than guessing. Data packs change behaviour, recipes, loot, structures and world generation; they can't add new blocks, items or textures. After the user installs it, read game/logs/latest.log for errors that mention your pack.")
+    } else {
+        format!("You're making a Paper plugin (Java) for this Paper {mc} server. Write the Java under mod/src/ in package folders (mod/src/dev/omnihub/hello/HelloPlugin.java) and mod/plugin.yml (name, version, main, api-version — the right value for {mc}, see docs.papermc.io — and the commands and permissions it adds); a config file can go in mod/config.yml and other resources in mod/resources/. The main class extends org.bukkit.plugin.java.JavaPlugin. Only the server's own libraries are on the class path (the Paper API and what Paper ships, such as Adventure for text): no other dependencies and no build tools. OmniHub compiles mod/src with javac for Java {java} when the user approves (the build tool), and packs the classes with plugin.yml and the resources into the plugin's jar. Use the Paper API for {mc} (docs.papermc.io, jd.papermc.io/paper). Call build, fix every error, then finish. After the user restarts the server, read game/logs/latest.log for errors.")
+    };
+    format!(
+        "You are Claude, working inside OmniHub (a Windows app) to make {what} for the user's own Minecraft server, “{name}” ({flavor} {mc}). The user may not be a programmer: talk to them in short, plain sentences, and in their language.\n\n\
+        Your tools see two folders:\n- mod/ = what you're making. You write here (write_file, edit_file, delete_file); nothing else can be written.\n- game/ = the server's folder, read-only (server.properties, logs/, the world in {level}/, its mods or plugins).\n\n\
+        What to make: {guide}\n\n\
+        How to work:\n1. If the request is unclear, ask one short question first. Otherwise look before you write, and search the web when you're unsure of a command or API rather than guessing.\n2. Write it: small, clean, commented, doing exactly what was asked.\n3. When it's complete, call finish. Tell the user in one or two sentences what you made, how players use it (commands, items, places), and that they can press Install.\n4. When the user reports a problem, read the server's log, fix it, and call finish again.\n\n\
+        Rules: make game features, minigames, quality-of-life and admin tools for the user's server and its players. Never make anything that harms players or the PC, hides admin access or back doors, runs commands for people outside the server's own permissions, reads or sends players' personal data, connects to the internet, or downloads or runs programs. If asked, say plainly that you won't. Don't copy other people's plugins or data packs; write your own.",
+        what = kind.label(),
+    )
+}
+
+/// A data pack's pack.mcmeta is there and readable.
+fn check_datapack(modd: &Path) -> Result<(), String> {
+    let t = std::fs::read_to_string(modd.join("pack.mcmeta")).map_err(|_| "A data pack needs mod/pack.mcmeta.".to_string())?;
+    let v: Value = serde_json::from_str(&t).map_err(|e| format!("mod/pack.mcmeta isn't valid JSON: {e}"))?;
+    if !v["pack"].is_object() {
+        return Err("mod/pack.mcmeta needs a \"pack\" section.".into());
+    }
+    if !modd.join("data").is_dir() {
+        return Err("The data pack has nothing in mod/data/ yet.".into());
+    }
+    Ok(())
+}
+
+/// A plugin project is sources and plain resources, with plugin.yml.
+fn check_plugin(modd: &Path) -> Result<usize, String> {
+    if !modd.join("plugin.yml").is_file() && !modd.join("paper-plugin.yml").is_file() {
+        return Err("A plugin needs mod/plugin.yml.".into());
+    }
+    let files = super::install::files_in(modd);
+    let java = files.iter().filter(|f| f.starts_with("src/") && f.ends_with(".java")).count();
+    if java == 0 {
+        return Err("There are no .java files under mod/src/ yet.".into());
+    }
+    for f in &files {
+        let l = f.to_lowercase();
+        if l.ends_with(".class") || l.ends_with(".jar") || (l.starts_with("src/") && !l.ends_with(".java")) {
+            return Err(format!("{f} can't be part of the plugin: only .java sources go in src/, and no compiled files."));
+        }
+    }
+    Ok(java)
+}
+
+/// Compile with javac: our options only (no annotation processors), five minutes at most.
+pub fn javac_build(javac: &Path, classpath: &[PathBuf], src: &Path, out: &Path, release: u32) -> Result<String, String> {
+    let files: Vec<PathBuf> = walkdir::WalkDir::new(src).into_iter().flatten().filter(|e| e.file_type().is_file() && e.path().extension().is_some_and(|x| x == "java")).map(|e| e.into_path()).collect();
+    if files.is_empty() {
+        return Err("There are no .java files in mod/src.".into());
+    }
+    let fwd = |p: &Path| format!("\"{}\"", p.to_string_lossy().replace('\\', "/").replace('"', ""));
+    let sep = if cfg!(windows) { ";" } else { ":" };
+    let mut args: Vec<String> = ["-proc:none", "-implicit:none", "-encoding", "UTF-8", "-nowarn", "-Xlint:none", "--release"].iter().map(|s| s.to_string()).collect();
+    args.push(release.to_string());
+    args.push("-d".into());
+    args.push(fwd(out));
+    args.push("-cp".into());
+    args.push(format!("\"{}\"", classpath.iter().map(|p| p.to_string_lossy().replace('\\', "/")).collect::<Vec<_>>().join(sep)));
+    args.extend(files.iter().map(|f| fwd(f)));
+    let argfile = out.parent().unwrap_or(out).join("javac-args.txt");
+    std::fs::write(&argfile, args.join("\n")).map_err(|e| e.to_string())?;
+    let mut c = std::process::Command::new(javac);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        c.creation_flags(0x0800_0000);
+    }
+    c.arg(format!("@{}", argfile.to_string_lossy())).env_remove("JAVA_TOOL_OPTIONS").env_remove("JDK_JAVAC_OPTIONS").env_remove("_JAVA_OPTIONS");
+    c.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+    let mut child = c.spawn().map_err(|e| format!("The Java compiler couldn't start: {e}"))?;
+    let start = std::time::Instant::now();
+    loop {
+        if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
+            let mut o = String::new();
+            let mut e = String::new();
+            if let Some(mut s) = child.stdout.take() {
+                let _ = s.read_to_string(&mut o);
+            }
+            if let Some(mut s) = child.stderr.take() {
+                let _ = s.read_to_string(&mut e);
+            }
+            let text = format!("{o}{e}");
+            let tail: String = text.chars().rev().take(6000).collect::<Vec<_>>().into_iter().rev().collect();
+            return if status.success() { Ok(if tail.trim().is_empty() { "No warnings.".into() } else { tail }) } else { Err(format!("The build failed:\n{tail}")) };
+        }
+        if start.elapsed() > Duration::from_secs(300) {
+            let _ = child.kill();
+            return Err("The build took over five minutes and was stopped.".into());
+        }
+        std::thread::sleep(Duration::from_millis(150));
+    }
+}
+
+/// Pack compiled classes, plugin.yml and resources into the plugin's jar.
+pub fn package_plugin(classes: &Path, modd: &Path, jar: &Path) -> Result<(), String> {
+    use std::io::Write as _;
+    if !classes.is_dir() || super::install::files_in(classes).is_empty() {
+        return Err("The plugin hasn't been built yet. Ask Claude to build it.".into());
+    }
+    let mut z = zip::ZipWriter::new(std::fs::File::create(jar).map_err(|e| e.to_string())?);
+    let o = zip::write::SimpleFileOptions::default();
+    z.start_file("META-INF/MANIFEST.MF", o).map_err(|e| e.to_string())?;
+    z.write_all(b"Manifest-Version: 1.0\r\nCreated-By: OmniHub\r\n\r\n").map_err(|e| e.to_string())?;
+    let mut add = |base: &Path, rel: &str, name: &str| -> Result<(), String> {
+        z.start_file(name, o).map_err(|e| e.to_string())?;
+        z.write_all(&std::fs::read(base.join(rel)).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+    };
+    for f in super::install::files_in(classes) {
+        add(classes, &f, &f)?;
+    }
+    for f in super::install::files_in(modd) {
+        let top = !f.contains('/') && (f.ends_with(".yml") || f.ends_with(".yaml") || f.ends_with(".json") || f.ends_with(".properties") || f.ends_with(".txt"));
+        if top {
+            add(modd, &f, &f)?;
+        } else if let Some(r) = f.strip_prefix("resources/") {
+            add(modd, &f, r)?;
+        }
+    }
+    z.finish().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 impl Maker {
     pub fn new(dir: &Path, events: EventBus, claude: Arc<Claude>) -> Maker {
-        Maker { dir: dir.to_path_buf(), events, claude, runs: Mutex::new(HashMap::new()), io: Mutex::new(()), edit: Mutex::new(()), builder: Mutex::new(Arc::new(|p: &Path, o: &Path| dotnet_build(p, o))) }
+        Maker { dir: dir.to_path_buf(), events, claude, runs: Mutex::new(HashMap::new()), io: Mutex::new(()), edit: Mutex::new(()), builder: Mutex::new(Arc::new(|p: &Path, o: &Path| dotnet_build(p, o))), java_builder: Mutex::new(Arc::new(javac_build)), servers: Mutex::new(Weak::new()) }
+    }
+
+    /// The Minecraft server host, for data packs and plugins Claude makes.
+    pub fn set_servers(&self, h: Arc<ServerHub>) {
+        *self.servers.lock() = Arc::downgrade(&h);
+    }
+
+    fn servers(&self) -> Result<Arc<ServerHub>, String> {
+        self.servers.lock().upgrade().ok_or_else(|| "Minecraft servers aren't available.".into())
     }
 
     fn pdir(&self, id: &str) -> Result<PathBuf, String> {
@@ -570,15 +732,27 @@ impl Maker {
 
     /// Start a mod for a game with the user's first message.
     pub fn create(&self, hub: &Arc<ModHub>, game: &str, text: &str) -> Result<Project, String> {
-        let (g, _) = hub.maker_context(game)?;
-        let kind = g.maker.kind.filter(|_| g.maker.available).ok_or_else(|| g.maker.why.clone().unwrap_or_else(|| "Claude can't make mods for this game.".into()))?;
+        let (key, game_name, kind) = match server_key(game) {
+            Some((sid, kind)) => {
+                let info = self.servers()?.maker_info(&sid)?;
+                if kind == MakerKind::PaperPlugin && info["plugins"] != true {
+                    return Err("Plugins are for Paper servers. Make a data pack instead: it works on every server.".into());
+                }
+                (game.to_string(), info["name"].as_str().unwrap_or("Server").to_string(), kind)
+            }
+            None => {
+                let (g, _) = hub.maker_context(game)?;
+                let kind = g.maker.kind.filter(|_| g.maker.available).ok_or_else(|| g.maker.why.clone().unwrap_or_else(|| "Claude can't make mods for this game.".into()))?;
+                (g.key.clone(), g.name.clone(), kind)
+            }
+        };
         if !self.claude.has_key() {
             return Err("Add your Anthropic API key first (Claude settings).".into());
         }
         let s = self.claude.settings();
         let id = uuid::Uuid::new_v4().simple().to_string();
         let name: String = text.split(['.', '\n', '!', '?']).next().unwrap_or(text).trim().chars().take(48).collect();
-        let p = Project { id: id.clone(), game: g.key.clone(), game_name: g.name.clone(), name: if name.is_empty() { "New mod".into() } else { name }, kind, created: now(), updated: now(), model: s.model.clone(), web: s.web, ..Default::default() };
+        let p = Project { id: id.clone(), game: key, game_name, name: if name.is_empty() { "New mod".into() } else { name }, kind, created: now(), updated: now(), model: s.model.clone(), web: s.web, ..Default::default() };
         std::fs::create_dir_all(self.pdir(&id)?.join("mod")).map_err(|e| e.to_string())?;
         self.store(&p)?;
         self.send(hub, &id, text)?;
@@ -693,20 +867,27 @@ impl Maker {
         yes
     }
 
-    fn area(&self, hub: &Arc<ModHub>, p: &Project) -> Result<(ModGame, Area), String> {
+    /// The instructions for Claude and the folders its tools may touch.
+    fn context(&self, hub: &Arc<ModHub>, p: &Project) -> Result<(String, Area), String> {
+        let modd = self.pdir(&p.id)?.join("mod");
+        if let Some((sid, kind)) = server_key(&p.game) {
+            let info = self.servers()?.maker_info(&sid)?;
+            let dir = PathBuf::from(info["dir"].as_str().unwrap_or_default());
+            return Ok((server_prompt(&info, kind), Area { game: dir, data: None, modd }));
+        }
         let (g, _) = hub.maker_context(&p.game)?;
-        Ok((g.clone(), Area { game: PathBuf::from(&g.dir), data: g.data_dir.as_ref().map(PathBuf::from), modd: self.pdir(&p.id)?.join("mod") }))
+        let area = Area { game: PathBuf::from(&g.dir), data: g.data_dir.as_ref().map(PathBuf::from), modd };
+        let unity = matches!(g.engine, Engine::UnityMono | Engine::UnityIl2cpp).then(|| unity_version(&area.game)).flatten();
+        Ok((system_prompt(&g, p.kind, &area.game, unity.as_deref()), area))
     }
 
     fn run(&self, hub: &Arc<ModHub>, id: &str, cancel: &AtomicBool) -> Result<(), String> {
         let p = self.load(id)?;
-        let (g, area) = self.area(hub, &p)?;
+        let (system, area) = self.context(hub, &p)?;
         let client = self.claude.client()?;
         let settings = self.claude.settings();
         let model = settings.model.clone();
         let t = crate::claude::traits(&model);
-        let unity = matches!(g.engine, Engine::UnityMono | Engine::UnityIl2cpp).then(|| unity_version(&area.game)).flatten();
-        let system = system_prompt(&g, p.kind, &area.game, unity.as_deref());
         let tool_defs = tools(p.kind, p.web, &model);
         let mut betas: Vec<&str> = Vec::new();
         if t.fallbacks {
@@ -991,6 +1172,9 @@ impl Maker {
             }
             "build" => {
                 let p = self.load(id)?;
+                if p.kind == MakerKind::PaperPlugin {
+                    return self.build_plugin(id, &p, area, cancel);
+                }
                 if !p.kind.compiled() {
                     return Err("This mod isn't built: it's loaded as it is.".into());
                 }
@@ -1015,8 +1199,11 @@ impl Maker {
                     return Err("The mod has no files yet.".into());
                 }
                 let p = self.load(id)?;
-                if p.kind.compiled() && !self.pdir(id)?.join("build").is_dir() {
+                if p.kind.built() && !self.pdir(id)?.join("build").is_dir() {
                     return Err("Build it first (the build tool), and fix any errors.".into());
+                }
+                if p.kind == MakerKind::Datapack {
+                    check_datapack(&area.modd)?;
                 }
                 self.set(id, |p| {
                     p.ready = true;
@@ -1043,6 +1230,9 @@ impl Maker {
             return Err("Claude hasn't finished this mod yet.".into());
         }
         let d = self.pdir(id)?;
+        if let Some((sid, kind)) = server_key(&p.game) {
+            return self.install_on_server(id, &p, &sid, kind);
+        }
         let stage = d.join("install");
         let _ = std::fs::remove_dir_all(&stage);
         std::fs::create_dir_all(&stage).map_err(|e| e.to_string())?;
@@ -1072,6 +1262,55 @@ impl Maker {
         })
     }
 
+    /// Put a data pack or plugin on its server.
+    fn install_on_server(&self, id: &str, p: &Project, sid: &str, kind: MakerKind) -> Result<Project, String> {
+        use crate::mcserver::Kind;
+        let d = self.pdir(id)?;
+        let servers = self.servers()?;
+        let c = if kind == MakerKind::Datapack {
+            check_datapack(&d.join("mod"))?;
+            servers.add_made(sid, Kind::Datapack, &d.join("mod"), &p.name, &p.id)?
+        } else {
+            let jar = d.join("build").join("plugin.jar");
+            package_plugin(&d.join("build").join("classes"), &d.join("mod"), &jar)?;
+            servers.add_made(sid, Kind::Plugin, &jar, &p.name, &p.id)?
+        };
+        if let Some(old) = p.installed.as_deref().filter(|o| *o != c.file) {
+            let _ = servers.remove_content(sid, old);
+        }
+        let v = p.version;
+        let how = if kind == MakerKind::Datapack { "It's live now (the server reloaded its data packs if it's running)." } else { "Restart the server to load it." };
+        self.log(id, Item { tone: Some("good".into()), ..item("notice", format!("Installed version {v} on the server. {how} Tell Claude here how it went."))});
+        self.set(id, |p| {
+            p.installed = Some(c.file.clone());
+            p.installed_version = v;
+        })
+    }
+
+    /// Compile a Paper plugin, once the user approves.
+    fn build_plugin(&self, id: &str, p: &Project, area: &Area, cancel: &AtomicBool) -> Result<String, String> {
+        check_plugin(&area.modd)?;
+        let (sid, _) = server_key(&p.game).ok_or("This isn't a server project.")?;
+        if !self.ask(id, "Claude wants to compile the plugin with the Java compiler (javac, from a JDK OmniHub downloads once from Adoptium). Only the plugin's own .java files are compiled, against Paper's API, with annotation processors off.", cancel) {
+            return Err("The user didn't approve the build. Ask what they'd like, or explain why the build is needed.".into());
+        }
+        self.log(id, item("tool", "Building with javac…"));
+        let servers = self.servers()?;
+        let (javac, cp) = servers.javac(&sid)?;
+        let release = servers.maker_info(&sid)?["java"].as_u64().unwrap_or(21) as u32;
+        let out = self.pdir(id)?.join("build");
+        let _ = std::fs::remove_dir_all(&out);
+        let classes = out.join("classes");
+        std::fs::create_dir_all(&classes).map_err(|e| e.to_string())?;
+        let b = self.java_builder.lock().clone();
+        let r = b(&javac, &cp, &area.modd.join("src"), &classes, release);
+        if r.is_err() {
+            let _ = std::fs::remove_dir_all(&out);
+        }
+        self.log(id, Item { tone: Some(if r.is_ok() { "good" } else { "bad" }.into()), ..item("notice", if r.is_ok() { "The build worked." } else { "The build failed; Claude is looking at the errors." }) });
+        r.map(|log| format!("Build succeeded.\n{log}"))
+    }
+
     /// Forget the installed copy (after the user removed it in the mod list).
     pub fn forget_install(&self, mod_id: &str) {
         for p in self.projects(None) {
@@ -1088,6 +1327,60 @@ impl Maker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn server_projects_build_and_pack_plugins() {
+        assert_eq!(server_key("mcserver:abc123:datapack"), Some(("abc123".to_string(), MakerKind::Datapack)));
+        assert_eq!(server_key("mcserver:abc123:plugin"), Some(("abc123".to_string(), MakerKind::PaperPlugin)));
+        assert_eq!(server_key("mcserver:../x:plugin"), None);
+        assert_eq!(server_key("steam:2379780"), None);
+        let t = tempfile::tempdir().unwrap();
+        let m = t.path().join("mod");
+        std::fs::create_dir_all(m.join("src/dev/omnihub/hello")).unwrap();
+        assert!(check_plugin(&m).unwrap_err().contains("plugin.yml"));
+        std::fs::write(m.join("plugin.yml"), "name: Hello\nversion: 1\nmain: dev.omnihub.hello.Hello\napi-version: '1.21'\n").unwrap();
+        assert!(check_plugin(&m).unwrap_err().contains(".java"));
+        std::fs::write(m.join("src/dev/omnihub/hello/Hello.java"), "package dev.omnihub.hello;\nimport org.bukkit.plugin.java.JavaPlugin;\npublic class Hello extends JavaPlugin {\n  @Override public void onEnable() { getLogger(); }\n}\n").unwrap();
+        std::fs::write(m.join("src/notes.txt"), "x").unwrap();
+        assert!(check_plugin(&m).unwrap_err().contains("only .java"));
+        std::fs::remove_file(m.join("src/notes.txt")).unwrap();
+        assert_eq!(check_plugin(&m).unwrap(), 1);
+        std::fs::create_dir_all(m.join("resources/lang")).unwrap();
+        std::fs::write(m.join("resources/lang/en.yml"), "hi: Hello").unwrap();
+        std::fs::write(m.join("config.yml"), "greeting: hi").unwrap();
+        // A data pack needs its pack.mcmeta and data/.
+        let dp = t.path().join("dp");
+        std::fs::create_dir_all(dp.join("data/omnihub/function")).unwrap();
+        assert!(check_datapack(&dp).is_err());
+        std::fs::write(dp.join("pack.mcmeta"), r#"{"pack":{"description":"x","min_format":[121,0],"max_format":[121,0]}}"#).unwrap();
+        check_datapack(&dp).unwrap();
+        assert!(package_plugin(&t.path().join("none"), &m, &t.path().join("x.jar")).unwrap_err().contains("built"));
+
+        // A real compile with the PC's JDK (when there is one): a stand-in API first, then the plugin against it.
+        let Some(v) = crate::mcserver::install::java_version(Path::new("javac")).or_else(|| crate::mcserver::install::java_version(Path::new("java"))) else { return };
+        if v < 17 || std::process::Command::new("javac").arg("-version").output().is_err() {
+            return;
+        }
+        let api_src = t.path().join("api/src/org/bukkit/plugin/java");
+        std::fs::create_dir_all(&api_src).unwrap();
+        std::fs::write(api_src.join("JavaPlugin.java"), "package org.bukkit.plugin.java;\npublic abstract class JavaPlugin {\n  public void onEnable() {}\n  public java.util.logging.Logger getLogger() { return java.util.logging.Logger.getGlobal(); }\n}\n").unwrap();
+        let api = t.path().join("api/classes");
+        std::fs::create_dir_all(&api).unwrap();
+        javac_build(Path::new("javac"), &[], &t.path().join("api/src"), &api, 17).unwrap();
+        let classes = t.path().join("build/classes");
+        std::fs::create_dir_all(&classes).unwrap();
+        javac_build(Path::new("javac"), std::slice::from_ref(&api), &m.join("src"), &classes, 17).unwrap();
+        assert!(classes.join("dev/omnihub/hello/Hello.class").is_file());
+        let jar = t.path().join("build/plugin.jar");
+        package_plugin(&classes, &m, &jar).unwrap();
+        let z = zip::ZipArchive::new(std::fs::File::open(&jar).unwrap()).unwrap();
+        let mut names: Vec<&str> = z.file_names().collect();
+        names.sort();
+        assert_eq!(names, ["META-INF/MANIFEST.MF", "config.yml", "dev/omnihub/hello/Hello.class", "lang/en.yml", "plugin.yml"]);
+        // Compiler errors come back for Claude to fix.
+        std::fs::write(m.join("src/dev/omnihub/hello/Hello.java"), "package dev.omnihub.hello;\npublic class Hello { int x = ; }\n").unwrap();
+        assert!(javac_build(Path::new("javac"), &[api], &m.join("src"), &classes, 17).unwrap_err().contains("error"));
+    }
 
     #[test]
     fn paths_reading_and_project_checks() {

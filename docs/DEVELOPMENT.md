@@ -204,12 +204,15 @@ Font License.
 
 Core services publish on an in-process bus (`events.rs`); the shell forwards
 every event to the windows, the phone server forwards `transfer:*`,
-`inbox:*`, `power:*`, `notes:*`, `media:*` and `games:*` to paired phones.
+`inbox:*`, `power:*`, `notes:*`, `media:*`, `games:*`, `chats:*` (when chats
+are shared) and `mcserver:changed|players|guard` (when servers are) to
+paired phones.
 Topics:
 `storage:progress|done|failed|deleted|dupes-done`, `screenshots:new|deleted|synced`,
 `notes:changed|exported|folder-changed`, `vault:locked|unlocked`,
 `remote:status|paired|devices`, `transfer:started|progress|done|cancelled`,
 `inbox:new`, `power:pending|cancelled|executed`, `screen:viewers`,
 `audit:new`, `settings:changed`, `media:state|lyrics`, `games:session`,
-`browser:clients|pair-request|pair-done`, `notes:reminder`; the shell adds `app:navigate` (tray) and
+`browser:clients|pair-request|pair-done`, `notes:reminder`,
+`mcserver:changed|work|console|players|content|guard`; the shell adds `app:navigate` (tray) and
 `region:pending` (overlay).

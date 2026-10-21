@@ -804,6 +804,7 @@ export interface Settings {
     /** Paired phones may put text on this PC's clipboard. */
     allowClipboard: boolean;
     allowTasks: boolean;
+    allowServers: boolean;
     /** “Send to → OmniHub (phone)” in Explorer. */
     sendToMenu: boolean;
   };
@@ -1884,7 +1885,7 @@ export interface GoveeStatus {
 export type ModEngine = 'unityMono' | 'unityIl2cpp' | 'unreal' | 'love' | 'rage' | 'source' | 'source2' | 'godot' | 'gameMaker' | 'renPy' | 'rpgMaker' | 'creation' | 'unknown';
 export type LoaderKind = 'bepInEx' | 'bepInExIl2cpp' | 'melonLoader' | 'lovely' | 'scriptHookV' | 'scriptHookVDotNet' | 'ue4ss';
 export type ModMethod = 'bepInEx' | 'bepInExIl2cpp' | 'melon' | 'melonLegacy' | 'lovely' | 'gta' | 'unreal' | 'files' | 'none';
-export type MakerKind = 'steamodded' | 'lovely' | 'shvdnScript' | 'ue4ssLua' | 'bepInExPlugin' | 'melonMod' | 'files';
+export type MakerKind = 'steamodded' | 'lovely' | 'shvdnScript' | 'ue4ssLua' | 'bepInExPlugin' | 'melonMod' | 'files' | 'datapack' | 'paperPlugin';
 export type ModRoot = 'game' | 'data';
 export type ModSort = 'downloads' | 'rating' | 'updated' | 'name';
 
@@ -2316,4 +2317,243 @@ export interface UsageReport {
   omni: { claude: UsagePeriod; openai: UsagePeriod; maker: UsageTokens };
   claudeCode: AgentUsage;
   codex: AgentUsage;
+}
+
+// ---------- Minecraft servers ----------
+
+export type SrvFlavor = 'vanilla' | 'paper' | 'fabric' | 'quilt' | 'forge' | 'neoForge';
+export type SrvState = 'stopped' | 'installing' | 'starting' | 'running' | 'stopping' | 'crashed';
+export type SrvKind = 'mod' | 'plugin' | 'datapack';
+export type SrvGamemode = 'survival' | 'creative' | 'adventure' | 'spectator';
+export type SrvDifficulty = 'peaceful' | 'easy' | 'normal' | 'hard';
+
+export interface SrvServer {
+  id: string;
+  name: string;
+  flavor: SrvFlavor;
+  mc: string;
+  /** Paper build, or the Fabric, Quilt, Forge or NeoForge version. */
+  loader: string;
+  dir: string;
+  launch: { type: 'jar'; jar: string } | { type: 'args'; args: string } | null;
+  javaMajor: number;
+  javaPath: string | null;
+  flags: string[];
+  memoryMb: number;
+  autoStart: boolean;
+  autoRestart: boolean;
+  keepAwake: boolean;
+  backupHours: number;
+  backupKeep: number;
+  lastBackup: number;
+  upnp: boolean;
+  from: string | null;
+  created: number;
+  eulaAt: number | null;
+  owned: boolean;
+}
+
+export interface SrvOnline {
+  name: string;
+  uuid: string | null;
+  since: number;
+  pos: [number, number, number] | null;
+  dimension: string | null;
+}
+
+export interface SrvView extends SrvServer {
+  state: SrvState;
+  since: number;
+  online: SrvOnline[];
+  maxPlayers: number;
+  port: number;
+  motd: string;
+  whitelist: boolean;
+  onlineMode: boolean;
+  problem: string | null;
+  work: { text: string; done: number; total: number } | null;
+  memoryUsedMb: number;
+  cpu: number;
+  restartNeeded: boolean;
+  /** server-icon.png as a data: address. */
+  icon: string | null;
+  /** This PC's address on the home network, with the port. */
+  lan: string | null;
+}
+
+export type SrvFrom = { type: 'modrinth'; project: string; version: string } | { type: 'mix'; id: string } | { type: 'file'; path: string };
+
+export interface SrvNew {
+  name: string;
+  flavor: SrvFlavor;
+  mc: string;
+  loader?: string;
+  memoryMb?: number;
+  port?: number;
+  eula: boolean;
+  onlineMode: boolean;
+  maxPlayers?: number;
+  motd?: string;
+  whitelist: boolean;
+  seed?: string;
+  gamemode?: SrvGamemode;
+  difficulty?: SrvDifficulty;
+  from?: SrvFrom;
+  start: boolean;
+}
+
+export interface SrvPatch {
+  name?: string;
+  memoryMb?: number;
+  /** "" for OmniHub's own Java. */
+  javaPath?: string;
+  flags?: string[];
+  autoStart?: boolean;
+  autoRestart?: boolean;
+  keepAwake?: boolean;
+  backupHours?: number;
+  backupKeep?: number;
+  upnp?: boolean;
+  eula?: boolean;
+}
+
+export interface SrvLine {
+  n: number;
+  at: number;
+  text: string;
+  level: 'info' | 'warn' | 'error' | 'chat' | 'cmd';
+}
+
+export type SrvAction =
+  | { type: 'give'; item: string; count: number }
+  | { type: 'clear'; item: string | null; count: number | null }
+  | { type: 'clearSlot'; slot: number }
+  | { type: 'teleport'; x: number; y: number; z: number; dimension: string | null }
+  | { type: 'teleportTo'; player: string }
+  | { type: 'spawn' }
+  | { type: 'gamemode'; mode: SrvGamemode }
+  | { type: 'heal' }
+  | { type: 'feed' }
+  | { type: 'message'; text: string }
+  | { type: 'kick'; reason: string | null }
+  | { type: 'ban'; reason: string | null }
+  | { type: 'pardon' }
+  | { type: 'op' }
+  | { type: 'deop' }
+  | { type: 'whitelist'; on: boolean }
+  /** An operator's name may join from this place (servers that don't check accounts). */
+  | { type: 'allow'; place: string }
+  | { type: 'refuse'; place: string };
+
+export interface SrvKnown {
+  name: string;
+  uuid: string;
+  online: boolean;
+  op: boolean;
+  whitelisted: boolean;
+  banned: boolean;
+  banReason: string | null;
+}
+
+/** An operator's name that joined from a new place and was kept out. */
+export interface SrvWaiting {
+  name: string;
+  place: string;
+  at: number;
+}
+
+export interface SrvPlayers {
+  online: SrvOnline[];
+  known: SrvKnown[];
+  whitelistOn: boolean;
+  enforce: boolean;
+  maxPlayers: number;
+  /** false: players without a paid account can join too (operators guarded). */
+  onlineMode: boolean;
+  waiting: SrvWaiting[];
+}
+
+export interface SrvItem {
+  /** 0–8 hotbar, 9–35 inventory, 100–103 armour (feet to head), -106 off hand. */
+  slot: number;
+  id: string;
+  label: string;
+  count: number;
+  custom: string | null;
+  enchanted: boolean;
+}
+
+export interface SrvPlayer {
+  name: string;
+  uuid: string | null;
+  online: boolean;
+  /** Read now from the server, or from the player's saved file. */
+  live: boolean;
+  pos: [number, number, number] | null;
+  dimension: string | null;
+  health: number | null;
+  food: number | null;
+  xpLevel: number | null;
+  gamemode: SrvGamemode | null;
+  selected: number | null;
+  items: SrvItem[];
+  ender: SrvItem[];
+}
+
+export interface SrvMap {
+  regions: [number, number][];
+  spawn: [number, number, number] | null;
+  players: SrvOnline[];
+  supported: boolean;
+}
+
+export interface SrvContent {
+  file: string;
+  kind: SrvKind;
+  title: string;
+  version: string;
+  icon: string | null;
+  project: string | null;
+  source: 'modrinth' | 'pack' | 'mix' | 'claude' | 'file';
+  from: string | null;
+  dependency: boolean;
+  enabled: boolean;
+  size: number;
+  sha1: string;
+}
+
+export interface SrvHit {
+  project: string;
+  slug: string;
+  title: string;
+  description: string;
+  author: string;
+  icon: string | null;
+  downloads: number;
+  categories: string[];
+  serverSide: string;
+  clientSide: string;
+  installed: boolean;
+}
+
+export interface SrvBackup {
+  name: string;
+  at: number;
+  size: number;
+  auto: boolean;
+}
+
+export interface SrvNet {
+  port: number;
+  lan: string[];
+  publicIp: string | null;
+  router: string | null;
+  routerIp: string | null;
+  upnp: boolean;
+  portOpen: boolean;
+  upnpError: string | null;
+  /** The internet provider shares one public address between homes. */
+  cgnat: boolean;
+  java: string | null;
+  firewall: FirewallReport | null;
 }
