@@ -12,9 +12,18 @@ use omnihub_core::system::procs::ProcessMonitor;
 /// A copy of a harmless program under a short name (process names are
 /// cut to 15 characters on Linux).
 fn stand_in(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
-    let src = if cfg!(windows) { std::path::PathBuf::from(r"C:\Windows\System32\PING.EXE") } else { std::path::PathBuf::from("/bin/sleep") };
     let p = dir.join(name);
-    std::fs::copy(src, &p).unwrap();
+    #[cfg(windows)]
+    std::fs::copy(r"C:\Windows\System32\PING.EXE", &p).unwrap();
+    // A script (its process takes the script's name) rather than a copy of
+    // `sleep`: where that is one program for every utility (uutils), a copy
+    // under another name refuses to start.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(&p, "#!/bin/sh\nsleep \"$1\"\n").unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
     p
 }
 
