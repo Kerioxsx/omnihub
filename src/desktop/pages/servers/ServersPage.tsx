@@ -64,11 +64,19 @@ export function ServersPage() {
   const { list, error, reload } = useServers();
   const [making, setMaking] = useState(false);
   const [preset, setPreset] = useState<SrvFrom | null>(null);
+  const [presetWorld, setPresetWorld] = useState<string | null>(null);
 
   // "Host as a server" from the modpack mixer or an installed modpack.
   useEffect(() => {
     const [kind, rest] = [fromParam?.split(':')[0], fromParam?.slice(fromParam.indexOf(':') + 1) ?? ''];
-    if ((kind === 'mix' || kind === 'launcher') && rest) {
+    if (kind === 'world' && rest.includes(':')) {
+      // world:<installed pack>:<its world folder>
+      setPreset({ type: 'launcher', id: rest.slice(0, rest.indexOf(':')) });
+      setPresetWorld(rest.slice(rest.indexOf(':') + 1));
+      setMaking(true);
+      navigate('servers');
+    } else if ((kind === 'mix' || kind === 'launcher') && rest) {
+      setPresetWorld(null);
       setPreset({ type: kind, id: rest });
       setMaking(true);
       navigate('servers');
@@ -106,7 +114,7 @@ export function ServersPage() {
         </>
       }
     >
-      <NewServerModal open={making} onClose={() => setMaking(false)} preset={preset} onMade={(nid) => (reload(), navigate('servers', { id: nid }))} />
+      <NewServerModal open={making} onClose={() => setMaking(false)} preset={preset} presetWorld={presetWorld} onMade={(nid) => (reload(), navigate('servers', { id: nid }))} />
       {error && <ErrorState error={error} onRetry={reload} />}
       {list && list.length === 0 && (
         <Card>

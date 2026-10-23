@@ -95,7 +95,7 @@ fn state(h: &ServerHub, id: &str) -> State {
 }
 
 fn new(name: &str, flavor: Flavor) -> NewServer {
-    NewServer { name: name.into(), flavor, mc: "26.3".into(), loader: String::new(), memory_mb: Some(1024), port: None, eula: true, online_mode: false, max_players: Some(8), motd: None, whitelist: false, seed: None, gamemode: None, difficulty: Some("hard".into()), from: None, start: false }
+    NewServer { name: name.into(), flavor, mc: "26.3".into(), loader: String::new(), memory_mb: Some(1024), port: None, eula: true, online_mode: false, max_players: Some(8), motd: None, whitelist: false, seed: None, gamemode: None, difficulty: Some("hard".into()), from: None, world: None, start: false }
 }
 
 #[test]
@@ -179,6 +179,38 @@ fn makes_a_server_from_another_launchers_modpack() {
     assert!(d.join("server-icon.png").is_file());
     assert!(std::fs::read(game.join("mods/zoomify.jar")).is_ok(), "the launcher's own files are left alone");
     assert!(h.create(NewServer { from: Some(FromPack::Launcher { id: "0".repeat(16) }), ..new("Gone", Flavor::Vanilla) }).unwrap_err().contains("isn't there"));
+
+    // A world played alone in that pack becomes the server's world, and the
+    // single player's things become the owner's.
+    use nbt::Tag;
+    let player = Tag::Compound(vec![("XpLevel".into(), Tag::Int(42)), ("Inventory".into(), Tag::List(vec![Tag::Compound(vec![("id".into(), Tag::Str("minecraft:diamond".into())), ("count".into(), Tag::Int(9))])]))]);
+    let level = Tag::Compound(vec![("Data".into(), Tag::Compound(vec![("LevelName".into(), Tag::Str("Our base".into())), ("GameType".into(), Tag::Int(1)), ("Difficulty".into(), Tag::Byte(1)), ("hardcore".into(), Tag::Byte(0)), ("Player".into(), player.clone()), ("Version".into(), Tag::Compound(vec![("Name".into(), Tag::Str("26.3".into()))]))]))]);
+    let save = game.join("saves").join("Base");
+    std::fs::create_dir_all(save.join("region")).unwrap();
+    std::fs::write(save.join("level.dat"), nbt::gzip(&nbt::write(&level))).unwrap();
+    std::fs::write(save.join("region").join("r.0.0.mca"), vec![7u8; 8192]).unwrap();
+    std::fs::write(save.join("session.lock"), b"x").unwrap();
+    let pack = packs[0].id.clone();
+    let world = |folder: &str, owner: Option<&str>| Some(WorldFrom { pack: pack.clone(), folder: folder.into(), owner: owner.map(String::from) });
+    assert!(h.create(NewServer { from: Some(FromPack::Launcher { id: pack.clone() }), world: world("../Base", None), ..new("Bad", Flavor::Vanilla) }).unwrap_err().contains("isn't there"));
+    assert!(h.create(NewServer { from: Some(FromPack::Launcher { id: pack.clone() }), world: world("Base", Some("not a name!")), ..new("Bad", Flavor::Vanilla) }).unwrap_err().contains("letters"));
+    let v = h.create(NewServer { from: Some(FromPack::Launcher { id: pack.clone() }), world: world("Base", Some("Steve")), mc: String::new(), ..new("Base", Flavor::Vanilla) }).unwrap();
+    wait("install with the world", 20, || state(h, &v.server.id) == State::Stopped);
+    let s = h.server(&v.server.id).unwrap();
+    assert_eq!(s.from.as_deref(), Some("Prism Launcher: Friends pack (world Our base)"));
+    let d = PathBuf::from(&s.dir);
+    assert_eq!(std::fs::read(d.join("world").join("region").join("r.0.0.mca")).unwrap(), vec![7u8; 8192]);
+    assert!(!d.join("world").join("session.lock").exists());
+    let p = Props::load(&d.join("server.properties"));
+    assert_eq!((p.get("gamemode"), p.get("difficulty"), p.get("hardcore")), (Some("creative"), Some("easy"), Some("false")));
+    let mine = d.join("world").join("playerdata").join(format!("{}.dat", players::offline_uuid("Steve")));
+    assert_eq!(nbt::read(&std::fs::read(mine).unwrap()).unwrap(), player, "Steve gets the single player's things");
+    assert!(save.join("session.lock").exists(), "the pack's own world is left as it was");
+    // A world on its own (no modpack) runs vanilla on the version it was played in.
+    let alone = h.create(NewServer { world: world("Base", None), mc: String::new(), ..new("Alone", Flavor::Fabric) }).unwrap();
+    let a = h.server(&alone.server.id).unwrap();
+    assert_eq!((a.flavor, a.mc.as_str()), (Flavor::Vanilla, "26.3"));
+    wait("install the lone world", 20, || state(h, &alone.server.id) == State::Stopped);
 }
 
 #[test]
@@ -395,7 +427,7 @@ fn real_server() {
     };
     let mc = std::env::var("OMNIHUB_MC_VERSION").unwrap_or_else(|_| "26.3".into());
     let port = 25700 + flavor as u16;
-    let v = h.create(NewServer { name: "Real".into(), flavor, mc, loader: String::new(), memory_mb: Some(1536), port: Some(port), eula: true, online_mode: false, max_players: Some(5), motd: None, whitelist: false, seed: Some("omnihub".into()), gamemode: None, difficulty: None, from: None, start: true }).unwrap();
+    let v = h.create(NewServer { name: "Real".into(), flavor, mc, loader: String::new(), memory_mb: Some(1536), port: Some(port), eula: true, online_mode: false, max_players: Some(5), motd: None, whitelist: false, seed: Some("omnihub".into()), gamemode: None, difficulty: None, from: None, world: None, start: true }).unwrap();
     let id = v.server.id.clone();
     wait("running", 600, || {
         let v = h.view(&id).unwrap();

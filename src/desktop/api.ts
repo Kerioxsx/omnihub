@@ -441,7 +441,15 @@ export const api = {
     removeLauncherPlace: (path: string) => call<T.McLauncherPacks>('mc_remove_launcher_place', { path }),
     removeSource: (id: string) => call<void>('mc_remove_source', { id }),
     plan: (name: string, ids: string[], mc: string, loader: T.McLoader) => call<T.McMix>('mc_plan', { name, ids, mc, loader }),
-    exportPack: (id: string, path: string) => call<void>('mc_export', { id, path }),
+    /** Save a mix as a .mrpack (its cover inside), optionally with your server in its list. */
+    exportPack: (id: string, path: string, server?: T.McServerEntry | null) => call<void>('mc_export', { id, path, server: server ?? null }),
+    /** A pack a friend shared, made into a mix ready to install. */
+    importShared: (path: string) => call<T.McMix>('mc_import_shared', { path }),
+    launcherDetails: (id: string) => call<T.McLauncherDetails>('mc_launcher_details', { id }),
+    launcherWorldIcon: (id: string, folder: string) => call<string | null>('mc_launcher_world_icon', { id, folder }),
+    /** Mods with a newer version on Modrinth: file name → version. */
+    launcherUpdates: (id: string) => call<Record<string, string>>('mc_launcher_updates', { id }),
+    shareLauncherPack: (id: string, path: string, format: T.McPackFormat, server?: T.McServerEntry | null) => call<T.McShared>('mc_share_launcher_pack', { id, path, format, server: server ?? null }),
     install: (id: string) => call<T.McInstalled>('mc_install', { id }),
     uninstall: (profile: string) => call<void>('mc_uninstall', { profile }),
     /** Mixes worked out so far, newest first. */

@@ -3,7 +3,7 @@
 // installed (Prism Launcher, CurseForge, Modrinth App), or a .mrpack file. The EULA
 // is the user's to accept; nothing starts until they do.
 
-import type { McLauncherPack, McMix, McPackHit, McPackVersion, SrvDifficulty, SrvFlavor, SrvFrom, SrvGamemode, SrvNew } from '@shared/types';
+import type { McLauncherPack, McMix, McPackHit, McPackVersion, McWorld, SrvDifficulty, SrvFlavor, SrvFrom, SrvGamemode, SrvNew } from '@shared/types';
 import { Blocks, ExternalLink, FileArchive, Globe, HardDrive, Package, Server, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
@@ -29,7 +29,7 @@ function memoryHint(mb: number, flavor: SrvFlavor, modded: boolean): string {
   return mb < 2048 ? 'Fine for a few friends.' : 'Room for a busy server.';
 }
 
-export function NewServerModal({ open, onClose, onMade, preset }: { open: boolean; onClose: () => void; onMade: (id: string) => void; preset?: SrvFrom | null }) {
+export function NewServerModal({ open, onClose, onMade, preset, presetWorld }: { open: boolean; onClose: () => void; onMade: (id: string) => void; preset?: SrvFrom | null; presetWorld?: string | null }) {
   const [source, setSource] = useState<Source>('fresh');
   const [name, setName] = useState('');
   const [flavor, setFlavor] = useState<SrvFlavor>('paper');
@@ -57,6 +57,9 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
   const [file, setFile] = useState('');
   const [installed, setInstalled] = useState<McLauncherPack[] | null>(null);
   const [installedId, setInstalledId] = useState('');
+  const [worlds, setWorlds] = useState<McWorld[] | null>(null);
+  const [worldFolder, setWorldFolder] = useState('');
+  const [owner, setOwner] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -71,8 +74,9 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
     } else if (preset?.type === 'launcher') {
       setSource('installed');
       setInstalledId(preset.id);
+      setWorldFolder(presetWorld ?? '');
     }
-  }, [open, preset]);
+  }, [open, preset, presetWorld]);
 
   useEffect(() => {
     if (!open || source !== 'fresh') return;
@@ -118,6 +122,16 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
     }, () => setInstalled([]));
   }, [open, source]);
 
+  // The pack's single-player worlds, to start the server from one.
+  useEffect(() => {
+    setWorlds(null);
+    if (!open || source !== 'installed' || !installedId) return;
+    void api.minecraft.launcherDetails(installedId).then((d) => {
+      setWorlds(d.worlds);
+      setWorldFolder((cur) => (d.worlds.some((w) => w.folder === cur) ? cur : ''));
+    }, () => setWorlds([]));
+  }, [open, source, installedId]);
+
   const pv = packVersions?.find((v) => v.id === packVersion);
   const mix = mixes?.find((m) => m.id === mixId);
   const inst = installed?.find((p) => p.id === installedId);
@@ -146,7 +160,8 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
   const make = async () => {
     if (!target) return;
     const from: SrvFrom | undefined = source === 'modpack' && pack ? { type: 'modrinth', project: pack.project, version: packVersion } : source === 'mix' ? { type: 'mix', id: mixId } : source === 'installed' ? { type: 'launcher', id: installedId } : source === 'file' ? { type: 'file', path: file } : undefined;
-    const req: SrvNew = { name: (name.trim() || defaultName || 'My server').slice(0, 60), flavor: target.flavor, mc: target.mc, memoryMb: memory, eula, onlineMode, maxPlayers, whitelist, gamemode, difficulty, seed: seed.trim() || undefined, from, start };
+    const world = source === 'installed' && worldFolder ? { pack: installedId, folder: worldFolder, owner: owner.trim() || undefined } : undefined;
+    const req: SrvNew = { world, name: (name.trim() || worlds?.find((w) => w.folder === worldFolder)?.name || defaultName || 'My server').slice(0, 60), flavor: target.flavor, mc: target.mc, memoryMb: memory, eula, onlineMode, maxPlayers, whitelist, gamemode, difficulty, seed: seed.trim() || undefined, from, start };
     setSaving(true);
     try {
       const v = await api.servers.create(req);
@@ -320,6 +335,25 @@ export function NewServerModal({ open, onClose, onMade, preset }: { open: boolea
                   </button>
                 ))}
               </div>
+              {worlds && worlds.length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="World" hint={worldFolder ? 'A copy goes to the server; the one in the pack stays as it is. Its game mode and difficulty come along.' : 'Or start from one you played alone.'}>
+                    <Select value={worldFolder} onChange={(e) => setWorldFolder(e.target.value)}>
+                      <option value="">A new world</option>
+                      {worlds.map((w) => (
+                        <option key={w.folder} value={w.folder}>
+                          {w.name} ({w.hardcore ? 'hardcore' : w.gameMode})
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  {worlds.find((w) => w.folder === worldFolder)?.hasPlayer && (
+                    <Field label="Your Minecraft name" hint="Your single-player things (inventory, where you were, levels) become yours on the server.">
+                      <TextInput value={owner} onChange={(e) => setOwner(e.target.value.replace(/[^\w]/g, '').slice(0, 16))} placeholder="Steve" />
+                    </Field>
+                  )}
+                </div>
+              )}
               {inst && (
                 <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-faint">
                   <LauncherBadge p={inst} /> Its mods are copied from {inst.gameDir}; the ones that only run in the game itself stay off the server, and its configs come along. The modpack itself isn’t changed.

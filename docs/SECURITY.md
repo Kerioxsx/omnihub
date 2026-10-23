@@ -276,6 +276,20 @@ and lets a phone do some of that. This is what protects each part.
   one copies its mods and configs into OmniHub's mixer; a server made from one
   gets copies too. Their SHA-1s go to Modrinth (as for any instance folder) to
   find Modrinth's copies and leave client-only mods off servers.
+- **Sharing with friends** writes one file: the mods (those Modrinth knows as
+  downloads from Modrinth's hosts, the rest inside), `config`,
+  `defaultconfigs`, `kubejs`, `resourcepacks`, `shaderpacks`,
+  `global_packs`, the cover as `icon.png`, and, only when asked, a
+  `servers.dat` with one server (its address limited to letters, digits,
+  `.`, `-`, `:`, `[`, `]`). `options.txt`, your own `servers.dat`, saves,
+  and keys never go in. Opening a friend's pack reads its index like any
+  .mrpack (overrides confined to the pack's folder, downloads only from
+  Modrinth's hosts, checked by hash) and its `icon.png` decoded with limits.
+- **Worlds**: `level.dat` is read with the NBT limits. Hosting a world copies
+  its folder into the server (`session.lock` left out; the world folder name
+  must be one plain name in `saves`). The single player's data is copied byte
+  for byte from `level.dat` to `playerdata/<uuid>.dat` of the owner's name
+  (checked like any player name), never over an existing file.
 - The Minecraft mixer adds a profile to `launcher_profiles.json` (a backup is
   kept as `launcher_profiles.json.omnihub-backup`) and a folder under
   `.minecraft\omnihub`; removing a mix removes both. It refuses to run while

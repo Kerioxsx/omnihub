@@ -10,7 +10,7 @@ use omnihub_core::mods::cover::{self, PollStatus, SignIn};
 use omnihub_core::mods::detect::LoaderKind;
 use omnihub_core::mods::launchers::Instance;
 use omnihub_core::mods::maker::{Project, View};
-use omnihub_core::mods::minecraft::{Installed, Mix, PackHit, PackVersion, Source};
+use omnihub_core::mods::minecraft::{Installed, LauncherDetails, Mix, PackFormat, PackHit, PackVersion, ServerEntry, Shared, Source};
 use omnihub_core::mods::thunderstore::Sort;
 use omnihub_core::mods::workshop::WorkshopItem;
 use omnihub_core::mods::{Browse, InstalledMod, ModGame};
@@ -295,8 +295,36 @@ pub async fn mc_plan(core: Core<'_>, name: String, ids: Vec<String>, mc: String,
 }
 
 #[tauri::command]
-pub async fn mc_export(core: Core<'_>, id: String, path: String) -> Res<()> {
-    run!(core, |c| c.mods.minecraft.export(&id, std::path::Path::new(&path)))
+pub async fn mc_export(core: Core<'_>, id: String, path: String, server: Option<ServerEntry>) -> Res<()> {
+    run!(core, |c| c.mods.minecraft.export(&id, std::path::Path::new(&path), server.as_ref()))
+}
+
+/// A pack a friend shared, made into a mix ready to install (with their cover).
+#[tauri::command]
+pub async fn mc_import_shared(core: Core<'_>, path: String) -> Res<Mix> {
+    run!(core, |c| c.mods.minecraft.import_shared(&path))
+}
+
+#[tauri::command]
+pub async fn mc_launcher_details(core: Core<'_>, id: String) -> Res<LauncherDetails> {
+    run!(core, |c| c.mods.minecraft.launcher_details(&id))
+}
+
+#[tauri::command]
+pub async fn mc_launcher_world_icon(core: Core<'_>, id: String, folder: String) -> Res<Option<String>> {
+    run!(core, |c| Ok::<_, String>(c.mods.minecraft.launcher_world_icon(&id, &folder).map(|b| cover::data_url(&b))))
+}
+
+/// Mods with a newer version on Modrinth: file name → version.
+#[tauri::command]
+pub async fn mc_launcher_updates(core: Core<'_>, id: String) -> Res<std::collections::HashMap<String, String>> {
+    run!(core, |c| c.mods.minecraft.launcher_updates(&id))
+}
+
+/// Save an installed modpack for friends (.mrpack or a CurseForge zip).
+#[tauri::command]
+pub async fn mc_share_launcher_pack(core: Core<'_>, id: String, path: String, format: PackFormat, server: Option<ServerEntry>) -> Res<Shared> {
+    run!(core, |c| c.mods.minecraft.share_launcher_pack(&id, std::path::Path::new(&path), format, server.as_ref()))
 }
 
 #[tauri::command]

@@ -327,6 +327,19 @@ folder). `Mixer::add_launcher_pack` adds one as a pack with the launcher's
 version and loader; `FromPack::Launcher` makes a server from one (its jars
 read locally, `config`, `defaultconfigs`, `kubejs` and `global_packs` along).
 
+0.13: `launchers::worlds`/`world` read `level.dat` (`Data`: name, version,
+game type, difficulty, hardcore, commands, whether a `Player` is kept);
+`launchers::mods_in` reads each jar's `fabric.mod.json`, `quilt.mod.json` or
+`(neoforge.)mods.toml` (version from the manifest for `${file.jarVersion}`);
+the Minecraft Launcher's `.minecraft` is an instance too (version from the
+profile used last, `version_parts`). `Mixer::share_launcher_pack` and
+`export(…, server)` write the friends' file (`servers_dat` makes a one-server
+list with `nbt::write`); `import_shared` adds a friend's .mrpack and plans it
+as a mix with its `icon.png` as cover (`cover: "shared"`).
+`NewServer.world` (`WorldFrom`) makes `bring_world` copy the world in and
+`nbt::level_player` move the single player's compound, byte for byte, to the
+owner's player file.
+
 Mix covers (`mods/cover.rs`): each pack's icon (Modrinth's, or an instance
 folder's) becomes a square tile (pixel art enlarged block by block), then
 `blend` gives each pack its own part (a soft diagonal for two, wedges for

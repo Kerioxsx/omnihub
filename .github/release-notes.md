@@ -1,13 +1,15 @@
 ## New in this version
 
-**See the modpacks you already have** — Prism Launcher, CurseForge and the Modrinth App.
+**Share your mixes with friends, and host the worlds you played alone.**
 
-- **Mods → Minecraft → Installed on this PC** lists every modpack those launchers installed (also PolyMC and MultiMC): its picture, its Minecraft version and mod loader, how many mods it has (and how many are turned off), the modpack and version it came from, and when you last played it. Filter by launcher or search.
-- **Mix** any of them with other packs: its mods and configs are copied into the mixer, and its version and loader come from the launcher, so it works even when a mod isn't on Modrinth.
-- **Host it as a server** (or New server → *Installed modpack*): the server gets the same loader and version, the pack's mods straight from your PC (the ones that only run in the game itself are left out) and its configs.
-- OmniHub only reads those folders; nothing in them is changed. Moved your instances or CurseForge folder to another drive? **Look in a folder** finds them there, and keeps looking there.
+- **Share with friends**: on a mix, or on any installed modpack (the new details window), save one file with every mod, the configs, resource and shader packs, **and the cover picture**. Your own settings, keys and server list stay out. Turn on *Put my server in their server list* and it's there in their Multiplayer, ready to join. Mods on Modrinth are downloaded by your friend's launcher; the rest ride inside the file. Installed modpacks can also be saved as a CurseForge zip.
+- **A friend's pack**: in Mods → Minecraft, open a pack someone sent you. It becomes a mix with **their picture**, ready to install in the Minecraft Launcher. The file also opens in the Modrinth App and Prism Launcher.
+- **What's in a modpack**: the details window lists its mods (name and version from each mod itself, which ones only run in the game, which are turned off), **checks Modrinth for newer versions** (nothing is changed), and shows its single-player worlds.
+- **Host a world you played alone**: pick a world (in the details window, or New server → Installed modpack → World). The server gets a copy, with its game mode and difficulty, and with your Minecraft name **your inventory, place and levels from single-player become yours on the server**. The original world isn't touched.
+- The Minecraft Launcher's own folder (.minecraft) is listed too, with its worlds and mods.
+- Fix: a test that compared paths with mixed slashes on Windows.
 
-Also in 0.12.0: host Minecraft servers on your PC 24/7 (a new **Servers** tab, also on your phone), with players' locations and inventories, the whitelist, a live map, mods and plugins, and players without a paid account if you choose.
+Also in 0.12: your installed modpacks from Prism Launcher, CurseForge and the Modrinth App; Minecraft servers 24/7 on your PC (also from your phone).
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

@@ -353,7 +353,7 @@ export const serversMock = {
     const port = 25565 + servers.length;
     const lp = req.from?.type === 'launcher' ? launchersMock.get(req.from.id) : undefined;
     if (req.from?.type === 'launcher' && !lp) throw new Error('That modpack isn’t there any more.');
-    const from = lp ? `${lp.launcherName}: ${lp.name}` : req.from?.type === 'mix' ? 'Mix: Create + Cobblemon' : req.from?.type === 'modrinth' ? 'Modpack' : req.from ? 'Modpack: from a file' : null;
+    const from = lp ? `${lp.launcherName}: ${lp.name}${req.world ? ` (world ${req.world.folder})` : ''}` : req.from?.type === 'mix' ? 'Mix: Create + Cobblemon' : req.from?.type === 'modrinth' ? 'Modpack' : req.from ? 'Modpack: from a file' : null;
     const s = base({ id, name: req.name, flavor: req.from?.type === 'mix' ? 'neoForge' : req.flavor, mc: req.mc || '26.1.2', state: 'installing', port, lan: `192.168.1.42:${port}`, memoryMb: req.memoryMb ?? 4096, maxPlayers: req.maxPlayers ?? 10, whitelist: req.whitelist, onlineMode: req.onlineMode, from, backupHours: 24, lastBackup: 0, created: now(), eulaAt: now(), launch: null });
     servers.push(s);
     contents[id] = [];

@@ -172,6 +172,22 @@ impl Reader<'_> {
         Ok(String::from_utf8_lossy(self.take(n)?).into_owned())
     }
 
+    /// Inside a compound's payload: go to the compound called `name` and
+    /// return where its payload starts (None if there isn't one).
+    fn enter(&mut self, name: &str) -> Result<Option<usize>, String> {
+        loop {
+            let k = self.u8()?;
+            if k == 0 {
+                return Ok(None);
+            }
+            let n = self.string()?;
+            if k == 10 && n == name {
+                return Ok(Some(self.at));
+            }
+            self.payload(k, 1)?;
+        }
+    }
+
     fn payload(&mut self, kind: u8, depth: usize) -> Result<Tag, String> {
         if depth > MAX_DEPTH {
             return Err("The data is nested too deeply.".into());
@@ -223,6 +239,99 @@ impl Reader<'_> {
             k => return Err(format!("Unknown NBT tag type {k}.")),
         })
     }
+}
+
+/// Write NBT: one root compound with an empty name (player files, servers.dat).
+pub fn write(root: &Tag) -> Vec<u8> {
+    fn kind(t: &Tag) -> u8 {
+        match t {
+            Tag::Byte(_) => 1,
+            Tag::Short(_) => 2,
+            Tag::Int(_) => 3,
+            Tag::Long(_) => 4,
+            Tag::Float(_) => 5,
+            Tag::Double(_) => 6,
+            Tag::Bytes(_) => 7,
+            Tag::Str(_) => 8,
+            Tag::List(_) => 9,
+            Tag::Compound(_) => 10,
+            Tag::Ints(_) => 11,
+            Tag::Longs(_) => 12,
+        }
+    }
+    fn s(out: &mut Vec<u8>, v: &str) {
+        out.extend((v.len() as u16).to_be_bytes());
+        out.extend(v.as_bytes());
+    }
+    fn p(out: &mut Vec<u8>, t: &Tag) {
+        match t {
+            Tag::Byte(v) => out.push(*v as u8),
+            Tag::Short(v) => out.extend(v.to_be_bytes()),
+            Tag::Int(v) => out.extend(v.to_be_bytes()),
+            Tag::Long(v) => out.extend(v.to_be_bytes()),
+            Tag::Float(v) => out.extend(v.to_bits().to_be_bytes()),
+            Tag::Double(v) => out.extend(v.to_bits().to_be_bytes()),
+            Tag::Bytes(v) => {
+                out.extend((v.len() as i32).to_be_bytes());
+                out.extend(v.iter().map(|&x| x as u8));
+            }
+            Tag::Str(v) => s(out, v),
+            Tag::List(v) => {
+                out.push(v.first().map(kind).unwrap_or(0));
+                out.extend((v.len() as i32).to_be_bytes());
+                v.iter().for_each(|x| p(out, x));
+            }
+            Tag::Compound(v) => {
+                for (k, x) in v {
+                    out.push(kind(x));
+                    s(out, k);
+                    p(out, x);
+                }
+                out.push(0);
+            }
+            Tag::Ints(v) => {
+                out.extend((v.len() as i32).to_be_bytes());
+                v.iter().for_each(|x| out.extend(x.to_be_bytes()));
+            }
+            Tag::Longs(v) => {
+                out.extend((v.len() as i32).to_be_bytes());
+                v.iter().for_each(|x| out.extend(x.to_be_bytes()));
+            }
+        }
+    }
+    let mut out = vec![10];
+    s(&mut out, "");
+    p(&mut out, root);
+    out
+}
+
+/// Gzip, as Minecraft keeps player files and level.dat.
+pub fn gzip(b: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    // Writing to a Vec can't fail.
+    let _ = e.write_all(b);
+    e.finish().unwrap_or_default()
+}
+
+/// The single-player's own data in a level.dat (`Data.Player`), as a player
+/// file of its own (uncompressed NBT), copied byte for byte so nothing in it
+/// changes on the way. None when the world has none (a server's world).
+pub fn level_player(level_dat: &[u8]) -> Result<Option<Vec<u8>>, String> {
+    let raw = inflate(level_dat)?;
+    let mut r = Reader { b: &raw, at: 0 };
+    if r.u8()? != 10 {
+        return Err("That isn't a level.dat.".into());
+    }
+    r.string()?;
+    if r.enter("Data")?.is_none() {
+        return Ok(None);
+    }
+    let Some(start) = r.enter("Player")? else { return Ok(None) };
+    r.payload(10, 0)?;
+    let mut out = vec![10, 0, 0];
+    out.extend_from_slice(&raw[start..r.at]);
+    Ok(Some(out))
 }
 
 /// Parse SNBT, the text form (`{count: 1, Slot: 0b, id: "minecraft:stone"}`).
@@ -413,75 +522,28 @@ fn number(w: &str) -> Option<Tag> {
 pub(crate) mod tests {
     use super::*;
 
-    /// Write NBT (for tests): one named root compound.
-    pub fn write(root: &Tag) -> Vec<u8> {
-        fn kind(t: &Tag) -> u8 {
-            match t {
-                Tag::Byte(_) => 1,
-                Tag::Short(_) => 2,
-                Tag::Int(_) => 3,
-                Tag::Long(_) => 4,
-                Tag::Float(_) => 5,
-                Tag::Double(_) => 6,
-                Tag::Bytes(_) => 7,
-                Tag::Str(_) => 8,
-                Tag::List(_) => 9,
-                Tag::Compound(_) => 10,
-                Tag::Ints(_) => 11,
-                Tag::Longs(_) => 12,
-            }
-        }
-        fn s(out: &mut Vec<u8>, v: &str) {
-            out.extend((v.len() as u16).to_be_bytes());
-            out.extend(v.as_bytes());
-        }
-        fn p(out: &mut Vec<u8>, t: &Tag) {
-            match t {
-                Tag::Byte(v) => out.push(*v as u8),
-                Tag::Short(v) => out.extend(v.to_be_bytes()),
-                Tag::Int(v) => out.extend(v.to_be_bytes()),
-                Tag::Long(v) => out.extend(v.to_be_bytes()),
-                Tag::Float(v) => out.extend(v.to_bits().to_be_bytes()),
-                Tag::Double(v) => out.extend(v.to_bits().to_be_bytes()),
-                Tag::Bytes(v) => {
-                    out.extend((v.len() as i32).to_be_bytes());
-                    out.extend(v.iter().map(|&x| x as u8));
-                }
-                Tag::Str(v) => s(out, v),
-                Tag::List(v) => {
-                    out.push(v.first().map(kind).unwrap_or(0));
-                    out.extend((v.len() as i32).to_be_bytes());
-                    v.iter().for_each(|x| p(out, x));
-                }
-                Tag::Compound(v) => {
-                    for (k, x) in v {
-                        out.push(kind(x));
-                        s(out, k);
-                        p(out, x);
-                    }
-                    out.push(0);
-                }
-                Tag::Ints(v) => {
-                    out.extend((v.len() as i32).to_be_bytes());
-                    v.iter().for_each(|x| out.extend(x.to_be_bytes()));
-                }
-                Tag::Longs(v) => {
-                    out.extend((v.len() as i32).to_be_bytes());
-                    v.iter().for_each(|x| out.extend(x.to_be_bytes()));
-                }
-            }
-        }
-        let mut out = vec![10];
-        s(&mut out, "");
-        p(&mut out, root);
-        out
-    }
+    pub use super::{gzip, write};
 
-    pub fn gzip(b: &[u8]) -> Vec<u8> {
-        use std::io::Write;
-        let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
-        e.write_all(b).unwrap();
-        e.finish().unwrap()
+    /// The single player's data comes out of level.dat byte for byte, also
+    /// strings Java wrote in its own UTF-8 (an emoji as two surrogates).
+    #[test]
+    fn single_player_data_is_copied_exactly() {
+        let player = Tag::Compound(vec![("CustomName".into(), Tag::Str("XXXXXX".into())), ("Inventory".into(), Tag::List(vec![Tag::Compound(vec![("id".into(), Tag::Str("minecraft:diamond".into())), ("count".into(), Tag::Int(64))])])), ("XpLevel".into(), Tag::Int(30))]);
+        let level = Tag::Compound(vec![("Data".into(), Tag::Compound(vec![("LevelName".into(), Tag::Str("Base".into())), ("Player".into(), player.clone()), ("Version".into(), Tag::Compound(vec![("Name".into(), Tag::Str("1.21.1".into()))]))]))]);
+        let mut raw = write(&level);
+        let java_emoji = [0xED, 0xA0, 0xBD, 0xED, 0xB8, 0x80];
+        let at = raw.windows(6).position(|w| w == b"XXXXXX").unwrap();
+        raw[at..at + 6].copy_from_slice(&java_emoji);
+        let out = level_player(&gzip(&raw)).unwrap().unwrap();
+        let mut expected = write(&player);
+        let at = expected.windows(6).position(|w| w == b"XXXXXX").unwrap();
+        expected[at..at + 6].copy_from_slice(&java_emoji);
+        assert_eq!(out, expected);
+        assert_eq!(read(&out).unwrap().get("XpLevel"), Some(&Tag::Int(30)));
+        // A server's level.dat has no player.
+        let server = Tag::Compound(vec![("Data".into(), Tag::Compound(vec![("LevelName".into(), Tag::Str("world".into()))]))]);
+        assert_eq!(level_player(&write(&server)).unwrap(), None);
+        assert!(level_player(b"\x08junk").is_err());
     }
 
     #[test]

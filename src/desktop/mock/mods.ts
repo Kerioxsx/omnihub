@@ -443,6 +443,25 @@ export const modsMock = {
   },
   mcAddFolder: (path: string) => modsMock.mcAddFile(`${path}\\instance.mrpack`),
   mcLauncherPacks: () => launchersMock.list(),
+  mcLauncherDetails: (id: string) => launchersMock.details(id),
+  mcLauncherWorldIcon: (id: string, folder: string) => launchersMock.worldIcon(id, folder),
+  async mcLauncherUpdates(id: string) {
+    await new Promise((r) => setTimeout(r, 700));
+    return launchersMock.updates(id);
+  },
+  async mcShareLauncherPack(id: string) {
+    await new Promise((r) => setTimeout(r, 900));
+    return launchersMock.share(id);
+  },
+  async mcImportShared(path: string): Promise<McMix> {
+    const name = path.split(/[\\/]/).pop()!.replace(/\.mrpack$/i, '') || 'Friend’s pack';
+    const s = modsMock.mcAddFile(path);
+    s.name = name;
+    const m = modsMock.mcPlan(name, [s.id], s.mc, s.loader);
+    m.cover = 'shared';
+    mcCovers.set(m.id, await paintedCover(mixIcons()));
+    return m;
+  },
   mcLauncherIcon: (id: string) => launchersMock.icon(id),
   mcAddLauncherPack(id: string): McSource {
     const p = launchersMock.get(id);

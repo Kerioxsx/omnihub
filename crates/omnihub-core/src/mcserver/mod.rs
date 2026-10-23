@@ -179,6 +179,20 @@ pub enum FromPack {
     Launcher { id: String },
 }
 
+/// A single-player world a server is made from.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WorldFrom {
+    /// The installed modpack (another launcher's instance) it's in.
+    pub pack: String,
+    /// Its folder in that instance's saves.
+    pub folder: String,
+    /// The owner's Minecraft name: the single player's things (inventory,
+    /// place, levels) become theirs on the server.
+    #[serde(default)]
+    pub owner: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewServer {
@@ -209,6 +223,9 @@ pub struct NewServer {
     pub difficulty: Option<String>,
     #[serde(default)]
     pub from: Option<FromPack>,
+    /// Its world: one played in single-player (otherwise a new one).
+    #[serde(default)]
+    pub world: Option<WorldFrom>,
     #[serde(default)]
     pub start: bool,
 }
@@ -631,6 +648,32 @@ impl ServerHub {
             Some(FromPack::Modrinth { .. }) => from_label = Some("Modpack".into()),
             None => {}
         }
+        let mut world = None;
+        if let Some(w) = &req.world {
+            let i = self.mods.minecraft.launcher_pack(&w.pack)?;
+            let info = crate::mods::launchers::world_dir(Path::new(&i.game_dir), &w.folder).and_then(|d| crate::mods::launchers::world(&d)).ok_or("That world isn't there any more.")?;
+            match &req.from {
+                Some(FromPack::Launcher { id }) if *id == w.pack => from_label = Some(format!("{}: {} (world {})", i.launcher_name, i.name, info.name)),
+                None => {
+                    // A world on its own runs on the version it was last played in.
+                    if !matches!(flavor, Flavor::Vanilla | Flavor::Paper) {
+                        flavor = Flavor::Vanilla;
+                    }
+                    if info.version.is_empty() {
+                        return Err("That world doesn't say which Minecraft version it was played in.".into());
+                    }
+                    mc = info.version.clone();
+                    from_label = Some(format!("World: {} ({})", info.name, i.launcher_name));
+                }
+                _ => return Err("A world comes with the modpack it was played in.".into()),
+            }
+            if let Some(o) = w.owner.as_deref().map(str::trim).filter(|o| !o.is_empty()) {
+                if !players::valid_name(o) {
+                    return Err("Minecraft names are 1–16 letters, digits or _.".into());
+                }
+            }
+            world = Some(info);
+        }
         if mc.is_empty() {
             return Err("Pick a Minecraft version.".into());
         }
@@ -662,6 +705,14 @@ impl ServerHub {
         if let Some(d) = req.difficulty.as_deref().filter(|d| ["peaceful", "easy", "normal", "hard"].contains(d)) {
             p.set("difficulty", d);
         }
+        // A single-player world keeps its own game mode, difficulty and hardcore.
+        if let Some(w) = &world {
+            p.set("gamemode", &w.game_mode);
+            if !w.difficulty.is_empty() {
+                p.set("difficulty", &w.difficulty);
+            }
+            p.set("hardcore", if w.hardcore { "true" } else { "false" });
+        }
         p.save(&dir.join("server.properties"))?;
         std::fs::write(dir.join("eula.txt"), format!("# Accepted in OmniHub on {} (https://aka.ms/MinecraftEULA)\neula=true\n", chrono::Local::now().format("%Y-%m-%d %H:%M"))).map_err(|e| e.to_string())?;
         let s = Server {
@@ -685,12 +736,12 @@ impl ServerHub {
             l.since = now();
         });
         let me = self.clone();
-        let (from, start) = (req.from.clone(), req.start);
+        let (from, world, start) = (req.from.clone(), req.world.clone(), req.start);
         let tid = id.clone();
         std::thread::Builder::new()
             .name("mc-install".into())
             .spawn(move || {
-                let r = me.install(&tid, from.as_ref());
+                let r = me.install(&tid, from.as_ref(), world.as_ref());
                 me.with_live(&tid, |l| {
                     l.state = State::Stopped;
                     l.work = None;
@@ -711,7 +762,7 @@ impl ServerHub {
     }
 
     /// Get Java and the server's program, then a pack's mods if it's made from one.
-    fn install(self: &Arc<Self>, id: &str, from: Option<&FromPack>) -> Result<(), String> {
+    fn install(self: &Arc<Self>, id: &str, from: Option<&FromPack>, world: Option<&WorldFrom>) -> Result<(), String> {
         let mut s = self.server(id)?;
         let dir = PathBuf::from(&s.dir);
         // The pack's server files, its configs, its name and where it's from.
@@ -781,8 +832,49 @@ impl ServerHub {
             let (added, skipped) = content::install_pack(&dir, &self.mods.minecraft.api, &files, &over, &title, &source, &mut |i, n, what| me.set_work(&tid, &format!("Adding {what}"), i as u64, n as u64))?;
             self.note(id, &format!("Added {added} mods from {title}; {skipped} that only run in the game itself were left out."), "info");
         }
+        if let Some(w) = world {
+            self.bring_world(id, &dir, w)?;
+        }
         if let Some(b) = icon {
             let _ = Self::write_icon(&dir, &b);
+        }
+        Ok(())
+    }
+
+    /// Copy a single-player world in as the server's world (the instance's
+    /// copy isn't touched), and give the single player's things to the
+    /// owner's account on this server.
+    fn bring_world(&self, id: &str, dir: &Path, w: &WorldFrom) -> Result<(), String> {
+        let i = self.mods.minecraft.launcher_pack(&w.pack)?;
+        let src = crate::mods::launchers::world_dir(Path::new(&i.game_dir), &w.folder).ok_or("That world isn't there any more.")?;
+        let dest = dir.join(level_of(dir));
+        if dest.join("level.dat").exists() {
+            return Err("The server already has a world.".into());
+        }
+        let files: Vec<walkdir::DirEntry> = walkdir::WalkDir::new(&src).follow_links(false).into_iter().flatten().filter(|e| e.file_type().is_file() && e.file_name() != "session.lock").collect();
+        let total: u64 = files.iter().filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum();
+        let mut done = 0;
+        for e in &files {
+            let Ok(rel) = e.path().strip_prefix(&src) else { continue };
+            let out = dest.join(rel);
+            std::fs::create_dir_all(out.parent().unwrap_or(&dest)).map_err(|e| e.to_string())?;
+            done += std::fs::copy(e.path(), &out).map_err(|x| format!("{}: {x}", e.path().display()))?;
+            self.set_work(id, "Copying the world", done, total);
+        }
+        let Some(name) = w.owner.as_deref().map(str::trim).filter(|n| !n.is_empty()) else { return Ok(()) };
+        let level = std::fs::read(dest.join("level.dat")).map_err(|e| e.to_string())?;
+        let Ok(Some(raw)) = nbt::level_player(&level) else { return Ok(()) };
+        match self.identity(dir, name) {
+            Ok(who) => {
+                let pd = dest.join("playerdata");
+                std::fs::create_dir_all(&pd).map_err(|e| e.to_string())?;
+                let f = pd.join(format!("{}.dat", who.uuid));
+                if !f.exists() {
+                    std::fs::write(&f, nbt::gzip(&raw)).map_err(|e| e.to_string())?;
+                }
+                self.note(id, &format!("{}'s things from single-player (inventory, place, levels) are theirs on the server.", who.name), "info");
+            }
+            Err(e) => self.note(id, &format!("{name}'s single-player things weren't moved: {e}"), "warn"),
         }
         Ok(())
     }

@@ -1,6 +1,8 @@
 //! Modpacks other launchers already installed on this PC: Prism Launcher (and
-//! PolyMC and MultiMC, which it grew from), CurseForge and the Modrinth App.
-//! Their folders are only read, never changed; the Modrinth App's database is
+//! PolyMC and MultiMC, which it grew from), CurseForge, the Modrinth App and
+//! the Minecraft Launcher's own folder; what's in each (mods from their jars'
+//! own descriptions, single-player worlds from their level.dat). Their
+//! folders are only read, never changed; the Modrinth App's database is
 //! opened read-only.
 
 use std::collections::{HashMap, HashSet};
@@ -15,6 +17,8 @@ pub enum Launcher {
     Prism,
     Curseforge,
     Modrinth,
+    /// Mojang's Minecraft Launcher (.minecraft).
+    Minecraft,
 }
 
 /// A modpack (an instance) another launcher installed.
@@ -66,6 +70,7 @@ pub fn find(p: &Places) -> Vec<Instance> {
     if let Some(r) = &p.roaming {
         prism_data(&r.join("PrismLauncher"), "Prism Launcher", &mut out);
         prism_data(&r.join("PolyMC"), "PolyMC", &mut out);
+        minecraft_launcher(&r.join(".minecraft"), &mut out);
         let app = r.join("ModrinthApp");
         if app.join("app.db").is_file() {
             modrinth_app(&app, &mut out);
@@ -343,6 +348,212 @@ fn modrinth_legacy(profiles: &Path, out: &mut Vec<Instance>) {
     }
 }
 
+/// The Minecraft Launcher's own folder, when it has worlds or mods: its
+/// version and loader from the profile played last that uses that folder.
+fn minecraft_launcher(dir: &Path, out: &mut Vec<Instance>) {
+    let has_worlds = std::fs::read_dir(dir.join("saves")).into_iter().flatten().flatten().any(|e| e.path().join("level.dat").is_file());
+    if !has_worlds && count_mods(&dir.join("mods")).0 == 0 {
+        return;
+    }
+    let profiles: Value = read_small(&dir.join("launcher_profiles.json"), 16 << 20).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+    let last = profiles["profiles"].as_object().into_iter().flat_map(|m| m.values()).filter(|p| p["gameDir"].as_str().is_none_or(|g| g.is_empty() || Path::new(g) == dir)).filter_map(|p| Some((when(p["lastUsed"].as_str()?)?, p["lastVersionId"].as_str()?.to_string()))).max_by_key(|(t, _)| *t);
+    let (mc, loader, lv) = last.as_ref().map(|(_, v)| version_parts(v)).unwrap_or_default();
+    out.push(make(Launcher::Minecraft, "Minecraft Launcher", "Minecraft Launcher".into(), dir, dir, mc, loader, lv, None, last.map(|(t, _)| t), None));
+}
+
+/// A launcher version id as (Minecraft, loader, loader version):
+/// "1.21.4", "fabric-loader-0.16.9-1.21.4", "quilt-loader-0.26.0-1.20.4",
+/// "1.20.1-forge-47.2.0", "neoforge-21.1.77" (Minecraft 1.21.1).
+fn version_parts(v: &str) -> (String, String, String) {
+    let three = |a: &str, b: &str, c: &str| (a.to_string(), b.to_string(), c.to_string());
+    for (prefix, loader) in [("fabric-loader-", "fabric"), ("quilt-loader-", "quilt")] {
+        if let Some((lv, mc)) = v.strip_prefix(prefix).and_then(|r| r.split_once('-')) {
+            return three(mc, loader, lv);
+        }
+    }
+    if let Some((mc, lv)) = v.split_once("-forge-") {
+        return three(mc, "forge", lv);
+    }
+    if let Some(lv) = v.strip_prefix("neoforge-") {
+        // NeoForge 21.1.x is for Minecraft 1.21.1; 26.1.2.x for 26.1.2.
+        let parts: Vec<&str> = lv.split('.').collect();
+        let mc = match parts.as_slice() {
+            [major, minor, ..] if major.parse::<u32>().is_ok_and(|m| m < 25) => if *minor == "0" { format!("1.{major}") } else { format!("1.{major}.{minor}") },
+            [a, b, c, _, ..] => format!("{a}.{b}.{c}"),
+            _ => String::new(),
+        };
+        return three(&mc, "neoforge", lv);
+    }
+    if v.starts_with("latest-") || !v.starts_with(|c: char| c.is_ascii_digit()) {
+        return Default::default();
+    }
+    three(v, "", "")
+}
+
+/// A single-player world in an instance's saves folder.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct World {
+    /// Its folder in saves\.
+    pub folder: String,
+    pub name: String,
+    /// The Minecraft version it was last played in.
+    pub version: String,
+    /// Unix seconds.
+    pub last_played: Option<i64>,
+    /// "survival", "creative", "adventure" or "spectator".
+    pub game_mode: String,
+    pub hardcore: bool,
+    /// "peaceful", "easy", "normal" or "hard"; empty when the world doesn't say.
+    pub difficulty: String,
+    pub cheats: bool,
+    pub size: u64,
+    /// It keeps the single player's things (inventory, place), which a server can take over.
+    pub has_player: bool,
+    pub has_icon: bool,
+}
+
+/// The worlds in a game folder's saves, most recently played first.
+pub fn worlds(game: &Path) -> Vec<World> {
+    let mut v: Vec<World> = std::fs::read_dir(game.join("saves")).into_iter().flatten().flatten().filter_map(|e| world(&e.path())).collect();
+    v.sort_by(|a, b| b.last_played.unwrap_or(0).cmp(&a.last_played.unwrap_or(0)).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+    v
+}
+
+pub fn world(dir: &Path) -> Option<World> {
+    use crate::mcserver::nbt;
+    let folder = dir.file_name()?.to_string_lossy().into_owned();
+    let level = nbt::read(&read_small(&dir.join("level.dat"), 64 << 20)?).ok()?;
+    let d = level.get("Data")?;
+    let int = |k: &str| d.get(k).and_then(nbt::Tag::int);
+    let game_mode = ["survival", "creative", "adventure", "spectator"].get(int("GameType").unwrap_or(0).clamp(0, 3) as usize).copied().unwrap_or("survival");
+    let difficulty = int("Difficulty").and_then(|x| ["peaceful", "easy", "normal", "hard"].get(x.clamp(0, 3) as usize).copied()).unwrap_or_default();
+    let name = d.get("LevelName").and_then(nbt::Tag::str).filter(|n| !n.trim().is_empty()).map(String::from).unwrap_or_else(|| folder.clone());
+    Some(World {
+        name,
+        version: d.get("Version").and_then(|v| v.get("Name")).and_then(nbt::Tag::str).unwrap_or_default().to_string(),
+        last_played: int("LastPlayed").filter(|t| *t > 0).map(|t| t / 1000),
+        game_mode: game_mode.into(),
+        hardcore: int("hardcore").unwrap_or(0) != 0,
+        difficulty: difficulty.into(),
+        cheats: int("allowCommands").unwrap_or(0) != 0,
+        size: walkdir::WalkDir::new(dir).follow_links(false).into_iter().flatten().filter_map(|e| e.metadata().ok()).filter(|m| m.is_file()).map(|m| m.len()).sum(),
+        has_player: d.get("Player").is_some(),
+        has_icon: dir.join("icon.png").is_file(),
+        folder,
+    })
+}
+
+/// A world folder in an instance, by its name in saves (one plain name, no path).
+pub fn world_dir(game: &Path, folder: &str) -> Option<PathBuf> {
+    let ok = !folder.is_empty() && super::install::safe_rel(folder).is_some_and(|r| r == folder && !r.contains('/'));
+    Some(game.join("saves").join(folder)).filter(|d| ok && d.join("level.dat").is_file())
+}
+
+/// A mod in an instance, as its jar describes itself.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModInfo {
+    pub file: String,
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    /// "client" (only in the game itself), "server", or empty (both, or it doesn't say).
+    pub side: String,
+    /// Off in the launcher (.jar.disabled).
+    pub disabled: bool,
+    pub size: u64,
+}
+
+/// The mods in a game folder, by name.
+pub fn mods_in(game: &Path) -> Vec<ModInfo> {
+    let mut v: Vec<ModInfo> = std::fs::read_dir(game.join("mods"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| {
+            let file = e.file_name().to_string_lossy().into_owned();
+            let low = file.to_lowercase();
+            let disabled = low.ends_with(".jar.disabled");
+            if !disabled && !low.ends_with(".jar") {
+                return None;
+            }
+            let size = e.metadata().ok().filter(|m| m.is_file())?.len();
+            let (id, name, version, side) = jar_meta(&e.path()).unwrap_or_default();
+            let fallback = file.trim_end_matches(".disabled").trim_end_matches(".jar").to_string();
+            Some(ModInfo { name: if name.is_empty() { fallback } else { name }, file, id, version, side, disabled, size })
+        })
+        .collect();
+    v.sort_by_key(|a| a.name.to_lowercase());
+    v
+}
+
+/// (id, name, version, side) from fabric.mod.json, quilt.mod.json or
+/// (neoforge.)mods.toml, with "${file.jarVersion}" taken from the manifest.
+fn jar_meta(jar: &Path) -> Option<(String, String, String, String)> {
+    let mut z = zip::ZipArchive::new(std::fs::File::open(jar).ok()?).ok()?;
+    let mut text = |name: &str| -> Option<String> {
+        let mut f = z.by_name(name).ok()?;
+        let mut s = String::new();
+        std::io::Read::read_to_string(&mut std::io::Read::take(&mut f, 1 << 20), &mut s).ok()?;
+        Some(s)
+    };
+    let side = |env: &str| match env {
+        "client" => "client",
+        "server" | "dedicated_server" => "server",
+        _ => "",
+    };
+    if let Some(v) = text("fabric.mod.json").and_then(|t| serde_json::from_str::<Value>(t.trim_start_matches('\u{feff}')).ok()) {
+        let s = |k: &str| v[k].as_str().unwrap_or_default().to_string();
+        return Some((s("id"), s("name"), s("version"), side(v["environment"].as_str().unwrap_or_default()).into()));
+    }
+    if let Some(v) = text("quilt.mod.json").and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
+        let q = &v["quilt_loader"];
+        let s = |x: &Value| x.as_str().unwrap_or_default().to_string();
+        return Some((s(&q["id"]), s(&q["metadata"]["name"]), s(&q["version"]), side(v["minecraft"]["environment"].as_str().unwrap_or_default()).into()));
+    }
+    let toml = text("META-INF/neoforge.mods.toml").or_else(|| text("META-INF/mods.toml"))?;
+    let first = toml_first_mod(&toml);
+    let get = |k: &str| first.get(k).cloned().unwrap_or_default();
+    let mut version = get("version");
+    if version.contains("${") {
+        version = text("META-INF/MANIFEST.MF").and_then(|m| m.lines().find_map(|l| l.strip_prefix("Implementation-Version:").map(|v| v.trim().to_string()))).unwrap_or_default();
+    }
+    // Forge mods that only run in the game say so with `clientSideOnly = true`.
+    let client = toml.lines().any(|l| l.split('#').next().unwrap_or("").replace(' ', "") == "clientSideOnly=true");
+    Some((get("modId"), get("displayName"), version, if client { "client".into() } else { String::new() }))
+}
+
+/// The keys of the first `[[mods]]` table in a mods.toml (plain `key = "value"` lines).
+fn toml_first_mod(t: &str) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    let mut inside = false;
+    for l in t.lines().map(str::trim) {
+        if l.starts_with('[') {
+            if inside {
+                break;
+            }
+            inside = l == "[[mods]]";
+            continue;
+        }
+        if !inside {
+            continue;
+        }
+        let Some((k, v)) = l.split_once('=') else { continue };
+        let v = v.trim();
+        let v = v.strip_prefix('"').and_then(|x| x.split_once('"')).map(|x| x.0).or_else(|| v.strip_prefix('\'').and_then(|x| x.split_once('\'')).map(|x| x.0));
+        if let Some(v) = v {
+            out.insert(k.trim().to_string(), v.to_string());
+        }
+    }
+    out
+}
+
+/// How much room a folder takes.
+pub fn size_of(dir: &Path) -> u64 {
+    walkdir::WalkDir::new(dir).follow_links(false).into_iter().flatten().filter_map(|e| e.metadata().ok()).filter(|m| m.is_file()).map(|m| m.len()).sum()
+}
+
 #[allow(clippy::too_many_arguments)]
 fn make(launcher: Launcher, label: &str, name: String, dir: &Path, game: &Path, mc: String, loader: String, loader_version: String, pack: Option<String>, last_played: Option<i64>, icon: Option<PathBuf>) -> Instance {
     let (mods, disabled) = count_mods(&game.join("mods"));
@@ -567,6 +778,82 @@ mod tests {
         let found = find(&Places { roaming: Some(roaming), ..Default::default() });
         assert_eq!(found.len(), 1);
         assert_eq!((found[0].name.as_str(), found[0].loader.as_str(), found[0].loader_version.as_str(), found[0].last_played), ("Legacy pack", "forge", "45.1.0", Some(1_685_620_800)));
+    }
+
+    fn level_dat(name: &str, version: &str, mode: i32, player: bool) -> Vec<u8> {
+        use crate::mcserver::nbt::{gzip, write, Tag};
+        let mut data = vec![
+            ("LevelName".to_string(), Tag::Str(name.into())),
+            ("Version".into(), Tag::Compound(vec![("Name".into(), Tag::Str(version.into()))])),
+            ("LastPlayed".into(), Tag::Long(1_760_000_000_000)),
+            ("GameType".into(), Tag::Int(mode)),
+            ("hardcore".into(), Tag::Byte(0)),
+            ("Difficulty".into(), Tag::Byte(3)),
+            ("allowCommands".into(), Tag::Byte(1)),
+        ];
+        if player {
+            data.push(("Player".into(), Tag::Compound(vec![("XpLevel".into(), Tag::Int(30))])));
+        }
+        gzip(&write(&Tag::Compound(vec![("Data".into(), Tag::Compound(data))])))
+    }
+
+    /// Worlds from their level.dat, mods from their jars' own descriptions,
+    /// and the Minecraft Launcher's folder with its last-played version.
+    #[test]
+    fn worlds_and_mods_inside() {
+        use crate::mods::tests::zip_of;
+        let t = tempfile::tempdir().unwrap();
+        let game = t.path().join("Roaming").join(".minecraft");
+        write(&game.join("saves/New World/level.dat"), level_dat("My Base", "1.21.1", 1, true));
+        write(&game.join("saves/New World/region/r.0.0.mca"), vec![0u8; 4096]);
+        write(&game.join("saves/New World/icon.png"), png());
+        write(&game.join("saves/Old/level.dat"), level_dat("", "1.12.2", 7, false));
+        std::fs::create_dir_all(game.join("saves/not a world")).unwrap();
+        let ws = worlds(&game);
+        assert_eq!(ws.len(), 2);
+        let w = &ws.iter().find(|w| w.folder == "New World").unwrap();
+        assert_eq!((w.name.as_str(), w.version.as_str(), w.game_mode.as_str(), w.difficulty.as_str(), w.cheats, w.hardcore, w.has_player, w.has_icon, w.last_played), ("My Base", "1.21.1", "creative", "hard", true, false, true, true, Some(1_760_000_000)));
+        assert!(w.size > 4096);
+        let o = ws.iter().find(|w| w.folder == "Old").unwrap();
+        assert_eq!((o.name.as_str(), o.game_mode.as_str(), o.has_player), ("Old", "spectator", false), "an unnamed world goes by its folder");
+        for bad in ["", "..", "../New World", "saves/New World", "not a world"] {
+            assert!(world_dir(&game, bad).is_none(), "{bad}");
+        }
+        assert!(world_dir(&game, "New World").is_some());
+
+        let m = game.join("mods");
+        write(&m.join("sodium.jar"), zip_of(&[("fabric.mod.json", br#"{"id":"sodium","name":"Sodium","version":"0.6.0","environment":"client"}"#)]));
+        write(&m.join("qsl.jar"), zip_of(&[("quilt.mod.json", br#"{"quilt_loader":{"id":"qsl","version":"10.0","metadata":{"name":"Quilt Standard Libraries"}},"minecraft":{"environment":"*"}}"#)]));
+        write(&m.join("create.jar"), zip_of(&[("META-INF/mods.toml", b"modLoader=\"javafml\"\n[[mods]]\nmodId=\"create\"\nversion=\"${file.jarVersion}\"\ndisplayName=\"Create\" # the name\n[[dependencies.create]]\nmodId=\"forge\"\n"), ("META-INF/MANIFEST.MF", b"Manifest-Version: 1.0\r\nImplementation-Version: 6.0.4\r\n")]));
+        write(&m.join("emi.jar"), zip_of(&[("META-INF/neoforge.mods.toml", b"[[mods]]\nmodId='emi'\nversion='1.1.18'\ndisplayName='EMI'\nclientSideOnly = true\n")]));
+        write(&m.join("mystery.jar"), b"not a zip");
+        write(&m.join("off.jar.disabled"), zip_of(&[("fabric.mod.json", br#"{"id":"off","name":"Turned Off","version":"1"}"#)]));
+        write(&m.join("notes.txt"), b"x");
+        let mods = mods_in(&game);
+        let row = |f: &str| mods.iter().find(|x| x.file == f).map(|x| (x.id.as_str(), x.name.as_str(), x.version.as_str(), x.side.as_str(), x.disabled)).unwrap();
+        assert_eq!(mods.len(), 6);
+        assert_eq!(row("sodium.jar"), ("sodium", "Sodium", "0.6.0", "client", false));
+        assert_eq!(row("qsl.jar"), ("qsl", "Quilt Standard Libraries", "10.0", "", false));
+        assert_eq!(row("create.jar"), ("create", "Create", "6.0.4", "", false));
+        assert_eq!(row("emi.jar"), ("emi", "EMI", "1.1.18", "client", false));
+        assert_eq!(row("mystery.jar"), ("", "mystery", "", "", false));
+        assert_eq!(row("off.jar.disabled"), ("off", "Turned Off", "1", "", true));
+
+        // The Minecraft Launcher's own folder: the profile played last that uses it.
+        write(&game.join("launcher_profiles.json"), r#"{"profiles":{
+            "a":{"lastUsed":"2026-09-01T10:00:00.000Z","lastVersionId":"fabric-loader-0.16.9-1.21.1"},
+            "b":{"lastUsed":"2025-01-01T10:00:00.000Z","lastVersionId":"1.20.1"},
+            "c":{"lastUsed":"2026-10-01T10:00:00.000Z","lastVersionId":"1.19","gameDir":"D:\\Elsewhere"}}}"#);
+        let found = find(&Places { roaming: Some(t.path().join("Roaming")), ..Default::default() });
+        let l = found.iter().find(|i| i.launcher == Launcher::Minecraft).unwrap();
+        assert_eq!((l.name.as_str(), l.mc.as_str(), l.loader.as_str(), l.loader_version.as_str(), l.mods, l.disabled), ("Minecraft Launcher", "1.21.1", "fabric", "0.16.9", 5, 1));
+        assert_eq!(version_parts("1.20.1-forge-47.2.0"), ("1.20.1".into(), "forge".into(), "47.2.0".into()));
+        assert_eq!(version_parts("neoforge-21.1.77"), ("1.21.1".into(), "neoforge".into(), "21.1.77".into()));
+        assert_eq!(version_parts("neoforge-21.0.167"), ("1.21".into(), "neoforge".into(), "21.0.167".into()));
+        assert_eq!(version_parts("neoforge-26.1.2.122"), ("26.1.2".into(), "neoforge".into(), "26.1.2.122".into()));
+        assert_eq!(version_parts("quilt-loader-0.26.0-1.20.4"), ("1.20.4".into(), "quilt".into(), "0.26.0".into()));
+        assert_eq!(version_parts("latest-release"), Default::default());
+        assert_eq!(version_parts("26.3"), ("26.3".into(), String::new(), String::new()));
     }
 
     #[test]

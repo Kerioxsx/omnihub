@@ -1,6 +1,6 @@
 // Demo: modpacks Prism Launcher, CurseForge and the Modrinth App installed.
 
-import type { McLauncherPack, McLauncherPacks } from '@shared/types';
+import type { McLauncherDetails, McLauncherPack, McLauncherPacks, McModInfo, McShared, McWorld } from '@shared/types';
 import { packIcon } from './mcCover';
 
 const H = 3600;
@@ -25,8 +25,36 @@ let packs: McLauncherPack[] = [
 ];
 let places: string[] = [];
 
+const MODS: [string, string, McModInfo['side']][] = [
+  ['Create', '6.0.4', ''], ['Just Enough Items', '15.20.0', ''], ['Jade', '11.12.3', 'client'], ['AppleSkin', '2.5.1', 'client'], ['Farmer’s Delight', '1.2.6', ''],
+  ['Sodium', '0.6.13', 'client'], ['Iris Shaders', '1.8.8', 'client'], ['Waystones', '14.1.11', ''], ['Storage Drawers', '12.9.13', ''], ['FTB Quests', '2001.4.13', ''],
+  ['Mekanism', '10.4.15', ''], ['Xaero’s Minimap', '25.2.0', 'client'], ['Sophisticated Backpacks', '3.23.6', ''], ['Balm', '7.3.29', ''], ['Architectury API', '9.2.14', ''],
+];
+const WORLDS: Omit<McWorld, 'lastPlayed'>[] = [
+  { folder: 'New World', name: 'Base with friends', version: '', gameMode: 'survival', hardcore: false, difficulty: 'normal', cheats: false, size: 412_000_000, hasPlayer: true, hasIcon: true },
+  { folder: 'Creative build', name: 'Creative build', version: '', gameMode: 'creative', hardcore: false, difficulty: 'peaceful', cheats: true, size: 96_000_000, hasPlayer: true, hasIcon: false },
+  { folder: 'Hardcore 3', name: 'Hardcore #3', version: '', gameMode: 'survival', hardcore: true, difficulty: 'hard', cheats: false, size: 58_000_000, hasPlayer: true, hasIcon: true },
+];
+
 export const launchersMock = {
   list: (): McLauncherPacks => ({ packs, places }),
+  details(id: string): McLauncherDetails {
+    const p = packs.find((x) => x.id === id);
+    if (!p) throw new Error('That modpack isn’t there any more.');
+    const mods: McModInfo[] = MODS.slice(0, Math.min(MODS.length, p.mods)).map(([name, version, side], i) => ({ file: `${name.toLowerCase().replace(/\W+/g, '-')}-${version}.jar`, id: name.toLowerCase().replace(/\W+/g, ''), name, version, side, disabled: i < p.disabled, size: 180_000 + i * 97_000 }));
+    const worlds = p.mods ? WORLDS.map((w, i) => ({ ...w, version: p.mc, lastPlayed: (p.lastPlayed ?? at(500)) - i * 9 * H })) : [];
+    return { mods, worlds, size: 1_200_000_000 + p.mods * 2_400_000 };
+  },
+  worldIcon: (id: string, folder: string): string | null => (WORLDS.find((w) => w.folder === folder)?.hasIcon ? packIcon(`${id}${folder}`) : null),
+  updates: (id: string): Record<string, string> => {
+    const d = launchersMock.details(id);
+    return Object.fromEntries(d.mods.filter((_, i) => i % 4 === 1).map((m) => [m.file, m.version.replace(/\d+$/, (n) => String(Number(n) + 2))]));
+  },
+  share(id: string): McShared {
+    const p = packs.find((x) => x.id === id)!;
+    const included = Math.max(1, Math.round(p.mods * 0.08));
+    return { mods: p.mods, fromModrinth: p.mods - included, included, bytes: 38_000_000 + included * 1_600_000 };
+  },
   get: (id: string): McLauncherPack | undefined => packs.find((p) => p.id === id),
   icon: (id: string): string | null => {
     const p = packs.find((x) => x.id === id);

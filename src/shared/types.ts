@@ -2096,7 +2096,56 @@ export interface McSource {
   overrides: number;
 }
 
-export type McLauncher = 'prism' | 'curseforge' | 'modrinth';
+export type McLauncher = 'prism' | 'curseforge' | 'modrinth' | 'minecraft';
+
+/** A mod in an installed modpack, as its jar describes itself. */
+export interface McModInfo {
+  file: string;
+  id: string;
+  name: string;
+  version: string;
+  /** client: only runs in the game itself; server; or '' (both, or it doesn't say). */
+  side: '' | 'client' | 'server';
+  disabled: boolean;
+  size: number;
+}
+
+/** A single-player world in an installed modpack. */
+export interface McWorld {
+  folder: string;
+  name: string;
+  version: string;
+  lastPlayed: number | null;
+  gameMode: string;
+  hardcore: boolean;
+  difficulty: string;
+  cheats: boolean;
+  size: number;
+  /** It keeps the single player's things, which can become yours on a server. */
+  hasPlayer: boolean;
+  hasIcon: boolean;
+}
+
+export interface McLauncherDetails {
+  mods: McModInfo[];
+  worlds: McWorld[];
+  size: number;
+}
+
+export type McPackFormat = 'mrpack' | 'curseforge';
+
+/** A server put in a shared pack's server list. */
+export interface McServerEntry {
+  name: string;
+  address: string;
+}
+
+export interface McShared {
+  mods: number;
+  fromModrinth: number;
+  included: number;
+  bytes: number;
+}
 
 /** A modpack Prism Launcher (or PolyMC/MultiMC), CurseForge or the Modrinth App installed. */
 export interface McLauncherPack {
@@ -2156,7 +2205,8 @@ export interface McMix {
   /** The packs' ids, in the same order as `sources`. */
   sourceIds: string[];
   /** How its cover was made: blended here, or painted by Pollinations. */
-  cover: 'blend' | 'ai' | null;
+  /** blend: made here; ai: painted by Pollinations; shared: the picture a friend's pack came with. */
+  cover: 'blend' | 'ai' | 'shared' | null;
 }
 
 /** The user's own Pollinations account, for painted mix covers. */
@@ -2431,6 +2481,8 @@ export interface SrvNew {
   gamemode?: SrvGamemode;
   difficulty?: SrvDifficulty;
   from?: SrvFrom;
+  /** A single-player world to start from, in an installed modpack. */
+  world?: { pack: string; folder: string; owner?: string };
   start: boolean;
 }
 

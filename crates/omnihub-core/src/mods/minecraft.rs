@@ -642,6 +642,61 @@ fn sha_pair(b: &[u8]) -> (String, String) {
 /// Files beside the mods (configs and the like): where they go, and what's in them.
 pub type Extras = Vec<(String, Vec<u8>)>;
 
+/// What's in an installed modpack.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherDetails {
+    pub mods: Vec<launchers::ModInfo>,
+    pub worlds: Vec<launchers::World>,
+    /// The instance folder's size, worlds included.
+    pub size: u64,
+}
+
+/// The kind of file a pack for friends is saved as.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum PackFormat {
+    /// Modrinth's .mrpack (the Modrinth App, Prism Launcher, ATLauncher…).
+    Mrpack,
+    /// CurseForge's modpack zip (manifest.json and overrides).
+    Curseforge,
+}
+
+/// A server to put in a pack's server list, so friends find it in Multiplayer.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct ServerEntry {
+    pub name: String,
+    pub address: String,
+}
+
+/// What went into a pack for friends.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Shared {
+    pub mods: usize,
+    /// Mods the friends' launcher downloads from Modrinth.
+    pub from_modrinth: usize,
+    /// Mods carried inside the file.
+    pub included: usize,
+    pub bytes: u64,
+}
+
+/// servers.dat with one server in it (uncompressed NBT, as Minecraft writes it).
+pub fn servers_dat(server: &ServerEntry) -> Result<Vec<u8>, String> {
+    use crate::mcserver::nbt::Tag;
+    let address = server.address.trim();
+    let ok = (1..=255).contains(&address.len()) && address.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | ':' | '[' | ']' | '_'));
+    if !ok {
+        return Err("That server address can't be used (letters, digits, dots, dashes and a :port).".into());
+    }
+    let name: String = server.name.chars().filter(|c| !c.is_control()).take(64).collect();
+    let entry = Tag::Compound(vec![("name".into(), Tag::Str(if name.trim().is_empty() { "Server".into() } else { name.trim().to_string() })), ("ip".into(), Tag::Str(address.into()))]);
+    Ok(crate::mcserver::nbt::write(&Tag::Compound(vec![("servers".into(), Tag::List(vec![entry]))])))
+}
+
+/// Folders a pack for friends carries along (not your keys, video settings or servers).
+const SHARE: &[&str] = &["config", "defaultconfigs", "kubejs", "resourcepacks", "shaderpacks", "global_packs"];
+
 const KEEP: &[&str] = &["config", "defaultconfigs", "kubejs", "resourcepacks", "shaderpacks", "global_packs", "options.txt", "servers.dat"];
 
 pub struct Mixer {
@@ -913,6 +968,137 @@ impl Mixer {
             }
         }
         Ok((files, over))
+    }
+
+    /// What's in an installed modpack: its mods (as their jars describe
+    /// themselves), its single-player worlds and its size.
+    pub fn launcher_details(&self, id: &str) -> Result<LauncherDetails, String> {
+        let i = self.launcher_pack(id)?;
+        let game = Path::new(&i.game_dir);
+        Ok(LauncherDetails { mods: launchers::mods_in(game), worlds: launchers::worlds(game), size: launchers::size_of(Path::new(&i.path)) })
+    }
+
+    /// A world's icon.png (at most 1 MB, and one that can be shown).
+    pub fn launcher_world_icon(&self, id: &str, folder: &str) -> Option<Vec<u8>> {
+        let i = self.launcher_pack(id).ok()?;
+        let p = launchers::world_dir(Path::new(&i.game_dir), folder)?.join("icon.png");
+        std::fs::metadata(&p).ok().filter(|m| m.len() <= 1 << 20)?;
+        let b = std::fs::read(p).ok()?;
+        super::cover::decode(&b)?;
+        Some(b)
+    }
+
+    /// Mods with a newer version on Modrinth for the pack's Minecraft and
+    /// loader: file name → that version. Nothing in the pack changes.
+    pub fn launcher_updates(&self, id: &str) -> Result<HashMap<String, String>, String> {
+        let i = self.launcher_pack(id)?;
+        if i.mc.is_empty() || loader_key(&i.loader).is_none() {
+            return Err(format!("{} doesn't say which Minecraft version and mod loader it uses.", i.launcher_name));
+        }
+        let mut by_sha = HashMap::new();
+        for j in jars_in(&Path::new(&i.game_dir).join("mods")).unwrap_or_default() {
+            let b = std::fs::read(&j).map_err(|e| e.to_string())?;
+            by_sha.insert(sha_pair(&b).0, j.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+        }
+        let found = self.api.update_by_hash(&by_sha.keys().cloned().collect::<Vec<_>>(), &i.mc, &[i.loader.as_str()])?;
+        Ok(found
+            .into_iter()
+            .filter(|(sha, v)| !v.files.iter().any(|f| f.hashes.get("sha1") == Some(sha)))
+            .filter_map(|(sha, v)| Some((by_sha.get(&sha)?.clone(), v.version_number)))
+            .collect())
+    }
+
+    /// Save an installed modpack for friends: the same mods (those on
+    /// Modrinth as downloads in a .mrpack, the rest carried inside), its
+    /// configs, resource and shader packs, and optionally your server in its
+    /// server list. Your own keys, video settings and server list stay out.
+    pub fn share_launcher_pack(&self, id: &str, dest: &Path, format: PackFormat, server: Option<&ServerEntry>) -> Result<Shared, String> {
+        let i = self.launcher_pack(id)?;
+        if i.mc.is_empty() {
+            return Err(format!("{} doesn't say which Minecraft version {} is for.", i.launcher_name, i.name));
+        }
+        if !i.loader.is_empty() && i.loader_version.is_empty() {
+            return Err(format!("{} doesn't say which {} version {} uses.", i.launcher_name, i.loader, i.name));
+        }
+        let servers = server.map(servers_dat).transpose()?;
+        let game = Path::new(&i.game_dir);
+        let jars = jars_in(&game.join("mods")).unwrap_or_default();
+        // Each jar: its path in the pack, hashes and size.
+        let mut mods = Vec::new();
+        for j in &jars {
+            let b = std::fs::read(j).map_err(|e| e.to_string())?;
+            let (sha1, sha512) = sha_pair(&b);
+            let name = j.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            mods.push((format!("mods/{name}"), j.clone(), sha1, sha512, b.len() as u64));
+        }
+        let mut files = Vec::new();
+        let mut inside: Vec<(String, PathBuf)> = Vec::new();
+        if format == PackFormat::Mrpack {
+            let known = self.api.by_hash(&mods.iter().map(|m| m.2.clone()).collect::<Vec<_>>()).unwrap_or_default();
+            let ids: Vec<String> = known.values().map(|v| v.project_id.clone()).collect::<HashSet<_>>().into_iter().collect();
+            let meta = if ids.is_empty() { HashMap::new() } else { self.api.project_meta(&ids).unwrap_or_default() };
+            for (path, src, sha1, sha512, size) in &mods {
+                let v = known.get(sha1);
+                let url = v.and_then(|v| v.files.iter().find(|f| f.hashes.get("sha1") == Some(sha1))).map(|f| f.url.clone()).filter(|u| HOSTS.iter().any(|h| u.starts_with(h)) || u.starts_with(&format!("{}/", self.api.base)));
+                match url {
+                    Some(url) => {
+                        let server_side = v.and_then(|v| meta.get(&v.project_id)).is_some_and(|m| m.server_side == "unsupported");
+                        files.push(json!({ "path": path, "hashes": { "sha1": sha1, "sha512": sha512 }, "env": { "client": "required", "server": if server_side { "unsupported" } else { "required" } }, "downloads": [url], "fileSize": size }));
+                    }
+                    None => inside.push((path.clone(), src.clone())),
+                }
+            }
+        } else {
+            inside = mods.iter().map(|m| (m.0.clone(), m.1.clone())).collect();
+        }
+        let summary = format!("Shared with OmniHub from {} ({}).", i.name, i.launcher_name);
+        let (index_name, index) = match format {
+            PackFormat::Mrpack => {
+                let mut deps = serde_json::Map::new();
+                deps.insert("minecraft".into(), json!(i.mc));
+                if let Some(k) = loader_key(&i.loader) {
+                    deps.insert(k.into(), json!(i.loader_version));
+                }
+                ("modrinth.index.json", json!({ "formatVersion": 1, "game": "minecraft", "versionId": "1.0.0", "name": i.name, "summary": summary, "files": files, "dependencies": deps }))
+            }
+            PackFormat::Curseforge => {
+                let loaders: Vec<Value> = if i.loader.is_empty() { vec![] } else { vec![json!({ "id": format!("{}-{}", i.loader, i.loader_version), "primary": true })] };
+                ("manifest.json", json!({ "minecraft": { "version": i.mc, "modLoaders": loaders }, "manifestType": "minecraftModpack", "manifestVersion": 1, "name": i.name, "version": "1.0.0", "author": "OmniHub", "files": [], "overrides": "overrides" }))
+            }
+        };
+        let tmp = dest.with_extension("part");
+        let written = (|| -> Result<(), String> {
+            let mut z = zip::ZipWriter::new(std::fs::File::create(&tmp).map_err(|e| e.to_string())?);
+            let o = zip::write::SimpleFileOptions::default().large_file(true);
+            z.start_file(index_name, o).map_err(|e| e.to_string())?;
+            z.write_all(serde_json::to_string_pretty(&index).unwrap_or_default().as_bytes()).map_err(|e| e.to_string())?;
+            let copy = |z: &mut zip::ZipWriter<std::fs::File>, rel: &str, src: &Path| -> Result<(), String> {
+                z.start_file(format!("overrides/{rel}"), o).map_err(|e| e.to_string())?;
+                std::io::copy(&mut std::fs::File::open(src).map_err(|e| format!("{}: {e}", src.display()))?, z).map_err(|e| e.to_string())?;
+                Ok(())
+            };
+            for (rel, src) in &inside {
+                copy(&mut z, rel, src)?;
+            }
+            for k in SHARE {
+                let d = game.join(k);
+                for rel in super::install::files_in(&d) {
+                    copy(&mut z, &format!("{k}/{rel}"), &d.join(&rel))?;
+                }
+            }
+            if let Some(b) = &servers {
+                z.start_file("overrides/servers.dat", o).map_err(|e| e.to_string())?;
+                z.write_all(b).map_err(|e| e.to_string())?;
+            }
+            z.finish().map_err(|e| e.to_string())?;
+            Ok(())
+        })();
+        if let Err(e) = written {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
+        std::fs::rename(&tmp, dest).map_err(|e| e.to_string())?;
+        Ok(Shared { mods: mods.len(), from_modrinth: files.len(), included: inside.len(), bytes: std::fs::metadata(dest).map(|m| m.len()).unwrap_or(0) })
     }
 
     /// Work out the mix of `sources` (in priority order) for `mc` and `loader`.
@@ -1239,7 +1425,11 @@ impl Mixer {
     }
 
     /// Save a mix as a .mrpack at `dest`.
-    pub fn export(&self, id: &str, dest: &Path) -> Result<(), String> {
+    pub fn export(&self, id: &str, dest: &Path, server: Option<&ServerEntry>) -> Result<(), String> {
+        let servers = server.map(servers_dat).transpose()?;
+        // The cover rides along as icon.png beside the index (launchers skip
+        // files there); OmniHub on a friend's PC uses it for the mix again.
+        let cover = self.cover(id).ok();
         let m = self.mix(id)?;
         let key = loader_key(&m.loader).ok_or("No loader.")?;
         if m.loader_version.is_empty() {
@@ -1278,9 +1468,42 @@ impl Mixer {
                 z.start_file(format!("overrides/{path}"), o).map_err(|e| e.to_string())?;
                 z.write_all(&std::fs::read(&p).map_err(|e| format!("{}: {e}", p.display()))?).map_err(|e| e.to_string())?;
             }
+            if let Some(b) = &servers {
+                z.start_file("overrides/servers.dat", o).map_err(|e| e.to_string())?;
+                z.write_all(b).map_err(|e| e.to_string())?;
+            }
+            if let Some(png) = &cover {
+                z.start_file("icon.png", o).map_err(|e| e.to_string())?;
+                z.write_all(png).map_err(|e| e.to_string())?;
+            }
             z.finish().map_err(|e| e.to_string())?;
         }
         std::fs::rename(&tmp, dest).map_err(|e| e.to_string())
+    }
+
+    /// A pack a friend shared (a .mrpack, from OmniHub or anywhere): added as
+    /// a pack and made into a mix of its own, ready to install, with the
+    /// friend's cover when the file has one.
+    pub fn import_shared(&self, path: &str) -> Result<Mix, String> {
+        let b = std::fs::read(path).map_err(|e| format!("Couldn't open it: {e}"))?;
+        let s = self.add_mrpack(&b, None, None, SourceKind::File { path: path.into() })?;
+        let picture = zip::ZipArchive::new(std::io::Cursor::new(&b)).ok().and_then(|mut z| {
+            let mut f = z.by_name("icon.png").ok()?;
+            let mut v = Vec::new();
+            (&mut f).take(8 << 20).read_to_end(&mut v).ok()?;
+            super::cover::decode(&v)
+        });
+        if let Some(img) = &picture {
+            let _ = std::fs::write(self.sdir(&s.id)?.join("icon"), super::cover::png(img));
+        }
+        let m = self.plan(&s.name, std::slice::from_ref(&s.id), &s.mc, &s.loader)?;
+        if let Some(img) = &picture {
+            std::fs::write(self.mdir(&m.id)?.join("cover.png"), super::cover::png(img)).map_err(|e| e.to_string())?;
+            let mut m = self.mix(&m.id)?;
+            m.cover = Some("shared".into());
+            self.keep_mix(&m)?;
+        }
+        self.mix(&m.id)
     }
 
     fn installs_file(&self) -> PathBuf {
@@ -1530,7 +1753,7 @@ mod tests {
 
         // As a .mrpack.
         let out = t.path().join("mix.mrpack");
-        mixer.export(&mix.id, &out).unwrap();
+        mixer.export(&mix.id, &out, None).unwrap();
         let (idx, n) = read_mrpack(&std::fs::read(&out).unwrap()).unwrap();
         assert_eq!(idx["dependencies"], json!({ "minecraft": "1.21.1", "fabric-loader": "0.16.9" }));
         assert_eq!(idx["files"].as_array().unwrap().len(), 5);
@@ -1542,6 +1765,21 @@ mod tests {
         assert_eq!(mixer.mix(&mix.id).unwrap().cover.as_deref(), Some("blend"));
         assert_eq!(mixer.mix(&mix.id).unwrap().source_ids, [sa.id.clone(), sb.id.clone()]);
         assert_eq!(mixer.cover(&mix.id).unwrap(), cover, "made once, then kept");
+
+        // Shared with a friend: the file carries the cover, and their OmniHub
+        // makes the same mix with the same picture.
+        let shared = t.path().join("for-a-friend.mrpack");
+        mixer.export(&mix.id, &shared, Some(&ServerEntry { name: "Our server".into(), address: "play.example.net".into() })).unwrap();
+        let mut z = zip::ZipArchive::new(std::fs::File::open(&shared).unwrap()).unwrap();
+        let mut inside = Vec::new();
+        z.by_name("icon.png").unwrap().read_to_end(&mut inside).unwrap();
+        assert_eq!(inside, cover);
+        assert!(z.by_name("overrides/servers.dat").is_ok());
+        let friend = Mixer::new(&t.path().join("friend"), Modrinth::new(&base, &base, &base), Some(t.path().join("friend-mc")));
+        let theirs = friend.import_shared(shared.to_str().unwrap()).unwrap();
+        assert_eq!((theirs.mc.as_str(), theirs.loader.as_str(), theirs.cover.as_deref()), ("1.21.1", "fabric", Some("shared")));
+        assert_eq!(theirs.entries.iter().filter(|e| e.file.is_some()).count(), 5);
+        assert_eq!(crate::mods::cover::decode(&friend.cover(&theirs.id).unwrap()).unwrap(), crate::mods::cover::decode(&cover).unwrap());
 
         // Into the Minecraft Launcher.
         let mut steps = 0;
@@ -1603,6 +1841,92 @@ mod tests {
         assert!(m.picture("https://evil.example/icon.png").unwrap_err().contains("only come from Modrinth"));
     }
 
+    /// A pack for friends: the same mods (Modrinth's as downloads, the rest
+    /// inside), its configs and packs, not your own settings or server list,
+    /// and your server in its list; also as a CurseForge zip.
+    #[test]
+    fn friends_get_the_same_pack() {
+        let t = tempfile::tempdir().unwrap();
+        let roaming = t.path().join("Roaming");
+        let inst = roaming.join("PrismLauncher/instances/Pals");
+        let game = inst.join(".minecraft");
+        for d in ["mods", "config", "resourcepacks"] {
+            std::fs::create_dir_all(game.join(d)).unwrap();
+        }
+        std::fs::write(inst.join("instance.cfg"), "name=Pals\n").unwrap();
+        std::fs::write(inst.join("mmc-pack.json"), r#"{"components":[{"uid":"net.minecraft","version":"1.21.1"},{"uid":"net.fabricmc.fabric-loader","version":"0.16.9"}]}"#).unwrap();
+        let sodium = zip_of(&[("fabric.mod.json", br#"{"id":"sodium","name":"Sodium","version":"0.6.0","environment":"client"}"#)]);
+        let secret: &[u8] = b"a mod made by a friend";
+        std::fs::write(game.join("mods/sodium.jar"), &sodium).unwrap();
+        std::fs::write(game.join("mods/secret.jar"), secret).unwrap();
+        std::fs::write(game.join("mods/old.jar.disabled"), b"off").unwrap();
+        std::fs::write(game.join("config/sodium.json"), b"{}").unwrap();
+        std::fs::write(game.join("resourcepacks/x.zip"), b"pack").unwrap();
+        std::fs::write(game.join("options.txt"), b"key_key.jump:key.keyboard.space").unwrap();
+        std::fs::write(game.join("servers.dat"), b"my own list").unwrap();
+        let (sha, newer) = (sha_pair(&sodium).0, b"sodium 0.7".as_slice());
+        let base: Arc<parking_lot::Mutex<String>> = Arc::default();
+        let b2 = base.clone();
+        let (sha2, sodium2) = (sha.clone(), sodium.clone());
+        let s = serve(Box::new(move |r: &Seen| {
+            let b = b2.lock().clone();
+            let ok = |v: Value| Some((200, "application/json", v.to_string().into_bytes()));
+            let body: Value = serde_json::from_slice(&r.body).unwrap_or(Value::Null);
+            let asked = |h: &str| body["hashes"].as_array().is_some_and(|a| a.iter().any(|x| x == h));
+            match r.path.as_str() {
+                "/v2/version_files" if asked(&sha2) => ok(json!({ &sha2: ver("AANobbMI", "0.6.0", &["1.21.1"], &["fabric"], ("sodium.jar", &sodium2), &b, json!([]), "2026-05-01") })),
+                "/v2/version_files/update" if asked(&sha2) => ok(json!({ &sha2: ver("AANobbMI", "0.7.0", &["1.21.1"], &["fabric"], ("sodium-0.7.jar", newer), &b, json!([]), "2026-09-01") })),
+                "/v2/version_files" | "/v2/version_files/update" => ok(json!({})),
+                p if p.starts_with("/v2/projects?") => ok(json!([{ "id": "AANobbMI", "title": "Sodium", "server_side": "unsupported" }])),
+                _ => None,
+            }
+        }));
+        *base.lock() = s.base.clone();
+        let mixer = Mixer::new(&t.path().join("mc"), Modrinth::new(&s.base, &s.base, &s.base), None).looking_in(launchers::Places { roaming: Some(roaming), ..Default::default() });
+        let id = mixer.launcher_packs()[0].id.clone();
+
+        let d = mixer.launcher_details(&id).unwrap();
+        assert_eq!(d.mods.iter().map(|m| (m.name.as_str(), m.version.as_str(), m.side.as_str(), m.disabled)).collect::<Vec<_>>(), [("old", "", "", true), ("secret", "", "", false), ("Sodium", "0.6.0", "client", false)]);
+        assert!(d.worlds.is_empty() && d.size > 0);
+        assert_eq!(mixer.launcher_updates(&id).unwrap(), HashMap::from([("sodium.jar".to_string(), "0.7.0".to_string())]));
+
+        let pals = ServerEntry { name: "Pals".into(), address: "203.0.113.5:25565".into() };
+        let out = t.path().join("Pals.mrpack");
+        let shared = mixer.share_launcher_pack(&id, &out, PackFormat::Mrpack, Some(&pals)).unwrap();
+        assert_eq!((shared.mods, shared.from_modrinth, shared.included), (2, 1, 1));
+        let mut z = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+        let names: HashSet<String> = z.file_names().map(String::from).collect();
+        for n in ["modrinth.index.json", "overrides/mods/secret.jar", "overrides/config/sodium.json", "overrides/resourcepacks/x.zip", "overrides/servers.dat"] {
+            assert!(names.contains(n), "{n} is in it: {names:?}");
+        }
+        for n in ["overrides/mods/sodium.jar", "overrides/mods/old.jar.disabled", "overrides/options.txt"] {
+            assert!(!names.contains(n), "{n} stays out");
+        }
+        let index: Value = serde_json::from_reader(z.by_name("modrinth.index.json").unwrap()).unwrap();
+        assert_eq!(index["dependencies"], json!({ "minecraft": "1.21.1", "fabric-loader": "0.16.9" }));
+        assert_eq!(index["files"][0]["downloads"], json!([format!("{}/cdn/sodium.jar", s.base)]));
+        assert_eq!(index["files"][0]["env"], json!({ "client": "required", "server": "unsupported" }));
+        let mut dat = Vec::new();
+        z.by_name("overrides/servers.dat").unwrap().read_to_end(&mut dat).unwrap();
+        let list = crate::mcserver::nbt::read(&dat).unwrap();
+        let first = &list.get("servers").unwrap().list()[0];
+        assert_eq!((first.get("name").and_then(|t| t.str()), first.get("ip").and_then(|t| t.str())), (Some("Pals"), Some("203.0.113.5:25565")));
+
+        let cf = t.path().join("Pals.zip");
+        let shared = mixer.share_launcher_pack(&id, &cf, PackFormat::Curseforge, None).unwrap();
+        assert_eq!((shared.from_modrinth, shared.included), (0, 2));
+        let mut z = zip::ZipArchive::new(std::fs::File::open(&cf).unwrap()).unwrap();
+        let manifest: Value = serde_json::from_reader(z.by_name("manifest.json").unwrap()).unwrap();
+        assert_eq!(manifest["minecraft"], json!({ "version": "1.21.1", "modLoaders": [{ "id": "fabric-0.16.9", "primary": true }] }));
+        assert!(z.by_name("overrides/mods/sodium.jar").is_ok() && z.by_name("overrides/servers.dat").is_err());
+
+        let bad = ServerEntry { name: "x".into(), address: "evil server; rm".into() };
+        assert!(mixer.share_launcher_pack(&id, &t.path().join("bad.mrpack"), PackFormat::Mrpack, Some(&bad)).unwrap_err().contains("can't be used"));
+        assert!(!t.path().join("bad.mrpack").exists() && !t.path().join("bad.part").exists());
+        // The instance itself is as it was.
+        assert_eq!(std::fs::read(game.join("servers.dat")).unwrap(), b"my own list");
+    }
+
     #[test]
     fn modpacks_other_launchers_installed_join_mixes() {
         let t = tempfile::tempdir().unwrap();
@@ -1631,7 +1955,7 @@ mod tests {
         let s = mixer.add_launcher_pack(&i.id).unwrap();
         assert_eq!((s.name.as_str(), s.mc.as_str(), s.loader.as_str(), s.loader_version.as_str(), s.files.len(), s.overrides), ("Create Above", "1.20.1", "forge", "47.2.0", 1, 2));
         assert_eq!(s.kind, SourceKind::Launcher { launcher: "Prism Launcher".into(), path: i.path.clone() });
-        assert_eq!(s.files[0].local.as_deref(), inst.join(".minecraft/mods/create.jar").to_str());
+        assert_eq!(s.files[0].local.as_deref(), inst.join(".minecraft").join("mods").join("create.jar").to_str());
         assert!(mixer.icon_of(&s).is_some(), "its picture is kept for the mix's cover");
         // A folder added by hand (no version known) still needs Modrinth.
         assert!(mixer.add_folder(inst.to_str().unwrap()).is_err());

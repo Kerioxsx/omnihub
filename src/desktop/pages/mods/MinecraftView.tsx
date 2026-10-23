@@ -7,7 +7,7 @@
 // own account.
 
 import type { McEntry, McEntryStatus, McLoader, McMix, McPackHit, McPackVersion, McStatus, PollSignIn, PollStatus } from '@shared/types';
-import { ArrowLeft, Blocks, Download, ExternalLink, FilePlus2, FolderOpen, FolderPlus, ImageDown, KeyRound, LogOut, Play, Plus, RefreshCw, Save, Search, Server, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { ArrowLeft, Blocks, Download, ExternalLink, FilePlus2, FolderOpen, FolderPlus, Gift, ImageDown, KeyRound, LogOut, PackageOpen, Play, Plus, RefreshCw, Search, Server, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -22,6 +22,7 @@ import { navigate } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
 import { InstalledPacks, loaderText } from './InstalledPacks';
+import { ShareWithFriends } from './ShareWithFriends';
 import { count, ProgressLine, useModProgress } from './shared';
 
 /** Connect the user's own Pollinations account: approve on its site, or paste a key. */
@@ -159,6 +160,7 @@ function MixCover({ mix }: { mix: McMix }) {
             <Spinner />
           </div>
         )}
+        {kind === 'shared' && !busy && <span className="absolute bottom-1 right-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">From a friend</span>}
         {kind === 'ai' && !busy && <span className="absolute bottom-1 right-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">AI</span>}
       </div>
       <div className="flex flex-col gap-1">
@@ -319,6 +321,7 @@ export function MinecraftView() {
   const [planning, setPlanning] = useState(false);
   const [adding, setAdding] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const progress = useModProgress('minecraft');
 
   const load = useCallback(() => void api.minecraft.status().then((s) => {
@@ -368,15 +371,20 @@ export function MinecraftView() {
       setPlanning(false);
     }
   };
-  const save = async () => {
-    if (!mix) return;
-    const path = await api.app.saveFile('Save the mix', `${mix.name.replace(/[^\w\s+-]/g, '').trim() || 'Mix'}.mrpack`);
-    if (!path) return;
+  const openShared = async () => {
+    const files = await api.app.pickFiles('A pack a friend sent you (.mrpack)');
+    if (!files[0]) return;
+    setPlanning(true);
     try {
-      await api.minecraft.exportPack(mix.id, path);
-      toast.success('Saved', 'Open it in Modrinth App, Prism Launcher or any launcher that reads .mrpack.');
+      const m = await api.minecraft.importShared(files[0]);
+      setMix(m);
+      setName(m.name);
+      load();
+      toast.success(`${m.name} is ready`, m.installable ? 'Press Install to put it in the Minecraft Launcher, with its picture.' : 'Save it again for the Modrinth App or Prism Launcher, or host it as a server.');
     } catch (e) {
-      toast.error('Not saved', errorText(e));
+      toast.error('Couldn’t open it', errorText(e));
+    } finally {
+      setPlanning(false);
     }
   };
   const install = async () => {
@@ -443,6 +451,9 @@ export function MinecraftView() {
                 </Button>
                 <Button size="sm" variant="secondary" icon={FilePlus2} onClick={() => void addFile()}>
                   .mrpack file
+                </Button>
+                <Button size="sm" variant="secondary" icon={PackageOpen} onClick={() => void openShared()} title="A pack a friend shared with you: it becomes a mix, with its picture, ready to install.">
+                  A friend’s pack
                 </Button>
                 <Button size="sm" variant="secondary" icon={FolderPlus} onClick={() => void addFolder()} title="An instance from another launcher (ATLauncher, GDLauncher…), or any folder with a mods folder.">
                   Instance folder
@@ -516,8 +527,9 @@ export function MinecraftView() {
                   Minecraft {mix.mc} · {mix.loader} {mix.loaderVersion} · {tally((e) => !!e.file || e.status === 'asIs')} mods and packs · {tally((e) => e.status === 'updated')} updated · {tally((e) => e.status === 'dependency')} added · {tally((e) => e.status === 'missing' || e.status === 'conflict')} left out
                 </div>
               </div>
-              <Button variant="secondary" icon={Save} onClick={() => void save()}>
-                Save as .mrpack
+              <ShareWithFriends open={sharing} onClose={() => setSharing(false)} name={mix.name} formats={false} save={(path, _f, server) => api.minecraft.exportPack(mix.id, path, server)} />
+              <Button variant="secondary" icon={Gift} onClick={() => setSharing(true)} title="One .mrpack with every mod, the configs and this cover. Friends open it in OmniHub, the Modrinth App or Prism Launcher.">
+                Share with friends
               </Button>
               <Button variant="secondary" icon={Server} onClick={() => navigate('servers', { from: `mix:${mix.id}` })} title="Host this mix as a Minecraft server on this PC (only the mods servers use).">
                 Host as a server

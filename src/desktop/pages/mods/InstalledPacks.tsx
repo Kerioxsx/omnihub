@@ -2,21 +2,24 @@
 // ones it grew from, CurseForge, the Modrinth App): listed with their
 // version, loader and mods, added to a mix, or hosted as a server.
 
-import type { McLauncher, McLauncherPack, McLauncherPacks, McSource } from '@shared/types';
-import { Blocks, Check, FolderOpen, FolderSearch, HardDrive, Plus, RefreshCw, Server, X } from 'lucide-react';
+import type { McLauncher, McLauncherDetails, McLauncherPack, McLauncherPacks, McSource, McWorld } from '@shared/types';
+import { ArrowUpCircle, Blocks, Check, FolderOpen, FolderSearch, Gift, Globe, HardDrive, Info, Plus, RefreshCw, Server, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Badge, Card, CardHeader, Spinner } from '../../components/ui/Card';
 import { SearchInput, Segmented } from '../../components/ui/Form';
+import { Modal } from '../../components/ui/Overlay';
 import { EmptyState } from '../../components/ui/States';
+import { ShareWithFriends } from './ShareWithFriends';
 import { navigate } from '../../lib/router';
 import { toast } from '../../state/toasts';
 
-const LAUNCHERS: { id: McLauncher; label: string; tone: 'good' | 'warn' | 'info' }[] = [
+const LAUNCHERS: { id: McLauncher; label: string; tone: 'good' | 'warn' | 'info' | 'accent' }[] = [
   { id: 'prism', label: 'Prism Launcher', tone: 'good' },
   { id: 'curseforge', label: 'CurseForge', tone: 'warn' },
   { id: 'modrinth', label: 'Modrinth App', tone: 'info' },
+  { id: 'minecraft', label: 'Minecraft Launcher', tone: 'accent' },
 ];
 
 const LOADER_LABEL: Record<string, string> = { fabric: 'Fabric', quilt: 'Quilt', forge: 'Forge', neoforge: 'NeoForge' };
@@ -70,6 +73,7 @@ export function InstalledPacks({ sources, onAdded }: { sources: McSource[]; onAd
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [all, setAll] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setData(null);
@@ -123,6 +127,7 @@ export function InstalledPacks({ sources, onAdded }: { sources: McSource[]; onAd
 
   return (
     <Card>
+      <PackDetails p={packs.find((x) => x.id === openId) ?? null} onClose={() => setOpenId(null)} />
       <CardHeader
         icon={HardDrive}
         title="Installed on this PC"
@@ -168,7 +173,7 @@ export function InstalledPacks({ sources, onAdded }: { sources: McSource[]; onAd
             </div>
             <div className="grid gap-2 lg:grid-cols-2">
               {shown.map((p) => (
-                <PackRow key={p.id} p={p} added={added(p)} busy={busy === p.id} onMix={() => void mix(p)} />
+                <PackRow key={p.id} p={p} added={added(p)} busy={busy === p.id} onMix={() => void mix(p)} onOpen={() => setOpenId(p.id)} />
               ))}
             </div>
             {!query && list.length > 6 && (
@@ -197,7 +202,7 @@ export function InstalledPacks({ sources, onAdded }: { sources: McSource[]; onAd
   );
 }
 
-function PackRow({ p, added, busy, onMix }: { p: McLauncherPack; added: boolean; busy: boolean; onMix: () => void }) {
+function PackRow({ p, added, busy, onMix, onOpen }: { p: McLauncherPack; added: boolean; busy: boolean; onMix: () => void; onOpen: () => void }) {
   const hostable = !!p.mc && SERVER_LOADERS.includes(p.loader);
   return (
     <div className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5">
@@ -219,8 +224,117 @@ function PackRow({ p, added, busy, onMix }: { p: McLauncherPack; added: boolean;
           {added ? 'Added' : 'Mix'}
         </Button>
         <IconButton icon={Server} label={hostable ? `Host ${p.name} as a server` : 'Its version or loader can’t run as a server'} disabled={!hostable} onClick={() => navigate('servers', { from: `launcher:${p.id}` })} />
+        <IconButton icon={Info} label={`What’s in ${p.name}: mods, worlds, sharing`} onClick={onOpen} />
         <IconButton icon={FolderOpen} label={`Open ${p.name}’s folder`} onClick={() => void api.app.openPath(p.path)} />
       </div>
     </div>
+  );
+}
+
+const gb = (b: number) => (b >= 1_073_741_824 ? `${(b / 1_073_741_824).toFixed(1)} GB` : `${Math.max(1, Math.round(b / 1_048_576))} MB`);
+
+function WorldIcon({ pack, w }: { pack: string; w: McWorld }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (w.hasIcon) void api.minecraft.launcherWorldIcon(pack, w.folder).then(setSrc, () => undefined);
+  }, [pack, w.folder, w.hasIcon]);
+  return <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg border border-line bg-surface-2">{src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <Globe size={18} className="text-faint" aria-hidden />}</div>;
+}
+
+/** What's in an installed modpack: its mods (with updates on Modrinth), its worlds, and sharing it. */
+export function PackDetails({ p, onClose }: { p: McLauncherPack | null; onClose: () => void }) {
+  const [d, setD] = useState<McLauncherDetails | null>(null);
+  const [tab, setTab] = useState<'mods' | 'worlds'>('mods');
+  const [updates, setUpdates] = useState<Record<string, string> | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  useEffect(() => {
+    setD(null);
+    setUpdates(null);
+    if (p) void api.minecraft.launcherDetails(p.id).then((x) => (setD(x), setTab(x.mods.length || !x.worlds.length ? 'mods' : 'worlds')), (e: unknown) => toast.error('Couldn’t read it', errorText(e)));
+  }, [p]);
+  if (!p) return null;
+  const check = async () => {
+    setChecking(true);
+    try {
+      const u = await api.minecraft.launcherUpdates(p.id);
+      setUpdates(u);
+      toast.info(Object.keys(u).length ? `${Object.keys(u).length} mods have a newer version` : 'Every mod is up to date', 'Nothing in the pack was changed.');
+    } catch (e) {
+      toast.error('Couldn’t check', errorText(e));
+    } finally {
+      setChecking(false);
+    }
+  };
+  const hostable = !!p.mc && SERVER_LOADERS.includes(p.loader);
+  return (
+    <Modal open={!!p} onClose={onClose} title={p.name} description={`${p.launcherName} · ${p.mc ? `Minecraft ${p.mc}` : 'version unknown'} · ${loaderText(p)}${d ? ` · ${gb(d.size)}` : ''}`} icon={HardDrive} size="lg"
+      footer={
+        <>
+          <Button variant="ghost" icon={FolderOpen} onClick={() => void api.app.openPath(p.path)}>
+            Folder
+          </Button>
+          <Button variant="secondary" icon={Server} disabled={!hostable} onClick={() => navigate('servers', { from: `launcher:${p.id}` })}>
+            Host as a server
+          </Button>
+          <Button variant="primary" icon={Gift} disabled={!p.mc || !p.mods} onClick={() => setSharing(true)}>
+            Share with friends
+          </Button>
+        </>
+      }
+    >
+      <ShareWithFriends open={sharing} onClose={() => setSharing(false)} name={p.name} formats save={(path, format, server) => api.minecraft.shareLauncherPack(p.id, path, format, server)} />
+      {!d ? (
+        <Spinner />
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented size="sm" label="Show" value={tab} onChange={setTab} options={[{ value: 'mods', label: `Mods ${d.mods.length}` }, { value: 'worlds', label: `Worlds ${d.worlds.length}` }]} />
+            {tab === 'mods' && d.mods.length > 0 && (
+              <Button size="sm" variant="ghost" icon={ArrowUpCircle} loading={checking} disabled={checking || !p.loader} className="ml-auto" onClick={() => void check()}>
+                Check for updates
+              </Button>
+            )}
+          </div>
+          {tab === 'mods' ? (
+            d.mods.length === 0 ? (
+              <div className="py-6 text-center text-[12.5px] text-dim">No mods: plain Minecraft.</div>
+            ) : (
+              <div className="max-h-[50vh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+                {d.mods.map((m) => (
+                  <div key={m.file} className="flex items-center gap-3 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-medium text-fg">{m.name}</div>
+                      <div className="truncate font-mono text-[11px] text-faint">{m.version ? `${m.version} · ` : ''}{m.file}</div>
+                    </div>
+                    {updates?.[m.file] && <Badge tone="accent" icon={ArrowUpCircle}>{updates[m.file]}</Badge>}
+                    {m.side === 'client' && <Badge tone="neutral" title="Left off servers">Game only</Badge>}
+                    {m.disabled && <Badge tone="warn">Off</Badge>}
+                  </div>
+                ))}
+              </div>
+            )
+          ) : d.worlds.length === 0 ? (
+            <div className="py-6 text-center text-[12.5px] text-dim">No single-player worlds in it yet.</div>
+          ) : (
+            <div className="grid max-h-[50vh] gap-2 overflow-y-auto sm:grid-cols-2">
+              {d.worlds.map((w) => (
+                <div key={w.folder} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5">
+                  <WorldIcon pack={p.id} w={w} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-semibold text-fg">{w.name}</div>
+                    <div className="truncate text-[11.5px] text-dim">
+                      {w.hardcore ? 'Hardcore' : w.gameMode[0].toUpperCase() + w.gameMode.slice(1)}{w.version ? ` · ${w.version}` : ''} · {gb(w.size)}
+                    </div>
+                    <div className="truncate text-[11.5px] text-faint">{played(w.lastPlayed)}</div>
+                  </div>
+                  <IconButton icon={Server} label={hostable ? `Host ${w.name} as a server` : 'This pack can’t run as a server'} disabled={!hostable} onClick={() => navigate('servers', { from: `world:${p.id}:${w.folder}` })} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }
