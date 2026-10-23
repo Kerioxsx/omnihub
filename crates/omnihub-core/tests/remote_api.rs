@@ -448,9 +448,18 @@ fn sound_calls_and_open_apps_from_the_phone() {
 fn tasks_from_the_phone() {
     let f = setup(false);
     // A harmless program with a name nothing else uses.
-    let (src, args): (std::path::PathBuf, Vec<&str>) = if cfg!(windows) { (r"C:\Windows\System32\PING.EXE".into(), vec!["-n", "120", "127.0.0.1"]) } else { (std::path::PathBuf::from("/bin/sleep"), vec!["120"]) };
+    let args: Vec<&str> = if cfg!(windows) { vec!["-n", "120", "127.0.0.1"] } else { vec!["120"] };
     let exe = f._dir.path().join(if cfg!(windows) { "omnihub-sleeper.exe" } else { "omnihub-sleeper" });
-    std::fs::copy(&src, &exe).unwrap();
+    #[cfg(windows)]
+    std::fs::copy(r"C:\Windows\System32\PING.EXE", &exe).unwrap();
+    // A script rather than a copy of `sleep`, which refuses another name
+    // where it is uutils' one program for every utility.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(&exe, "#!/bin/sh\nsleep \"$1\"\n").unwrap();
+        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
     let mut child = std::process::Command::new(&exe).args(&args).stdout(std::process::Stdio::null()).spawn().unwrap();
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
