@@ -257,6 +257,9 @@ pub struct Modrinth {
     base: String,
     fabric: String,
     quilt: String,
+    /// NeoForge's Maven and Forge's file site, for their newest builds.
+    neo: String,
+    forge: String,
     agent: ureq::Agent,
 }
 
@@ -270,7 +273,12 @@ fn agent_for(base: &str) -> ureq::Agent {
 
 impl Modrinth {
     pub fn new(base: &str, fabric: &str, quilt: &str) -> Modrinth {
-        Modrinth { base: base.trim_end_matches('/').into(), fabric: fabric.trim_end_matches('/').into(), quilt: quilt.trim_end_matches('/').into(), agent: agent_for(base) }
+        Modrinth { base: base.trim_end_matches('/').into(), fabric: fabric.trim_end_matches('/').into(), quilt: quilt.trim_end_matches('/').into(), neo: crate::mcserver::install::NEO_MAVEN.into(), forge: crate::mcserver::install::FORGE_FILES.into(), agent: agent_for(base) }
+    }
+
+    /// Where NeoForge and Forge builds are looked up (tests use a pretend site).
+    pub fn with_forge_sites(self, neo: &str, forge: &str) -> Modrinth {
+        Modrinth { neo: neo.trim_end_matches('/').into(), forge: forge.trim_end_matches('/').into(), ..self }
     }
 
     fn ua() -> &'static str {
@@ -445,7 +453,19 @@ impl Modrinth {
         let url = match loader {
             "fabric" => format!("{}/v2/versions/loader/{mc}", self.fabric),
             "quilt" => format!("{}/v3/versions/loader/{mc}", self.quilt),
-            _ => return Err(format!("OmniHub can't look up {loader} versions: pick a Minecraft version one of the {loader} packs uses.")),
+            "neoforge" => {
+                // NeoForge 21.1.x is for Minecraft 1.21.1, 26.1.2.x for 26.1.2.
+                let v = self.get(&format!("{}/api/maven/versions/releases/net/neoforged/neoforge", self.neo)).map_err(|e| e.replace("Modrinth", "NeoForge"))?;
+                let mut all: Vec<String> = v["versions"].as_array().into_iter().flatten().filter_map(|x| x.as_str()).filter(|x| crate::mcserver::install::neo_mc(x).as_deref() == Some(mc)).map(String::from).collect();
+                all.sort_by(|a, b| version_cmp(b, a));
+                return all.iter().find(|x| !x.contains("beta") && !x.contains("alpha")).or(all.first()).cloned().ok_or_else(|| format!("NeoForge has no build for Minecraft {mc} yet."));
+            }
+            "forge" => {
+                let v = self.get(&format!("{}/net/minecraftforge/forge/promotions_slim.json", self.forge)).map_err(|e| e.replace("Modrinth", "Forge"))?;
+                let p = &v["promos"];
+                return p[format!("{mc}-recommended")].as_str().or(p[format!("{mc}-latest")].as_str()).map(String::from).ok_or_else(|| format!("Forge has no build for Minecraft {mc}."));
+            }
+            _ => return Err(format!("OmniHub can't look up {loader} versions.")),
         };
         let v = self.get(&url)?;
         let list = v.as_array().ok_or("No loader list.")?;
@@ -833,7 +853,10 @@ impl Mixer {
         let mut votes: HashMap<(String, String), usize> = HashMap::new();
         for f in &mut files {
             if let Some(v) = known.get(&f.sha1) {
-                if let Some(p) = v.primary() {
+                // The download of this very jar: a version can hold several
+                // (a Forge and a NeoForge jar, sources), and its main one
+                // may be another, which wouldn't match this jar's hashes.
+                if let Some(p) = v.files.iter().find(|x| x.hashes.get("sha1") == Some(&f.sha1)) {
                     f.urls = vec![p.url.clone()];
                 }
                 for mc in &v.game_versions {
@@ -1925,6 +1948,60 @@ mod tests {
         assert!(!t.path().join("bad.mrpack").exists() && !t.path().join("bad.part").exists());
         // The instance itself is as it was.
         assert_eq!(std::fs::read(game.join("servers.dat")).unwrap(), b"my own list");
+    }
+
+    /// NeoForge and Forge mixes get a loader build even when no pack names
+    /// one, so they can be saved as .mrpack; and a mod's download is its own
+    /// jar, not another file of the same Modrinth version.
+    #[test]
+    fn neoforge_mixes_get_a_build_and_the_right_jars() {
+        let t = tempfile::tempdir().unwrap();
+        let neo_jar: &[u8] = b"the NeoForge jar";
+        let forge_jar: &[u8] = b"the Forge jar";
+        let (neo_sha, forge_sha) = (sha_pair(neo_jar), sha_pair(forge_jar));
+        let base: Arc<parking_lot::Mutex<String>> = Arc::default();
+        let b2 = base.clone();
+        let (ns, fs) = (neo_sha.clone(), forge_sha.clone());
+        let s = serve(Box::new(move |r: &Seen| {
+            let b = b2.lock().clone();
+            let ok = |v: Value| Some((200, "application/json", v.to_string().into_bytes()));
+            match r.path.as_str() {
+                "/api/maven/versions/releases/net/neoforged/neoforge" => ok(json!({ "versions": ["21.1.70", "21.1.77", "21.1.80-beta", "21.0.167", "26.1.2.100", "26.1.2.122"] })),
+                "/net/minecraftforge/forge/promotions_slim.json" => ok(json!({ "promos": { "1.20.1-latest": "47.4.2", "1.20.1-recommended": "47.4.0", "1.21.4-latest": "54.1.0" } })),
+                // One version with both jars, the Forge one first and main.
+                "/v2/version_files" => ok(json!({ &ns.0: { "project_id": "multi", "version_number": "2.0", "game_versions": ["1.21.1"], "loaders": ["forge", "neoforge"],
+                    "files": [{ "hashes": { "sha1": fs.0, "sha512": fs.1 }, "url": format!("{b}/cdn/thing-forge.jar"), "filename": "thing-forge.jar", "primary": true, "size": 13 },
+                              { "hashes": { "sha1": ns.0, "sha512": ns.1 }, "url": format!("{b}/cdn/thing-neoforge.jar"), "filename": "thing-neoforge.jar", "primary": false, "size": 16 }] } })),
+                "/v2/version_files/update" => ok(json!({})),
+                p if p.starts_with("/v2/projects?") => ok(json!([])),
+                _ => None,
+            }
+        }));
+        *base.lock() = s.base.clone();
+        let api = Modrinth::new(&s.base, &s.base, &s.base).with_forge_sites(&s.base, &s.base);
+        assert_eq!(api.latest_loader("neoforge", "1.21.1").unwrap(), "21.1.77", "the newest that isn't a beta");
+        assert_eq!(api.latest_loader("neoforge", "1.21").unwrap(), "21.0.167");
+        assert_eq!(api.latest_loader("neoforge", "26.1.2").unwrap(), "26.1.2.122");
+        assert!(api.latest_loader("neoforge", "1.12.2").unwrap_err().contains("no build"));
+        assert_eq!(api.latest_loader("forge", "1.20.1").unwrap(), "47.4.0", "recommended first");
+        assert_eq!(api.latest_loader("forge", "1.21.4").unwrap(), "54.1.0");
+
+        let mixer = Mixer::new(&t.path().join("mc"), api, None);
+        let inst = t.path().join("Thing");
+        std::fs::create_dir_all(inst.join("mods")).unwrap();
+        std::fs::write(inst.join("mods").join("thing.jar"), neo_jar).unwrap();
+        let src = mixer.add_folder(inst.to_str().unwrap()).unwrap();
+        assert_eq!(src.files[0].urls, [format!("{}/cdn/thing-neoforge.jar", s.base)], "its own jar, not the main file");
+        // No pack names a NeoForge build for the folder: the mix gets the newest.
+        let mix = mixer.plan("Neo", std::slice::from_ref(&src.id), "1.21.1", "neoforge").unwrap();
+        assert_eq!(mix.loader_version, "21.1.77");
+        assert!(mix.problems.is_empty(), "{:?}", mix.problems);
+        let out = t.path().join("neo.mrpack");
+        mixer.export(&mix.id, &out, None).unwrap();
+        let (idx, _) = read_mrpack(&std::fs::read(&out).unwrap()).unwrap();
+        assert_eq!(idx["dependencies"], json!({ "minecraft": "1.21.1", "neoforge": "21.1.77" }));
+        let f = &idx["files"][0];
+        assert_eq!((f["hashes"]["sha1"].as_str(), f["downloads"][0].as_str()), (Some(neo_sha.0.as_str()), Some(format!("{}/cdn/thing-neoforge.jar", s.base).as_str())));
     }
 
     #[test]

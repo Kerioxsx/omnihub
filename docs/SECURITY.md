@@ -276,6 +276,9 @@ and lets a phone do some of that. This is what protects each part.
   one copies its mods and configs into OmniHub's mixer; a server made from one
   gets copies too. Their SHA-1s go to Modrinth (as for any instance folder) to
   find Modrinth's copies and leave client-only mods off servers.
+- The newest NeoForge or Forge build for a mix is read from
+  `maven.neoforged.net` (its version list) or `files.minecraftforge.net`
+  (`promotions_slim.json`); only the version number is used.
 - **Sharing with friends** writes one file: the mods (those Modrinth knows as
   downloads from Modrinth's hosts, the rest inside), `config`,
   `defaultconfigs`, `kubejs`, `resourcepacks`, `shaderpacks`,

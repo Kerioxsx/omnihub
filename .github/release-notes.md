@@ -7,7 +7,8 @@
 - **What's in a modpack**: the details window lists its mods (name and version from each mod itself, which ones only run in the game, which are turned off), **checks Modrinth for newer versions** (nothing is changed), and shows its single-player worlds.
 - **Host a world you played alone**: pick a world (in the details window, or New server → Installed modpack → World). The server gets a copy, with its game mode and difficulty, and with your Minecraft name **your inventory, place and levels from single-player become yours on the server**. The original world isn't touched.
 - The Minecraft Launcher's own folder (.minecraft) is listed too, with its worlds and mods.
-- Fix: a test that compared paths with mixed slashes on Windows.
+- Fix: **NeoForge (and Forge) mixes** couldn't be saved as a .mrpack when none of their packs named a loader build ("OmniHub can't look up neoforge versions"). OmniHub now finds the newest NeoForge or Forge build for the chosen Minecraft version.
+- Fix: mods added from an instance folder or an installed modpack could get the download of another file from the same Modrinth version (often the Forge jar of a mod that ships both), which failed its checksum when downloaded. Each mod now gets the download of its own jar.
 
 Also in 0.12: your installed modpacks from Prism Launcher, CurseForge and the Modrinth App; Minecraft servers 24/7 on your PC (also from your phone).
 
