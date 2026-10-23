@@ -2032,7 +2032,8 @@ mod tests {
         let s = mixer.add_launcher_pack(&i.id).unwrap();
         assert_eq!((s.name.as_str(), s.mc.as_str(), s.loader.as_str(), s.loader_version.as_str(), s.files.len(), s.overrides), ("Create Above", "1.20.1", "forge", "47.2.0", 1, 2));
         assert_eq!(s.kind, SourceKind::Launcher { launcher: "Prism Launcher".into(), path: i.path.clone() });
-        assert_eq!(s.files[0].local.as_deref(), inst.join(".minecraft").join("mods").join("create.jar").to_str());
+        // Compared as paths: Windows writes either slash.
+        assert_eq!(s.files[0].local.as_deref().map(Path::new), Some(inst.join(".minecraft").join("mods").join("create.jar").as_path()));
         assert!(mixer.icon_of(&s).is_some(), "its picture is kept for the mix's cover");
         // A folder added by hand (no version known) still needs Modrinth.
         assert!(mixer.add_folder(inst.to_str().unwrap()).is_err());
