@@ -1,13 +1,15 @@
 ## New in this version
 
-**Govee lights: real colours on every light, and every light keeps moving.**
+**Install NeoForge and Forge mixes in one click, Govee colours that pop, and your keyboard in sync.**
 
-- **Colours instead of white** on lights with few LEDs: a light that covers a big part of the screen used to mix all its colours into a pale white. Now, when a part of the screen is colourful, the light shows its main colour. The brightness boost no longer pushes pale colours to white.
-- **Every light updates**: *Auto* now gives a colour per segment only to lights Govee's account (your API key) or OmniHub knows can take it, and **one colour** to every other light, which all Govee lights take. Lights on one colour get it worked out from their whole part of the screen.
-- **Lights that stopped**: a light that leaves streaming (restarted, or touched in the Govee app) is switched back to it by itself within seconds.
-- Each light shows *Live* while OmniHub drives it, whether per segment or one colour.
+- **Install any mix**: NeoForge and Forge mixes now have a working **Install in the Minecraft Launcher** button. OmniHub runs NeoForge's or Forge's own installer for you (about a minute, with the Java it needs, downloaded once), then adds the mix as its own profile with its picture.
+- **Govee lamp blinking off**: a lamp that kept switching off for a moment and back on now stays steady.
+- **More saturated colours**: pale screen colours are made vivid before they reach the lights, so lights no longer look white. In music, lights never dim so far between beats that they look switched off.
+- **What each light gets**: each light's badge says *Live · per segment* or *Live · one colour*, so you can tell at once which setting a light needs.
+- **Your keyboard and PC lights follow the Govee lights**: in My PC → Lighting, pick **Like the Govee lights** and your keyboard, PC and strips show what the Govee lights show (the screen, the music or their effect).
+- **No more keyboard lag or flickering colours**: keyboards, mice and headsets get colours at a pace they keep up with, and OmniHub tells you when another lighting program (SignalRGB, iCUE, G HUB, Razer Synapse, Armoury Crate…) is fighting over the same lights.
 
-Also in 0.13.1: lights found behind routers that hide them, a brightness boost, smoother music, an installer fix for a drive that's gone.
+Also in 0.13.2: real colours on lights with few LEDs, every light updating, lights found behind routers that hide them.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

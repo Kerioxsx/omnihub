@@ -534,7 +534,7 @@ export function MinecraftView() {
               <Button variant="secondary" icon={Server} onClick={() => navigate('servers', { from: `mix:${mix.id}` })} title="Host this mix as a Minecraft server on this PC (only the mods servers use).">
                 Host as a server
               </Button>
-              <Button variant="primary" icon={Play} disabled={!mix.installable || !st?.found || installing} onClick={() => void install()} title={mix.installable ? undefined : 'Forge and NeoForge mixes: save as .mrpack and open it in Modrinth App or Prism Launcher.'}>
+              <Button variant="primary" icon={Play} disabled={!mix.installable || !st?.found || installing} onClick={() => void install()} title={!st?.found ? 'Minecraft (Java Edition) wasn’t found on this PC.' : mix.installable ? undefined : 'Save this mix as a .mrpack and open it in Modrinth App or Prism Launcher.'}>
                 {installing ? 'Installing…' : 'Install in the Minecraft Launcher'}
               </Button>
             </div>
@@ -543,10 +543,10 @@ export function MinecraftView() {
                 {p}
               </Callout>
             ))}
-            {!mix.installable && (
-              <Callout tone="info" className="mx-5 mt-3">
-                {mix.loader === 'forge' ? 'Forge' : 'NeoForge'} needs its own installer, so this mix goes into a launcher that installs it: save it as a .mrpack and open it in Modrinth App, Prism Launcher or CurseForge.
-              </Callout>
+            {(mix.loader === 'forge' || mix.loader === 'neoforge') && (
+              <div className="mx-5 mt-3 text-[11.5px] text-faint">
+                Install puts {mix.loader === 'forge' ? 'Forge' : 'NeoForge'} {mix.loaderVersion} in the Minecraft Launcher first with its own installer (about a minute; OmniHub gets the Java it needs once), then the mix as its own profile.
+              </div>
             )}
             {groups.map((g) =>
               g.list.length ? (

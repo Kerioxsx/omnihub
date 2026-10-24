@@ -122,7 +122,7 @@ export function LightCard({ light, govee, monitors }: { light: GoveeLight; govee
               )}
               {light.streaming && (
                 <Badge tone="accent" icon={Radio}>
-                  Live
+                  Live · {light.perSegment ? 'per segment' : 'one colour'}
                 </Badge>
               )}
             </div>

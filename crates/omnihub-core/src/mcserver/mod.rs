@@ -1022,6 +1022,28 @@ impl ServerHub {
         }
     }
 
+    /// Forge or NeoForge installed for the Minecraft Launcher (a mix needs
+    /// it), with OmniHub's Java for that Minecraft version (downloaded once).
+    pub fn install_client_loader(&self, loader: &str, mc: &str, version: &str, mc_dir: &Path, progress: install::Progress) -> Result<String, String> {
+        let flavor = match loader {
+            "forge" => Flavor::Forge,
+            "neoforge" => Flavor::NeoForge,
+            _ => return Err("Only Forge and NeoForge have their own installer.".into()),
+        };
+        let (major, _) = self.web.java_for(flavor, mc)?;
+        let java = match self.runtimes.find(major, false) {
+            Some(p) => p,
+            None => match self.runtimes.ensure(&self.web, major, false, progress) {
+                Ok(p) => p,
+                Err(e) => match install::java_version(Path::new("java")) {
+                    Some(v) if v >= major => PathBuf::from("java"),
+                    _ => return Err(e),
+                },
+            },
+        };
+        self.web.install_client(flavor, mc, version, mc_dir, &java, progress)
+    }
+
     /// The Java program a server uses now (for the firewall), if it's there.
     pub fn java_exe(&self, id: &str) -> Option<PathBuf> {
         let s = self.server(id).ok()?;

@@ -14,7 +14,7 @@ export interface Inputs {
   temp: number | null;
 }
 
-export const ANIMATED: Record<LightEffect, boolean> = { off: false, static: false, breathing: true, spectrum: true, wave: true, gradient: true, music: true, temperature: false };
+export const ANIMATED: Record<LightEffect, boolean> = { off: false, static: false, breathing: true, spectrum: true, wave: true, gradient: true, music: true, temperature: false, govee: true };
 
 export function parseHex(s: string): Rgb | null {
   const h = s.trim().replace(/^#/, '');
@@ -101,6 +101,9 @@ export function colorAt(p: LightProfile, colors: Rgb[], x: number, dev: number, 
     case 'temperature':
       c = along(colors, ((inp.temp ?? 40) - 35) / 50, false);
       break;
+    case 'govee':
+      c = along(colors, x, false);
+      break;
   }
   return scale(c, Math.min(100, p.brightness) / 100);
 }
@@ -112,6 +115,7 @@ export const EFFECTS: { value: LightEffect; label: string; hint: string; colors:
   { value: 'wave', label: 'Rainbow wave', hint: 'A rainbow running along the lights', colors: false },
   { value: 'gradient', label: 'Flow', hint: 'Your colours flowing slowly', colors: true },
   { value: 'music', label: 'Music', hint: 'Pulses with what your PC plays', colors: true },
+  { value: 'govee', label: 'Like the Govee lights', hint: 'Shows what your Govee lights show: the screen, the music or their effect (your colours when they’re off)', colors: true },
   { value: 'temperature', label: 'Temperature', hint: 'Cool to hot with the processor (needs LibreHardwareMonitor)', colors: true },
   { value: 'off', label: 'Off', hint: 'Lights off', colors: false },
 ];

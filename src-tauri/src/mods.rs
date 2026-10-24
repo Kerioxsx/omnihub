@@ -2,6 +2,7 @@
 //! Thunderstore, Workshop items), Claude's settings and the mod maker, and
 //! the Minecraft modpack mixer.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use omnihub_core::claude::ClaudeSettings;
@@ -337,7 +338,16 @@ pub async fn mc_install(core: Core<'_>, id: String) -> Res<Installed> {
         }
         let memory = omnihub_core::mods::minecraft::memory_for_pc();
         let ev = c.events.clone();
-        let r = c.mods.minecraft.install(&id, &mut |done, total, file| ev.emit("mods:progress", serde_json::json!({ "game": "minecraft", "text": if file.is_empty() { String::new() } else { format!("Downloading {file}…") }, "done": done, "total": total })), memory);
+        // Forge and NeoForge: their own installer puts the loader in the launcher first.
+        let m = c.mods.minecraft.mix(&id)?;
+        let loader_id = if matches!(m.loader.as_str(), "forge" | "neoforge") && !m.loader_version.is_empty() {
+            let mc_dir = c.mods.minecraft.minecraft_dir().map(Path::to_path_buf).ok_or("Minecraft (Java Edition) isn't installed: its .minecraft folder wasn't found.")?;
+            let ev = ev.clone();
+            Some(c.mcserver.install_client_loader(&m.loader, &m.mc, &m.loader_version, &mc_dir, &mut |done, total, text| ev.emit("mods:progress", serde_json::json!({ "game": "minecraft", "text": text, "done": done, "total": total })))?)
+        } else {
+            None
+        };
+        let r = c.mods.minecraft.install(&id, &mut |done, total, file| ev.emit("mods:progress", serde_json::json!({ "game": "minecraft", "text": if file.is_empty() { String::new() } else { format!("Downloading {file}…") }, "done": done, "total": total })), memory, loader_id.as_deref());
         c.audit.record("desktop", "minecraft.install", &id, r.is_ok());
         r
     })

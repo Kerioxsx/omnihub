@@ -236,7 +236,7 @@ let mcSources: McSource[] = [
 ];
 const mcInstalled: McInstalled[] = [];
 let mcMix: McMix | null = null;
-const DEMO_MIX: McMix = { id: 'mixdemo', name: 'Create + Cobblemon', mc: '26.1.2', loader: 'neoforge', loaderVersion: '26.1.2.122', sources: ['Create: Arcane Engineering', 'Cobblemon Official Modpack'], entries: [], clashes: [], problems: [], installable: false, sourceIds: [], cover: 'blend' };
+const DEMO_MIX: McMix = { id: 'mixdemo', name: 'Create + Cobblemon', mc: '26.1.2', loader: 'neoforge', loaderVersion: '26.1.2.122', sources: ['Create: Arcane Engineering', 'Cobblemon Official Modpack'], entries: [], clashes: [], problems: [], installable: true, sourceIds: [], cover: 'blend' };
 const mcCovers = new Map<string, string>();
 const mixIcons = () => (mcMix?.sourceIds ?? []).map((id) => mcSources.find((s) => s.id === id)).map((s) => s?.icon ?? packIcon(s?.name ?? 'Pack'));
 
@@ -502,7 +502,7 @@ export const modsMock = {
       entry('JEI', 'conflict', [b], '', "Doesn't run alongside Roughly Enough Items, which stays."),
       entry('Fresh Animations', 'kept', [a], '1.9.3', null, 'resourcepacks'),
     ];
-    mcMix = { id: `mix${Date.now()}`, name: name || n.join(' + '), mc, loader, loaderVersion: '0.16.9', sources: n, entries, clashes: [`config/sodium-options.json: kept ${a}'s, not ${b}'s`, `options.txt: kept ${a}'s, not ${b}'s`], problems: [], installable: loader === 'fabric' || loader === 'quilt', sourceIds: src.map((s) => s.id), cover: null };
+    mcMix = { id: `mix${Date.now()}`, name: name || n.join(' + '), mc, loader, loaderVersion: '0.16.9', sources: n, entries, clashes: [`config/sodium-options.json: kept ${a}'s, not ${b}'s`, `options.txt: kept ${a}'s, not ${b}'s`], problems: [], installable: ['fabric', 'quilt', 'forge', 'neoforge'].includes(loader), sourceIds: src.map((s) => s.id), cover: null };
     mcCovers.delete(mcMix.id);
     return mcMix;
   },

@@ -1598,7 +1598,7 @@ export type EmojiPack = { kind: 'pictures'; count: number } | { kind: 'font'; na
 
 // ---------- My PC (lighting, fans, screens, specs) ----------
 
-export type LightEffect = 'off' | 'static' | 'breathing' | 'spectrum' | 'wave' | 'gradient' | 'music' | 'temperature';
+export type LightEffect = 'off' | 'static' | 'breathing' | 'spectrum' | 'wave' | 'gradient' | 'music' | 'temperature' | 'govee';
 
 export interface LightProfile {
   id: string;
@@ -1707,6 +1707,8 @@ export interface CoolerDevice {
 export interface RigStatus {
   lighting: LinkState;
   lightingMessage: string | null;
+  /** other lighting programs running (they fight over the same lights) */
+  lightingRivals: string[];
   devices: LitDevice[];
   openrgbInstalled: string | null;
   fans: LinkState;
@@ -1867,6 +1869,8 @@ export interface GoveeLight {
   extras: GoveeExtra[];
   values: Record<string, unknown>;
   streaming: boolean;
+  /** a colour per segment (else one colour) */
+  perSegment: boolean;
   message: string | null;
 }
 

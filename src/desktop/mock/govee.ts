@@ -69,6 +69,7 @@ function light(id: string, sku: string, name: string, ip: string | null, segment
     extras,
     values: { gradientToggle: 1, dreamViewToggle: 0, nightlightToggle: 0, volume: 35, whiteNoise: 2 },
     streaming: false,
+    perSegment: false,
     message: null,
   };
 }
@@ -212,6 +213,7 @@ function lights(): GoveeLight[] {
       color: look.mode === 'color' ? look.color : l.color,
       kelvin: look.mode === 'white' ? look.kelvin : null,
       streaming: !!(settings.enabled && on && live && l.lan && s.control),
+      perSegment: s.stream === 'segments' || (s.stream === 'auto' && (l.segments ?? 0) > 1),
       message: settings.enabled && live && !l.lan ? 'Live colours need LAN Control: switch it on for this light in the Govee Home app.' : null,
       cloud: l.cloud && hasKey,
     };

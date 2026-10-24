@@ -186,6 +186,9 @@ pub struct FanControl {
 pub struct RigStatus {
     pub lighting: LinkState,
     pub lighting_message: Option<String>,
+    /// Other lighting programs running now: they set the same lights, so
+    /// the colours flip between theirs and OmniHub's.
+    pub lighting_rivals: Vec<String>,
     pub devices: Vec<LitDevice>,
     pub openrgb_installed: Option<String>,
     pub fans: LinkState,
@@ -212,6 +215,47 @@ pub fn openrgb_installed() -> Option<PathBuf> {
         }
     }
     c.into_iter().find(|p| p.is_file())
+}
+
+/// Programs that drive RGB lights themselves (process name, lowercase,
+/// without ".exe" → the name people know).
+const RIVALS: &[(&str, &str)] = &[
+    ("signalrgb", "SignalRGB"),
+    ("icue", "Corsair iCUE"),
+    ("lghub", "Logitech G HUB"),
+    ("lghub_agent", "Logitech G HUB"),
+    ("razer synapse", "Razer Synapse"),
+    ("razer synapse 3", "Razer Synapse"),
+    ("razercentralservice", "Razer Synapse"),
+    ("armourycrate", "ASUS Armoury Crate"),
+    ("lightingservice", "ASUS Aura"),
+    ("steelseriesgg", "SteelSeries GG"),
+    ("steelseriesengine", "SteelSeries GG"),
+    ("nzxt cam", "NZXT CAM"),
+    ("mysticlight", "MSI Mystic Light"),
+];
+
+/// The lighting programs among running process names, each named once.
+pub fn rivals<'a>(processes: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for p in processes {
+        let p = p.to_lowercase();
+        let base = p.strip_suffix(".exe").unwrap_or(&p);
+        if let Some((_, name)) = RIVALS.iter().find(|(k, _)| *k == base) {
+            if !out.iter().any(|n| n == name) {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+fn running_rivals() -> Vec<String> {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let names: Vec<String> = sys.processes().values().map(|p| p.name().to_string_lossy().into_owned()).collect();
+    rivals(names.iter().map(String::as_str))
 }
 
 fn peripheral(k: DeviceKind) -> bool {
@@ -575,11 +619,27 @@ impl RigHub {
             }
         }
         let inputs = Inputs { t: run.t0.get_or_insert_with(Instant::now).elapsed().as_secs_f32(), level: run.level, beat: run.beat, temp: self.status().cpu_temp };
-        let colors = lighting::palette(profile);
+        let mut colors = lighting::palette(profile);
+        if profile.effect == lighting::Effect::Govee {
+            let shown = crate::govee::show_colors();
+            if !shown.is_empty() {
+                colors = shown;
+            }
+        }
+        if run.rivals_at.is_none_or(|t| t.elapsed() > Duration::from_secs(15)) {
+            run.rivals_at = Some(Instant::now());
+            let found = running_rivals();
+            self.set_status(|st| st.lighting_rivals = found);
+        }
         let refresh = run.last_full.is_none_or(|t| t.elapsed() > Duration::from_secs(5));
         let mut failed = false;
         for (dev, c) in run.controllers.iter().enumerate() {
             if !run.lit.contains(&c.index) || c.leds == 0 {
+                continue;
+            }
+            // Keyboards, mice and headsets take colours slowly: sent faster,
+            // they queue up and play back late, flicking through colours.
+            if peripheral(c.kind) && !refresh && run.sent_at.get(&c.index).is_some_and(|t| t.elapsed() < Duration::from_millis(66)) {
                 continue;
             }
             let frame = lighting::frame(profile, &colors, c.leds, dev, &inputs);
@@ -591,6 +651,7 @@ impl RigHub {
                 break;
             }
             run.sent.insert(c.index, frame);
+            run.sent_at.insert(c.index, Instant::now());
         }
         if refresh {
             run.last_full = Some(Instant::now());
@@ -745,6 +806,8 @@ struct LightRun {
     lit: Vec<u32>,
     chosen_for: (Vec<String>, bool),
     sent: HashMap<u32, Vec<Rgb>>,
+    sent_at: HashMap<u32, Instant>,
+    rivals_at: Option<Instant>,
     last_full: Option<Instant>,
     retry_at: Option<Instant>,
     t0: Option<Instant>,
@@ -802,6 +865,12 @@ fn sanitize(s: &mut RigSettings) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn other_lighting_programs_are_named() {
+        assert_eq!(rivals(["explorer.exe", "SignalRgb.exe", "iCUE.exe", "lghub.exe", "lghub_agent.exe", "Razer Synapse 3.exe"]), ["Corsair iCUE", "Logitech G HUB", "Razer Synapse", "SignalRGB"]);
+        assert!(rivals(["OpenRGB.exe", "chrome.exe", "icue-helper.exe"]).is_empty());
+    }
 
     fn hub(dir: &Path) -> Arc<RigHub> {
         let events = EventBus::new();

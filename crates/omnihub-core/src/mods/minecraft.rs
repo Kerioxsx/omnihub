@@ -29,6 +29,19 @@ fn yes() -> bool {
     true
 }
 
+/// Loaders the Minecraft Launcher can start a mix with (Forge and NeoForge
+/// after their own installer has run).
+fn installable(loader: &str) -> bool {
+    matches!(loader, "fabric" | "quilt" | "forge" | "neoforge")
+}
+
+/// A saved mix, with what can be installed worked out again (older mixes
+/// were saved when Forge and NeoForge couldn't be).
+fn with_install(mut m: Mix) -> Mix {
+    m.installable = installable(&m.loader);
+    m
+}
+
 /// Memory to give a modded Minecraft (GB): 4, 6 or 8 by the PC's RAM.
 pub fn memory_for_pc() -> u32 {
     let mut sys = sysinfo::System::new();
@@ -1348,7 +1361,7 @@ impl Mixer {
             entries,
             clashes,
             problems,
-            installable: matches!(loader, "fabric" | "quilt"),
+            installable: installable(loader),
             source_ids: sources.iter().map(|s| s.id.clone()).collect(),
             cover: None,
         };
@@ -1435,7 +1448,7 @@ impl Mixer {
             .filter_map(|e| {
                 let p = e.path().join("mix.json");
                 let at = std::fs::metadata(&p).and_then(|m| m.modified()).ok()?;
-                Some((at, serde_json::from_slice::<Mix>(&std::fs::read(&p).ok()?).ok()?))
+                Some((at, serde_json::from_slice::<Mix>(&std::fs::read(&p).ok()?).ok().map(with_install)?))
             })
             .collect();
         v.sort_by_key(|x| std::cmp::Reverse(x.0));
@@ -1444,7 +1457,7 @@ impl Mixer {
     }
 
     pub fn mix(&self, id: &str) -> Result<Mix, String> {
-        std::fs::read(self.mdir(id)?.join("mix.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).ok_or_else(|| "That mix is gone; work it out again.".into())
+        std::fs::read(self.mdir(id)?.join("mix.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).map(with_install).ok_or_else(|| "That mix is gone; work it out again.".into())
     }
 
     /// Save a mix as a .mrpack at `dest`.
@@ -1539,17 +1552,30 @@ impl Mixer {
 
     /// Install a Fabric or Quilt mix into the Minecraft Launcher: its own
     /// folder under .minecraft\omnihub, the loader's version file, and a profile.
-    pub fn install(&self, id: &str, progress: &mut dyn FnMut(usize, usize, &str), memory_gb: u32) -> Result<Installed, String> {
+    /// Install a mix as a Minecraft Launcher profile. Forge and NeoForge
+    /// are installed by their own installers first; `loader_id` is the
+    /// version that made (Fabric and Quilt come from their meta servers).
+    pub fn install(&self, id: &str, progress: &mut dyn FnMut(usize, usize, &str), memory_gb: u32, loader_id: Option<&str>) -> Result<Installed, String> {
         let m = self.mix(id)?;
         if !m.installable {
-            return Err("Only Fabric and Quilt mixes go straight into the Minecraft Launcher. Save it as a .mrpack and open it in Modrinth App or Prism Launcher instead.".into());
+            return Err("This mix has no loader the Minecraft Launcher can start. Save it as a .mrpack and open it in Modrinth App or Prism Launcher instead.".into());
         }
         if m.loader_version.is_empty() {
             return Err(m.problems.first().cloned().unwrap_or_else(|| "The loader version is unknown.".into()));
         }
         let mc_dir = self.minecraft.clone().ok_or("Minecraft (Java Edition) isn't installed: its .minecraft folder wasn't found.")?;
-        let profile = self.api.profile_json(&m.loader, &m.mc, &m.loader_version)?;
-        let version_id = profile["id"].as_str().filter(|s| super::install::safe_rel(s).is_some_and(|r| !r.contains('/'))).ok_or("The loader's profile has no id.")?.to_string();
+        let (profile, version_id) = match loader_id {
+            Some(v) => (None, v.to_string()),
+            None if matches!(m.loader.as_str(), "forge" | "neoforge") => return Err("Forge and NeoForge are installed by their own installer first.".into()),
+            None => {
+                let p = self.api.profile_json(&m.loader, &m.mc, &m.loader_version)?;
+                let v = p["id"].as_str().map(str::to_string);
+                (Some(p), v.unwrap_or_default())
+            }
+        };
+        if version_id.is_empty() || super::install::safe_rel(&version_id).is_none_or(|r| r.contains('/')) || (profile.is_none() && !mc_dir.join("versions").join(&version_id).is_dir()) {
+            return Err("The loader's version wasn't found.".into());
+        }
         let slug = super::slug(&m.name);
         let mut dir = mc_dir.join("omnihub").join(&slug);
         let mut n = 2;
@@ -1590,7 +1616,7 @@ impl Mixer {
         std::fs::rename(&tmp, &dir).map_err(|e| e.to_string())?;
         // The loader's version file (shared by every profile that uses it).
         let vdir = mc_dir.join("versions").join(&version_id);
-        if !vdir.join(format!("{version_id}.json")).is_file() {
+        if let Some(profile) = profile.filter(|_| !vdir.join(format!("{version_id}.json")).is_file()) {
             std::fs::create_dir_all(&vdir).map_err(|e| e.to_string())?;
             std::fs::write(vdir.join(format!("{version_id}.json")), serde_json::to_vec_pretty(&profile).unwrap_or_default()).map_err(|e| e.to_string())?;
         }
@@ -1806,7 +1832,7 @@ mod tests {
 
         // Into the Minecraft Launcher.
         let mut steps = 0;
-        let inst = mixer.install(&mix.id, &mut |_, _, _| steps += 1, 6).unwrap();
+        let inst = mixer.install(&mix.id, &mut |_, _, _| steps += 1, 6, None).unwrap();
         let dir = PathBuf::from(&inst.dir);
         assert!(dir.join("mods/sodium-0.6.jar").is_file() && dir.join("mods/create-1.21.1.jar").is_file() && dir.join("mods/fabric-api.jar").is_file());
         assert!(!dir.join("mods/embeddium.jar").exists());

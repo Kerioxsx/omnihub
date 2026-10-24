@@ -267,6 +267,8 @@ pub struct GoveeLight {
     pub values: HashMap<String, Value>,
     /// OmniHub is streaming colours to it.
     pub streaming: bool,
+    /// A colour per segment (else one colour).
+    pub per_segment: bool,
     pub message: Option<String>,
 }
 
@@ -350,7 +352,8 @@ struct Shared {
     cloud_extra: HashMap<String, CloudExtra>,
     frames: HashMap<String, Vec<Rgb>>,
     /// Per light: streaming now, and what's wrong (if anything).
-    flags: HashMap<String, (bool, Option<String>)>,
+    /// Per light: streaming, per segment, a message.
+    flags: HashMap<String, (bool, bool, Option<String>)>,
     /// Something the page shows changed.
     status_dirty: bool,
 }
@@ -401,6 +404,15 @@ fn merge(a: &mut Value, b: &Value) {
         }
         (a, b) => *a = b.clone(),
     }
+}
+
+/// What the lights show now, for the PC's own lighting to follow.
+static SHOW: std::sync::Mutex<Option<(Vec<Rgb>, Instant)>> = std::sync::Mutex::new(None);
+
+/// The colours the Govee lights show now (every light's, one after
+/// another); empty when OmniHub hasn't driven them in the last two seconds.
+pub fn show_colors() -> Vec<Rgb> {
+    SHOW.lock().ok().and_then(|s| s.as_ref().filter(|(_, at)| at.elapsed() < Duration::from_secs(2)).map(|(c, _)| c.clone())).unwrap_or_default()
 }
 
 /// Models known to take DreamView (`razer`) streaming on the network.
@@ -915,16 +927,17 @@ impl GoveeHub {
                     extras: cd.map(|d| d.extras()).unwrap_or_default(),
                     values,
                     streaming: sh.flags.get(&id).is_some_and(|f| f.0),
-                    message: sh.flags.get(&id).and_then(|f| f.1.clone()),
+                    per_segment: sh.flags.get(&id).is_some_and(|f| f.1),
+                    message: sh.flags.get(&id).and_then(|f| f.2.clone()),
                     id,
                 }
             })
             .collect();
     }
 
-    fn set_light_state(&self, id: &str, streaming: bool, message: Option<String>) {
+    fn set_light_state(&self, id: &str, streaming: bool, per_segment: bool, message: Option<String>) {
         let mut sh = self.shared.lock();
-        let next = (streaming, message);
+        let next = (streaming, per_segment, message);
         if sh.flags.get(id) != Some(&next) {
             sh.flags.insert(id.to_string(), next);
             sh.status_dirty = true;
@@ -1293,7 +1306,7 @@ impl GoveeHub {
                 run.applied = None;
                 run.power = None;
                 run.bright = None;
-                self.set_light_state(id, false, None);
+                self.set_light_state(id, false, false, None);
                 continue;
             }
             let send = |v: &Value| -> bool { matches!((w.lan.as_ref(), lan_dev), (Some(lan), Some(d)) if lan.send(d.ip, v).is_ok()) };
@@ -1320,7 +1333,7 @@ impl GoveeHub {
                     send(&lan::razer(&lan::razer_switch(false)));
                     run.razer_on = false;
                 }
-                self.set_light_state(id, false, None);
+                self.set_light_state(id, false, false, None);
                 continue;
             }
             // Identify: blink white for a moment.
@@ -1353,7 +1366,7 @@ impl GoveeHub {
             let n = if l.segments > 0 { l.segments as usize } else { cloud_dev.and_then(|d| d.segments()).unwrap_or(10) }.clamp(1, lan::RAZER_MAX);
             if look.mode.live() {
                 if lan_dev.is_none() {
-                    self.set_light_state(id, false, Some("Live colours need LAN Control: switch it on for this light in the Govee Home app.".into()));
+                    self.set_light_state(id, false, false, Some("Live colours need LAN Control: switch it on for this light in the Govee Home app.".into()));
                     continue;
                 }
                 // One colour: worked out from the whole zone, not averaged from segments.
@@ -1395,12 +1408,11 @@ impl GoveeHub {
                 let keepalive = run.sent_at.is_none_or(|t| t.elapsed() > Duration::from_millis(900));
                 if segments {
                     if (changed || keepalive) && run.sent_at.is_none_or(|t| t.elapsed() >= Duration::from_millis(30)) {
-                        // Again now and then: a light that left streaming (restarted,
-                        // touched in the Govee app) comes back by itself.
-                        if !run.razer_on || run.razer_at.is_none_or(|t| t.elapsed() > Duration::from_secs(5)) {
+                        // Switched on once (and after a pause): switching it on again
+                        // while streaming makes some lamps blink off.
+                        if !run.razer_on || run.sent_at.is_none_or(|t| t.elapsed() > Duration::from_secs(2)) {
                             send(&lan::razer(&lan::razer_switch(true)));
                             run.razer_on = true;
-                            run.razer_at = Some(Instant::now());
                         }
                         send(&lan::razer(&lan::razer_frame(&colors, l.gradient)));
                         run.sent_at = Some(Instant::now());
@@ -1421,7 +1433,7 @@ impl GoveeHub {
                 }
                 run.applied = None;
                 frames.insert(id.clone(), colors);
-                self.set_light_state(id, true, None);
+                self.set_light_state(id, true, segments, None);
                 continue;
             }
             // A still look: sent once, again only when it changes.
@@ -1494,7 +1506,7 @@ impl GoveeHub {
                 if lan_dev.is_some() || cloud_dev.is_some() {
                     run.applied = Some(sig);
                 }
-                self.set_light_state(id, false, message);
+                self.set_light_state(id, false, false, message);
             }
             let preview = match look.mode {
                 Mode::Color => Rgb::parse(&look.color).map(|c| vec![c]),
@@ -1506,6 +1518,14 @@ impl GoveeHub {
             }
         }
         {
+            let mut ids: Vec<&String> = frames.keys().collect();
+            ids.sort();
+            let all: Vec<Rgb> = ids.iter().flat_map(|k| frames[*k].iter().copied()).collect();
+            if !all.is_empty() {
+                if let Ok(mut show) = SHOW.lock() {
+                    *show = Some((all, Instant::now()));
+                }
+            }
             let mut sh = self.shared.lock();
             sh.frames = frames;
             let st = &mut sh.status;
@@ -1539,7 +1559,6 @@ impl GoveeHub {
 struct Run {
     ip: Option<IpAddr>,
     razer_on: bool,
-    razer_at: Option<Instant>,
     smooth: Smooth,
     music: MusicRun,
     last: Option<Vec<Rgb>>,

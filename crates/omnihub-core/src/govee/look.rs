@@ -99,6 +99,17 @@ pub fn saturate(c: C, amount: f32) -> C {
     from_hsv(h, s * amount, v)
 }
 
+/// Saturated for LEDs, which wash pale colours out to white: a soft curve
+/// lifts pale colours first, then `amount` (1 = as is) scales it. Greys
+/// stay grey.
+fn vivid(c: C, amount: f32) -> C {
+    let (h, s, v) = hsv(c);
+    if s < 0.08 {
+        return c;
+    }
+    from_hsv(h, (1.0 - (1.0 - s) * (1.0 - s)) * amount, v)
+}
+
 /// The average of a rectangle of cells; with `skip_dark`, black cells
 /// (letterbox bars, dark menus) don't pull the colour down. Colourful
 /// cells count more than grey ones, so a red car on a grey road reads as
@@ -214,7 +225,7 @@ pub fn screen_colors(g: &Grid, zone: Zone, n: usize, skip_dark: bool) -> Vec<C> 
 /// a little darker (LEDs wash out mid tones), then dim colours lifted by
 /// `boost` so the lights aren't much dimmer than the screen looks.
 pub fn screen_tone(c: C, saturation: f32, boost: f32) -> C {
-    let c = saturate(c, saturation);
+    let c = vivid(c, saturation);
     lift([c[0].powf(1.3), c[1].powf(1.3), c[2].powf(1.3)], boost)
 }
 
@@ -306,7 +317,8 @@ pub fn music_colors(style: MusicStyle, palette: &[Rgb], s: &Sound, n: usize, dt:
     let at = |x: f32| to_c(lighting::along(&pal, x, true));
     match style {
         MusicStyle::Pulse => {
-            let k = if s.active { (0.16 + 0.6 * energy + 0.4 * run.flash).min(1.0) } else { idle };
+            // Never far down between beats, so a lamp doesn't look switched off.
+            let k = if s.active { (0.32 + 0.5 * energy + 0.4 * run.flash).min(1.0) } else { idle };
             let base = run.pos / len;
             (0..n).map(|i| scale(at(base + 0.18 * i as f32 / n as f32), k)).collect()
         }
@@ -331,7 +343,7 @@ pub fn music_colors(style: MusicStyle, palette: &[Rgb], s: &Sound, n: usize, dt:
                     let x = (i as f32 + 0.5) / n as f32;
                     let from_mid = (x - 0.5).abs();
                     let wave = run.flash * (-((from_mid - front).abs() * 8.0)).exp();
-                    let k = if s.active { (0.22 + 0.5 * energy + 0.6 * wave).min(1.0) } else { idle };
+                    let k = if s.active { (0.32 + 0.45 * energy + 0.6 * wave).min(1.0) } else { idle };
                     scale(at(x + run.phase), k)
                 })
                 .collect()
@@ -478,6 +490,15 @@ mod tests {
     }
 
     #[test]
+    fn pale_screen_colours_get_vivid() {
+        let pale = [0.8, 0.6, 0.6];
+        let (_, s0, _) = hsv(pale);
+        let (_, s1, v1) = hsv(vivid(pale, 1.0));
+        assert!(s1 > s0 + 0.15 && (v1 - 0.8).abs() < 1e-4, "{s0} {s1}");
+        assert_eq!(vivid([0.5, 0.5, 0.52], 1.5), [0.5, 0.5, 0.52]);
+    }
+
+    #[test]
     fn music_colour_glides_on_a_beat() {
         let pal = [Rgb(255, 0, 0), Rgb(0, 0, 255)];
         let s = Sound { active: true, beats: 1, ..Default::default() };
@@ -539,7 +560,8 @@ mod tests {
         let a = music_colors(MusicStyle::Pulse, &pal, &quiet, 3, 0.03, 1.0, 0.0, &mut run);
         let beat = Sound { active: true, beats: 1, level: 0.8, low: 0.9, ..Default::default() };
         let b = music_colors(MusicStyle::Pulse, &pal, &beat, 3, 0.03, 1.0, 0.0, &mut run);
-        assert!(to_rgb(b[0]).2 > 200 && to_rgb(a[0]).0 < 80, "a beat lights it in the next colour: {a:?} {b:?}");
+        // Between beats it stays dimmer, but never so low the lamp looks switched off.
+        assert!(to_rgb(b[0]).2 > 200 && (60..100).contains(&to_rgb(a[0]).0), "a beat lights it in the next colour: {a:?} {b:?}");
         // Spectrum: loud bass lights the first segment, not the last.
         let mut bands = vec![0.0; 16];
         bands[0] = 1.0;

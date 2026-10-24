@@ -25,6 +25,9 @@ pub enum Effect {
     Music,
     /// Cool to hot with the processor's temperature.
     Temperature,
+    /// What the Govee lights show (the screen, the music, their effect),
+    /// spread along the LEDs; the colours when they aren't on.
+    Govee,
 }
 
 impl Effect {
@@ -155,6 +158,7 @@ pub fn color_at(p: &LightProfile, colors: &[Rgb], x: f32, dev: usize, inp: &Inpu
             let temp = inp.temp.unwrap_or(40.0);
             along(colors, (temp - 35.0) / 50.0, false)
         }
+        Effect::Govee => along(colors, x, false),
     };
     scale(c, p.brightness.min(100) as f32 / 100.0)
 }

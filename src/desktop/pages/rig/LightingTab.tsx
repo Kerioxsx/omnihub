@@ -91,6 +91,13 @@ export function LightingTab({ rig, onPreview }: { rig: Rig; onPreview: (p: Light
             {st.lightingMessage && <span className="text-warn">· {st.lightingMessage}</span>}
           </div>
         )}
+        {s.lighting.enabled && st && st.lightingRivals.length > 0 && (
+          <div className="border-t border-line p-4">
+            <Callout tone="warn" icon={Lightbulb} title={`${st.lightingRivals.join(', ')} ${st.lightingRivals.length > 1 ? 'are' : 'is'} also changing your lights`}>
+              Two programs setting the same keyboard or lights make the colours flicker and lag. Close {st.lightingRivals.length > 1 ? 'them' : 'it'} (also from the tray), or turn off {st.lightingRivals.length > 1 ? 'their' : 'its'} lighting control, or untick those devices below so only one program drives each.
+            </Callout>
+          </div>
+        )}
         {s.lighting.enabled && st && (st.lighting === 'missing' || st.lighting === 'error') && (
           <div className="border-t border-line p-4">
             <Callout

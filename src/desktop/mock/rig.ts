@@ -69,6 +69,7 @@ function status(): RigStatus {
   return {
     lighting: settings.lighting.enabled ? 'on' : 'off',
     lightingMessage: null,
+    lightingRivals: [],
     devices: [
       { key: 'ROG STRIX B650E-F|HID', name: 'ASUS ROG STRIX B650E-F GAMING WIFI', kind: 'motherboard', leds: 18, zones: ['Aura Mainboard', 'Aura Addressable 1', 'Aura Addressable 2'], on: true },
       { key: 'G.Skill Trident Z5|I2C 0x61', name: 'G.Skill Trident Z5 RGB', kind: 'memory', leds: 8, zones: ['DRAM'], on: true },

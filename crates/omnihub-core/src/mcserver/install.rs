@@ -392,6 +392,44 @@ impl Web {
         Ok((b["id"].as_u64().map(|n| n.to_string()).unwrap_or_default(), d["url"].as_str().unwrap_or_default().to_string(), d["checksums"]["sha256"].as_str().unwrap_or_default().to_string()))
     }
 
+    /// Forge or NeoForge for the Minecraft Launcher in `mc_dir`, the way their
+    /// own installers do it (`--installClient`). Returns the version the
+    /// launcher starts; nothing runs when it is there already.
+    pub fn install_client(&self, flavor: Flavor, mc: &str, loader: &str, mc_dir: &Path, java: &Path, progress: Progress) -> Result<String, String> {
+        let ok_ver = |v: &str| !v.is_empty() && v.len() < 64 && v.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+' | '_'));
+        if !ok_ver(mc) || !ok_ver(loader) {
+            return Err("That loader version isn't valid.".into());
+        }
+        let (base, name, id) = match flavor {
+            Flavor::Forge => (format!("{}/net/minecraftforge/forge/{mc}-{loader}/forge-{mc}-{loader}-installer.jar", self.ep.forge_maven), format!("Forge {loader}"), format!("{mc}-forge-{loader}")),
+            Flavor::NeoForge => (format!("{}/releases/net/neoforged/neoforge/{loader}/neoforge-{loader}-installer.jar", self.ep.neo_maven), format!("NeoForge {loader}"), format!("neoforge-{loader}")),
+            _ => return Err("Only Forge and NeoForge have their own installer.".into()),
+        };
+        let made = |id: &str| mc_dir.join("versions").join(id).join(format!("{id}.json")).is_file();
+        if made(&id) {
+            return Ok(id);
+        }
+        if !mc_dir.join("launcher_profiles.json").is_file() {
+            return Err("Open the Minecraft Launcher once first (it makes its profile list), then install again.".into());
+        }
+        let work = mc_dir.join("omnihub").join(".installer");
+        std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
+        let res = (|| {
+            let sum = self.maven_sum(&base)?;
+            progress(0, 0, &format!("Downloading {name}'s installer"));
+            self.fetch(&base, &sum, &work.join("installer.jar"), progress)?;
+            progress(0, 0, &format!("Installing {name} in the Minecraft Launcher (about a minute)"));
+            run_installer(java, &work, &["-jar", "installer.jar", "--installClient", &mc_dir.to_string_lossy()], progress)
+        })();
+        let _ = std::fs::remove_dir_all(&work);
+        res?;
+        if made(&id) {
+            Ok(id)
+        } else {
+            Err(format!("{name}'s installer finished, but its version wasn't found in the Minecraft Launcher's folder."))
+        }
+    }
+
     /// The Java a server needs and the start flags its publisher recommends.
     pub fn java_for(&self, flavor: Flavor, mc: &str) -> Result<(u32, Vec<String>), String> {
         if flavor == Flavor::Paper {
