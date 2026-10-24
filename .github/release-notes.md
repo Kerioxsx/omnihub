@@ -1,14 +1,13 @@
 ## New in this version
 
-**Govee lights: all of them found, all of them moving, brighter and smoother.**
+**Govee lights: real colours on every light, and every light keeps moving.**
 
-- **Lights that weren't found**: besides the usual call on the network, OmniHub now also asks every address on your Wi-Fi directly (routers often drop the first kind), and asks twice. Still missing one? Setup lists what to check: LAN Control on for *each* light, the same network (not a guest Wi-Fi), or its address.
-- **Lights that stayed still** in music or screen mode (or kept the identify blink): not every Govee light takes a colour per segment. The new **Auto** choice (the default) gives a colour per segment only to lights Govee's account says can take it, and one colour to the rest. If a light still stays on one colour, pick **One colour** for it.
-- **Screen colours brighter and truer**: a new **Brightness boost** (on by default) lifts dim colours to light the room without changing them, while black stays black, and colourful parts of the picture count more than grey ones, so a red car on a grey road shows red instead of a muddy brown.
-- **Smoother music**, especially on lamps with many LEDs (like the Govee x JBL table lamp speaker): colours glide from one beat's colour to the next and fade more gently. A **Smoothness** slider in Music sets how snappy it is. You can also pick up to 84 segments for a light.
-- **Installer fix**: setup no longer stops with *"could not write to D:\OmniHub"* or *"The volume D:\ is currently unavailable"* when OmniHub was once installed on a drive that's gone. The .exe installs to your user folder instead (and offers it if a folder can't be written); the MSI goes back to Program Files.
+- **Colours instead of white** on lights with few LEDs: a light that covers a big part of the screen used to mix all its colours into a pale white. Now, when a part of the screen is colourful, the light shows its main colour. The brightness boost no longer pushes pale colours to white.
+- **Every light updates**: *Auto* now gives a colour per segment only to lights Govee's account (your API key) or OmniHub knows can take it, and **one colour** to every other light, which all Govee lights take. Lights on one colour get it worked out from their whole part of the screen.
+- **Lights that stopped**: a light that leaves streaming (restarted, or touched in the Govee app) is switched back to it by itself within seconds.
+- Each light shows *Live* while OmniHub drives it, whether per segment or one colour.
 
-Also in 0.13: share mixes and modpacks with friends (with the cover and your server), a friend's pack, modpack details, servers from single-player worlds.
+Also in 0.13.1: lights found behind routers that hide them, a brightness boost, smoother music, an installer fix for a drive that's gone.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

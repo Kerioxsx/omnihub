@@ -102,9 +102,13 @@ pub fn saturate(c: C, amount: f32) -> C {
 /// The average of a rectangle of cells; with `skip_dark`, black cells
 /// (letterbox bars, dark menus) don't pull the colour down. Colourful
 /// cells count more than grey ones, so a red car on a grey road reads as
-/// red rather than a muddy brown.
+/// red rather than a muddy brown. Many colours mixed fade towards white,
+/// so a colourful rectangle whose mix comes out pale shows its main colour
+/// instead (lights with few segments see big rectangles).
 fn average(g: &Grid, x0: usize, x1: usize, y0: usize, y1: usize, skip_dark: bool) -> C {
-    let (mut sum, mut n, mut weight, mut dark) = ([0f32; 3], 0f32, 0f32, 0f32);
+    let (mut sum, mut n, mut weight, mut dark, mut vivid) = ([0f32; 3], 0f32, 0f32, 0f32, 0f32);
+    // Colourful cells by hue, in twelve 30° steps.
+    let mut hues = [([0f32; 3], 0f32); 12];
     let (y0, x0) = (y0.min(g.h - 1), x0.min(g.w - 1));
     let (y1, x1) = (y1.max(y0 + 1).min(g.h), x1.max(x0 + 1).min(g.w));
     for y in y0..y1 {
@@ -116,17 +120,46 @@ fn average(g: &Grid, x0: usize, x1: usize, y0: usize, y1: usize, skip_dark: bool
             }
             let (hi, lo) = (p.iter().copied().max().unwrap_or(0), p.iter().copied().min().unwrap_or(0));
             let w = 0.3 + 2.0 * (hi - lo) as f32 / 255.0;
+            let c = [p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0];
+            let (h, s, _) = hsv(c);
             for i in 0..3 {
-                sum[i] += w * p[i] as f32 / 255.0;
+                sum[i] += w * c[i];
             }
             n += 1.0;
             weight += w;
+            vivid += w * s;
+            if hi - lo > 25 {
+                let b = &mut hues[((h * 12.0) as usize).min(11)];
+                for (a, v) in b.0.iter_mut().zip(c) {
+                    *a += w * v;
+                }
+                b.1 += w;
+            }
         }
     }
     if n == 0.0 || n < dark * 0.05 {
         return [0.0; 3];
     }
-    scale(sum, 1.0 / weight)
+    let mixed = scale(sum, 1.0 / weight);
+    let (want, have) = (0.8 * vivid / weight, hsv(mixed).1);
+    if want > 0.16 && have < want {
+        // The strongest 90° of hues (a step and its neighbours).
+        let around = |i: usize| [(i + 11) % 12, i, (i + 1) % 12];
+        let best = (0..12).max_by(|&a, &b| around(a).iter().map(|&k| hues[k].1).sum::<f32>().total_cmp(&around(b).iter().map(|&k| hues[k].1).sum::<f32>())).unwrap_or(0);
+        let (mut c, mut w) = ([0f32; 3], 0f32);
+        for k in around(best) {
+            for (a, v) in c.iter_mut().zip(hues[k].0) {
+                *a += v;
+            }
+            w += hues[k].1;
+        }
+        if w > 0.0 {
+            let main = scale(c, 1.0 / w);
+            let t = ((want - have) / (0.5 * want)).clamp(0.0, 1.0);
+            return [mixed[0] + (main[0] - mixed[0]) * t, mixed[1] + (main[1] - mixed[1]) * t, mixed[2] + (main[2] - mixed[2]) * t];
+        }
+    }
+    mixed
 }
 
 /// The screen's colours for a light of `n` segments along `zone`.
@@ -187,15 +220,17 @@ pub fn screen_tone(c: C, saturation: f32, boost: f32) -> C {
 
 /// Brighter, same colour: a dim colour is scaled toward full brightness by
 /// `boost` (0 leaves it, 1 makes every colour full). Near-black stays
-/// black, and the lift fades in over the darkest tones so dark scenes don't
-/// flicker bright.
+/// black, the lift fades in over the darkest tones so dark scenes don't
+/// flicker bright, and pale colours are lifted less (LEDs show a bright
+/// pale colour as white).
 pub fn lift(c: C, boost: f32) -> C {
     let v = c[0].max(c[1]).max(c[2]);
     if v < 0.03 || boost <= 0.0 {
         return c;
     }
     let fade = ((v - 0.03) / 0.12).clamp(0.0, 1.0);
-    let target = v + (1.0 - v) * boost.clamp(0.0, 1.0) * fade;
+    let pale = 0.35 + 0.65 * hsv(c).1;
+    let target = v + (1.0 - v) * boost.clamp(0.0, 1.0) * fade * pale;
     scale(c, target / v)
 }
 
@@ -424,6 +459,22 @@ mod tests {
         assert_eq!(lift([0.01, 0.0, 0.0], 1.0), [0.01, 0.0, 0.0]);
         let c = [0.3, 0.15, 0.05];
         assert!(to_rgb(screen_tone(c, 1.0, 0.65)).0 > to_rgb(screen_tone(c, 1.0, 0.0)).0 + 60);
+    }
+
+    #[test]
+    fn few_segments_keep_their_colour() {
+        // Half red, a third green, the rest blue: the mix leans red, not grey.
+        let g = grid(|x, _| if x < 8 { [255, 0, 0] } else if x < 13 { [0, 255, 0] } else { [0, 0, 255] });
+        let c = to_rgb(screen_colors(&g, Zone::Whole, 1, false)[0]);
+        assert!(c.0 as u32 > 2 * c.1 as u32 && c.0 as u32 > 2 * c.2 as u32, "{c:?}");
+        // Opposite colours would mix to grey: one of them shows instead.
+        let g = grid(|x, _| if x < 8 { [255, 0, 0] } else { [0, 255, 255] });
+        let (_, s, _) = hsv(screen_colors(&g, Zone::Whole, 1, false)[0]);
+        assert!(s > 0.8, "{s}");
+        // A grey screen stays grey, and pale colours are lifted less than vivid ones.
+        let g = grid(|_, _| [120, 120, 120]);
+        assert!(hsv(screen_colors(&g, Zone::Whole, 1, false)[0]).1 < 0.01);
+        assert!(lift([0.3, 0.27, 0.27], 0.65)[0] < lift([0.3, 0.05, 0.05], 0.65)[0] - 0.1);
     }
 
     #[test]

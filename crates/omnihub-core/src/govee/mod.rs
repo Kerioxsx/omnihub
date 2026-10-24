@@ -403,13 +403,22 @@ fn merge(a: &mut Value, b: &Value) {
     }
 }
 
-/// Whether a light gets a colour per segment: `Auto` asks Govee's account
-/// (lights without DreamView there get one colour; unknown ones stream).
-fn stream_segments(kind: StreamKind, cloud: Option<&CloudDevice>) -> bool {
+/// Models known to take DreamView (`razer`) streaming on the network.
+const STREAMERS: &[&str] = &[
+    "H6199", "H619A", "H619B", "H619C", "H619D", "H619E", "H619Z", "H6604", "H6046", "H6047", "H6056", "H6168", "H6061", "H6062", "H6065", "H6066", "H6067", "H6072", "H6076", "H61A0", "H61A1", "H61A2", "H61A3", "H70B1",
+];
+
+/// Whether a light gets a colour per segment. `Auto`: what Govee's account
+/// says (DreamView), else only models known to stream; every other light
+/// gets one colour, which all of them take.
+fn stream_segments(kind: StreamKind, cloud: Option<&CloudDevice>, sku: Option<&str>) -> bool {
     match kind {
         StreamKind::Segments => true,
         StreamKind::Single => false,
-        StreamKind::Auto => cloud.is_none_or(|d| d.has("dreamViewToggle")),
+        StreamKind::Auto => match cloud {
+            Some(d) => d.has("dreamViewToggle"),
+            None => sku.is_some_and(|s| STREAMERS.iter().any(|k| k.eq_ignore_ascii_case(s.trim()))),
+        },
     }
 }
 
@@ -1347,6 +1356,9 @@ impl GoveeHub {
                     self.set_light_state(id, false, Some("Live colours need LAN Control: switch it on for this light in the Govee Home app.".into()));
                     continue;
                 }
+                // One colour: worked out from the whole zone, not averaged from segments.
+                let segments = stream_segments(l.stream, cloud_dev, lan_dev.map(|d| d.sku.as_str()));
+                let n = if segments { n } else { 1 };
                 let target: Vec<look::C> = match look.mode {
                     Mode::Effect => {
                         let colors: Vec<Rgb> = look.colors.iter().filter_map(|c| Rgb::parse(c)).collect();
@@ -1381,12 +1393,14 @@ impl GoveeHub {
                 }
                 let changed = run.last.as_ref().is_none_or(|p| p.len() != colors.len() || p.iter().zip(&colors).any(|(a, b)| a.0.abs_diff(b.0) > 1 || a.1.abs_diff(b.1) > 1 || a.2.abs_diff(b.2) > 1));
                 let keepalive = run.sent_at.is_none_or(|t| t.elapsed() > Duration::from_millis(900));
-                let segments = stream_segments(l.stream, cloud_dev);
                 if segments {
                     if (changed || keepalive) && run.sent_at.is_none_or(|t| t.elapsed() >= Duration::from_millis(30)) {
-                        if !run.razer_on || run.sent_at.is_none_or(|t| t.elapsed() > Duration::from_secs(2)) {
+                        // Again now and then: a light that left streaming (restarted,
+                        // touched in the Govee app) comes back by itself.
+                        if !run.razer_on || run.razer_at.is_none_or(|t| t.elapsed() > Duration::from_secs(5)) {
                             send(&lan::razer(&lan::razer_switch(true)));
                             run.razer_on = true;
+                            run.razer_at = Some(Instant::now());
                         }
                         send(&lan::razer(&lan::razer_frame(&colors, l.gradient)));
                         run.sent_at = Some(Instant::now());
@@ -1407,7 +1421,7 @@ impl GoveeHub {
                 }
                 run.applied = None;
                 frames.insert(id.clone(), colors);
-                self.set_light_state(id, segments, None);
+                self.set_light_state(id, true, None);
                 continue;
             }
             // A still look: sent once, again only when it changes.
@@ -1525,6 +1539,7 @@ impl GoveeHub {
 struct Run {
     ip: Option<IpAddr>,
     razer_on: bool,
+    razer_at: Option<Instant>,
     smooth: Smooth,
     music: MusicRun,
     last: Option<Vec<Rgb>>,
@@ -1699,10 +1714,12 @@ mod tests {
     fn auto_streams_segments_only_to_lights_that_can() {
         let dev = |caps: &[&str]| CloudDevice { sku: "H6022".into(), device: "x".into(), name: "Lamp".into(), kind: "devices.types.light".into(), capabilities: caps.iter().map(|i| cloud::Capability { kind: "devices.capabilities.toggle".into(), instance: i.to_string(), parameters: Value::Null }).collect() };
         let (dream, plain) = (dev(&["dreamViewToggle"]), dev(&["gradientToggle"]));
-        assert!(stream_segments(StreamKind::Auto, Some(&dream)));
-        assert!(!stream_segments(StreamKind::Auto, Some(&plain)));
-        assert!(stream_segments(StreamKind::Auto, None));
-        assert!(stream_segments(StreamKind::Segments, Some(&plain)) && !stream_segments(StreamKind::Single, Some(&dream)));
+        assert!(stream_segments(StreamKind::Auto, Some(&dream), Some("H6022")));
+        assert!(!stream_segments(StreamKind::Auto, Some(&plain), Some("H6199")));
+        // Not in the account: only models known to stream get segments.
+        assert!(stream_segments(StreamKind::Auto, None, Some("h6199")));
+        assert!(!stream_segments(StreamKind::Auto, None, Some("H6008")) && !stream_segments(StreamKind::Auto, None, None));
+        assert!(stream_segments(StreamKind::Segments, Some(&plain), None) && !stream_segments(StreamKind::Single, Some(&dream), None));
         assert_eq!(LightSettings::default().stream, StreamKind::Auto);
         let mut s = GoveeSettings::default();
         s.look.boost = 250;

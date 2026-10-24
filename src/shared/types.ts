@@ -1782,7 +1782,7 @@ export interface GoveeLightSettings {
   brightness: number;
   /** 0 = what Govee says (or 10) */
   segments: number;
-  /** auto: per segment when the light can stream them (Govee's account says so, or doesn't know it) */
+  /** auto: per segment when Govee's account (or the model) says the light streams them, else one colour */
   stream: 'auto' | 'segments' | 'single';
   zone: GoveeZone;
   reverse: boolean;

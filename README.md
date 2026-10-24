@@ -32,6 +32,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.13.2
+
+- **Govee lights**: lights with few LEDs show the screen's main colour instead of a pale white, Auto gives one colour to every light not known to stream segments (so every light updates), and a light that drops out of streaming comes back by itself.
+
 ## New in 0.13.1
 
 - **Govee lights**: every light found (OmniHub also asks each address on the network), **Auto** per-segment or one-colour streaming so every light follows music and the screen, a **brightness boost** and truer screen colours, and smoother music on lamps with many LEDs. Installer fix for a remembered install folder on a drive that's gone.
