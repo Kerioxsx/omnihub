@@ -230,7 +230,10 @@ const RIVALS: &[(&str, &str)] = &[
     ("armourycrate", "ASUS Armoury Crate"),
     ("lightingservice", "ASUS Aura"),
     ("steelseriesgg", "SteelSeries GG"),
+    ("steelseriesggclient", "SteelSeries GG"),
     ("steelseriesengine", "SteelSeries GG"),
+    ("steelseriesprism", "SteelSeries GG"),
+    ("steelseriesprismsync", "SteelSeries GG"),
     ("nzxt cam", "NZXT CAM"),
     ("mysticlight", "MSI Mystic Light"),
 ];
@@ -870,6 +873,7 @@ mod tests {
     fn other_lighting_programs_are_named() {
         assert_eq!(rivals(["explorer.exe", "SignalRgb.exe", "iCUE.exe", "lghub.exe", "lghub_agent.exe", "Razer Synapse 3.exe"]), ["Corsair iCUE", "Logitech G HUB", "Razer Synapse", "SignalRGB"]);
         assert!(rivals(["OpenRGB.exe", "chrome.exe", "icue-helper.exe"]).is_empty());
+        assert_eq!(rivals(["SteelSeriesGGClient.exe", "SteelSeriesPrism.exe"]), ["SteelSeries GG"]);
     }
 
     fn hub(dir: &Path) -> Arc<RigHub> {

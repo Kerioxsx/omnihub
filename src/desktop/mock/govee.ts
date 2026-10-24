@@ -17,7 +17,7 @@ const LOOK: GoveeLook = {
   smoothness: 45,
   saturation: 130,
   skipDark: true,
-  boost: 65,
+  boost: 40,
   style: 'pulse',
   albumColors: true,
   sensitivity: 60,

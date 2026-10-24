@@ -1,15 +1,13 @@
 ## New in this version
 
-**Install NeoForge and Forge mixes in one click, Govee colours that pop, and your keyboard in sync.**
+**Govee floor lamps follow effects and music, calmer brightness, SteelSeries keyboards, and Save as .mrpack.**
 
-- **Install any mix**: NeoForge and Forge mixes now have a working **Install in the Minecraft Launcher** button. OmniHub runs NeoForge's or Forge's own installer for you (about a minute, with the Java it needs, downloaded once), then adds the mix as its own profile with its picture.
-- **Govee lamp blinking off**: a lamp that kept switching off for a moment and back on now stays steady.
-- **More saturated colours**: pale screen colours are made vivid before they reach the lights, so lights no longer look white. In music, lights never dim so far between beats that they look switched off.
-- **What each light gets**: each light's badge says *Live · per segment* or *Live · one colour*, so you can tell at once which setting a light needs.
-- **Your keyboard and PC lights follow the Govee lights**: in My PC → Lighting, pick **Like the Govee lights** and your keyboard, PC and strips show what the Govee lights show (the screen, the music or their effect).
-- **No more keyboard lag or flickering colours**: keyboards, mice and headsets get colours at a pace they keep up with, and OmniHub tells you when another lighting program (SignalRGB, iCUE, G HUB, Razer Synapse, Armoury Crate…) is fighting over the same lights.
+- **Govee H6076 floor lamp** (and other models that don't take a colour per segment): it changed with plain colours but stayed warm during effects, music and screen. *Auto* now streams per segment only to the DreamView kits; every other light gets one colour, which they all follow. A light can still be set to *Per segment* by hand.
+- **Less glaring**: the screen's brightness boost starts at 40 instead of 65. If yours was on the old 65, it's brought down once; pick any value in Screen → Brightness boost.
+- **SteelSeries keyboards**: OmniHub now spots SteelSeries GG (Prism) setting the keyboard at the same time and says how to hand it over (GG → Engine → your keyboard → turn off Prism), so the colours stop fighting.
+- **Save as .mrpack**: mixes have their own *Save as .mrpack* button again, beside Share with friends.
 
-Also in 0.13.2: real colours on lights with few LEDs, every light updating, lights found behind routers that hide them.
+Also in 0.13.3: NeoForge and Forge mixes install in the Minecraft Launcher, PC lighting can follow the Govee lights.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

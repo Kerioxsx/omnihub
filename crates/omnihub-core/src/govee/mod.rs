@@ -113,7 +113,7 @@ impl Default for Look {
             smoothness: 45,
             saturation: 130,
             skip_dark: true,
-            boost: 65,
+            boost: 40,
             style: MusicStyle::Pulse,
             album_colors: true,
             sensitivity: 60,
@@ -203,13 +203,16 @@ pub struct GoveeSettings {
     pub timers: Vec<Timer>,
     /// The Govee API key, encrypted for this Windows account (DPAPI), base64.
     pub api_secret: String,
+    /// Which one-off fixes to saved settings have run.
+    #[serde(default)]
+    pub revision: u8,
     /// Addresses to ask directly (lights the scan doesn't reach).
     pub manual: Vec<String>,
 }
 
 impl Default for GoveeSettings {
     fn default() -> Self {
-        GoveeSettings { enabled: false, on: true, brightness: 80, look: Look::default(), lights: Vec::new(), presets: Vec::new(), preset: String::new(), timers: Vec::new(), api_secret: String::new(), manual: Vec::new() }
+        GoveeSettings { enabled: false, on: true, brightness: 80, look: Look::default(), lights: Vec::new(), presets: Vec::new(), preset: String::new(), timers: Vec::new(), api_secret: String::new(), manual: Vec::new(), revision: 1 }
     }
 }
 
@@ -416,9 +419,9 @@ pub fn show_colors() -> Vec<Rgb> {
 }
 
 /// Models known to take DreamView (`razer`) streaming on the network.
-const STREAMERS: &[&str] = &[
-    "H6199", "H619A", "H619B", "H619C", "H619D", "H619E", "H619Z", "H6604", "H6046", "H6047", "H6056", "H6168", "H6061", "H6062", "H6065", "H6066", "H6067", "H6072", "H6076", "H61A0", "H61A1", "H61A2", "H61A3", "H70B1",
-];
+/// Only the DreamView kits: other models (an H6076 floor lamp, for one)
+/// ignore the stream and stay on their last colour.
+const STREAMERS: &[&str] = &["H6199", "H6604"];
 
 /// Whether a light gets a colour per segment. `Auto`: what Govee's account
 /// says (DreamView), else only models known to stream; every other light
@@ -452,6 +455,15 @@ fn sanitize_look(l: &mut Look) {
 }
 
 fn sanitize(s: &mut GoveeSettings) {
+    if s.revision < 1 {
+        // 0.13.4: the brightness boost's first default (65) was too bright.
+        for l in std::iter::once(&mut s.look).chain(s.lights.iter_mut().map(|l| &mut l.look)).chain(s.presets.iter_mut().map(|p| &mut p.look)) {
+            if l.boost == 65 {
+                l.boost = 40;
+            }
+        }
+        s.revision = 1;
+    }
     s.brightness = s.brightness.clamp(1, 100);
     sanitize_look(&mut s.look);
     s.lights.truncate(64);
@@ -1738,12 +1750,20 @@ mod tests {
         // Not in the account: only models known to stream get segments.
         assert!(stream_segments(StreamKind::Auto, None, Some("h6199")));
         assert!(!stream_segments(StreamKind::Auto, None, Some("H6008")) && !stream_segments(StreamKind::Auto, None, None));
+        assert!(!stream_segments(StreamKind::Auto, None, Some("H6076")), "the floor lamp ignores the stream");
         assert!(stream_segments(StreamKind::Segments, Some(&plain), None) && !stream_segments(StreamKind::Single, Some(&dream), None));
         assert_eq!(LightSettings::default().stream, StreamKind::Auto);
         let mut s = GoveeSettings::default();
         s.look.boost = 250;
         sanitize(&mut s);
         assert_eq!(s.look.boost, 100);
+        // Saved with the first default: brought down once, then left alone.
+        let mut old: GoveeSettings = serde_json::from_value(json!({ "look": { "boost": 65 }, "lights": [{ "id": "a", "look": { "boost": 65 } }] })).unwrap();
+        sanitize(&mut old);
+        assert_eq!((old.look.boost, old.lights[0].look.boost, old.revision), (40, 40, 1));
+        old.look.boost = 65;
+        sanitize(&mut old);
+        assert_eq!(old.look.boost, 65, "a boost picked later stays");
     }
 
     #[test]

@@ -387,6 +387,18 @@ export function MinecraftView() {
       setPlanning(false);
     }
   };
+  const saveMrpack = async () => {
+    if (!mix) return;
+    const path = await api.app.saveFile('Save the mix as a .mrpack', `${mix.name.replace(/[^\w\s+-]/g, '').trim() || 'Mix'}.mrpack`);
+    if (!path) return;
+    try {
+      await api.minecraft.exportPack(mix.id, path, null);
+      toast.success('Saved', 'Open it in the Modrinth App, Prism Launcher or CurseForge, or keep it as a backup.');
+    } catch (e) {
+      toast.error('Not saved', errorText(e));
+    }
+  };
+
   const install = async () => {
     if (!mix) return;
     setInstalling(true);
@@ -528,6 +540,9 @@ export function MinecraftView() {
                 </div>
               </div>
               <ShareWithFriends open={sharing} onClose={() => setSharing(false)} name={mix.name} formats={false} save={(path, _f, server) => api.minecraft.exportPack(mix.id, path, server)} />
+              <Button variant="secondary" icon={Download} onClick={() => void saveMrpack()} title="Save this mix as a .mrpack (mods, configs and the cover) for the Modrinth App, Prism Launcher, CurseForge or a backup.">
+                Save as .mrpack
+              </Button>
               <Button variant="secondary" icon={Gift} onClick={() => setSharing(true)} title="One .mrpack with every mod, the configs and this cover. Friends open it in OmniHub, the Modrinth App or Prism Launcher.">
                 Share with friends
               </Button>
