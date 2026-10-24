@@ -8,16 +8,42 @@
   ; run this installer again, elevated, into the same folder.
   Push $0
   Push $1
+  ; A folder remembered from an earlier install on a drive that isn't there
+  ; any more (a USB drive, a card reader, a letter that moved) can't be
+  ; written, not even by an administrator: install into this user's own
+  ; folder instead. Only for drive letters ("D:\..."), never network paths.
+  StrCpy $1 $INSTDIR 1 1
+  ${If} $1 == ":"
+    StrCpy $1 $INSTDIR 3
+    ${IfNot} ${FileExists} "$1*.*"
+      StrCpy $INSTDIR "$LOCALAPPDATA\OmniHub"
+      CreateDirectory "$INSTDIR"
+      SetOutPath "$INSTDIR"
+    ${EndIf}
+  ${EndIf}
   ClearErrors
   FileOpen $0 "$INSTDIR\.omnihub-write-test" w
   ${If} ${Errors}
     ${GetOptions} $CMDLINE "/OHELEVATED" $1
     ${IfNot} ${Errors}
-      ; Already the elevated run, and still not allowed.
-      MessageBox MB_ICONSTOP "OmniHub could not write to $INSTDIR, even with administrator rights.$\r$\n$\r$\nUninstall OmniHub in Windows Settings > Apps (your data is kept), then run this setup again." /SD IDOK
+      ; Already the elevated run, and still not allowed: offer this user's own folder.
+      MessageBox MB_YESNO|MB_ICONEXCLAMATION "OmniHub could not write to $INSTDIR, even with administrator rights.$\r$\n$\r$\nInstall it into your own user folder instead ($LOCALAPPDATA\OmniHub)? Your data and settings are kept." /SD IDYES IDYES omnihub_user_folder
       Pop $1
       Pop $0
       Abort
+      omnihub_user_folder:
+      StrCpy $INSTDIR "$LOCALAPPDATA\OmniHub"
+      CreateDirectory "$INSTDIR"
+      SetOutPath "$INSTDIR"
+      ClearErrors
+      FileOpen $0 "$INSTDIR\.omnihub-write-test" w
+      ${If} ${Errors}
+        MessageBox MB_ICONSTOP "OmniHub could not write to $INSTDIR either. Check that your user folder isn't full or locked, then run this setup again." /SD IDOK
+        Pop $1
+        Pop $0
+        Abort
+      ${EndIf}
+      Goto omnihub_can_write
     ${EndIf}
     MessageBox MB_OKCANCEL|MB_ICONINFORMATION "OmniHub is installed in $INSTDIR, which only an administrator can change.$\r$\n$\r$\nClick OK and approve the Windows prompt to update it there.$\r$\n$\r$\nTip: to update without administrator rights in the future, uninstall OmniHub in Windows Settings > Apps (your data is kept) and run this setup again. It then installs into your own user folder." /SD IDOK IDOK omnihub_elevate
     Pop $1
@@ -47,6 +73,7 @@
     SetErrorLevel 0
     Quit
   ${EndIf}
+  omnihub_can_write:
   FileClose $0
   Delete "$INSTDIR\.omnihub-write-test"
 

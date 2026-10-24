@@ -64,5 +64,5 @@ export function useGovee(): Govee {
 
 /** A light's own settings (or the defaults for one never changed). */
 export function lightSettings(s: GoveeSettings, id: string): GoveeLightSettings {
-  return s.lights.find((l) => l.id === id) ?? { id, name: '', control: true, follow: true, look: s.look, on: true, brightness: 100, segments: 0, stream: 'segments', zone: 'whole', reverse: false, gradient: true };
+  return s.lights.find((l) => l.id === id) ?? { id, name: '', control: true, follow: true, look: s.look, on: true, brightness: 100, segments: 0, stream: 'auto', zone: 'whole', reverse: false, gradient: true };
 }

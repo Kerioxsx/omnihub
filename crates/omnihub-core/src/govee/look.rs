@@ -100,9 +100,11 @@ pub fn saturate(c: C, amount: f32) -> C {
 }
 
 /// The average of a rectangle of cells; with `skip_dark`, black cells
-/// (letterbox bars, dark menus) don't pull the colour down.
+/// (letterbox bars, dark menus) don't pull the colour down. Colourful
+/// cells count more than grey ones, so a red car on a grey road reads as
+/// red rather than a muddy brown.
 fn average(g: &Grid, x0: usize, x1: usize, y0: usize, y1: usize, skip_dark: bool) -> C {
-    let (mut sum, mut n, mut dark) = ([0f32; 3], 0f32, 0f32);
+    let (mut sum, mut n, mut weight, mut dark) = ([0f32; 3], 0f32, 0f32, 0f32);
     let (y0, x0) = (y0.min(g.h - 1), x0.min(g.w - 1));
     let (y1, x1) = (y1.max(y0 + 1).min(g.h), x1.max(x0 + 1).min(g.w));
     for y in y0..y1 {
@@ -112,16 +114,19 @@ fn average(g: &Grid, x0: usize, x1: usize, y0: usize, y1: usize, skip_dark: bool
                 dark += 1.0;
                 continue;
             }
+            let (hi, lo) = (p.iter().copied().max().unwrap_or(0), p.iter().copied().min().unwrap_or(0));
+            let w = 0.3 + 2.0 * (hi - lo) as f32 / 255.0;
             for i in 0..3 {
-                sum[i] += p[i] as f32 / 255.0;
+                sum[i] += w * p[i] as f32 / 255.0;
             }
             n += 1.0;
+            weight += w;
         }
     }
     if n == 0.0 || n < dark * 0.05 {
         return [0.0; 3];
     }
-    scale(sum, 1.0 / n)
+    scale(sum, 1.0 / weight)
 }
 
 /// The screen's colours for a light of `n` segments along `zone`.
@@ -172,11 +177,26 @@ pub fn screen_colors(g: &Grid, zone: Zone, n: usize, skip_dark: bool) -> Vec<C> 
     }
 }
 
-/// Screen colours as lights show them well: livelier colours, and dark
-/// scenes a little darker (LEDs wash out mid tones).
-pub fn screen_tone(c: C, saturation: f32) -> C {
+/// Screen colours as lights show them well: livelier colours, dark scenes
+/// a little darker (LEDs wash out mid tones), then dim colours lifted by
+/// `boost` so the lights aren't much dimmer than the screen looks.
+pub fn screen_tone(c: C, saturation: f32, boost: f32) -> C {
     let c = saturate(c, saturation);
-    [c[0].powf(1.3), c[1].powf(1.3), c[2].powf(1.3)]
+    lift([c[0].powf(1.3), c[1].powf(1.3), c[2].powf(1.3)], boost)
+}
+
+/// Brighter, same colour: a dim colour is scaled toward full brightness by
+/// `boost` (0 leaves it, 1 makes every colour full). Near-black stays
+/// black, and the lift fades in over the darkest tones so dark scenes don't
+/// flicker bright.
+pub fn lift(c: C, boost: f32) -> C {
+    let v = c[0].max(c[1]).max(c[2]);
+    if v < 0.03 || boost <= 0.0 {
+        return c;
+    }
+    let fade = ((v - 0.03) / 0.12).clamp(0.0, 1.0);
+    let target = v + (1.0 - v) * boost.clamp(0.0, 1.0) * fade;
+    scale(c, target / v)
 }
 
 /// One of the PC lighting effects across `n` segments.
@@ -220,11 +240,15 @@ pub struct MusicRun {
     pub color: usize,
     pub flash: f32,
     pub phase: f32,
+    /// Where in the palette the colour is now (glides towards `color`).
+    pub pos: f32,
 }
 
 /// The music across `n` segments in the palette's colours. `gain` is the
-/// sensitivity (1 = as heard).
-pub fn music_colors(style: MusicStyle, palette: &[Rgb], s: &Sound, n: usize, dt: f32, gain: f32, run: &mut MusicRun) -> Vec<C> {
+/// sensitivity (1 = as heard); `blend` how long (s) a beat's new colour
+/// takes to glide in.
+#[allow(clippy::too_many_arguments)]
+pub fn music_colors(style: MusicStyle, palette: &[Rgb], s: &Sound, n: usize, dt: f32, gain: f32, blend: f32, run: &mut MusicRun) -> Vec<C> {
     let n = n.max(1);
     let pal: Vec<Rgb> = if palette.is_empty() { vec![Rgb(255, 0, 80), Rgb(0, 160, 255), Rgb(255, 170, 0)] } else { palette.to_vec() };
     if s.beats != run.beats {
@@ -235,13 +259,20 @@ pub fn music_colors(style: MusicStyle, palette: &[Rgb], s: &Sound, n: usize, dt:
         run.beats = s.beats;
     }
     run.flash *= (-dt / 0.22).exp();
+    let len = pal.len() as f32;
+    let mut d = (run.color as f32 - run.pos).rem_euclid(len);
+    if d > len / 2.0 {
+        d -= len;
+    }
+    let k = if blend <= 0.0 { 1.0 } else { 1.0 - (-dt / blend).exp() };
+    run.pos = (run.pos + d * k).rem_euclid(len);
     let energy = ((s.low * 0.7 + s.level * 0.6) * gain).clamp(0.0, 1.0);
     let idle = if s.active { 0.0 } else { 0.12 };
     let at = |x: f32| to_c(lighting::along(&pal, x, true));
     match style {
         MusicStyle::Pulse => {
             let k = if s.active { (0.16 + 0.6 * energy + 0.4 * run.flash).min(1.0) } else { idle };
-            let base = run.color as f32 / pal.len() as f32;
+            let base = run.pos / len;
             (0..n).map(|i| scale(at(base + 0.18 * i as f32 / n as f32), k)).collect()
         }
         MusicStyle::Spectrum => {
@@ -379,6 +410,37 @@ mod tests {
     }
 
     #[test]
+    fn vivid_colours_and_brightness_lift() {
+        // A small red car on a grey road reads red, not a muddy grey.
+        let g = grid(|x, y| if x < 4 && y < 3 { [220, 20, 20] } else { [90, 90, 90] });
+        let c = to_rgb(screen_colors(&g, Zone::Whole, 1, false)[0]);
+        assert!(c.0 as i32 - c.1 as i32 > 50, "{c:?}");
+        // A dim colour gets brighter with the same hue; near-black stays.
+        let dim = [0.2, 0.1, 0.0];
+        let up = lift(dim, 0.6);
+        assert!(up[0] > 0.6 && (up[1] / up[0] - 0.5).abs() < 1e-4 && up[2] == 0.0, "{up:?}");
+        assert!((lift(dim, 1.0)[0] - 1.0).abs() < 1e-4);
+        assert_eq!(lift(dim, 0.0), dim);
+        assert_eq!(lift([0.01, 0.0, 0.0], 1.0), [0.01, 0.0, 0.0]);
+        let c = [0.3, 0.15, 0.05];
+        assert!(to_rgb(screen_tone(c, 1.0, 0.65)).0 > to_rgb(screen_tone(c, 1.0, 0.0)).0 + 60);
+    }
+
+    #[test]
+    fn music_colour_glides_on_a_beat() {
+        let pal = [Rgb(255, 0, 0), Rgb(0, 0, 255)];
+        let s = Sound { active: true, beats: 1, ..Default::default() };
+        let mut run = MusicRun::default();
+        let a = music_colors(MusicStyle::Pulse, &pal, &s, 1, 0.03, 1.0, 0.3, &mut run);
+        assert!(a[0][0] > a[0][2], "{a:?}");
+        for _ in 0..60 {
+            music_colors(MusicStyle::Pulse, &pal, &s, 1, 0.03, 1.0, 0.3, &mut run);
+        }
+        let b = music_colors(MusicStyle::Pulse, &pal, &s, 1, 0.03, 1.0, 0.3, &mut run);
+        assert!(b[0][2] > b[0][0], "{b:?}");
+    }
+
+    #[test]
     fn screen_zones() {
         // Left half red, right half blue.
         let g = grid(|x, _| if x < 8 { [255, 0, 0] } else { [0, 0, 255] });
@@ -398,7 +460,7 @@ mod tests {
         // Letterbox bars don't darken the picture.
         let g = grid(|_, y| if !(2..7).contains(&y) { [0, 0, 0] } else { [200, 100, 0] });
         assert_eq!(to_rgb(screen_colors(&g, Zone::Whole, 1, true)[0]), Rgb(200, 100, 0));
-        assert!(to_rgb(screen_colors(&g, Zone::Whole, 1, false)[0]).0 < 130);
+        assert!(to_rgb(screen_colors(&g, Zone::Whole, 1, false)[0]).0 < 185);
         // An all-black screen is black.
         assert_eq!(to_rgb(screen_colors(&grid(|_, _| [0, 0, 0]), Zone::Whole, 2, true)[1]), Rgb(0, 0, 0));
     }
@@ -423,18 +485,18 @@ mod tests {
         let pal = [Rgb(255, 0, 0), Rgb(0, 0, 255)];
         let mut run = MusicRun::default();
         let quiet = Sound { active: true, ..Default::default() };
-        let a = music_colors(MusicStyle::Pulse, &pal, &quiet, 3, 0.03, 1.0, &mut run);
+        let a = music_colors(MusicStyle::Pulse, &pal, &quiet, 3, 0.03, 1.0, 0.0, &mut run);
         let beat = Sound { active: true, beats: 1, level: 0.8, low: 0.9, ..Default::default() };
-        let b = music_colors(MusicStyle::Pulse, &pal, &beat, 3, 0.03, 1.0, &mut run);
+        let b = music_colors(MusicStyle::Pulse, &pal, &beat, 3, 0.03, 1.0, 0.0, &mut run);
         assert!(to_rgb(b[0]).2 > 200 && to_rgb(a[0]).0 < 80, "a beat lights it in the next colour: {a:?} {b:?}");
         // Spectrum: loud bass lights the first segment, not the last.
         let mut bands = vec![0.0; 16];
         bands[0] = 1.0;
         let s = Sound { active: true, bands, ..Default::default() };
-        let sp = music_colors(MusicStyle::Spectrum, &pal, &s, 4, 0.03, 1.0, &mut MusicRun::default());
+        let sp = music_colors(MusicStyle::Spectrum, &pal, &s, 4, 0.03, 1.0, 0.0, &mut MusicRun::default());
         assert!(to_rgb(sp[0]).0 > 200 && to_rgb(sp[3]).2 < 30, "{sp:?}");
         // Nothing playing: a faint glow.
-        let off = music_colors(MusicStyle::Flow, &pal, &Sound::default(), 5, 0.03, 1.0, &mut MusicRun::default());
+        let off = music_colors(MusicStyle::Flow, &pal, &Sound::default(), 5, 0.03, 1.0, 0.0, &mut MusicRun::default());
         assert!(off.iter().all(|c| c.iter().all(|&v| v <= 0.13)));
         let v = serde_json::json!({ "level": 0.5, "low": 0.25, "beat": 1.0, "bands": [0.1, 0.2], "active": true, "beats": 7, "bpm": 120.0 });
         let snd = Sound::from_json(&v);

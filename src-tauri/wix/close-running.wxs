@@ -13,6 +13,26 @@
     <InstallExecuteSequence>
       <Custom Action="OmniHubCloseRunning" Before="InstallValidate" />
     </InstallExecuteSequence>
+    <!--
+      The folder of an earlier install is remembered in the registry and
+      reused as is; on a drive that is gone (a USB disk, a removed D:) the
+      setup stops with "The volume D:\ is currently unavailable". Searches
+      of type "directory" only succeed when the folder is really there, so
+      a remembered folder that isn't falls back to Program Files.
+    -->
+    <Property Id="OMNIHUBRAWNAMED">
+      <RegistrySearch Id="OmniHubRawNamed" Root="HKCU" Key="Software\OmniHub\OmniHub" Name="InstallDir" Type="raw" />
+    </Property>
+    <Property Id="OMNIHUBRAWDEFAULT">
+      <RegistrySearch Id="OmniHubRawDefault" Root="HKCU" Key="Software\OmniHub\OmniHub" Type="raw" />
+    </Property>
+    <Property Id="OMNIHUBDIRNAMED">
+      <RegistrySearch Id="OmniHubDirNamed" Root="HKCU" Key="Software\OmniHub\OmniHub" Name="InstallDir" Type="directory" />
+    </Property>
+    <Property Id="OMNIHUBDIRDEFAULT">
+      <RegistrySearch Id="OmniHubDirDefault" Root="HKCU" Key="Software\OmniHub\OmniHub" Type="directory" />
+    </Property>
+    <SetProperty Id="INSTALLDIR" Action="OmniHubForgetMissingDir" After="AppSearch" Sequence="both" Value="[ProgramFiles64Folder]OmniHub\"><![CDATA[INSTALLDIR AND ((INSTALLDIR = OMNIHUBRAWNAMED AND NOT OMNIHUBDIRNAMED) OR (INSTALLDIR = OMNIHUBRAWDEFAULT AND NOT OMNIHUBDIRDEFAULT))]]></SetProperty>
     <DirectoryRef Id="INSTALLDIR">
       <Component Id="OmniHubCloseRunningMarker" Guid="*">
         <RegistryValue Root="HKCU" Key="Software\[Manufacturer]\[ProductName]" Name="ClosesRunningApp" Type="integer" Value="1" KeyPath="yes" />

@@ -1761,6 +1761,8 @@ export interface GoveeLook {
   smoothness: number;
   saturation: number;
   skipDark: boolean;
+  /** screen: 0 = as bright as on screen, 100 = dim colours lifted to full */
+  boost: number;
   style: MusicStyle;
   albumColors: boolean;
   sensitivity: number;
@@ -1780,7 +1782,8 @@ export interface GoveeLightSettings {
   brightness: number;
   /** 0 = what Govee says (or 10) */
   segments: number;
-  stream: 'segments' | 'single';
+  /** auto: per segment when the light can stream them (Govee's account says so, or doesn't know it) */
+  stream: 'auto' | 'segments' | 'single';
   zone: GoveeZone;
   reverse: boolean;
   gradient: boolean;

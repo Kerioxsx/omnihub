@@ -129,6 +129,8 @@ export function LookEditor({ look, onChange, lights, monitors, palette, compact 
           )}
           <Slider label="Smoothness" value={look.smoothness} min={0} max={100} step={1} onChange={(v) => onChange({ smoothness: v })} format={(v) => (v < 20 ? 'Instant (games)' : v > 70 ? 'Very smooth (films)' : 'Smooth')} />
           <Slider label="Vividness" value={look.saturation} min={50} max={200} step={5} onChange={(v) => onChange({ saturation: v })} format={(v) => `${v}%`} />
+          <Slider label="Brightness boost" value={look.boost} min={0} max={100} step={5} onChange={(v) => onChange({ boost: v })} format={(v) => (v === 0 ? 'As on screen' : `${v}%`)} />
+          <p className="-mt-1 text-[11.5px] text-faint">Dim scenes light up the room more, same colours. Black stays black.</p>
           <label className="flex items-center justify-between gap-3 text-[12.5px] font-medium text-fg">
             <span>
               Ignore black bars and dark menus
@@ -174,6 +176,8 @@ export function LookEditor({ look, onChange, lights, monitors, palette, compact 
             <Colors colors={look.colors} onChange={(colors) => onChange({ colors })} />
           )}
           <Slider label="Sensitivity" value={look.sensitivity} min={0} max={100} step={1} onChange={(v) => onChange({ sensitivity: v })} format={(v) => `${v}%`} />
+          <Slider label="Smoothness" value={look.smoothness} min={0} max={100} step={1} onChange={(v) => onChange({ smoothness: v })} format={(v) => (v < 20 ? 'Snappy' : v > 70 ? 'Very smooth' : 'Smooth')} />
+          <p className="-mt-1 text-[11.5px] text-faint">Beats still land at once; smoother glides between colours and fades slower. Lamps with many LEDs look best with Blend segments on.</p>
         </div>
       )}
 

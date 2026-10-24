@@ -173,7 +173,7 @@ export function LightCard({ light, govee, monitors }: { light: GoveeLight; govee
             </span>
             <Select value={ls.segments} onChange={(e) => set({ segments: Number(e.target.value) })} className="w-32">
               <option value={0}>Auto ({light.segments ?? 10})</option>
-              {[1, 3, 4, 5, 6, 7, 8, 10, 12, 14, 15, 16, 20, 24, 30, 40].map((n) => (
+              {[1, 3, 4, 5, 6, 7, 8, 10, 12, 14, 15, 16, 20, 24, 30, 40, 48, 60, 72, 84].map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>
@@ -188,11 +188,13 @@ export function LightCard({ light, govee, monitors }: { light: GoveeLight; govee
               value={ls.stream}
               onChange={(v) => set({ stream: v })}
               options={[
+                { value: 'auto', label: 'Auto' },
                 { value: 'segments', label: `Per segment (${segs})` },
                 { value: 'single', label: 'One colour' },
               ]}
             />
           </div>
+          <p className="-mt-1 text-[11.5px] text-faint">Not every Govee light takes a colour per segment. If this one stays on one colour (or on the blink) while the others move, pick One colour.</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <label className="flex items-center gap-2 text-[12.5px] text-dim">
               <Switch checked={ls.gradient} onChange={(v) => set({ gradient: v })} label="Blend segments" /> Blend segments

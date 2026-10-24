@@ -413,7 +413,9 @@ and lets a phone do some of that. This is what protects each part.
 
 - Local network only, unless the user adds a Govee API key: discovery is the
   documented LAN API scan (multicast to 239.255.255.250:4001 from each local
-  network, plus any addresses the user adds), answers arrive on UDP 4002,
+  network, plus any addresses the user adds; every few minutes the same scan
+  message also goes to each address of the PC's own /24 Wi-Fi or Ethernet
+  networks, never virtual adapters), answers arrive on UDP 4002,
   commands go to the light's UDP 4003. Live colours use the `razer`
   (DreamView) sub-protocol to the same port. Nothing is sent to other hosts.
 - Windows Firewall: the page checks whether answers on UDP 4002 get through

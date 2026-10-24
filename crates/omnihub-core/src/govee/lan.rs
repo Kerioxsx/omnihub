@@ -227,6 +227,15 @@ impl Lan {
         }
     }
 
+    /// Ask every address of each local /24 network directly: routers that
+    /// drop multicast (or Wi-Fi with "IGMP snooping") still pass these.
+    pub fn sweep(&self, networks: &[Ipv4Addr]) {
+        let body = scan().to_string();
+        for ip in sweep_targets(networks) {
+            let _ = self.send.send_to(body.as_bytes(), (ip, self.ports.scan));
+        }
+    }
+
     pub fn send(&self, ip: IpAddr, msg: &Value) -> std::io::Result<()> {
         self.send.send_to(msg.to_string().as_bytes(), (ip, self.ports.cmd)).map(|_| ())
     }
@@ -257,6 +266,23 @@ fn multicast_socket(ip: Ipv4Addr) -> std::io::Result<UdpSocket> {
     s.set_multicast_ttl_v4(2)?;
     s.bind(&SocketAddr::from((ip, 0)).into())?;
     Ok(s.into())
+}
+
+/// Every other host of each address's /24 (at most 4 networks).
+pub fn sweep_targets(networks: &[Ipv4Addr]) -> Vec<Ipv4Addr> {
+    let mut nets: Vec<[u8; 3]> = Vec::new();
+    for ip in networks {
+        let o = ip.octets();
+        if !nets.contains(&[o[0], o[1], o[2]]) && nets.len() < 4 {
+            nets.push([o[0], o[1], o[2]]);
+        }
+    }
+    nets.iter().flat_map(|n| (1..=254u8).map(move |h| Ipv4Addr::new(n[0], n[1], n[2], h))).filter(|a| !networks.contains(a)).collect()
+}
+
+/// The Wi-Fi and Ethernet addresses (no virtual adapters) to sweep.
+pub fn sweep_networks() -> Vec<Ipv4Addr> {
+    crate::remote::net::lan_addresses().into_iter().filter(|a| !a.virtual_adapter).filter_map(|a| a.ip.parse().ok()).collect()
 }
 
 /// The local IPv4 addresses to scan from (Wi-Fi and Ethernet first;
@@ -320,6 +346,14 @@ pub mod tests {
         pub fn commands(&self, cmd: &str) -> Vec<Value> {
             self.got.lock().unwrap().iter().filter(|v| v["msg"]["cmd"] == cmd).cloned().collect()
         }
+    }
+
+    #[test]
+    fn sweeps_each_network_once() {
+        let t = sweep_targets(&[Ipv4Addr::new(192, 168, 1, 20), Ipv4Addr::new(192, 168, 1, 21), Ipv4Addr::new(10, 0, 0, 5)]);
+        assert_eq!(t.len(), 254 * 2 - 3);
+        assert!(t.contains(&Ipv4Addr::new(192, 168, 1, 1)) && t.contains(&Ipv4Addr::new(10, 0, 0, 254)));
+        assert!(!t.contains(&Ipv4Addr::new(192, 168, 1, 20)) && !t.contains(&Ipv4Addr::new(10, 0, 0, 0)));
     }
 
     #[test]

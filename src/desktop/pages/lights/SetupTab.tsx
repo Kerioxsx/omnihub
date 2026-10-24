@@ -55,7 +55,7 @@ export function SetupTab({ govee }: { govee: Govee }) {
           </div>
           {st?.lanMessage && <Callout tone="bad">{st.lanMessage}</Callout>}
           <Callout tone="info" title="A light isn’t found?">
-            In the Govee Home app, open the light → settings (⚙) → switch on <b>LAN Control</b>. The PC and the light need to be on the same Wi-Fi network.
+            In the Govee Home app, open the light → settings (⚙) → switch on <b>LAN Control</b> (each light has its own switch). The PC and the light need to be on the same network, not a guest Wi-Fi. OmniHub also asks every address on your network, which finds lights routers hide; still missing? Add its address below, or your Govee API key so it shows from your account.
           </Callout>
           {fw && fw.supported && fw.verdict !== 'allowed' && fw.verdict !== 'off' && (
             <Callout

@@ -387,7 +387,11 @@ analysis and the cover palette, effects from `rig::lighting`, smoothing) and
 controls the lights, a timer is set or the page is open: it scans now and
 then, reads states, streams live looks at up to 30 frames a second (a frame
 per light only when it changed, a keep-alive each second), sends still looks
-once, and fires timers on the local clock. Cloud calls run on a separate
+once, and fires timers on the local clock. A light's live colours go per
+segment (`razer`) or as one colour; `StreamKind::Auto` picks per segment
+only when Govee's account lists `dreamViewToggle` for it (or doesn't know
+it). Scans go out twice, plus a unicast sweep of the local /24 networks
+every five minutes for routers that drop multicast. Cloud calls run on a separate
 `govee-cloud` thread with a coalescing queue. `capture::sampler` shrinks the
 desktop on the GPU (Desktop Duplication → mipmapped copy → one small level
 read back), falling back to GDI capture.

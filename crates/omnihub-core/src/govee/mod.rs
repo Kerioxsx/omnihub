@@ -86,6 +86,8 @@ pub struct Look {
     pub saturation: u8,
     /// Screen: black bars and dark menus don't dim the lights.
     pub skip_dark: bool,
+    /// Screen: 0 = as bright as on screen, 100 = dim colours lifted to full.
+    pub boost: u8,
     /// Music: how it moves.
     pub style: MusicStyle,
     /// Music: the album cover's colours (else `colors`).
@@ -111,6 +113,7 @@ impl Default for Look {
             smoothness: 45,
             saturation: 130,
             skip_dark: true,
+            boost: 65,
             style: MusicStyle::Pulse,
             album_colors: true,
             sensitivity: 60,
@@ -123,8 +126,11 @@ impl Default for Look {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum StreamKind {
-    /// A colour per segment (Govee's DreamView streaming).
+    /// Segments when the light can stream them (Govee's account says so,
+    /// or doesn't know the light), else one colour.
     #[default]
+    Auto,
+    /// A colour per segment (Govee's DreamView streaming).
     Segments,
     /// One colour for the whole light (for lights that don't stream).
     Single,
@@ -159,7 +165,7 @@ pub struct LightSettings {
 
 impl Default for LightSettings {
     fn default() -> Self {
-        LightSettings { id: String::new(), name: String::new(), control: true, follow: true, look: Look::default(), on: true, brightness: 100, segments: 0, stream: StreamKind::Segments, zone: Zone::Whole, reverse: false, gradient: true }
+        LightSettings { id: String::new(), name: String::new(), control: true, follow: true, look: Look::default(), on: true, brightness: 100, segments: 0, stream: StreamKind::Auto, zone: Zone::Whole, reverse: false, gradient: true }
     }
 }
 
@@ -397,6 +403,16 @@ fn merge(a: &mut Value, b: &Value) {
     }
 }
 
+/// Whether a light gets a colour per segment: `Auto` asks Govee's account
+/// (lights without DreamView there get one colour; unknown ones stream).
+fn stream_segments(kind: StreamKind, cloud: Option<&CloudDevice>) -> bool {
+    match kind {
+        StreamKind::Segments => true,
+        StreamKind::Single => false,
+        StreamKind::Auto => cloud.is_none_or(|d| d.has("dreamViewToggle")),
+    }
+}
+
 fn sanitize_look(l: &mut Look) {
     if Rgb::parse(&l.color).is_none() {
         l.color = Look::default().color;
@@ -407,6 +423,7 @@ fn sanitize_look(l: &mut Look) {
     l.speed = if l.speed.is_finite() { l.speed.clamp(0.2, 3.0) } else { 1.0 };
     l.smoothness = l.smoothness.min(100);
     l.saturation = l.saturation.clamp(50, 200);
+    l.boost = l.boost.min(100);
     l.sensitivity = l.sensitivity.min(100);
     l.scene = l.scene.chars().take(80).collect();
     l.device_music = l.device_music.chars().take(40).collect();
@@ -945,7 +962,13 @@ impl GoveeHub {
                 if rescan || w.next_scan.is_none_or(|t| Instant::now() >= t) {
                     let ifaces = if self.lan_config.multicast { lan::interfaces() } else { Vec::new() };
                     let manual: Vec<IpAddr> = s.manual.iter().filter_map(|a| a.parse().ok()).collect();
+                    // Twice: a lost packet costs a light a whole round.
                     l.scan(&ifaces, &manual);
+                    l.scan(&ifaces, &manual);
+                    if self.lan_config.multicast && (rescan || w.next_sweep.is_none_or(|t| Instant::now() >= t)) {
+                        l.sweep(&lan::sweep_networks());
+                        w.next_sweep = Some(Instant::now() + Duration::from_secs(300));
+                    }
                     let found = !self.shared.lock().lan_devices.is_empty();
                     w.next_scan = Some(Instant::now() + if found { Duration::from_secs(60) } else { Duration::from_secs(10) });
                     w.status_due = Some(Instant::now() + Duration::from_millis(1500));
@@ -1330,13 +1353,14 @@ impl GoveeHub {
                         look::effect_colors(look.effect, &colors, look.speed, n, dev_index, &crate::rig::lighting::Inputs { t: w.t, level: w.sound.level, beat: w.sound.beat, temp: None })
                     }
                     Mode::Screen => match w.sampler.as_ref().and_then(|sm| sm.grid()) {
-                        Some(g) => look::screen_colors(g, l.zone, n, look.skip_dark).into_iter().map(|c| look::screen_tone(c, look.saturation as f32 / 100.0)).collect(),
+                        Some(g) => look::screen_colors(g, l.zone, n, look.skip_dark).into_iter().map(|c| look::screen_tone(c, look.saturation as f32 / 100.0, look.boost as f32 / 100.0)).collect(),
                         None => vec![[0.0; 3]; n],
                     },
                     _ => {
                         let pal: Vec<Rgb> = if look.album_colors && !w.palette.is_empty() { w.palette.clone() } else { look.colors.iter().filter_map(|c| Rgb::parse(c)).collect() };
                         let gain = 0.5 + look.sensitivity as f32 / 100.0 * 1.5;
-                        look::music_colors(look.style, &pal, &w.sound, n, dt, gain, &mut run.music)
+                        let blend = 0.05 + look.smoothness as f32 / 100.0 * 0.6;
+                        look::music_colors(look.style, &pal, &w.sound, n, dt, gain, blend, &mut run.music)
                     }
                 };
                 let (rise, fall) = match look.mode {
@@ -1344,7 +1368,11 @@ impl GoveeHub {
                         let tau = 0.02 + look.smoothness as f32 / 100.0 * 0.6;
                         (tau, tau)
                     }
-                    Mode::Music => (0.02, 0.16),
+                    // A beat still lands at once; smoother fades slower.
+                    Mode::Music => {
+                        let sm = look.smoothness as f32 / 100.0;
+                        (0.015 + sm * 0.08, 0.1 + sm * 0.45)
+                    }
                     _ => (0.0, 0.0),
                 };
                 let mut colors = run.smooth.step(&target, dt, rise, fall);
@@ -1353,31 +1381,33 @@ impl GoveeHub {
                 }
                 let changed = run.last.as_ref().is_none_or(|p| p.len() != colors.len() || p.iter().zip(&colors).any(|(a, b)| a.0.abs_diff(b.0) > 1 || a.1.abs_diff(b.1) > 1 || a.2.abs_diff(b.2) > 1));
                 let keepalive = run.sent_at.is_none_or(|t| t.elapsed() > Duration::from_millis(900));
-                match l.stream {
-                    StreamKind::Segments => {
-                        if (changed || keepalive) && run.sent_at.is_none_or(|t| t.elapsed() >= Duration::from_millis(30)) {
-                            if !run.razer_on || run.sent_at.is_none_or(|t| t.elapsed() > Duration::from_secs(2)) {
-                                send(&lan::razer(&lan::razer_switch(true)));
-                                run.razer_on = true;
-                            }
-                            send(&lan::razer(&lan::razer_frame(&colors, l.gradient)));
-                            run.sent_at = Some(Instant::now());
-                            run.last = Some(colors.clone());
+                let segments = stream_segments(l.stream, cloud_dev);
+                if segments {
+                    if (changed || keepalive) && run.sent_at.is_none_or(|t| t.elapsed() >= Duration::from_millis(30)) {
+                        if !run.razer_on || run.sent_at.is_none_or(|t| t.elapsed() > Duration::from_secs(2)) {
+                            send(&lan::razer(&lan::razer_switch(true)));
+                            run.razer_on = true;
                         }
+                        send(&lan::razer(&lan::razer_frame(&colors, l.gradient)));
+                        run.sent_at = Some(Instant::now());
+                        run.last = Some(colors.clone());
                     }
-                    StreamKind::Single => {
-                        if (changed || keepalive) && run.sent_at.is_none_or(|t| t.elapsed() >= Duration::from_millis(100)) {
-                            let k = colors.len().max(1) as u32;
-                            let sum = colors.iter().fold((0u32, 0u32, 0u32), |a, c| (a.0 + c.0 as u32, a.1 + c.1 as u32, a.2 + c.2 as u32));
-                            send(&lan::color(Rgb((sum.0 / k) as u8, (sum.1 / k) as u8, (sum.2 / k) as u8)));
-                            run.sent_at = Some(Instant::now());
-                            run.last = Some(colors.clone());
-                        }
+                } else {
+                    if run.razer_on {
+                        send(&lan::razer(&lan::razer_switch(false)));
+                        run.razer_on = false;
+                    }
+                    if (changed || keepalive) && run.sent_at.is_none_or(|t| t.elapsed() >= Duration::from_millis(100)) {
+                        let k = colors.len().max(1) as u32;
+                        let sum = colors.iter().fold((0u32, 0u32, 0u32), |a, c| (a.0 + c.0 as u32, a.1 + c.1 as u32, a.2 + c.2 as u32));
+                        send(&lan::color(Rgb((sum.0 / k) as u8, (sum.1 / k) as u8, (sum.2 / k) as u8)));
+                        run.sent_at = Some(Instant::now());
+                        run.last = Some(colors.clone());
                     }
                 }
                 run.applied = None;
                 frames.insert(id.clone(), colors);
-                self.set_light_state(id, l.stream == StreamKind::Segments, None);
+                self.set_light_state(id, segments, None);
                 continue;
             }
             // A still look: sent once, again only when it changes.
@@ -1511,6 +1541,7 @@ struct Worker {
     lan: Option<Lan>,
     lan_retry: Option<Instant>,
     next_scan: Option<Instant>,
+    next_sweep: Option<Instant>,
     next_status: Option<Instant>,
     status_due: Option<Instant>,
     status_at: Option<Instant>,
@@ -1662,6 +1693,21 @@ mod tests {
         let left = st.sleep_until.unwrap() - crate::media::now_ms();
         assert!((29 * 60_000..=30 * 60_000).contains(&left));
         assert!(h.sleep(None).sleep_until.is_none());
+    }
+
+    #[test]
+    fn auto_streams_segments_only_to_lights_that_can() {
+        let dev = |caps: &[&str]| CloudDevice { sku: "H6022".into(), device: "x".into(), name: "Lamp".into(), kind: "devices.types.light".into(), capabilities: caps.iter().map(|i| cloud::Capability { kind: "devices.capabilities.toggle".into(), instance: i.to_string(), parameters: Value::Null }).collect() };
+        let (dream, plain) = (dev(&["dreamViewToggle"]), dev(&["gradientToggle"]));
+        assert!(stream_segments(StreamKind::Auto, Some(&dream)));
+        assert!(!stream_segments(StreamKind::Auto, Some(&plain)));
+        assert!(stream_segments(StreamKind::Auto, None));
+        assert!(stream_segments(StreamKind::Segments, Some(&plain)) && !stream_segments(StreamKind::Single, Some(&dream)));
+        assert_eq!(LightSettings::default().stream, StreamKind::Auto);
+        let mut s = GoveeSettings::default();
+        s.look.boost = 250;
+        sanitize(&mut s);
+        assert_eq!(s.look.boost, 100);
     }
 
     #[test]

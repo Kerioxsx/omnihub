@@ -1,16 +1,14 @@
 ## New in this version
 
-**Share your mixes with friends, and host the worlds you played alone.**
+**Govee lights: all of them found, all of them moving, brighter and smoother.**
 
-- **Share with friends**: on a mix, or on any installed modpack (the new details window), save one file with every mod, the configs, resource and shader packs, **and the cover picture**. Your own settings, keys and server list stay out. Turn on *Put my server in their server list* and it's there in their Multiplayer, ready to join. Mods on Modrinth are downloaded by your friend's launcher; the rest ride inside the file. Installed modpacks can also be saved as a CurseForge zip.
-- **A friend's pack**: in Mods → Minecraft, open a pack someone sent you. It becomes a mix with **their picture**, ready to install in the Minecraft Launcher. The file also opens in the Modrinth App and Prism Launcher.
-- **What's in a modpack**: the details window lists its mods (name and version from each mod itself, which ones only run in the game, which are turned off), **checks Modrinth for newer versions** (nothing is changed), and shows its single-player worlds.
-- **Host a world you played alone**: pick a world (in the details window, or New server → Installed modpack → World). The server gets a copy, with its game mode and difficulty, and with your Minecraft name **your inventory, place and levels from single-player become yours on the server**. The original world isn't touched.
-- The Minecraft Launcher's own folder (.minecraft) is listed too, with its worlds and mods.
-- Fix: **NeoForge (and Forge) mixes** couldn't be saved as a .mrpack when none of their packs named a loader build ("OmniHub can't look up neoforge versions"). OmniHub now finds the newest NeoForge or Forge build for the chosen Minecraft version.
-- Fix: mods added from an instance folder or an installed modpack could get the download of another file from the same Modrinth version (often the Forge jar of a mod that ships both), which failed its checksum when downloaded. Each mod now gets the download of its own jar.
+- **Lights that weren't found**: besides the usual call on the network, OmniHub now also asks every address on your Wi-Fi directly (routers often drop the first kind), and asks twice. Still missing one? Setup lists what to check: LAN Control on for *each* light, the same network (not a guest Wi-Fi), or its address.
+- **Lights that stayed still** in music or screen mode (or kept the identify blink): not every Govee light takes a colour per segment. The new **Auto** choice (the default) gives a colour per segment only to lights Govee's account says can take it, and one colour to the rest. If a light still stays on one colour, pick **One colour** for it.
+- **Screen colours brighter and truer**: a new **Brightness boost** (on by default) lifts dim colours to light the room without changing them, while black stays black, and colourful parts of the picture count more than grey ones, so a red car on a grey road shows red instead of a muddy brown.
+- **Smoother music**, especially on lamps with many LEDs (like the Govee x JBL table lamp speaker): colours glide from one beat's colour to the next and fade more gently. A **Smoothness** slider in Music sets how snappy it is. You can also pick up to 84 segments for a light.
+- **Installer fix**: setup no longer stops with *"could not write to D:\OmniHub"* or *"The volume D:\ is currently unavailable"* when OmniHub was once installed on a drive that's gone. The .exe installs to your user folder instead (and offers it if a folder can't be written); the MSI goes back to Program Files.
 
-Also in 0.12: your installed modpacks from Prism Launcher, CurseForge and the Modrinth App; Minecraft servers 24/7 on your PC (also from your phone).
+Also in 0.13: share mixes and modpacks with friends (with the cover and your server), a friend's pack, modpack details, servers from single-player worlds.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

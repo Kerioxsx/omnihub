@@ -116,6 +116,10 @@ impl CloudDevice {
         self.capabilities.iter().find(|c| c.instance == instance)
     }
 
+    pub fn has(&self, instance: &str) -> bool {
+        self.cap(instance).is_some()
+    }
+
     /// Segments it can colour one by one.
     pub fn segments(&self) -> Option<usize> {
         let c = self.cap("segmentedColorRgb")?;

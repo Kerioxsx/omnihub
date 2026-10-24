@@ -17,6 +17,7 @@ const LOOK: GoveeLook = {
   smoothness: 45,
   saturation: 130,
   skipDark: true,
+  boost: 65,
   style: 'pulse',
   albumColors: true,
   sensitivity: 60,
@@ -93,7 +94,7 @@ const LIGHTS: GoveeLight[] = [
   ]),
 ];
 
-const lightDefaults = (id: string): GoveeLightSettings => ({ id, name: '', control: true, follow: true, look: { ...LOOK }, on: true, brightness: 100, segments: 0, stream: 'segments', zone: 'whole', reverse: false, gradient: true });
+const lightDefaults = (id: string): GoveeLightSettings => ({ id, name: '', control: true, follow: true, look: { ...LOOK }, on: true, brightness: 100, segments: 0, stream: 'auto', zone: 'whole', reverse: false, gradient: true });
 
 let settings: GoveeSettings = {
   enabled: true,
