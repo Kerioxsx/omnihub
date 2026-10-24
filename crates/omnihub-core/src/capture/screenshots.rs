@@ -30,6 +30,10 @@ pub struct Screenshot {
     pub note: String,
     pub favorite: bool,
     pub exists: bool,
+    /// Text was read from it ("Copy text"); it is then searchable.
+    pub has_text: bool,
+    #[serde(skip)]
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -97,6 +101,8 @@ pub enum ShotError {
     Db(#[from] rusqlite::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("{0}")]
+    Other(String),
 }
 
 pub struct ScreenshotLibrary {
@@ -144,10 +150,12 @@ impl ScreenshotLibrary {
             tags: serde_json::from_str(&tags).unwrap_or_default(),
             note: r.get(9)?,
             favorite: r.get(10)?,
+            text: r.get(11)?,
+            has_text: r.get::<_, Option<String>>(11)?.is_some(),
         })
     }
 
-    const COLS: &'static str = "id, path, created, width, height, bytes, app_exe, app_title, tags, note, favorite";
+    const COLS: &'static str = "id, path, created, width, height, bytes, app_exe, app_title, tags, note, favorite, ocr_text";
 
     pub fn list(&self, f: &ShotFilter) -> Result<Vec<Screenshot>, ShotError> {
         let all = self.db.with(|c| {
@@ -168,6 +176,7 @@ impl ScreenshotLibrary {
                     || s.app_exe.as_ref().is_some_and(|t| t.to_lowercase().contains(&q))
                     || s.tags.iter().any(|t| t.to_lowercase().contains(&q))
                     || s.path.to_lowercase().contains(&q)
+                    || s.text.as_ref().is_some_and(|t| t.to_lowercase().contains(&q))
             })
             .take(f.limit.unwrap_or(usize::MAX))
             .collect())
@@ -252,6 +261,37 @@ impl ScreenshotLibrary {
             let mut f = std::io::BufWriter::new(f);
             let _ = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut f, 80).encode_image(&rgb);
         }
+    }
+
+    /// The text in a screenshot, read once with Windows' OCR and kept (so
+    /// searching finds screenshots by what they show).
+    pub fn text(&self, id: &str) -> Result<String, ShotError> {
+        let shot = self.get(id)?;
+        if let Some(t) = shot.text {
+            return Ok(t);
+        }
+        let text = super::ocr::recognize(Path::new(&shot.path)).map_err(ShotError::Other)?;
+        self.db.with(|c| c.execute("UPDATE screenshots SET ocr_text=?2 WHERE id=?1", params![id, text]))?;
+        Ok(text)
+    }
+
+    /// Save an edited copy (PNG bytes from the markup editor) next to the
+    /// other screenshots, keeping the original's app and tags.
+    pub fn store_edited(&self, source_id: &str, png: &[u8], dir: &Path) -> Result<Screenshot, ShotError> {
+        let orig = self.get(source_id)?;
+        let img = image::load_from_memory_with_format(png, image::ImageFormat::Png)?.to_rgba8();
+        let app = ForegroundApp { exe: orig.app_exe.clone(), title: orig.app_title.clone(), rect: None };
+        let shot = self.store(&img, &app, dir, ImageFormat::Png)?;
+        let note = if orig.note.is_empty() { "Edited copy".to_string() } else { format!("{} (edited copy)", orig.note) };
+        self.update(&shot.id, Some(orig.tags.clone()), Some(note), None)
+    }
+
+    /// [`store_edited`](Self::store_edited) for a `data:image/png;base64,` URL from the editor.
+    pub fn store_edited_data_url(&self, source_id: &str, url: &str, dir: &Path) -> Result<Screenshot, ShotError> {
+        use base64::Engine;
+        let b64 = url.strip_prefix("data:image/png;base64,").ok_or_else(|| ShotError::Other("expected a PNG image".into()))?;
+        let png = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| ShotError::Other(e.to_string()))?;
+        self.store_edited(source_id, &png, dir)
     }
 
     /// Thumbnail as a data URL (created on demand for imported files).
@@ -558,6 +598,30 @@ mod tests {
         std::fs::remove_file(&s.path).unwrap();
         l.sync_folder(&shots).unwrap();
         assert_eq!(l.list(&ShotFilter::default()).unwrap().len(), 1, "missing file dropped");
+    }
+
+    #[test]
+    fn edited_copies_and_text_search() {
+        let tmp = tempfile::tempdir().unwrap();
+        let l = lib(tmp.path());
+        let shots = tmp.path().join("shots");
+        let img = image::RgbaImage::from_pixel(64, 48, image::Rgba([10, 20, 30, 255]));
+        let app = ForegroundApp { exe: Some("C:\\Apps\\bar.exe".into()), title: Some("Bar".into()), rect: None };
+        let s = l.store(&img, &app, &shots, ImageFormat::Png).unwrap();
+        l.update(&s.id, Some(vec!["work".into()]), None, None).unwrap();
+        let mut png = Vec::new();
+        image::RgbaImage::from_pixel(32, 24, image::Rgba([200, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let e = l.store_edited(&s.id, &png, &shots).unwrap();
+        assert_ne!(e.id, s.id);
+        assert_eq!((e.width, e.height, e.app_exe.as_deref(), e.tags.clone()), (32, 24, Some("C:\\Apps\\bar.exe"), vec!["work".to_string()]));
+        assert_eq!(e.note, "Edited copy");
+        assert!(l.store_edited(&s.id, b"not a png", &shots).is_err());
+        // Text read earlier is cached and searchable.
+        l.db.with(|c| c.execute("UPDATE screenshots SET ocr_text='Invoice 4471 total' WHERE id=?1", params![s.id])).unwrap();
+        assert_eq!(l.text(&s.id).unwrap(), "Invoice 4471 total");
+        let found = l.list(&ShotFilter { query: "invoice 4471".into(), ..Default::default() }).unwrap();
+        assert_eq!(found.iter().map(|x| x.id.as_str()).collect::<Vec<_>>(), [s.id.as_str()]);
+        assert!(found[0].has_text);
     }
 
     #[test]

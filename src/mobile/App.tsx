@@ -10,7 +10,7 @@ import { useApp, useInbox, usePower, toast, TAB_ORDER, type Tab } from './state'
 import { useUploads, isActive } from './uploads';
 import { emitEvent } from './lib/events';
 import { useBackHandler } from './lib/back';
-import { cx, errorMessage, useInterval } from './lib/util';
+import { copyToClipboard, cx, errorMessage, useInterval } from './lib/util';
 import { TabBar } from './ui/TabBar';
 import { Toasts } from './ui/Toasts';
 import { Logo } from './ui/Logo';
@@ -20,7 +20,9 @@ import { HomeScreen } from './screens/Home';
 import { FilesScreen } from './screens/Files';
 import { ScreenScreen } from './screens/Screen';
 import { PowerScreen } from './screens/Power';
+import { MusicScreen } from './screens/Music';
 import { MoreScreen, type MorePage } from './screens/More';
+import { ChatsScreen } from './screens/Chats';
 
 type Phase = 'boot' | 'pair' | 'ready' | 'unreachable';
 
@@ -100,9 +102,17 @@ export function App() {
           const item = (payload?.item ?? payload) as InboxItem;
           if (!item?.id) break;
           useInbox.getState().add(item);
-          toast.info('Your PC sent a file', item.name, { label: 'Download', run: () => client.receive(item).catch((e) => toast.error("Couldn't download", errorMessage(e))) });
+          if (item.kind === 'text') {
+            const text = item.text ?? '';
+            toast.info('Your PC sent text', item.name, { label: 'Copy', run: () => void copyToClipboard(text).then((ok) => (ok ? toast.success('Copied') : toast.error("Couldn't copy"))) });
+          } else {
+            toast.info(item.folder ? 'Your PC sent a folder' : 'Your PC sent a file', item.name, { label: 'Download', run: () => client.receive(item).catch((e) => toast.error("Couldn't download", errorMessage(e))) });
+          }
           break;
         }
+        case 'inbox:removed':
+          if (payload?.id) useInbox.getState().remove(payload.id);
+          break;
         case 'power:pending':
           power.setPending(payload as PendingPower);
           break;
@@ -112,6 +122,9 @@ export function App() {
           if (payload?.reason !== 'replaced' && had && !power.cancelling) toast.info(`${had.label} cancelled`, 'Cancelled on the PC.');
           break;
         }
+        case 'mcserver:guard':
+          toast.error(`${payload?.name ?? 'Someone'} wants in on ${payload?.server ?? 'your server'}`, 'That name is an operator and joined from a new place, so it was kept out. Allow it in More → Minecraft servers → Players if it’s really them.');
+          break;
         case 'power:executed': {
           power.setPending(null);
           const a = payload?.action as PowerAction;
@@ -135,6 +148,8 @@ export function App() {
   const hidden: Tab[] = [];
   if (info && !info.features.screen) hidden.push('screen');
   if (info && !info.features.power) hidden.push('power');
+  if (info && !info.features.media) hidden.push('music');
+  if (info && !info.features.chats) hidden.push('chats');
   useEffect(() => {
     if (hidden.includes(tab)) setTab('home');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,7 +223,9 @@ export function App() {
       <ConnectionBanner />
       <main className="absolute inset-0 overflow-hidden">
         {panel('home', <HomeScreen active={tab === 'home'} openMore={(p) => (setMorePage(p), setTab('more'))} />)}
+        {!hidden.includes('chats') && panel('chats', <ChatsScreen active={tab === 'chats'} />)}
         {panel('files', <FilesScreen active={tab === 'files'} />)}
+        {!hidden.includes('music') && panel('music', <MusicScreen active={tab === 'music'} />)}
         {!hidden.includes('screen') && panel('screen', <ScreenScreen active={tab === 'screen'} />)}
         {!hidden.includes('power') && panel('power', <PowerScreen active={tab === 'power'} />)}
         {panel(

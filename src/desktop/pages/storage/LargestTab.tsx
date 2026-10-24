@@ -1,16 +1,17 @@
 import { formatBytes, formatDate } from '@shared/format';
 import type { PathedNode } from '@shared/types';
-import { FileSearch } from 'lucide-react';
+import { FileSearch, FileSpreadsheet } from 'lucide-react';
 import { type CSSProperties, useState } from 'react';
 import { api } from '../../api';
 import { FileIcon } from '../../components/FileIcon';
+import { IconButton } from '../../components/ui/Button';
 import { Card, Skeleton } from '../../components/ui/Card';
 import { Segmented } from '../../components/ui/Form';
 import { EmptyState, ErrorState } from '../../components/ui/States';
 import { VirtualList } from '../../components/VirtualList';
 import { useAsync } from '../../lib/hooks';
 import { useStorage } from '../../state/storage';
-import { openItemMenu } from './actions';
+import { exportCsv, openItemMenu } from './actions';
 
 function parentOf(path: string): string {
   const i = path.lastIndexOf('\\');
@@ -63,6 +64,8 @@ export function LargestTab({ scanId }: { scanId: string }) {
         <div className="text-[13px] text-dim">
           The 100 largest files{scope === 'here' && here.data ? <span> under <span className="font-mono text-fg">{here.data}</span></span> : ' in this scan'} — together <span className="font-semibold text-fg tabular">{formatBytes(total)}</span>.
         </div>
+        <div className="flex-1" />
+        <IconButton icon={FileSpreadsheet} label="Export the largest files as CSV" size="sm" onClick={() => void exportCsv(scanId, under, 'largest', scope === 'here' && here.data ? here.data : scanId)} />
         <Segmented
           size="sm"
           label="Scope"

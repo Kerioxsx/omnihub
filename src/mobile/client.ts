@@ -2,7 +2,7 @@
 // (crates/omnihub-core/src/remote/api.rs). The phone app is served by that
 // server, so every URL is same-origin.
 
-import type { Device, Note, NoteKind, PendingPower, PowerAction, InboxItem, EntrySummary, MonitorInfo, Preset } from '@shared/types';
+import type { SrvAction, SrvLine, SrvMap, SrvPlayer, SrvPlayers, SrvView, ChatFolder, ChatSource, ChatSummary, ChatTools, ChatView, ClaudeCodeMode, CodexSandbox, Device, NewChatKind, Note, NoteKind, PendingPower, PowerAction, InboxItem, EntrySummary, MonitorInfo, Preset, UsageReport } from '@shared/types';
 
 const TOKEN_KEY = 'omnihub.token';
 const NAME_KEY = 'omnihub.deviceName';
@@ -93,7 +93,7 @@ export interface ServerInfo {
   tls: boolean;
   paired: boolean;
   pairingOpen: boolean;
-  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean };
+  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean; games?: boolean; chats?: boolean; chatAgents?: boolean; servers?: boolean };
 }
 
 export interface FsEntry {
@@ -116,6 +116,55 @@ export interface Status {
   pendingPower: PendingPower | null;
   vaultUnlocked: boolean;
 }
+
+// ---------- music ----------
+
+export type { AudioInfo, FpsLive, GameKind, GameSession, GameStep, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, PingResult, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
+import type { AudioInfo, FpsLive, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
+
+/** One app in the PC's volume mixer. */
+export interface AppVolume {
+  key: string;
+  name: string;
+  level: number;
+  muted: boolean;
+  active: boolean;
+}
+
+/** An app using the PC's microphone right now. */
+export interface Call {
+  key: string;
+  name: string;
+  sinceMs: number | null;
+}
+
+export interface Mixer {
+  master: { level: number; muted: boolean } | null;
+  mic: { muted: boolean; devices: number } | null;
+  apps: AppVolume[];
+  calls: Call[];
+  /** Other apps recording from a microphone right now (a game's voice chat). */
+  micApps: string[];
+}
+
+/** A program with a window open on the PC. */
+export interface OpenApp {
+  key: string;
+  exeName: string;
+  name: string;
+  titles: string[];
+  canQuit: boolean;
+}
+
+export interface PhoneGame {
+  id: string;
+  name: string;
+  kind: GameKind;
+  lastPlayed: number | null;
+  canLaunch: boolean;
+  process: string;
+}
+
 
 export const client = {
   info: () => request<ServerInfo>('GET', '/api/info'),
@@ -159,6 +208,15 @@ export const client = {
     const t = await request<{ url: string; name: string }>('POST', `/api/inbox/${item.id}/ticket`);
     triggerDownload(t.url, t.name, false);
   },
+  /** Fetch an offered file into memory so it can go to the share sheet (Save to Photos/Files). */
+  fetchForShare: async (item: InboxItem): Promise<File> => {
+    const t = await request<{ url: string; name: string }>('POST', `/api/inbox/${item.id}/ticket`);
+    const res = await fetch(t.url);
+    if (!res.ok) throw new Error(`The PC answered ${res.status}`);
+    const blob = await res.blob();
+    return new File([blob], t.name, { type: blob.type || 'application/octet-stream' });
+  },
+  sendClipboard: (text: string) => request<void>('POST', '/api/clipboard', { text }),
   dismiss: (id: string) => request<void>('DELETE', `/api/inbox/${id}`),
 
   power: () => request<{ enabled: boolean; actions: { action: PowerAction; label: string; destructive: boolean }[]; pending: PendingPower | null; delaySeconds: number }>('GET', '/api/power'),
@@ -167,11 +225,57 @@ export const client = {
 
   apps: () => request<{ apps: { id: string; name: string; publisher: string; source: string }[] }>('GET', '/api/apps'),
   appIcon: (id: string) => request<{ icon: string | null }>('GET', `/api/apps/${id}/icon`),
+  games: () => request<{ profiles: PhoneGame[]; session: GameSession | null; fps?: FpsLive | null }>('GET', '/api/games'),
+  playGame: (id: string, launch: boolean) => request<{ session: GameSession }>('POST', `/api/games/${encodeURIComponent(id)}/play`, { launch }),
+  stopGame: () => request<{ stopped: boolean }>('POST', '/api/games/stop'),
+  pingGame: (id: string) => request<{ results: PingResult[] }>('POST', '/api/games/ping', { id }),
+  servers: () => request<SrvView[]>('GET', '/api/servers'),
+  serverRun: (id: string, what: 'start' | 'stop' | 'restart') => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/${what}`),
+  serverPlayers: (id: string) => request<SrvPlayers>('GET', `/api/servers/${encodeURIComponent(id)}/players`),
+  serverPlayer: (id: string, name: string) => request<SrvPlayer>('GET', `/api/servers/${encodeURIComponent(id)}/player/${encodeURIComponent(name)}`),
+  serverAct: (id: string, name: string, action: SrvAction) => request<{ reply: string }>('POST', `/api/servers/${encodeURIComponent(id)}/act`, { name, action }),
+  serverWhitelist: (id: string, on: boolean) => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/whitelist`, { on }),
+  serverJoin: (id: string, everyone: boolean) => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/join`, { everyone }),
+  serverMaxPlayers: (id: string, players: number) => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/max-players`, { players }),
+  serverConsole: (id: string, after?: number) => request<SrvLine[]>('GET', `/api/servers/${encodeURIComponent(id)}/console${after != null ? `?after=${after}` : ''}`),
+  serverCommand: (id: string, text: string) => request<{ ok: boolean }>('POST', `/api/servers/${encodeURIComponent(id)}/command`, { text }),
+  serverMap: (id: string, dim: string) => request<SrvMap>('GET', `/api/servers/${encodeURIComponent(id)}/map?dim=${dim}`),
+  serverTile: (id: string, dim: string, x: number, z: number) => request<{ url: string }>('GET', `/api/servers/${encodeURIComponent(id)}/map/tile?dim=${dim}&x=${x}&z=${z}`),
+  tasks: (sort: ProcessSort = 'cpu', limit = 80) => request<Usage>('GET', `/api/tasks?sort=${sort}&limit=${limit}`),
+  endTask: (name: string) => request<{ ended: number }>('POST', '/api/tasks/end', { name }),
+  setTaskPriority: (name: string, priority: Priority) => request<{ changed: number }>('POST', '/api/tasks/priority', { name, priority }),
+  media: () => request<{ state: MediaState | null; nowMs: number; audio: AudioInfo }>('GET', '/api/media'),
+  mediaControl: (action: MediaAction, positionMs = 0) => request<{ ok: boolean }>('POST', '/api/media/control', { action, positionMs: Math.max(0, Math.round(positionMs)) }),
+  mediaLyrics: () => request<{ key: string | null; lyrics: LyricsStatus }>('GET', '/api/media/lyrics'),
+  mediaAudio: (patch: { level?: number; muted?: boolean; bass?: number; treble?: number; eqEnabled?: boolean }) => request<AudioInfo>('POST', '/api/media/audio', patch),
+  sound: () => request<Mixer>('GET', '/api/sound'),
+  soundMaster: (patch: { level?: number; muted?: boolean }) => request<Mixer>('POST', '/api/sound/master', patch),
+  soundApp: (key: string, patch: { level?: number; muted?: boolean }) => request<Mixer>('POST', '/api/sound/app', { key, ...patch }),
+  soundMic: (muted: boolean) => request<Mixer>('POST', '/api/sound/mic', { muted }),
+  openApps: () => request<{ apps: OpenApp[] }>('GET', '/api/open-apps'),
+  closeApp: (key: string) => request<{ windows: number }>('POST', '/api/open-apps/close', { key }),
+  openAppIcon: (key: string) => request<{ icon: string | null }>('GET', `/api/open-apps/icon?key=${encodeURIComponent(key)}`),
+  /** Object URL of the cover art (revoke when done). */
+  mediaArt: async (id: string): Promise<string> => {
+    const res = await fetch(`/api/media/art?id=${encodeURIComponent(id)}`, { headers: { authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) throw new Error('no artwork');
+    return URL.createObjectURL(await res.blob());
+  },
   launch: (id: string) => request<{ launched: string }>('POST', `/api/apps/${id}/launch`),
 
   notes: (kind?: NoteKind, q = '') => request<{ notes: Note[]; claudeFolder: boolean }>('GET', `/api/notes?${kind ? `kind=${kind}&` : ''}q=${encodeURIComponent(q)}`),
   note: (id: string) => request<Note>('GET', `/api/notes/${id}`),
   createNote: (n: { title: string; body: string; kind: NoteKind; tags?: string[]; sendToClaude?: boolean }) => request<Note>('POST', '/api/notes', n),
+
+  chats: () => request<{ chats: ChatSummary[]; tools: ChatTools; agents: boolean; claudeMode: ClaudeCodeMode; codexSandbox: CodexSandbox }>('GET', '/api/chats'),
+  chat: (source: ChatSource, id: string) => request<ChatView>('GET', `/api/chats/${source}/${encodeURIComponent(id)}`),
+  chatSend: (source: ChatSource, id: string, text: string, mode = '') => request<{ ok: boolean }>('POST', `/api/chats/${source}/${encodeURIComponent(id)}/send`, { text, mode }),
+  chatStop: (source: ChatSource, id: string) => request<{ ok: boolean }>('POST', `/api/chats/${source}/${encodeURIComponent(id)}/stop`),
+  chatNew: (kind: NewChatKind, text: string, folder: string | null, mode = '') => request<ChatSummary>('POST', '/api/chats/new', { kind, text, folder, mode }),
+  chatFolders: () => request<ChatFolder[]>('GET', '/api/chats/folders'),
+  chatUsage: () => request<UsageReport>('GET', '/api/chats/usage'),
+  ideas: () => request<Note[]>('GET', '/api/ideas'),
+  saveIdea: (text: string, from: string | null = null) => request<Note>('POST', '/api/ideas', { text, from }),
 
   screenInfo: () => request<{ monitors: MonitorInfo[]; presets: Preset[]; allowControl: boolean; defaultPreset: string }>('GET', '/api/screen/info'),
 
@@ -485,6 +589,10 @@ export interface ScreenStats {
   maxWidth: number;
   control: boolean;
   monitor: MonitorInfo | null;
+  /** the PC paused sharing (nothing is captured) */
+  paused?: boolean;
+  /** the PC shares a single window instead of the display */
+  window?: boolean;
 }
 
 /** Messages the viewer sends (see capture/stream.rs `ViewerMessage`). */

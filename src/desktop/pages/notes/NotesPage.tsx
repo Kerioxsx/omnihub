@@ -1,6 +1,6 @@
 import type { Note, NoteKind } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { Bot, Lightbulb, NotebookPen, Plus } from 'lucide-react';
+import { Bot, LayoutTemplate, Lightbulb, NotebookPen, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -14,6 +14,8 @@ import { toast } from '../../state/toasts';
 import { ClaudePanel } from './ClaudePanel';
 import { type Draft, NoteEditor } from './NoteEditor';
 import { NoteList } from './NoteList';
+import { fillTemplate } from './templates';
+import { type TemplateChoice, TemplatePicker } from './TemplatePicker';
 
 const sortNotes = (a: Note, b: Note) => Number(b.pinned) - Number(a.pinned) || b.updated - a.updated;
 const toDraft = (n: Note): Draft => ({ title: n.title, body: n.body, tags: [...n.tags], pinned: n.pinned, color: n.color });
@@ -34,6 +36,7 @@ export function NotesPage() {
   const [panel, setPanel] = useStoredState('omnihub.notes.claudePanel', true);
   const wide = useMediaQuery('(min-width: 1280px)');
   const [panelDrawer, setPanelDrawer] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const dirty = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<{ note: Note | null; draft: Draft | null }>({ note: null, draft: null });
@@ -105,10 +108,10 @@ export function NotesPage() {
   };
 
   const create = useCallback(
-    async (k: NoteKind) => {
+    async (k: NoteKind, from?: TemplateChoice) => {
       await save();
       try {
-        const n = await api.notes.save({ kind: k, title: '', body: '', tags: [], pinned: false, color: null });
+        const n = await api.notes.save({ kind: k, title: from ? fillTemplate(from.title) : '', body: from ? fillTemplate(from.body) : '', tags: from?.tags ?? [], pinned: false, color: null });
         setKind(k);
         setQuery('');
         setTag(null);
@@ -122,6 +125,18 @@ export function NotesPage() {
     },
     [kind, save],
   );
+
+  /** Keep a copy of the current note as a template (tagged #template). */
+  const saveAsTemplate = async () => {
+    if (!current || !draft) return;
+    await save();
+    try {
+      await api.notes.save({ kind: current.kind, title: `${draft.title || 'Untitled'} (template)`, body: draft.body, tags: [...new Set([...draft.tags, 'template'])], pinned: false, color: draft.color });
+      toast.success('Saved as a template', 'Find it under Templates.');
+    } catch (e) {
+      toast.error('Could not save the template', errorText(e));
+    }
+  };
 
   // Select the first note when nothing is selected (or the selection left this tab).
   useEffect(() => {
@@ -189,6 +204,9 @@ export function NotesPage() {
               Claude folder
             </Button>
           )}
+          <Button icon={LayoutTemplate} variant="ghost" onClick={() => setTemplatesOpen(true)}>
+            Templates
+          </Button>
           <Button icon={isIdea ? Plus : Lightbulb} variant={isIdea ? 'secondary' : 'ghost'} onClick={() => void create(isIdea ? 'note' : 'idea')}>
             {isIdea ? 'New note' : 'New idea'}
           </Button>
@@ -230,6 +248,7 @@ export function NotesPage() {
                   setCurrent(n);
                   setNotes((list) => list.map((x) => (x.id === n.id ? n : x)));
                 }}
+                onSaveTemplate={() => void saveAsTemplate()}
               />
             </motion.div>
           ) : (
@@ -243,6 +262,14 @@ export function NotesPage() {
       <Drawer open={panelDrawer && !wide} onClose={() => setPanelDrawer(false)} label="Claude folder" width={380}>
         <ClaudePanel onClose={() => setPanelDrawer(false)} className="h-full rounded-none border-0" />
       </Drawer>
+      <TemplatePicker
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onPick={(t) => {
+          setTemplatesOpen(false);
+          void create(t.kind, t);
+        }}
+      />
     </Page>
   );
 }

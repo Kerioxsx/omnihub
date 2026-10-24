@@ -2,6 +2,8 @@
 @import "../shared/theme.css";
 /* Vite's root is mobile/, so tell Tailwind where the components live. */
 @source "./";
+/* Minecraft heads and item tiles, shared with the desktop app. */
+@source "../shared/minecraft.tsx";
 
 :root {
   --safe-top: env(safe-area-inset-top, 0px);

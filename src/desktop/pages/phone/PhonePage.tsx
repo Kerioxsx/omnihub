@@ -1,24 +1,26 @@
 import { formatBytes, formatDateTime, formatRelative } from '@shared/format';
-import type { AuditEntry, Device } from '@shared/types';
+import type { AuditEntry, Device, InboxItem } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowDownToLine, ArrowUpFromLine, Check, CircleCheck, CircleX, Copy, Eye, FolderSearch, Globe, History, Lock, MonitorUp, Pencil, QrCode, Send, ShieldCheck, Smartphone, Tablet, Trash, Unlock, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Check, CircleCheck, CircleX, Copy, Eye, FolderSearch, Globe, History, Lock, MonitorUp, Pencil, QrCode, Send, ShieldCheck, Smartphone, Tablet, Trash, Type, Unlock, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Badge, Card, CardHeader, Dot, Skeleton } from '../../components/ui/Card';
-import { Select, Switch, TextInput } from '../../components/ui/Form';
-import { Modal } from '../../components/ui/Overlay';
+import { Switch, TextInput } from '../../components/ui/Form';
 import { ProgressBar } from '../../components/ui/Progress';
 import { EmptyState } from '../../components/ui/States';
+import { FileIcon } from '../../components/FileIcon';
 import { cx } from '../../lib/cx';
 import { useAsync, useEvent, useNow } from '../../lib/hooks';
 import { navigate, useRoute } from '../../lib/router';
 import { copyText } from '../../lib/util';
 import { confirm } from '../../state/dialogs';
 import { useLive } from '../../state/live';
+import { useSend } from '../../state/send';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
+import { ConnectionCheck } from './ConnectionCheck';
 import { PairDialog } from './PairDialog';
 import { Permissions } from './Permissions';
 
@@ -75,8 +77,8 @@ function Hero({ onPair, onSend }: { onPair: () => void; onSend: () => void }) {
         <div className="flex flex-col items-end gap-3">
           <Switch size="lg" checked={running} onChange={(v) => void toggle(v)} label="Phone companion" disabled={busy} />
           <div className="flex gap-2">
-            <Button icon={Send} onClick={onSend} disabled={!running}>
-              Send files
+            <Button icon={Send} onClick={onSend}>
+              Send to phone
             </Button>
             <Button variant="primary" icon={QrCode} onClick={onPair}>
               Pair a phone
@@ -156,6 +158,38 @@ function Devices({ onPair }: { onPair: () => void }) {
   );
 }
 
+function Offered() {
+  const offered = useAsync(() => api.remote.inbox(), []);
+  useEvent<{ item: InboxItem }>('inbox:new', (p) => offered.setData([p.item, ...(offered.data ?? []).filter((i) => i.id !== p.item.id)]));
+  useEvent<{ id: string }>('inbox:removed', (p) => offered.setData((offered.data ?? []).filter((i) => i.id !== p.id)));
+  const items = offered.data ?? [];
+  if (!items.length) return null;
+  const unsend = (id: string) => void api.remote.inboxRemove(id).catch((e: unknown) => toast.error('Could not remove', errorText(e)));
+  return (
+    <div className="mt-4">
+      <div className="mb-1.5 flex items-center justify-between text-[11.5px] font-semibold uppercase tracking-wider text-faint">
+        <span>Waiting on your phones</span>
+        <span className="tabular">{items.length}</span>
+      </div>
+      <div className="max-h-[220px] space-y-1 overflow-y-auto pr-1">
+        {items.map((i) => (
+          <div key={i.id} className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-surface-2">
+            {i.kind === 'text' ? <Type size={15} className="shrink-0 text-faint" aria-hidden /> : <FileIcon name={i.name} isDir={false} />}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[12.5px] text-fg">{i.name}</div>
+              <div className="text-[11px] text-faint tabular">
+                {i.kind === 'text' ? `${i.size} characters` : formatBytes(i.size)}
+                {i.folder ? ` · folder “${i.folder}”` : ''} · {formatRelative(i.created)}
+              </div>
+            </div>
+            <IconButton icon={X} label="Stop offering" size="sm" onClick={() => unsend(i.id)} className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Transfers() {
   const transfers = useLive((s) => s.transfers);
   const clear = useLive((s) => s.clearFinished);
@@ -207,8 +241,9 @@ function Transfers() {
             );
           })}
         </AnimatePresence>
-        {!transfers.length && <div className="rounded-xl border border-dashed border-line px-4 py-5 text-center text-[12.5px] text-faint">No transfers yet. Files sent from a phone land in your incoming folder.</div>}
+        {!transfers.length && <div className="rounded-xl border border-dashed border-line px-4 py-5 text-center text-[12.5px] text-faint">No transfers yet. Files sent from a phone land in your incoming folder; drop files on this window to send them to a phone.</div>}
       </div>
+      <Offered />
     </Card>
   );
 }
@@ -288,91 +323,28 @@ function AuditLog() {
   );
 }
 
-function SendDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const devices = useLive((s) => s.devices).filter((d) => !d.revoked);
-  const [paths, setPaths] = useState<string[]>([]);
-  const [target, setTarget] = useState('');
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    setPaths([]);
-    void api.app.pickFiles('Choose files to send').then(setPaths, (e: unknown) => toast.error('Could not open the file picker', errorText(e)));
-  }, [open]);
-  const send = async () => {
-    setBusy(true);
-    try {
-      const items = await api.remote.send(paths, target || null);
-      toast.success(`Offered ${items.length} file${items.length === 1 ? '' : 's'}`, `${target ? devices.find((d) => d.id === target)?.name : 'Every phone'} sees them in the companion inbox.`);
-      onClose();
-    } catch (e) {
-      toast.error('Could not send', errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Send files to a phone"
-      icon={Send}
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="primary" icon={Send} disabled={!paths.length} loading={busy} onClick={() => void send()}>
-            Send {paths.length || ''}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-3 pb-2">
-        <div className="space-y-1.5">
-          {paths.map((p) => (
-            <div key={p} className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-3 pr-1">
-              <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-dim">{p}</span>
-              <IconButton icon={X} label="Remove" size="sm" onClick={() => setPaths(paths.filter((x) => x !== p))} />
-            </div>
-          ))}
-          {!paths.length && <div className="text-[13px] text-faint">No files chosen.</div>}
-          <Button size="xs" onClick={() => void api.app.pickFiles('Choose files to send').then((more) => setPaths([...new Set([...paths, ...more])]))}>
-            Add files…
-          </Button>
-        </div>
-        <label className="block text-[12.5px] text-dim">
-          Send to
-          <Select value={target} onChange={(e) => setTarget(e.target.value)} className="mt-1.5" aria-label="Phone">
-            <option value="">Every paired phone</option>
-            {devices.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </div>
-    </Modal>
-  );
-}
-
 export function PhonePage() {
   const route = useRoute();
   const [pairOpen, setPairOpen] = useState(false);
-  const [sendOpen, setSendOpen] = useState(false);
   const remote = useLive((s) => s.remote);
 
+  const [checkFocus, setCheckFocus] = useState(false);
   useEffect(() => {
     if (route.params.get('pair') === '1') {
       setPairOpen(true);
       navigate('phone');
+    }
+    if (route.params.get('check') === '1') {
+      setCheckFocus(true);
+      navigate('phone');
+      setTimeout(() => document.getElementById('connection-check')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
     }
   }, [route.params]);
 
   return (
     <Page title="Phone" subtitle="Use your phone as a remote for this PC — files, power, screen and notes, all over your local network.">
       <div className="space-y-3">
-        <Hero onPair={() => setPairOpen(true)} onSend={() => setSendOpen(true)} />
+        <Hero onPair={() => setPairOpen(true)} onSend={() => useSend.getState().openFiles()} />
         <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
           <div className="space-y-3">
             <Viewers />
@@ -380,12 +352,18 @@ export function PhonePage() {
             <Transfers />
             <AuditLog />
           </div>
-          <Permissions />
+          <div className="space-y-3">
+            {remote?.running && (
+              <div id="connection-check" className="scroll-mt-4">
+                <ConnectionCheck key={String(checkFocus)} defaultOpen={checkFocus} />
+              </div>
+            )}
+            <Permissions />
+          </div>
         </div>
         {!remote && <Skeleton className="h-20" />}
       </div>
       <PairDialog open={pairOpen} onClose={() => setPairOpen(false)} />
-      <SendDialog open={sendOpen} onClose={() => setSendOpen(false)} />
     </Page>
   );
 }

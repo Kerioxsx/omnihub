@@ -1,7 +1,8 @@
+import { primaryProvider } from '@shared/accounts';
 import { formatDate, formatRelative } from '@shared/format';
 import type { Entry, EntryKind, EntrySummary, VaultStatus } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { ClipboardCheck, Copy, ExternalLink, Eye, EyeOff, KeyRound, LockKeyhole, Pencil, Plus, Settings2, ShieldAlert, Star, Timer, Trash } from 'lucide-react';
+import { ClipboardCheck, Copy, ExternalLink, Eye, EyeOff, Globe, KeyRound, LockKeyhole, Pencil, Plus, Settings2, ShieldAlert, ShieldCheck, Star, Timer, Trash } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -9,7 +10,7 @@ import { Badge, Card, Skeleton, Spinner } from '../../components/ui/Card';
 import { SearchInput, Select } from '../../components/ui/Form';
 import { Callout, EmptyState } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
-import { useEvent, useNow } from '../../lib/hooks';
+import { useEvent, useMediaQuery, useNow } from '../../lib/hooks';
 import { formatCountdown, prettyUrl } from '../../lib/util';
 import { confirm } from '../../state/dialogs';
 import { useLive } from '../../state/live';
@@ -17,16 +18,20 @@ import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
 import { EntryForm } from './EntryForm';
 import { KINDS, StrengthMeter, kindIcon, useStrength } from './shared';
+import { BrowserAutofill } from './BrowserAutofill';
+import { VaultHealth } from './VaultHealth';
 import { VaultSettings } from './VaultSettings';
 
-type Field = 'password' | 'username' | 'email' | 'url' | 'notes';
+type Field = 'password' | 'username' | 'email' | 'url' | 'notes' | 'totp';
 
 const SCORE_TONE = ['bg-bad', 'bg-bad', 'bg-warn', 'bg-good', 'bg-good'];
-const PROVIDER_HELP: [RegExp, string, string][] = [
-  [/google|gmail/i, 'Google', 'https://myaccount.google.com/signinoptions/passkeys'],
-  [/microsoft|outlook|live\.com|hotmail/i, 'Microsoft', 'https://account.live.com/proofs/manage/additional'],
-  [/apple|icloud/i, 'Apple', 'https://support.apple.com/en-us/102195'],
-];
+const PASSKEY_HELP: Record<string, string> = {
+  Google: 'https://myaccount.google.com/signinoptions/passkeys',
+  Microsoft: 'https://account.live.com/proofs/manage/additional',
+  Apple: 'https://support.apple.com/en-us/102195',
+  Yahoo: 'https://login.yahoo.com/account/security',
+  Proton: 'https://account.proton.me/u/0/mail/account-password',
+};
 
 function FieldRow({ label, children, onCopy, copied, mono }: { label: string; children: ReactNode; onCopy?: () => void; copied?: number | null; mono?: boolean }) {
   return (
@@ -43,6 +48,44 @@ function FieldRow({ label, children, onCopy, copied, mono }: { label: string; ch
         onCopy && <IconButton icon={Copy} label={`Copy ${label.toLowerCase()}`} size="sm" onClick={onCopy} className="opacity-70 group-hover:opacity-100" />
       )}
     </div>
+  );
+}
+
+/** The current 2FA code with a countdown ring; refreshed when it rolls over. */
+function TotpRow({ id, onCopy, copied }: { id: string; onCopy: () => void; copied: number | null }) {
+  const [code, setCode] = useState<{ code: string; until: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const now = useNow(500);
+  const expired = !code || code.until <= now;
+  useEffect(() => {
+    if (!expired) return;
+    let alive = true;
+    api.vault.totp(id).then(
+      (c) => alive && setCode({ code: c.code, until: Date.now() + c.remaining * 1000 }),
+      (e: unknown) => alive && setError(errorText(e)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [id, expired]);
+  const left = code ? Math.max(0, Math.ceil((code.until - now) / 1000)) : 30;
+  const r = 9;
+  const c = 2 * Math.PI * r;
+  return (
+    <FieldRow label="2FA code" onCopy={onCopy} copied={copied} mono>
+      {error ? (
+        <span className="text-bad">{error}</span>
+      ) : (
+        <span className="flex items-center gap-3">
+          <span className="text-[18px] font-semibold tracking-[0.18em] tabular">{code ? `${code.code.slice(0, Math.ceil(code.code.length / 2))} ${code.code.slice(Math.ceil(code.code.length / 2))}` : '··· ···'}</span>
+          <svg width="22" height="22" viewBox="0 0 22 22" aria-label={`Changes in ${left} seconds`} className={left <= 5 ? 'text-warn' : 'text-accent'}>
+            <circle cx="11" cy="11" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
+            <circle cx="11" cy="11" r={r} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - left / 30)} transform="rotate(-90 11 11)" style={{ transition: 'stroke-dashoffset .5s linear' }} />
+          </svg>
+          <span className="font-sans text-[12px] text-faint tabular">{left}s</span>
+        </span>
+      )}
+    </FieldRow>
   );
 }
 
@@ -92,7 +135,8 @@ function Detail({ id, onEdit, onDeleted, onChanged }: { id: string; onEdit: (e: 
     );
 
   const Icon = kindIcon(entry.kind);
-  const primary = PROVIDER_HELP.find(([re]) => re.test(`${entry.url} ${entry.email} ${entry.username}`));
+  const provider = primaryProvider(entry);
+  const primary = provider ? ([null, provider, PASSKEY_HELP[provider]] as const) : null;
   const toggleFav = async () => {
     try {
       await api.vault.save({ id: entry.id, kind: entry.kind, title: entry.title, username: entry.username, email: entry.email, password: null, url: entry.url, notes: null, tags: entry.tags, favorite: !entry.favorite });
@@ -181,6 +225,7 @@ function Detail({ id, onEdit, onDeleted, onChanged }: { id: string; onEdit: (e: 
             )}
           </div>
         )}
+        {entry.totp && <TotpRow id={entry.id} onCopy={() => void copy('totp')} copied={left('totp')} />}
         {entry.url && (
           <FieldRow label="Website" onCopy={() => void copy('url')} copied={left('url')}>
             <button type="button" onClick={() => void api.app.openUrl(entry.url)} className="inline-flex items-center gap-1.5 text-accent hover:underline">
@@ -226,6 +271,8 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [form, setForm] = useState<{ open: boolean; entry: Entry | null }>({ open: false, entry: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
   const [locksAt, setLocksAt] = useState(() => (status.locksIn != null ? Date.now() + status.locksIn * 1000 : null));
   const now = useNow(1000);
   const lastTouch = useRef(0);
@@ -266,12 +313,13 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
 
   const secs = locksAt ? Math.max(0, (locksAt - now) / 1000) : null;
   const weak = (entries ?? []).filter((e) => e.hasPassword && e.passwordScore <= 1).length;
+  const wide = useMediaQuery('(min-width: 1320px)');
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3" onMouseMove={touch} onKeyDown={touch}>
       <div className="flex items-center gap-2">
-        <SearchInput value={q} onChange={setQ} placeholder="Search entries" className="w-72" aria-label="Search entries" />
-        <Select value={kind} onChange={(e) => setKind(e.target.value as '' | EntryKind)} aria-label="Kind" className="w-[150px]">
+        <SearchInput value={q} onChange={setQ} placeholder="Search entries" className="w-60 min-w-[140px] shrink" aria-label="Search entries" />
+        <Select value={kind} onChange={(e) => setKind(e.target.value as '' | EntryKind)} aria-label="Kind" className="w-[136px] shrink-0">
           <option value="">All kinds</option>
           {KINDS.map((k) => (
             <option key={k.value} value={k.value}>
@@ -279,24 +327,34 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
             </option>
           ))}
         </Select>
-        <button type="button" onClick={() => setFavs(!favs)} aria-pressed={favs} className={cx('inline-flex h-9 items-center gap-1.5 rounded-[10px] border px-3 text-[13px] transition-colors', favs ? 'border-warn/40 bg-warn/12 text-warn' : 'border-line bg-surface text-dim hover:text-fg')}>
+        <button type="button" onClick={() => setFavs(!favs)} aria-pressed={favs} className={cx('inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] border px-3 text-[13px] transition-colors', favs ? 'border-warn/40 bg-warn/12 text-warn' : 'border-line bg-surface text-dim hover:text-fg')}>
           <Star size={14} fill={favs ? 'currentColor' : 'none'} aria-hidden /> Favourites
         </button>
-        {weak > 0 && (
-          <Badge tone="bad" icon={ShieldAlert} title="Entries with a weak or reused-looking password">
-            {weak} weak password{weak > 1 ? 's' : ''}
-          </Badge>
-        )}
+        <button type="button" onClick={() => setHealthOpen(true)} className={cx('inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-[10px] border px-3 text-[13px] transition-colors', weak > 0 ? 'border-bad/40 bg-bad/10 text-bad hover:bg-bad/15' : 'border-line bg-surface text-dim hover:text-fg')} title="Weak, reused and old passwords, and breach check">
+          {weak > 0 ? <ShieldAlert size={14} aria-hidden /> : <ShieldCheck size={14} aria-hidden />}
+          {weak > 0 ? `${weak} weak` : 'Health'}
+        </button>
         <div className="flex-1" />
         {secs != null && (
-          <span className={cx('flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] tabular', secs < 60 ? 'border-warn/40 bg-warn/10 text-warn' : 'border-line bg-surface text-dim')} title="The vault locks itself after inactivity">
-            <Timer size={13} /> Locks in {formatCountdown(secs)}
+          <span className={cx('flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-[12px] tabular', secs < 60 ? 'border-warn/40 bg-warn/10 text-warn' : 'border-line bg-surface text-dim')} title="The vault locks itself after inactivity">
+            <Timer size={13} /> {wide ? `Locks in ${formatCountdown(secs)}` : formatCountdown(secs)}
           </span>
         )}
+        {wide ? (
+          <Button icon={Globe} onClick={() => setBrowserOpen(true)} className="shrink-0">
+            Browser autofill
+          </Button>
+        ) : (
+          <IconButton icon={Globe} label="Browser autofill" variant="secondary" onClick={() => setBrowserOpen(true)} />
+        )}
         <IconButton icon={Settings2} label="Vault settings" variant="secondary" onClick={() => setSettingsOpen(true)} />
-        <Button icon={LockKeyhole} onClick={() => void lock()}>
-          Lock
-        </Button>
+        {wide ? (
+          <Button icon={LockKeyhole} onClick={() => void lock()}>
+            Lock
+          </Button>
+        ) : (
+          <IconButton icon={LockKeyhole} label="Lock" variant="secondary" onClick={() => void lock()} />
+        )}
         <Button variant="primary" icon={Plus} onClick={() => setForm({ open: true, entry: null })}>
           New entry
         </Button>
@@ -329,6 +387,7 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
                         </span>
                         <span className="block truncate text-[12px] text-faint">{e.username || e.email || prettyUrl(e.url) || (e.hasNotes ? 'Secure note' : '—')}</span>
                       </span>
+                      {e.hasTotp && <ShieldCheck size={13} className="shrink-0 text-good" aria-label="Has a 2FA code" />}
                       {e.primaryAccount && <span className="h-2 w-2 shrink-0 rounded-full bg-warn" title="Primary account — consider a passkey" />}
                       {e.hasPassword && <span className={cx('h-1.5 w-5 shrink-0 rounded-full', SCORE_TONE[e.passwordScore])} title={`Password strength ${e.passwordScore}/4`} />}
                     </motion.button>
@@ -371,6 +430,8 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
         }}
       />
       <VaultSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} status={status} />
+      <BrowserAutofill open={browserOpen} onClose={() => setBrowserOpen(false)} />
+      <VaultHealth open={healthOpen} onClose={() => setHealthOpen(false)} onOpenEntry={(id) => setSelected(id)} />
     </div>
   );
 }

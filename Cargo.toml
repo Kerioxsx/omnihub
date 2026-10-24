@@ -3,7 +3,7 @@ members = ["crates/omnihub-core", "src-tauri"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.13.5"
 edition = "2021"
 license = "MIT"
 authors = ["Kerioxsx"]
@@ -18,8 +18,11 @@ opt-level = 2
 opt-level = 1
 
 [profile.release]
-lto = "thin"
-codegen-units = 4
+# Only OmniHub's own two crates are compiled by a release (the rest comes
+# from the build cache); without cross-crate LTO and with more codegen units they
+# build in a fraction of the time, for a binary that is barely different.
+lto = false
+codegen-units = 16
 opt-level = 3
 strip = "debuginfo"
 panic = "unwind"
