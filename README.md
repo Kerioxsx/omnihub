@@ -32,6 +32,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.13.5
+
+- **Govee**: *Per segment, any light* gives lights that ignore streaming (like the H6076 floor lamp) a colour per segment through Govee's own segment commands.
+
 ## New in 0.13.4
 
 - **Govee**: lights that don't stream segments (like the H6076 floor lamp) get one colour in effects, music and screen, a calmer brightness boost, and SteelSeries GG (Prism) is spotted when it fights over the keyboard. Mixes have a **Save as .mrpack** button again.

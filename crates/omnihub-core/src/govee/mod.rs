@@ -132,6 +132,9 @@ pub enum StreamKind {
     Auto,
     /// A colour per segment (Govee's DreamView streaming).
     Segments,
+    /// A colour per segment through Govee's own segment commands: slower,
+    /// for lights that ignore the streaming (up to 15 segments).
+    SegmentsLite,
     /// One colour for the whole light (for lights that don't stream).
     Single,
 }
@@ -423,18 +426,42 @@ pub fn show_colors() -> Vec<Rgb> {
 /// ignore the stream and stay on their last colour.
 const STREAMERS: &[&str] = &["H6199", "H6604"];
 
-/// Whether a light gets a colour per segment. `Auto`: what Govee's account
-/// says (DreamView), else only models known to stream; every other light
-/// gets one colour, which all of them take.
-fn stream_segments(kind: StreamKind, cloud: Option<&CloudDevice>, sku: Option<&str>) -> bool {
-    match kind {
+/// How a light's live colours travel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Route {
+    /// `razer` frames, a colour per segment, up to ~30 a second.
+    Stream,
+    /// Segment-colour commands for the segments that changed, ~8 a second.
+    Commands,
+    /// One colour for the whole light.
+    Single,
+}
+
+/// `Auto`: streaming when Govee's account says so (DreamView), else only
+/// for models known to stream; every other light gets one colour, which
+/// all of them take.
+fn route(kind: StreamKind, cloud: Option<&CloudDevice>, sku: Option<&str>) -> Route {
+    let streams = match kind {
         StreamKind::Segments => true,
+        StreamKind::SegmentsLite => return Route::Commands,
         StreamKind::Single => false,
         StreamKind::Auto => match cloud {
             Some(d) => d.has("dreamViewToggle"),
             None => sku.is_some_and(|s| STREAMERS.iter().any(|k| k.eq_ignore_ascii_case(s.trim()))),
         },
+    };
+    if streams {
+        Route::Stream
+    } else {
+        Route::Single
     }
+}
+
+/// A colour rounded to 32 steps a channel: segment commands go out only
+/// for changes that show.
+fn coarse(c: Rgb) -> Rgb {
+    let q = |v: u8| ((v as u16 * 31 + 127) / 255 * 255 / 31) as u8;
+    Rgb(q(c.0), q(c.1), q(c.2))
 }
 
 fn sanitize_look(l: &mut Look) {
@@ -1382,8 +1409,12 @@ impl GoveeHub {
                     continue;
                 }
                 // One colour: worked out from the whole zone, not averaged from segments.
-                let segments = stream_segments(l.stream, cloud_dev, lan_dev.map(|d| d.sku.as_str()));
-                let n = if segments { n } else { 1 };
+                let way = route(l.stream, cloud_dev, lan_dev.map(|d| d.sku.as_str()));
+                let n = match way {
+                    Route::Stream => n,
+                    Route::Commands => n.min(lan::SEGMENT_MAX),
+                    Route::Single => 1,
+                };
                 let target: Vec<look::C> = match look.mode {
                     Mode::Effect => {
                         let colors: Vec<Rgb> = look.colors.iter().filter_map(|c| Rgb::parse(c)).collect();
@@ -1418,7 +1449,26 @@ impl GoveeHub {
                 }
                 let changed = run.last.as_ref().is_none_or(|p| p.len() != colors.len() || p.iter().zip(&colors).any(|(a, b)| a.0.abs_diff(b.0) > 1 || a.1.abs_diff(b.1) > 1 || a.2.abs_diff(b.2) > 1));
                 let keepalive = run.sent_at.is_none_or(|t| t.elapsed() > Duration::from_millis(900));
-                if segments {
+                if way != Route::Stream && run.razer_on {
+                    send(&lan::razer(&lan::razer_switch(false)));
+                    run.razer_on = false;
+                }
+                if way == Route::Commands {
+                    // Only the segments that changed, a few times a second; all of
+                    // them now and then in case a packet was lost.
+                    if (changed || keepalive) && run.sent_at.is_none_or(|t| t.elapsed() >= Duration::from_millis(120)) {
+                        let full = keepalive || run.cmd_sent.len() != colors.len();
+                        let todo: Vec<(usize, Rgb)> = colors.iter().map(|&c| coarse(c)).enumerate().filter(|(i, c)| full || run.cmd_sent.get(*i) != Some(c)).collect();
+                        let packets = lan::segment_packets(&todo);
+                        if !packets.is_empty() {
+                            let refs: Vec<&[u8]> = packets.iter().map(|p| &p[..]).collect();
+                            send(&lan::pt_real(&refs));
+                        }
+                        run.cmd_sent = colors.iter().map(|&c| coarse(c)).collect();
+                        run.sent_at = Some(Instant::now());
+                        run.last = Some(colors.clone());
+                    }
+                } else if way == Route::Stream {
                     if (changed || keepalive) && run.sent_at.is_none_or(|t| t.elapsed() >= Duration::from_millis(30)) {
                         // Switched on once (and after a pause): switching it on again
                         // while streaming makes some lamps blink off.
@@ -1431,10 +1481,6 @@ impl GoveeHub {
                         run.last = Some(colors.clone());
                     }
                 } else {
-                    if run.razer_on {
-                        send(&lan::razer(&lan::razer_switch(false)));
-                        run.razer_on = false;
-                    }
                     if (changed || keepalive) && run.sent_at.is_none_or(|t| t.elapsed() >= Duration::from_millis(100)) {
                         let k = colors.len().max(1) as u32;
                         let sum = colors.iter().fold((0u32, 0u32, 0u32), |a, c| (a.0 + c.0 as u32, a.1 + c.1 as u32, a.2 + c.2 as u32));
@@ -1445,7 +1491,7 @@ impl GoveeHub {
                 }
                 run.applied = None;
                 frames.insert(id.clone(), colors);
-                self.set_light_state(id, true, segments, None);
+                self.set_light_state(id, true, way != Route::Single, None);
                 continue;
             }
             // A still look: sent once, again only when it changes.
@@ -1574,6 +1620,8 @@ struct Run {
     smooth: Smooth,
     music: MusicRun,
     last: Option<Vec<Rgb>>,
+    /// Segment colours last sent as commands.
+    cmd_sent: Vec<Rgb>,
     sent_at: Option<Instant>,
     /// The still look last sent.
     applied: Option<String>,
@@ -1709,6 +1757,21 @@ mod tests {
     }
 
     #[test]
+    fn segment_commands_for_lights_that_dont_stream() {
+        let dir = tempfile::tempdir().unwrap();
+        let (h, fake, _events) = hub(dir.path());
+        h.update(&json!({ "enabled": true, "look": { "mode": "screen", "smoothness": 10 }, "lights": [{ "id": "AA:BB:CC:DD:EE:FF:00:11", "segments": 4, "zone": "around", "stream": "segmentsLite" }] })).unwrap();
+        h.hold();
+        wait("segment commands", || !fake.commands("ptReal").is_empty());
+        use base64::Engine;
+        let c = &fake.commands("ptReal")[0];
+        let p = base64::engine::general_purpose::STANDARD.decode(c["msg"]["data"]["command"][0].as_str().unwrap()).unwrap();
+        assert_eq!((p.len(), &p[..4]), (20, &[0x33u8, 0x05, 0x15, 0x01][..]));
+        assert!(fake.commands("razer").iter().all(|c| base64::engine::general_purpose::STANDARD.decode(c["msg"]["data"]["pt"].as_str().unwrap()).unwrap() != lan::razer_switch(true)), "no streaming switched on");
+        wait("shown as per segment", || h.status().lights[0].per_segment && h.status().lights[0].streaming);
+    }
+
+    #[test]
     fn presets_timers_and_the_sleep_timer() {
         let dir = tempfile::tempdir().unwrap();
         let (h, fake, _) = hub(dir.path());
@@ -1745,13 +1808,15 @@ mod tests {
     fn auto_streams_segments_only_to_lights_that_can() {
         let dev = |caps: &[&str]| CloudDevice { sku: "H6022".into(), device: "x".into(), name: "Lamp".into(), kind: "devices.types.light".into(), capabilities: caps.iter().map(|i| cloud::Capability { kind: "devices.capabilities.toggle".into(), instance: i.to_string(), parameters: Value::Null }).collect() };
         let (dream, plain) = (dev(&["dreamViewToggle"]), dev(&["gradientToggle"]));
-        assert!(stream_segments(StreamKind::Auto, Some(&dream), Some("H6022")));
-        assert!(!stream_segments(StreamKind::Auto, Some(&plain), Some("H6199")));
+        assert_eq!(route(StreamKind::Auto, Some(&dream), Some("H6022")), Route::Stream);
+        assert_eq!(route(StreamKind::Auto, Some(&plain), Some("H6199")), Route::Single);
         // Not in the account: only models known to stream get segments.
-        assert!(stream_segments(StreamKind::Auto, None, Some("h6199")));
-        assert!(!stream_segments(StreamKind::Auto, None, Some("H6008")) && !stream_segments(StreamKind::Auto, None, None));
-        assert!(!stream_segments(StreamKind::Auto, None, Some("H6076")), "the floor lamp ignores the stream");
-        assert!(stream_segments(StreamKind::Segments, Some(&plain), None) && !stream_segments(StreamKind::Single, Some(&dream), None));
+        assert_eq!(route(StreamKind::Auto, None, Some("h6199")), Route::Stream);
+        assert!(route(StreamKind::Auto, None, Some("H6008")) == Route::Single && route(StreamKind::Auto, None, None) == Route::Single);
+        assert_eq!(route(StreamKind::Auto, None, Some("H6076")), Route::Single, "the floor lamp ignores the stream");
+        assert!(route(StreamKind::Segments, Some(&plain), None) == Route::Stream && route(StreamKind::Single, Some(&dream), None) == Route::Single);
+        assert_eq!(route(StreamKind::SegmentsLite, None, Some("H6076")), Route::Commands);
+        assert_eq!(coarse(Rgb(255, 0, 130)), coarse(Rgb(253, 2, 132)));
         assert_eq!(LightSettings::default().stream, StreamKind::Auto);
         let mut s = GoveeSettings::default();
         s.look.boost = 250;

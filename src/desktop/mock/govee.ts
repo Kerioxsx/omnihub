@@ -213,7 +213,7 @@ function lights(): GoveeLight[] {
       color: look.mode === 'color' ? look.color : l.color,
       kelvin: look.mode === 'white' ? look.kelvin : null,
       streaming: !!(settings.enabled && on && live && l.lan && s.control),
-      perSegment: s.stream === 'segments' || (s.stream === 'auto' && (l.segments ?? 0) > 1),
+      perSegment: s.stream === 'segments' || s.stream === 'segmentsLite' || (s.stream === 'auto' && (l.segments ?? 0) > 1),
       message: settings.enabled && live && !l.lan ? 'Live colours need LAN Control: switch it on for this light in the Govee Home app.' : null,
       cloud: l.cloud && hasKey,
     };

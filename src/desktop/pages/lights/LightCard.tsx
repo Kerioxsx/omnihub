@@ -190,11 +190,12 @@ export function LightCard({ light, govee, monitors }: { light: GoveeLight; govee
               options={[
                 { value: 'auto', label: 'Auto' },
                 { value: 'segments', label: `Per segment (${segs})` },
+                { value: 'segmentsLite', label: 'Per segment, any light' },
                 { value: 'single', label: 'One colour' },
               ]}
             />
           </div>
-          <p className="-mt-1 text-[11.5px] text-faint">Auto: a colour per segment for lights Govee’s account (your API key) or OmniHub knows can take it, one colour for the rest, which every light takes. A lamp with many LEDs that isn’t known: try Per segment; if it then stays still, go back to Auto.</p>
+          <p className="-mt-1 text-[11.5px] text-faint">Auto: a colour per segment for lights Govee’s account (your API key) or OmniHub knows can take it, one colour for the rest. <b>Per segment</b> streams fast but only DreamView-type lights take it; if a light stays still with it, try <b>Per segment, any light</b>: Govee’s own segment commands, about 8 times a second, up to 15 segments (set the number your light has above).</p>
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <label className="flex items-center gap-2 text-[12.5px] text-dim">
               <Switch checked={ls.gradient} onChange={(v) => set({ gradient: v })} label="Blend segments" /> Blend segments

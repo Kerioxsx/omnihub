@@ -393,7 +393,9 @@ only when Govee's account lists `dreamViewToggle` for it, or, without the
 account, for models known to stream (`STREAMERS`); one-colour lights get
 their colour from their whole zone (`n = 1`). A zone's colour is a
 chroma-weighted average that falls back to the zone's main hue when the
-mix comes out pale. Scans go out twice, plus a unicast sweep of the local /24 networks
+mix comes out pale. `StreamKind::SegmentsLite` sends the segments that changed as
+Govee's BLE segment-colour packets (`33 05 15 01 RGB … mask`) in one
+`ptReal`, at most every 120 ms, for lights that ignore `razer`. Scans go out twice, plus a unicast sweep of the local /24 networks
 every five minutes for routers that drop multicast. Cloud calls run on a separate
 `govee-cloud` thread with a coalescing queue. `capture::sampler` shrinks the
 desktop on the GPU (Desktop Duplication → mipmapped copy → one small level

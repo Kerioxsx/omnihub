@@ -1,13 +1,11 @@
 ## New in this version
 
-**Govee floor lamps follow effects and music, calmer brightness, SteelSeries keyboards, and Save as .mrpack.**
+**A colour per segment on Govee lights that ignore streaming.**
 
-- **Govee H6076 floor lamp** (and other models that don't take a colour per segment): it changed with plain colours but stayed warm during effects, music and screen. *Auto* now streams per segment only to the DreamView kits; every other light gets one colour, which they all follow. A light can still be set to *Per segment* by hand.
-- **Less glaring**: the screen's brightness boost starts at 40 instead of 65. If yours was on the old 65, it's brought down once; pick any value in Screen → Brightness boost.
-- **SteelSeries keyboards**: OmniHub now spots SteelSeries GG (Prism) setting the keyboard at the same time and says how to hand it over (GG → Engine → your keyboard → turn off Prism), so the colours stop fighting.
-- **Save as .mrpack**: mixes have their own *Save as .mrpack* button again, beside Share with friends.
+- **Per segment, any light**: a new choice on each light (Lights → the light → Live colours). Lights like the H6076 floor lamp ignore Govee's fast streaming, so until now they could only show one colour in screen, music and effect modes. This choice sends Govee's own segment commands instead (what its Bluetooth app sends), about 8 times a second, only for the segments that changed: up to 15 segments, each with its own colour. Set the number of segments your light has under *Placement, segments*.
+- *Auto* stays as it was: streaming for the lights that take it, one colour for the rest.
 
-Also in 0.13.3: NeoForge and Forge mixes install in the Minecraft Launcher, PC lighting can follow the Govee lights.
+Also in 0.13.4: calmer brightness boost, SteelSeries GG spotted, Save as .mrpack.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

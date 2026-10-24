@@ -51,6 +51,24 @@ pub fn ble_packet(payload: &[u8]) -> [u8; 20] {
     p
 }
 
+/// Most segments one segment-colour packet can pick (a 15-bit mask).
+pub const SEGMENT_MAX: usize = 15;
+
+/// Govee's own segment-colour commands (what its Bluetooth app sends,
+/// carried by `ptReal`): `33 05 15 01 RR GG BB 00×5 <mask lo> <mask hi>`,
+/// one packet per colour with a bit for each segment that takes it. For
+/// lights that ignore `razer` streaming.
+pub fn segment_packets(segments: &[(usize, Rgb)]) -> Vec<[u8; 20]> {
+    let mut groups: Vec<(Rgb, u16)> = Vec::new();
+    for &(i, c) in segments.iter().filter(|(i, _)| *i < SEGMENT_MAX) {
+        match groups.iter_mut().find(|(g, _)| *g == c) {
+            Some(g) => g.1 |= 1 << i,
+            None => groups.push((c, 1 << i)),
+        }
+    }
+    groups.into_iter().map(|(c, mask)| ble_packet(&[0x33, 0x05, 0x15, 0x01, c.0, c.1, c.2, 0, 0, 0, 0, 0, (mask & 0xff) as u8, (mask >> 8) as u8])).collect()
+}
+
 /// A razer packet: `BB 00 <length> <command> <data…> <xor>`.
 pub fn razer_packet(cmd: u8, data: &[u8]) -> Vec<u8> {
     let len = data.len().min(255);
@@ -346,6 +364,15 @@ pub mod tests {
         pub fn commands(&self, cmd: &str) -> Vec<Value> {
             self.got.lock().unwrap().iter().filter(|v| v["msg"]["cmd"] == cmd).cloned().collect()
         }
+    }
+
+    #[test]
+    fn segment_colour_packets() {
+        let p = segment_packets(&[(0, Rgb(255, 0, 0)), (1, Rgb(0, 0, 255)), (14, Rgb(255, 0, 0)), (20, Rgb(1, 2, 3))]);
+        assert_eq!(p.len(), 2, "one packet per colour; segments past 15 are left out");
+        assert_eq!(&p[0][..14], &[0x33, 0x05, 0x15, 0x01, 255, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x40]);
+        assert_eq!((p[1][4..7].to_vec(), p[1][12], p[1][13]), (vec![0, 0, 255], 0x02, 0x00));
+        assert_eq!(p[0][19], xor(&p[0][..19]));
     }
 
     #[test]
