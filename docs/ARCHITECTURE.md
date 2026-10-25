@@ -254,10 +254,13 @@ or the UI:
   follows settings, monitors, full-screen apps (`SHQueryUserNotificationState`)
   and game boosts once a second.
 
-`games/` keeps profiles in `games.json`. Play runs a session on its own
+`games/` keeps profiles in `games.json`. `games/reshade.rs` handles Roblox shaders: it downloads the official ReShade
+and a fixed set of SweetFX/qUINT effects into `tools/reshade`, writes OmniHub's
+presets, and puts `dxgi.dll` + `ReShade.ini` + a marker into each Roblox
+folder (again before each Roblox start, since updates make new folders). Play runs a session on its own
 thread: each step (close apps, power plan, notifications, per-game registry
 settings, admin-only settings in one helper call, Wi-Fi low-latency handle,
-Roblox flags, launch) is recorded as it happens and in a journal on disk;
+Roblox flags and shaders, launch) is recorded as it happens and in a journal on disk;
 the thread then follows the game's process and restores everything when it
 exits or on Stop. Boost modes (Competitive, Quality, Custom) decide which
 switches are on; Quality never touches the game's own settings. While the

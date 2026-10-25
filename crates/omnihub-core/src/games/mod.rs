@@ -14,6 +14,7 @@ pub mod library;
 pub mod nvidia;
 pub mod pc;
 pub mod ping;
+pub mod reshade;
 pub mod roblox;
 pub mod tweaks;
 
@@ -782,6 +783,57 @@ impl GameHub {
         Ok(files.into_iter().map(|f| f.to_string_lossy().into_owned()).collect())
     }
 
+    fn shaders(&self) -> reshade::Shaders {
+        reshade::Shaders::new(self.tools_dir.join("reshade"))
+    }
+
+    /// Roblox shaders now: ReShade's version and where it is in place.
+    pub fn roblox_shaders(&self) -> reshade::ShaderStatus {
+        let mut st = reshade::ShaderStatus { version: self.shaders().version(), ..Default::default() };
+        for d in roblox::player_dirs(&self.roblox_roots.lock()) {
+            match (d.join("dxgi.dll").is_file(), d.join(reshade::MARKER).is_file()) {
+                (true, true) => st.applied += 1,
+                (true, false) => st.foreign.push(d.to_string_lossy().into_owned()),
+                _ => {}
+            }
+        }
+        st
+    }
+
+    /// Put shaders in Roblox (downloading ReShade the first time) or take
+    /// OmniHub's out.
+    pub fn apply_roblox_shaders(&self, s: &reshade::ShaderSettings) -> Result<reshade::ShaderStatus, String> {
+        let sh = self.shaders();
+        if s.enabled {
+            let ev = self.events.clone();
+            sh.download(&mut |text| ev.emit("games:roblox-shaders", serde_json::json!({ "text": text })))?;
+        }
+        sh.apply(s, &roblox::player_dirs(&self.roblox_roots.lock()))
+    }
+
+    /// Every flag Roblox's client has (from a community tracker, cached a
+    /// day), allowlisted ones first.
+    pub fn roblox_flag_list(&self, refresh: bool) -> Result<Vec<roblox::KnownFlag>, String> {
+        let cache = self.tools_dir.join("roblox-flags.json");
+        let fresh = std::fs::metadata(&cache).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age < Duration::from_secs(86_400));
+        if fresh && !refresh {
+            if let Some(list) = std::fs::read(&cache).ok().and_then(|b| serde_json::from_slice(&b).ok()) {
+                return Ok(list);
+            }
+        }
+        let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(60))).build().into();
+        let get = |url: &str| -> Result<Vec<u8>, String> { agent.get(url).call().map_err(|e| format!("The flag list didn't download: {e}"))?.body_mut().with_config().limit(32 << 20).read_to_vec().map_err(|e| e.to_string()) };
+        let names = String::from_utf8_lossy(&get(roblox::FLAG_NAMES)?).into_owned();
+        let values: serde_json::Value = serde_json::from_slice(&get(roblox::FLAG_VALUES)?).unwrap_or_default();
+        let list = roblox::known_flags(&names, &values);
+        if list.is_empty() {
+            return Err("The flag list came back empty.".into());
+        }
+        let _ = std::fs::create_dir_all(&self.tools_dir);
+        let _ = std::fs::write(&cache, serde_json::to_vec(&list).unwrap_or_default());
+        Ok(list)
+    }
+
     /// The ping targets for a profile: its custom host, or its game's regions.
     pub fn ping_targets(&self, id: Option<&str>) -> Vec<PingTarget> {
         let p = id.and_then(|i| self.profile(i));
@@ -1243,6 +1295,11 @@ impl GameHub {
         if p.kind == GameKind::Roblox && p.roblox.enabled {
             let r = self.write_roblox(&p.roblox).map(|files| format!("{} flags written ({} file{})", p.roblox.to_flags().len(), files.len(), if files.len() == 1 { "" } else { "s" }));
             self.push(step("roblox", "Roblox flags", r));
+        }
+        // Shaders are put back after each Roblox update (a new version folder).
+        if p.kind == GameKind::Roblox && p.roblox.shaders.enabled {
+            let r = self.apply_roblox_shaders(&p.roblox.shaders).map(|st| format!("ReShade in {} folder{}", st.applied, if st.applied == 1 { "" } else { "s" }));
+            self.push(step("shaders", "Roblox shaders", r));
         }
 
         // 8b. The game's own settings (only while it is closed).

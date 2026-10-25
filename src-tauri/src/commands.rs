@@ -1534,6 +1534,27 @@ pub async fn games_roblox_preview(flags: games::roblox::RobloxFlags) -> Res<serd
     Ok(serde_json::json!({ "flags": map, "ignored": ignored }))
 }
 
+/// Roblox shaders: ReShade's version and where it is in place.
+#[tauri::command]
+pub async fn games_roblox_shaders(core: Core<'_>) -> Res<games::reshade::ShaderStatus> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.roblox_shaders())).await
+}
+
+/// Put Roblox shaders in (downloading ReShade the first time) or take them out.
+#[tauri::command]
+pub async fn games_roblox_shaders_apply(core: Core<'_>, shaders: games::reshade::ShaderSettings) -> Res<games::reshade::ShaderStatus> {
+    let core = core.inner().clone();
+    blocking(move || core.games.apply_roblox_shaders(&shaders)).await
+}
+
+/// Every flag Roblox's client has, allowlisted ones first.
+#[tauri::command]
+pub async fn games_roblox_flag_list(core: Core<'_>, refresh: bool) -> Res<Vec<games::roblox::KnownFlag>> {
+    let core = core.inner().clone();
+    blocking(move || core.games.roblox_flag_list(refresh)).await
+}
+
 // ---------- game settings, installed games, PC tweaks ----------
 
 #[derive(Serialize)]

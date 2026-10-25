@@ -2,7 +2,7 @@
 // boost session whose steps tick in (with a live FPS readout), ping and
 // lag-under-load results, the FPS meter and a found Roblox install.
 
-import type { BoostMode, FpsLive, FpsOverview, FpsRecord, FpsSummary, GameBoost, GameKind, GameLaunch, GameProfile, GameSession, GameState, GameStep, LoadTest, PingResult, PingTarget, RobloxFlags, RobloxInstall } from '@shared/types';
+import type { BoostMode, FpsLive, FpsOverview, FpsRecord, FpsSummary, GameBoost, GameKind, GameLaunch, GameProfile, GameSession, GameState, GameStep, KnownFlag, LoadTest, PingResult, PingTarget, RobloxFlags, RobloxInstall, RobloxShaders, ShaderStatus } from '@shared/types';
 import { emit } from './bus';
 import { configGame, settingsStep } from './optimize';
 
@@ -33,7 +33,7 @@ export function withMode(b: GameBoost, mode: BoostMode): GameBoost {
 
 const defaultMode = (kind: GameKind): BoostMode => (kind === 'gta5' || kind === 'cyberpunk' || kind === 'custom' ? 'quality' : 'competitive');
 
-const ROBLOX_DEFAULT: RobloxFlags = { enabled: true, preset: 'balanced', renderer: 'auto', msaa: null, textureQuality: null, noGrass: false, graySky: false, lowDetailDistance: false, pauseVoxelizer: false, qualityLevel: null, exclusiveFullscreen: false, ignoreDisplayScaling: false, custom: {} };
+const ROBLOX_DEFAULT: RobloxFlags = { enabled: true, preset: 'balanced', renderer: 'auto', msaa: null, textureQuality: null, noGrass: false, graySky: false, lowDetailDistance: false, pauseVoxelizer: false, qualityLevel: null, exclusiveFullscreen: false, ignoreDisplayScaling: false, custom: {}, customOff: [], shaders: { enabled: false, preset: 'realistic', strength: 100 } };
 
 function template(kind: GameKind): GameProfile {
   const t = TEMPLATES[kind];
@@ -250,7 +250,7 @@ const ALLOW = new Set([
 ]);
 
 export function withPreset(f: RobloxFlags): RobloxFlags {
-  const base: RobloxFlags = { ...ROBLOX_DEFAULT, enabled: f.enabled, preset: f.preset, custom: f.custom };
+  const base: RobloxFlags = { ...ROBLOX_DEFAULT, enabled: f.enabled, preset: f.preset, custom: f.custom, customOff: f.customOff ?? [], shaders: f.shaders ?? ROBLOX_DEFAULT.shaders };
   switch (f.preset) {
     case 'maxFps':
       return { ...base, renderer: 'd3d11', msaa: 0, textureQuality: 0, noGrass: true, lowDetailDistance: true, pauseVoxelizer: true, qualityLevel: 1, exclusiveFullscreen: true };
@@ -278,8 +278,33 @@ export function preview(flags: RobloxFlags) {
   if (f.qualityLevel != null) m.DFIntDebugFRMQualityLevelOverride = String(f.qualityLevel);
   if (f.exclusiveFullscreen) m.FFlagHandleAltEnterFullscreenManually = 'False';
   if (f.ignoreDisplayScaling) m.DFFlagDisableDPIScale = 'True';
-  Object.assign(m, flags.custom);
+  for (const [k, v] of Object.entries(flags.custom)) if (!(flags.customOff ?? []).includes(k)) m[k] = v;
   return { flags: m, ignored: Object.keys(m).filter((k) => !ALLOW.has(k)) };
+}
+
+let shaderState: ShaderStatus = { version: null, applied: 0, foreign: [] };
+
+export function robloxShaders(): ShaderStatus {
+  return shaderState;
+}
+
+export async function robloxShadersApply(s: RobloxShaders): Promise<ShaderStatus> {
+  if (s.enabled && !shaderState.version) await new Promise((r) => setTimeout(r, 1200));
+  shaderState = { version: '6.8.0', applied: s.enabled ? 1 : 0, foreign: [] };
+  return shaderState;
+}
+
+const FLAG_SAMPLE: KnownFlag[] = [
+  ...[...ALLOW].map((name) => ({ name, value: name.startsWith('FFlag') || name.startsWith('DFFlag') ? 'False' : '0', allowed: true })),
+  { name: 'DFIntTaskSchedulerTargetFps', value: '60', allowed: false },
+  { name: 'FFlagDebugDisplayFPS', value: 'False', allowed: false },
+  { name: 'FIntRenderShadowIntensity', value: '1', allowed: false },
+  { name: 'DFFlagDebugRenderForceTechnologyVoxel', value: 'False', allowed: false },
+  { name: 'FStringDebugLuaLogPattern', value: '', allowed: false },
+];
+
+export function robloxFlagList(): KnownFlag[] {
+  return FLAG_SAMPLE;
 }
 
 export function robloxWrite(flags: RobloxFlags): string[] {

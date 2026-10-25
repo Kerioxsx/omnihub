@@ -82,6 +82,10 @@ pub struct RobloxFlags {
     pub ignore_display_scaling: bool,
     /// Extra flags, name → value.
     pub custom: Map<String, Value>,
+    /// Extra flags kept but switched off (not written).
+    pub custom_off: Vec<String>,
+    /// Shaders through ReShade (like RoShade or Bloxshade).
+    pub shaders: super::reshade::ShaderSettings,
 }
 
 impl Default for RobloxFlags {
@@ -100,6 +104,8 @@ impl Default for RobloxFlags {
             exclusive_fullscreen: false,
             ignore_display_scaling: false,
             custom: Map::new(),
+            custom_off: Vec::new(),
+            shaders: Default::default(),
         }
     }
 }
@@ -107,7 +113,7 @@ impl Default for RobloxFlags {
 impl RobloxFlags {
     /// The options a preset stands for (Custom keeps the current ones).
     pub fn with_preset(&self, preset: Preset) -> RobloxFlags {
-        let base = RobloxFlags { enabled: self.enabled, preset, custom: self.custom.clone(), ..Default::default() };
+        let base = RobloxFlags { enabled: self.enabled, preset, custom: self.custom.clone(), custom_off: self.custom_off.clone(), shaders: self.shaders.clone(), ..Default::default() };
         match preset {
             Preset::MaxFps => RobloxFlags { renderer: Renderer::D3d11, msaa: Some(0), texture_quality: Some(0), no_grass: true, low_detail_distance: true, pause_voxelizer: true, quality_level: Some(1), exclusive_fullscreen: true, ..base },
             Preset::Balanced => RobloxFlags { renderer: Renderer::D3d11, no_grass: true, exclusive_fullscreen: true, ..base },
@@ -161,11 +167,70 @@ impl RobloxFlags {
         if f.ignore_display_scaling {
             set("DFFlagDisableDPIScale", "True".into());
         }
-        for (k, v) in &self.custom {
+        for (k, v) in self.custom.iter().filter(|(k, _)| !self.custom_off.contains(k)) {
             m.insert(k.clone(), v.clone());
         }
         m
     }
+}
+
+/// Every flag name Roblox's client has, with prefix ("[C++] DFFlagX" lines).
+pub const FLAG_NAMES: &str = "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/FVariables.txt";
+/// The values Roblox serves its Windows client now, by name without prefix.
+pub const FLAG_VALUES: &str = "https://raw.githubusercontent.com/MaximumADHD/Roblox-FFlag-Tracker/main/PCDesktopClient.json";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KnownFlag {
+    pub name: String,
+    /// What Roblox sets it to now, as the file spells it.
+    pub value: Option<String>,
+    /// On the allowlist: Roblox still reads it from the local file.
+    pub allowed: bool,
+}
+
+/// A flag's name without its kind (FFlag, DFInt, FString…).
+pub fn bare_name(name: &str) -> &str {
+    for p in ["DFFlag", "DFInt", "DFString", "DFLog", "SFFlag", "FFlag", "FInt", "FString", "FLog"] {
+        if let Some(rest) = name.strip_prefix(p) {
+            return rest;
+        }
+    }
+    name
+}
+
+/// The flags list from the tracker's two files, allowlisted ones first.
+pub fn known_flags(names: &str, values: &Value) -> Vec<KnownFlag> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out: Vec<KnownFlag> = names
+        .lines()
+        .filter_map(|l| l.split_whitespace().last())
+        .filter(|n| n.len() > 3 && n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+        .filter(|n| seen.insert(n.to_string()))
+        .map(|n| KnownFlag {
+            name: n.to_string(),
+            value: values.get(bare_name(n)).map(|v| match v {
+                Value::Bool(b) => if *b { "True" } else { "False" }.to_string(),
+                Value::String(s) => s.clone(),
+                other => other.to_string(),
+            }),
+            allowed: ALLOWLIST.contains(&n),
+        })
+        .collect();
+    out.sort_by(|a, b| b.allowed.cmp(&a.allowed).then_with(|| a.name.cmp(&b.name)));
+    out
+}
+
+/// Folders Roblox starts from: every version folder, and a bootstrapper's
+/// Modifications folder (it copies that over each version at launch).
+pub fn player_dirs(roots: &[(PathBuf, Option<&'static str>)]) -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = detect_in(roots).version_dirs.iter().map(PathBuf::from).collect();
+    for (root, boot) in roots {
+        if boot.is_some() && root.join("Versions").is_dir() {
+            v.push(root.join("Modifications"));
+        }
+    }
+    v
 }
 
 /// Custom flag names Roblox will ignore.
@@ -273,6 +338,23 @@ pub fn write_flags(roots: &[(PathBuf, Option<&'static str>)], flags: &Map<String
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_flags_switch_off_and_the_list_reads() {
+        let mut f = RobloxFlags { preset: Preset::Custom, ..Default::default() };
+        f.custom.insert("FFlagA".into(), Value::String("True".into()));
+        f.custom.insert("DFIntB".into(), Value::String("5".into()));
+        f.custom_off.push("DFIntB".into());
+        let m = f.to_flags();
+        assert!(m.contains_key("FFlagA") && !m.contains_key("DFIntB"));
+        let names = "[C++] DFFlagDisableDPIScale\n[C++] FIntSomething\n[Lua] FFlagLuaThing\n[C++] FIntSomething\n";
+        let values = serde_json::json!({ "DisableDPIScale": true, "Something": 42 });
+        let list = known_flags(names, &values);
+        assert_eq!(list.len(), 3);
+        assert_eq!((list[0].name.as_str(), list[0].allowed, list[0].value.as_deref()), ("DFFlagDisableDPIScale", true, Some("True")));
+        assert_eq!(list.iter().find(|k| k.name == "FIntSomething").unwrap().value.as_deref(), Some("42"));
+        assert_eq!(bare_name("DFIntTaskSchedulerTargetFps"), "TaskSchedulerTargetFps");
+    }
 
     #[test]
     fn presets_use_allowed_flags_only() {

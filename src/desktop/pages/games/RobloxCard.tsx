@@ -10,6 +10,8 @@ import { Card, CardHeader } from '../../components/ui/Card';
 import { Segmented, Select, Switch } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { toast } from '../../state/toasts';
+import { CustomFlags } from './RobloxFlagList';
+import { RobloxShaders } from './RobloxShaders';
 import { Row } from './shared';
 
 const PRESETS: Record<Exclude<RobloxPreset, 'custom'>, Partial<RobloxFlags>> = {
@@ -26,8 +28,6 @@ function effective(f: RobloxFlags): RobloxFlags {
 export function RobloxCard({ flags, onChange }: { flags: RobloxFlags; onChange: (f: RobloxFlags) => void }) {
   const [install, setInstall] = useState<RobloxInstall | null>(null);
   const [preview, setPreview] = useState<{ flags: Record<string, unknown>; ignored: string[] } | null>(null);
-  const [custom, setCustom] = useState(() => (Object.keys(flags.custom).length ? JSON.stringify(flags.custom, null, 2) : ''));
-  const [customError, setCustomError] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
 
   useEffect(() => {
@@ -41,25 +41,11 @@ export function RobloxCard({ flags, onChange }: { flags: RobloxFlags; onChange: 
   // Touching any single option turns the preset into Custom.
   const set = (patch: Partial<RobloxFlags>) => onChange({ ...f, ...patch, preset: 'custom' });
 
-  const applyCustom = () => {
-    if (!custom.trim()) {
-      setCustomError(null);
-      return onChange({ ...flags, custom: {} });
-    }
-    try {
-      const v = JSON.parse(custom) as unknown;
-      if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('Use an object: { "FlagName": "value" }');
-      setCustomError(null);
-      onChange({ ...flags, custom: v as RobloxFlags['custom'] });
-    } catch (e) {
-      setCustomError(e instanceof Error ? e.message : String(e));
-    }
-  };
-
   const write = async () => {
     setWriting(true);
     try {
       const files = await api.games.robloxWrite(flags);
+      if (flags.shaders?.enabled) await api.games.robloxShadersApply(flags.shaders);
       toast.success('Roblox flags written', `${files.length} file${files.length === 1 ? '' : 's'}.${install?.running ? ' Restart Roblox to use them.' : ''}`);
     } catch (e) {
       toast.error('Could not write the flags', errorText(e));
@@ -155,19 +141,11 @@ export function RobloxCard({ flags, onChange }: { flags: RobloxFlags; onChange: 
         <Row title="Ignore display scaling" hint="Renders at full resolution on scaled screens: sharper, but fewer FPS.">
           <Switch checked={f.ignoreDisplayScaling} onChange={(v) => set({ ignoreDisplayScaling: v })} label="Ignore display scaling" />
         </Row>
-        <Row title="Custom flags" hint="Advanced: any other flags as JSON. Roblox ignores flags outside its allowlist." stack>
-          <textarea
-            value={custom}
-            onChange={(e) => setCustom(e.target.value)}
-            onBlur={applyCustom}
-            spellCheck={false}
-            rows={4}
-            placeholder={'{\n  "FFlagDebugSkyGray": "True"\n}'}
-            className="w-full resize-y rounded-xl border border-line bg-surface p-3 font-mono text-[12px] text-fg outline-none focus:border-accent/60"
-          />
-          {customError && <div className="text-[12px] text-bad">{customError}</div>}
+        <Row title="Your own flags" hint="Any flag, switched on or off one by one. Pick from every flag Roblox has (All flags); Roblox only reads the allowlisted ones from your PC." stack>
+          <CustomFlags flags={flags} onChange={onChange} ignored={preview?.ignored ?? []} />
         </Row>
       </div>
+      <RobloxShaders value={flags.shaders ?? { enabled: false, preset: 'realistic', strength: 100 }} onChange={(shaders) => onChange({ ...flags, shaders })} renderer={f.renderer} found={!!install?.found} />
       <div className="space-y-2 px-5 pb-4 pt-2">
         {preview && (
           <details className="rounded-xl bg-surface px-3 py-2 text-[12px] text-dim">

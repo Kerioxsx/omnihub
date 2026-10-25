@@ -1398,6 +1398,36 @@ export interface RobloxFlags {
   exclusiveFullscreen: boolean;
   ignoreDisplayScaling: boolean;
   custom: Record<string, string | number | boolean>;
+  /** custom flags kept but switched off */
+  customOff: string[];
+  shaders: RobloxShaders;
+}
+
+export type ShaderPreset = 'realistic' | 'vivid' | 'cinematic' | 'soft' | 'sharp' | 'custom';
+
+/** Shaders through ReShade, like RoShade or Bloxshade. */
+export interface RobloxShaders {
+  enabled: boolean;
+  preset: ShaderPreset;
+  /** 25–150 % */
+  strength: number;
+}
+
+export interface ShaderStatus {
+  /** ReShade's version once downloaded */
+  version: string | null;
+  /** Roblox folders with OmniHub's ReShade */
+  applied: number;
+  /** Roblox folders with another tool's dxgi.dll, left alone */
+  foreign: string[];
+}
+
+export interface KnownFlag {
+  name: string;
+  /** what Roblox sets it to now */
+  value: string | null;
+  /** on the allowlist: Roblox still reads it */
+  allowed: boolean;
 }
 
 export interface GameProfile {

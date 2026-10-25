@@ -202,6 +202,16 @@ and lets a phone do some of that. This is what protects each part.
   Roblox's own settings file,
   `ClientSettings\ClientAppSettings.json`, where OmniHub writes Fast Flags
   (keeping any flags it did not write).
+- Roblox shaders (off by default): when turned on, OmniHub downloads the
+  official ReShade setup from reshade.me (the standard build Roblox allows,
+  never the add-on one), takes `ReShade64.dll` out of it unchanged, and
+  downloads a fixed list of effect files (SweetFX, qUINT, ReShade's own
+  headers) from raw.githubusercontent.com into its own folder. It copies the
+  DLL as `dxgi.dll` into Roblox's version folders (and a bootstrapper's
+  Modifications folder) with a `ReShade.ini` and a marker file; turning
+  shaders off removes only folders with OmniHub's marker, never another
+  tool's ReShade. The flag browser downloads a public list of Roblox's flag
+  names and values from a community tracker on GitHub; nothing is sent.
 
 ## Mods and Claude
 

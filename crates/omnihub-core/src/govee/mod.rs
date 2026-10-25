@@ -437,23 +437,38 @@ enum Route {
     Single,
 }
 
-/// `Auto`: streaming when Govee's account says so (DreamView), else only
-/// for models known to stream; every other light gets one colour, which
-/// all of them take.
-fn route(kind: StreamKind, cloud: Option<&CloudDevice>, sku: Option<&str>) -> Route {
-    let streams = match kind {
-        StreamKind::Segments => true,
-        StreamKind::SegmentsLite => return Route::Commands,
-        StreamKind::Single => false,
-        StreamKind::Auto => match cloud {
-            Some(d) => d.has("dreamViewToggle"),
-            None => sku.is_some_and(|s| STREAMERS.iter().any(|k| k.eq_ignore_ascii_case(s.trim()))),
-        },
-    };
-    if streams {
-        Route::Stream
-    } else {
-        Route::Single
+/// Segments of models whose count Govee's account isn't needed for.
+const KNOWN_SEGMENTS: &[(&str, usize)] = &[("H6076", 14)];
+
+/// The segments a model is known to have.
+fn known_segments(sku: Option<&str>) -> Option<usize> {
+    let sku = sku?.trim();
+    KNOWN_SEGMENTS.iter().find(|(k, _)| k.eq_ignore_ascii_case(sku)).map(|(_, n)| *n)
+}
+
+/// `Auto`: streaming when Govee's account says so (DreamView) or the model
+/// is known to stream; segment commands when the light has segments (the
+/// account or the model says how many, or they were set by hand); else one
+/// colour, which every light takes.
+fn route(kind: StreamKind, cloud: Option<&CloudDevice>, sku: Option<&str>, set_segments: u8) -> Route {
+    match kind {
+        StreamKind::Segments => Route::Stream,
+        StreamKind::SegmentsLite => Route::Commands,
+        StreamKind::Single => Route::Single,
+        StreamKind::Auto => {
+            let streams = match cloud {
+                Some(d) => d.has("dreamViewToggle"),
+                None => sku.is_some_and(|s| STREAMERS.iter().any(|k| k.eq_ignore_ascii_case(s.trim()))),
+            };
+            let segments = if set_segments > 0 { set_segments as usize } else { cloud.and_then(|d| d.segments()).or_else(|| known_segments(sku)).unwrap_or(0) };
+            if streams {
+                Route::Stream
+            } else if segments > 1 {
+                Route::Commands
+            } else {
+                Route::Single
+            }
+        }
     }
 }
 
@@ -1402,14 +1417,14 @@ impl GoveeHub {
                     run.bright_at = Some(Instant::now());
                 }
             }
-            let n = if l.segments > 0 { l.segments as usize } else { cloud_dev.and_then(|d| d.segments()).unwrap_or(10) }.clamp(1, lan::RAZER_MAX);
+            let n = if l.segments > 0 { l.segments as usize } else { cloud_dev.and_then(|d| d.segments()).or_else(|| known_segments(lan_dev.map(|d| d.sku.as_str()))).unwrap_or(10) }.clamp(1, lan::RAZER_MAX);
             if look.mode.live() {
                 if lan_dev.is_none() {
                     self.set_light_state(id, false, false, Some("Live colours need LAN Control: switch it on for this light in the Govee Home app.".into()));
                     continue;
                 }
                 // One colour: worked out from the whole zone, not averaged from segments.
-                let way = route(l.stream, cloud_dev, lan_dev.map(|d| d.sku.as_str()));
+                let way = route(l.stream, cloud_dev, lan_dev.map(|d| d.sku.as_str()), l.segments);
                 let n = match way {
                     Route::Stream => n,
                     Route::Commands => n.min(lan::SEGMENT_MAX),
@@ -1808,14 +1823,17 @@ mod tests {
     fn auto_streams_segments_only_to_lights_that_can() {
         let dev = |caps: &[&str]| CloudDevice { sku: "H6022".into(), device: "x".into(), name: "Lamp".into(), kind: "devices.types.light".into(), capabilities: caps.iter().map(|i| cloud::Capability { kind: "devices.capabilities.toggle".into(), instance: i.to_string(), parameters: Value::Null }).collect() };
         let (dream, plain) = (dev(&["dreamViewToggle"]), dev(&["gradientToggle"]));
-        assert_eq!(route(StreamKind::Auto, Some(&dream), Some("H6022")), Route::Stream);
-        assert_eq!(route(StreamKind::Auto, Some(&plain), Some("H6199")), Route::Single);
-        // Not in the account: only models known to stream get segments.
-        assert_eq!(route(StreamKind::Auto, None, Some("h6199")), Route::Stream);
-        assert!(route(StreamKind::Auto, None, Some("H6008")) == Route::Single && route(StreamKind::Auto, None, None) == Route::Single);
-        assert_eq!(route(StreamKind::Auto, None, Some("H6076")), Route::Single, "the floor lamp ignores the stream");
-        assert!(route(StreamKind::Segments, Some(&plain), None) == Route::Stream && route(StreamKind::Single, Some(&dream), None) == Route::Single);
-        assert_eq!(route(StreamKind::SegmentsLite, None, Some("H6076")), Route::Commands);
+        assert_eq!(route(StreamKind::Auto, Some(&dream), Some("H6022"), 0), Route::Stream);
+        assert_eq!(route(StreamKind::Auto, Some(&plain), Some("H6199"), 0), Route::Single);
+        // Not in the account: models known to stream stream; lights with
+        // segments (known model, or set by hand) get segment commands.
+        assert_eq!(route(StreamKind::Auto, None, Some("h6199"), 0), Route::Stream);
+        assert!(route(StreamKind::Auto, None, Some("H6008"), 0) == Route::Single && route(StreamKind::Auto, None, None, 0) == Route::Single);
+        assert_eq!(route(StreamKind::Auto, None, Some("H6076"), 0), Route::Commands, "the floor lamp takes segment commands");
+        assert_eq!(known_segments(Some("h6076")), Some(14));
+        assert_eq!(route(StreamKind::Auto, None, Some("H6008"), 6), Route::Commands, "segments set by hand");
+        assert!(route(StreamKind::Segments, Some(&plain), None, 0) == Route::Stream && route(StreamKind::Single, Some(&dream), None, 0) == Route::Single);
+        assert_eq!(route(StreamKind::SegmentsLite, None, Some("H6076"), 0), Route::Commands);
         assert_eq!(coarse(Rgb(255, 0, 130)), coarse(Rgb(253, 2, 132)));
         assert_eq!(LightSettings::default().stream, StreamKind::Auto);
         let mut s = GoveeSettings::default();

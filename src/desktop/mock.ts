@@ -3,7 +3,7 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, ChatSource, NewChatKind, ModSort, CaptureKind, ConfigGame, ConfigOptions, DeepPartial, GameKind, GameProfile, RobloxFlags, TweakId, MediaAction, Priority, ProcessSort, DupeOptions, EntryInput, GeneratorOptions, NoteFilter, NoteInput, PowerAction, Rect, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey } from '@shared/types';
+import type { CaptureKind, ChatSource, ConfigGame, ConfigOptions, DeepPartial, DupeOptions, EntryInput, GameKind, GameProfile, GeneratorOptions, MediaAction, ModSort, NewChatKind, NoteFilter, NoteInput, PowerAction, Priority, ProcessSort, Rect, RobloxFlags, RobloxShaders, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey, SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, TweakId } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
@@ -90,6 +90,9 @@ const handlers: Record<string, Handler> = {
   games_roblox_status: () => games.robloxStatus(),
   games_roblox_write: (a) => games.robloxWrite(obj<RobloxFlags>(a, 'flags')),
   games_roblox_preview: (a) => games.preview(obj<RobloxFlags>(a, 'flags')),
+  games_roblox_shaders: () => games.robloxShaders(),
+  games_roblox_shaders_apply: (a) => games.robloxShadersApply(obj<RobloxShaders>(a, 'shaders')),
+  games_roblox_flag_list: () => games.robloxFlagList(),
   games_configs: () => optimize.configs(),
   games_config_options: (a) => optimize.setOptions(obj<ConfigOptions>(a, 'options')),
   games_config_apply: (a) => optimize.apply(str(a, 'game') as ConfigGame),

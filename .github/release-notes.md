@@ -1,11 +1,12 @@
 ## New in this version
 
-**A colour per segment on Govee lights that ignore streaming.**
+**Roblox shaders like RoShade and Bloxshade, every Roblox flag at hand, and Govee floor lamps in full colour by themselves.**
 
-- **Per segment, any light**: a new choice on each light (Lights → the light → Live colours). Lights like the H6076 floor lamp ignore Govee's fast streaming, so until now they could only show one colour in screen, music and effect modes. This choice sends Govee's own segment commands instead (what its Bluetooth app sends), about 8 times a second, only for the segments that changed: up to 15 segments, each with its own colour. Set the number of segments your light has under *Placement, segments*.
-- *Auto* stays as it was: streaming for the lights that take it, one colour for the rest.
+- **Roblox shaders**: in a Roblox game profile, turn on *Shaders* and pick a look: **Realistic** (shadows in corners, soft bloom), **Vivid**, **Cinematic**, **Soft**, **Sharp** (lightest on frame rate) or **Custom** (what you tune in the game is kept), with a strength slider. OmniHub downloads the official ReShade (the build Roblox allows) and effects from SweetFX and qUINT, puts them in Roblox, and puts them back after each Roblox update when you start Roblox from OmniHub. In the game, **Home** opens ReShade's menu and **End** turns the effects off and on. Another shader tool already in Roblox is left alone.
+- **Every Roblox flag**: *All flags* lists every flag Roblox's client has, with the value Roblox uses now, searchable, the ones Roblox still reads from your PC marked. Add any flag, edit its value, and switch each one **on or off** without deleting it. Pasting a JSON block still works.
+- **Govee floor lamps on Auto**: lights that ignore streaming but have segments (like the H6076 floor lamp, now known as 14 segments, or any light with its segments set) get a colour per segment through Govee's own segment commands by themselves.
 
-Also in 0.13.4: calmer brightness boost, SteelSeries GG spotted, Save as .mrpack.
+Also in 0.13.5: *Per segment, any light* for Govee lights that ignore streaming.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 
