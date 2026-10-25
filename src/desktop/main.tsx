@@ -1,13 +1,16 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, Suspense, lazy, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@shared/theme.css';
 import './styles.css';
 import { inTauri } from './api';
-import { App } from './App';
 import { useRoute } from './lib/router';
-import { AmbientOverlay } from './pages/overlay/AmbientOverlay';
-import { CaseScreen } from './pages/overlay/CaseScreen';
-import { RegionOverlay } from './pages/overlay/RegionOverlay';
+
+// Each window loads only what it shows: the glow and case-screen windows
+// never parse the app's pages, and the app never parses theirs.
+const App = lazy(() => import('./App').then((m) => ({ default: m.App })));
+const AmbientOverlay = lazy(() => import('./pages/overlay/AmbientOverlay').then((m) => ({ default: m.AmbientOverlay })));
+const CaseScreen = lazy(() => import('./pages/overlay/CaseScreen').then((m) => ({ default: m.CaseScreen })));
+const RegionOverlay = lazy(() => import('./pages/overlay/RegionOverlay').then((m) => ({ default: m.RegionOverlay })));
 
 /**
  * The region overlay runs in its own borderless window labelled "overlay"
@@ -42,11 +45,8 @@ function Root() {
     document.documentElement.classList.toggle('overlay-route', overlay);
     document.documentElement.classList.toggle('ambient-route', ambient);
   }, [overlay, ambient]);
-  if (route.id === 'casescreen' || overlayWindow === 'casescreen') return <CaseScreen />;
-  if (ambient) return <AmbientOverlay />;
-  if (overlay) return <RegionOverlay />;
-  if (overlayWindow === null) return null;
-  return <App />;
+  const view = route.id === 'casescreen' || overlayWindow === 'casescreen' ? <CaseScreen /> : ambient ? <AmbientOverlay /> : overlay ? <RegionOverlay /> : overlayWindow === null ? null : <App />;
+  return <Suspense fallback={null}>{view}</Suspense>;
 }
 
 createRoot(document.getElementById('root')!).render(

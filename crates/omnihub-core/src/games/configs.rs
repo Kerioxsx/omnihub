@@ -175,11 +175,32 @@ pub struct FortniteOptions {
     pub fullscreen: bool,
     /// NVIDIA Reflex Low Latency: 0 off, 1 on, 2 on + boost.
     pub reflex: u8,
+    /// Fortnite's rendering mode; None follows `performance_mode`
+    /// (settings saved before the choice existed).
+    pub render_mode: Option<RenderMode>,
 }
 
 impl Default for FortniteOptions {
     fn default() -> Self {
-        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2 }
+        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None }
+    }
+}
+
+/// Settings → Video → Rendering Mode.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RenderMode {
+    /// The lightest renderer, the most frames on almost every PC.
+    Performance,
+    Dx12,
+    Dx11,
+    /// Leave Fortnite's choice alone.
+    Keep,
+}
+
+impl FortniteOptions {
+    pub fn render(&self) -> RenderMode {
+        self.render_mode.unwrap_or(if self.performance_mode { RenderMode::Performance } else { RenderMode::Keep })
     }
 }
 
@@ -325,12 +346,21 @@ fn fortnite_edits(o: &FortniteOptions) -> Vec<Edit> {
             e.push(edit(s, key, "0", false, "Window mode: fullscreen"));
         }
     }
-    if o.performance_mode {
-        // The feature level Epic's own "-FeatureLevelES31" switch selects.
-        e.push(edit(Some(FN_RHI), "PreferredFeatureLevel", "es31", true, "Rendering mode: Performance"));
-        e.push(edit(Some("PerformanceMode"), "MeshQuality", "0", false, "Performance-mode meshes: low"));
+    let render = o.render();
+    match render {
+        RenderMode::Performance => {
+            // The feature level Epic's own "-FeatureLevelES31" switch selects.
+            e.push(edit(Some(FN_RHI), "PreferredFeatureLevel", "es31", true, "Rendering mode: Performance"));
+            e.push(edit(Some("PerformanceMode"), "MeshQuality", "0", false, "Performance-mode meshes: low"));
+        }
+        RenderMode::Dx12 | RenderMode::Dx11 => {
+            let (rhi, level, what) = if render == RenderMode::Dx12 { ("dx12", "sm6", "DirectX 12") } else { ("dx11", "sm5", "DirectX 11") };
+            e.push(edit(Some(FN_RHI), "PreferredRHI", rhi, true, format!("Rendering mode: {what}")));
+            e.push(edit(Some(FN_RHI), "PreferredFeatureLevel", level, true, format!("Rendering mode: {what}")));
+        }
+        RenderMode::Keep => {}
     }
-    if o.performance_mode || o.lowest_quality {
+    if render == RenderMode::Performance || o.lowest_quality {
         e.push(edit(s, "bRayTracing", "False", false, "Ray tracing off"));
     }
     let g = Some(FN_SCALABILITY);
@@ -799,6 +829,24 @@ mod tests {
         restore(ConfigGame::Fortnite, &paths, &backups).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), FORTNITE);
         assert!(restore(ConfigGame::Fortnite, &paths, &backups).is_err(), "nothing left to restore");
+    }
+
+    #[test]
+    fn fortnite_render_modes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("GameUserSettings.ini");
+        std::fs::write(&path, FORTNITE).unwrap();
+        let mut opts = ConfigOptions::default();
+        opts.fortnite.render_mode = Some(RenderMode::Dx11);
+        apply(ConfigGame::Fortnite, &opts, std::slice::from_ref(&path), &dir.path().join("b")).unwrap();
+        let doc = Doc::ini(&std::fs::read(&path).unwrap());
+        assert_eq!(doc.get(Some(FN_RHI), "PreferredRHI").as_deref(), Some("dx11"));
+        assert_eq!(doc.get(Some(FN_RHI), "PreferredFeatureLevel").as_deref(), Some("sm5"));
+        assert!(doc.get(Some("PerformanceMode"), "MeshQuality").is_none());
+        // Saved before the choice existed: Performance mode off keeps Fortnite's.
+        let old: FortniteOptions = serde_json::from_str(r#"{"performanceMode":false}"#).unwrap();
+        assert_eq!(old.render(), RenderMode::Keep);
+        assert_eq!(FortniteOptions::default().render(), RenderMode::Performance);
     }
 
     #[test]

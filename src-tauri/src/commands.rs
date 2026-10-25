@@ -559,7 +559,7 @@ pub async fn shots_capture(app: AppHandle, core: Core<'_>, kind: CaptureKind, de
     .await;
     if was_visible {
         if let Some(w) = &main {
-            let _ = w.show();
+            crate::rest::show(w);
         }
     }
     shot
@@ -1592,6 +1592,17 @@ pub async fn games_config_apply(core: Core<'_>, game: games::configs::ConfigGame
         core.audit.record("desktop", "game.settings", &format!("{} ({} changes)", game.label(), r.as_ref().map(Vec::len).unwrap_or(0)), r.is_ok());
         r?;
         Ok(game_configs(&core))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn games_fortnite_clean(core: Core<'_>) -> Res<games::CacheClean> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.games.fortnite_clean_caches();
+        core.audit.record("desktop", "game.fortnite-clean", &r.as_ref().map(|c| format!("{} MB", c.freed_bytes / 1_000_000)).unwrap_or_default(), r.is_ok());
+        r.map_err(err)
     })
     .await
 }

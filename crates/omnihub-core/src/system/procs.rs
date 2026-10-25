@@ -112,6 +112,8 @@ struct Inner {
 
 pub struct ProcessMonitor {
     inner: Mutex<Inner>,
+    /// Names only, for "is it running?" (much cheaper than a full sample).
+    names: Mutex<(System, Option<Instant>)>,
 }
 
 impl Default for ProcessMonitor {
@@ -124,10 +126,12 @@ impl Default for ProcessMonitor {
 /// other; CPU figures over a few milliseconds are noise, so reuse a sample
 /// this fresh.
 const FRESH: Duration = Duration::from_millis(700);
+/// Is-it-running answers: one process list serves a burst of questions.
+const NAMES_FRESH: Duration = Duration::from_millis(500);
 
 impl ProcessMonitor {
     pub fn new() -> Self {
-        ProcessMonitor { inner: Mutex::new(Inner { sys: System::new(), rows: Vec::new(), at: None, gpu: None, gpu_sample: None }) }
+        ProcessMonitor { inner: Mutex::new(Inner { sys: System::new(), rows: Vec::new(), at: None, gpu: None, gpu_sample: None }), names: Mutex::new((System::new(), None)) }
     }
 
     fn refresh(inner: &mut Inner) {
@@ -248,10 +252,13 @@ impl ProcessMonitor {
 
     /// Process ids of every running program called `name`.
     pub fn pids_named(&self, name: &str) -> Vec<u32> {
-        let mut inner = self.inner.lock();
-        inner.at = None;
-        Self::refresh(&mut inner);
-        inner.rows.iter().filter(|r| r.name.eq_ignore_ascii_case(name)).map(|r| r.pid).collect()
+        let mut names = self.names.lock();
+        let (sys, at) = &mut *names;
+        if at.is_none_or(|t| t.elapsed() >= NAMES_FRESH) {
+            sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
+            *at = Some(Instant::now());
+        }
+        sys.processes().iter().filter(|(pid, p)| pid.as_u32() > 4 && p.thread_kind().is_none() && p.status() != sysinfo::ProcessStatus::Zombie && p.name().to_string_lossy().eq_ignore_ascii_case(name)).map(|(pid, _)| pid.as_u32()).collect()
     }
 
     /// Where a running program called `name` lives.
@@ -266,6 +273,8 @@ impl ProcessMonitor {
         if is_protected(name) {
             return Err(format!("{name} is part of Windows and cannot be ended here"));
         }
+        // What is running changes now; the next "is it running?" looks again.
+        self.names.lock().1 = None;
         let mut inner = self.inner.lock();
         inner.at = None;
         Self::refresh(&mut inner);

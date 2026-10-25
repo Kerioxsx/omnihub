@@ -151,8 +151,9 @@ pub fn run(args: Vec<String>) {
                 .spawn(move || loop {
                     match rx.blocking_recv() {
                         Ok(ev) => {
-                            let _ = h.emit(&ev.topic, &ev.payload);
-                            let hidden = h.get_webview_window("main").and_then(|w| w.is_visible().ok()).is_none_or(|v| !v);
+                            // Resting windows get theirs when they wake.
+                            rest::deliver(&h, &ev.topic, &ev.payload);
+                            let hidden = !rest::main_shown();
                             // Reminders are due now: always a Windows notification.
                             if hidden || ev.topic == "notes:reminder" {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
@@ -201,7 +202,7 @@ pub fn run(args: Vec<String>) {
             }
             if let Some(w) = app.get_webview_window("main") {
                 if !(start_hidden && settings.general.start_minimized) {
-                    let _ = w.show();
+                    rest::show(&w);
                 }
                 // Windows signing out, or an installer closing OmniHub to
                 // replace it: leave (closing would only hide to the tray and
@@ -223,6 +224,12 @@ pub fn run(args: Vec<String>) {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // Clicked back to: awake at once, not at the next check.
+            if let WindowEvent::Focused(true) = event {
+                if let Some(w) = window.app_handle().get_webview_window(window.label()) {
+                    rest::wake(&w);
+                }
+            }
             if window.label() != "main" {
                 return;
             }
@@ -425,6 +432,7 @@ pub fn run(args: Vec<String>) {
             commands::games_config_options,
             commands::games_config_apply,
             commands::games_config_restore,
+            commands::games_fortnite_clean,
             commands::games_load_test,
             commands::games_fps,
             commands::games_fps_install,

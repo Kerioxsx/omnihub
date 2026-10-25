@@ -279,6 +279,16 @@ and manages the region-capture overlay window. Closing the window hides it
 to the tray by default so the phone server keeps running; autostart passes
 `--minimized`.
 
+Windows nobody can see rest (`rest.rs`): one hidden in the tray, minimised,
+or behind a full-screen game or video on its monitor (for three seconds) has
+its WebView2 marked invisible, set to the low memory target and suspended.
+Core events for a resting window are held (only the newest of each
+whole-state topic; audio, light and fps frames skipped) and replayed in order
+when it wakes — on focus, on show, or at the next 300 ms check; past 1,500 it
+reloads instead. The frontend listens with its own window label as the
+target, so Tauri can skip a resting window. Each window loads only its own
+code: pages, the full-screen player and onboarding are lazy chunks.
+
 ## Frontend
 
 `src/shared/types.ts` mirrors the Rust types, `src/desktop/api.ts` maps every

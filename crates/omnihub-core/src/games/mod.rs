@@ -910,6 +910,17 @@ impl GameHub {
         configs::apply(game, &self.config_options(), &self.config_files(game), &self.backups_dir)
     }
 
+    /// Empty Fortnite's logs, crash reports and web cache, and the graphics
+    /// driver's shader caches (not while Fortnite runs; the first match
+    /// after rebuilds its shaders).
+    pub fn fortnite_clean_caches(&self) -> Result<CacheClean, String> {
+        if !self.procs.pids_named(ConfigGame::Fortnite.process()).is_empty() {
+            return Err("Close Fortnite first.".into());
+        }
+        let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).ok_or("Windows didn’t say where your app data is.")?;
+        Ok(clean_folders(&fortnite_cache_dirs(&local)))
+    }
+
     pub fn config_restore(&self, game: ConfigGame) -> Result<(), String> {
         if !self.procs.pids_named(game.process()).is_empty() {
             return Err(format!("Close {} first.", game.label()));
@@ -1607,6 +1618,51 @@ impl GameHub {
     }
 }
 
+/// What emptying cache folders freed.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheClean {
+    pub freed_bytes: u64,
+    pub files: u64,
+    /// Files in use (left alone).
+    pub skipped: u64,
+}
+
+/// Fortnite's throwaway folders and the GPU drivers' shader caches.
+fn fortnite_cache_dirs(local: &Path) -> Vec<PathBuf> {
+    let saved = local.join("FortniteGame").join("Saved");
+    let mut dirs = vec![saved.join("Logs"), saved.join("Crashes")];
+    if let Ok(rd) = std::fs::read_dir(&saved) {
+        dirs.extend(rd.flatten().filter(|e| e.file_name().to_string_lossy().to_ascii_lowercase().starts_with("webcache")).map(|e| e.path()));
+    }
+    for d in ["D3DSCache", "NVIDIA/DXCache", "NVIDIA/GLCache", "AMD/DxCache", "AMD/DxcCache", "AMD/VkCache", "Intel/ShaderCache"] {
+        dirs.push(local.join(d));
+    }
+    dirs
+}
+
+/// Delete what is inside each folder (the folders themselves stay).
+fn clean_folders(dirs: &[PathBuf]) -> CacheClean {
+    let mut out = CacheClean::default();
+    for dir in dirs {
+        for entry in walkdir::WalkDir::new(dir).min_depth(1).contents_first(true).into_iter().flatten() {
+            let path = entry.path();
+            if entry.file_type().is_dir() {
+                let _ = std::fs::remove_dir(path);
+                continue;
+            }
+            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            if std::fs::remove_file(path).is_ok() {
+                out.freed_bytes += size;
+                out.files += 1;
+            } else {
+                out.skipped += 1;
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1638,5 +1694,22 @@ mod tests {
         assert_eq!(step("x", "X", Ok("skip: not needed".into())).status, StepStatus::Skipped);
         assert_eq!(step("x", "X", Ok("skip: not needed".into())).detail, "not needed");
         assert_eq!(step("x", "X", Err("nope".into())).status, StepStatus::Failed);
+    }
+
+    #[test]
+    fn fortnite_caches_are_emptied() {
+        let dir = tempfile::tempdir().unwrap();
+        let saved = dir.path().join("FortniteGame/Saved");
+        for (f, n) in [("Logs/FortniteGame.log", 100), ("Crashes/x/dump.dmp", 50), ("webcache_4430/a", 10), ("Config/WindowsClient/GameUserSettings.ini", 5)] {
+            let p = saved.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, vec![0u8; n]).unwrap();
+        }
+        std::fs::create_dir_all(dir.path().join("NVIDIA/DXCache")).unwrap();
+        std::fs::write(dir.path().join("NVIDIA/DXCache/s.bin"), [1u8; 40]).unwrap();
+        let r = clean_folders(&fortnite_cache_dirs(dir.path()));
+        assert_eq!((r.freed_bytes, r.files, r.skipped), (200, 4, 0));
+        assert!(saved.join("Logs").is_dir() && !saved.join("Crashes/x").exists());
+        assert!(saved.join("Config/WindowsClient/GameUserSettings.ini").is_file(), "settings stay");
     }
 }

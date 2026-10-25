@@ -24,7 +24,10 @@ async function call<R>(cmd: string, args: Args = {}): Promise<R> {
 export async function on<P = unknown>(topic: string, handler: (payload: P) => void): Promise<() => void> {
   if (inTauri) {
     const { listen } = await import('@tauri-apps/api/event');
-    return listen<P>(topic, (e) => handler(e.payload));
+    const { getCurrentWebview } = await import('@tauri-apps/api/webview');
+    // Bound to this window, so a window resting in the background is skipped
+    // (the backend hands it what it missed when it wakes).
+    return listen<P>(topic, (e) => handler(e.payload), { target: getCurrentWebview().label });
   }
   const { mockListen } = await import('./mock');
   return mockListen(topic, handler as (p: unknown) => void);
@@ -189,6 +192,7 @@ export const api = {
     setConfigOptions: (options: T.ConfigOptions) => call<T.GameConfigs>('games_config_options', { options }),
     applyConfig: (game: T.ConfigGame) => call<T.GameConfigs>('games_config_apply', { game }),
     restoreConfig: (game: T.ConfigGame) => call<T.GameConfigs>('games_config_restore', { game }),
+    fortniteCleanCaches: () => call<T.CacheClean>('games_fortnite_clean'),
     library: () => call<T.InstalledGame[]>('games_library'),
     addInstalled: (key: string) => call<T.GameProfile>('games_add_installed', { key }),
     loadTest: (id: string | null) => call<T.LoadTest>('games_load_test', { id }),

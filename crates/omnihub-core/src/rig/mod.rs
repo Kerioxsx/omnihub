@@ -256,7 +256,7 @@ pub fn rivals<'a>(processes: impl IntoIterator<Item = &'a str>) -> Vec<String> {
 
 fn running_rivals() -> Vec<String> {
     let mut sys = sysinfo::System::new();
-    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    sys.refresh_processes_specifics(sysinfo::ProcessesToUpdate::All, true, sysinfo::ProcessRefreshKind::nothing());
     let names: Vec<String> = sys.processes().values().map(|p| p.name().to_string_lossy().into_owned()).collect();
     rivals(names.iter().map(String::as_str))
 }

@@ -1,5 +1,5 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
-import { type ComponentType, useEffect, useState } from 'react';
+import { type ComponentType, Suspense, lazy, useEffect, useState } from 'react';
 import { CommandPalette } from './components/CommandPalette';
 import { ConfirmHost } from './components/ConfirmHost';
 import { BrowserPairDialog } from './components/BrowserPairDialog';
@@ -8,7 +8,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalEvents, ThemeController } from './components/GlobalEvents';
 import { Logo } from './components/Logo';
 import { PowerBanner } from './components/PowerBanner';
-import { isWindowFullscreen, setWindowFullscreen } from './lib/nowPlaying';
+import { isWindowFullscreen, setWindowFullscreen, usePlayer } from './lib/nowPlaying';
 import { SendDialog } from './components/SendDialog';
 import { Sidebar } from './components/Sidebar';
 import { Toaster } from './components/Toaster';
@@ -17,27 +17,29 @@ import { overlayOpen } from './components/ui/Overlay';
 import { ErrorState } from './components/ui/States';
 import { useMediaQuery, useStoredState } from './lib/hooks';
 import { PAGE_IDS, type RouteId, navigate, useRoute } from './lib/router';
-import { AppsPage } from './pages/apps/AppsPage';
-import { GamesPage } from './pages/games/GamesPage';
-import { LightsPage } from './pages/lights/LightsPage';
-import { ModsPage } from './pages/mods/ModsPage';
-import { ServersPage } from './pages/servers/ServersPage';
-import { ChatsPage } from './pages/chats/ChatsPage';
-import { RigPage } from './pages/rig/RigPage';
-import { MusicPage } from './pages/music/MusicPage';
-import { PlayerHost } from './components/music/PlayerHost';
-import { HomePage } from './pages/home/HomePage';
-import { NotesPage } from './pages/notes/NotesPage';
-import { Onboarding } from './pages/onboarding/Onboarding';
-import { PhonePage } from './pages/phone/PhonePage';
-import { ScreenPage } from './pages/screen/ScreenPage';
-import { SettingsPage } from './pages/settings/SettingsPage';
-import { ScreenshotsPage } from './pages/shots/ScreenshotsPage';
-import { StoragePage } from './pages/storage/StoragePage';
-import { TasksPage } from './pages/tasks/TasksPage';
-import { VaultPage } from './pages/vault/VaultPage';
 import { usePalette } from './state/dialogs';
 import { useSettings } from './state/settings';
+
+// Pages load the first time they are opened.
+const AppsPage = lazy(() => import('./pages/apps/AppsPage').then((m) => ({ default: m.AppsPage })));
+const GamesPage = lazy(() => import('./pages/games/GamesPage').then((m) => ({ default: m.GamesPage })));
+const LightsPage = lazy(() => import('./pages/lights/LightsPage').then((m) => ({ default: m.LightsPage })));
+const ModsPage = lazy(() => import('./pages/mods/ModsPage').then((m) => ({ default: m.ModsPage })));
+const ServersPage = lazy(() => import('./pages/servers/ServersPage').then((m) => ({ default: m.ServersPage })));
+const ChatsPage = lazy(() => import('./pages/chats/ChatsPage').then((m) => ({ default: m.ChatsPage })));
+const RigPage = lazy(() => import('./pages/rig/RigPage').then((m) => ({ default: m.RigPage })));
+const MusicPage = lazy(() => import('./pages/music/MusicPage').then((m) => ({ default: m.MusicPage })));
+const HomePage = lazy(() => import('./pages/home/HomePage').then((m) => ({ default: m.HomePage })));
+const NotesPage = lazy(() => import('./pages/notes/NotesPage').then((m) => ({ default: m.NotesPage })));
+const PhonePage = lazy(() => import('./pages/phone/PhonePage').then((m) => ({ default: m.PhonePage })));
+const ScreenPage = lazy(() => import('./pages/screen/ScreenPage').then((m) => ({ default: m.ScreenPage })));
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const ScreenshotsPage = lazy(() => import('./pages/shots/ScreenshotsPage').then((m) => ({ default: m.ScreenshotsPage })));
+const StoragePage = lazy(() => import('./pages/storage/StoragePage').then((m) => ({ default: m.StoragePage })));
+const TasksPage = lazy(() => import('./pages/tasks/TasksPage').then((m) => ({ default: m.TasksPage })));
+const VaultPage = lazy(() => import('./pages/vault/VaultPage').then((m) => ({ default: m.VaultPage })));
+const Onboarding = lazy(() => import('./pages/onboarding/Onboarding').then((m) => ({ default: m.Onboarding })));
+const PlayerHost = lazy(() => import('./components/music/PlayerHost').then((m) => ({ default: m.PlayerHost })));
 
 const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen'>, ComponentType> = {
   home: HomePage,
@@ -117,6 +119,12 @@ export function App() {
   const error = useSettings((s) => s.error);
   const load = useSettings((s) => s.load);
   const route = useRoute();
+  // The full-screen player loads the first time it opens.
+  const playerOpen = usePlayer((p) => p.open);
+  const [playerUsed, setPlayerUsed] = useState(false);
+  useEffect(() => {
+    if (playerOpen) setPlayerUsed(true);
+  }, [playerOpen]);
   const [storedCollapsed, setStoredCollapsed] = useStoredState('omnihub.sidebarCollapsed', false);
   // Narrow windows collapse the sidebar automatically unless the user opens it.
   const narrow = useMediaQuery('(max-width: 1199px)');
@@ -153,7 +161,9 @@ export function App() {
               exit={{ opacity: 0, y: -6, transition: { duration: 0.1 } }}
             >
               <ErrorBoundary name={pageId}>
-                <PageComp />
+                <Suspense fallback={null}>
+                  <PageComp />
+                </Suspense>
               </ErrorBoundary>
             </motion.div>
           </AnimatePresence>
@@ -167,12 +177,18 @@ export function App() {
       <CommandPalette />
       <ConfirmHost />
       <MenuHost />
-      <PlayerHost />
+      {playerUsed && (
+        <Suspense fallback={null}>
+          <PlayerHost />
+        </Suspense>
+      )}
       <SendDialog />
       <DropOverlay />
       <BrowserPairDialog />
       <Toaster />
-      <AnimatePresence>{showOnboarding && <Onboarding key="onboarding" onDone={() => setOnboardingForced(false)} />}</AnimatePresence>
+      <Suspense fallback={null}>
+        <AnimatePresence>{showOnboarding && <Onboarding key="onboarding" onDone={() => setOnboardingForced(false)} />}</AnimatePresence>
+      </Suspense>
     </MotionConfig>
   );
 }

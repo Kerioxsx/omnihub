@@ -39,7 +39,7 @@ pub async fn begin(app: AppHandle, from_app: bool) -> Result<(), String> {
         Err(e) => {
             if hide_main {
                 if let Some(w) = &main {
-                    let _ = w.show();
+                    crate::rest::show(w);
                 }
             }
             return Err(e);
@@ -82,7 +82,7 @@ pub fn finish(app: &AppHandle) {
     }
     if restore {
         if let Some(w) = app.get_webview_window("main") {
-            let _ = w.show();
+            crate::rest::show(&w);
             let _ = w.set_focus();
         }
     }

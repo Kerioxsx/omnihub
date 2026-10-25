@@ -12,7 +12,7 @@ const TRAY_ID: &str = "omnihub";
 pub fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
-        let _ = w.show();
+        crate::rest::show(&w);
         let _ = w.set_focus();
     }
 }

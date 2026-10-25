@@ -1280,6 +1280,17 @@ export interface FortniteOptions {
   fullscreen: boolean;
   /** NVIDIA Reflex Low Latency: 0 off, 1 on, 2 on + boost. */
   reflex: number;
+  /** Rendering mode; null follows performanceMode. */
+  renderMode?: FortniteRenderMode | null;
+}
+
+export type FortniteRenderMode = 'performance' | 'dx12' | 'dx11' | 'keep';
+
+export interface CacheClean {
+  freedBytes: number;
+  files: number;
+  /** Files in use, left alone. */
+  skipped: number;
 }
 
 export interface MinecraftOptions {

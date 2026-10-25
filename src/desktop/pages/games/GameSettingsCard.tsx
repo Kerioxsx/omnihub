@@ -3,10 +3,10 @@
 // and Minecraft. Shows what the file says now, what Optimize changes, and
 // puts your own settings back.
 
-import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteOptions, GameConfigs, GameSession, MinecraftOptions, ProOptions } from '@shared/types';
-import { formatRelative } from '@shared/format';
+import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteOptions, FortniteRenderMode, GameConfigs, GameSession, MinecraftOptions, ProOptions } from '@shared/types';
+import { formatBytes, formatRelative } from '@shared/format';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, ChevronDown, Gauge, Info, Lightbulb, RotateCcw, Sparkles, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Eraser, Gauge, Info, Lightbulb, RotateCcw, Sparkles, XCircle, Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
@@ -180,8 +180,24 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   ))}
                 </Select>
               </Row>
-              <Row title="Performance rendering mode" hint="Fortnite’s lightest renderer, made for high frame rates. The biggest single gain on most PCs.">
-                <Switch checked={o.fortnite.performanceMode} onChange={(v) => fn({ performanceMode: v })} label="Performance mode" />
+              <Row title="Max FPS setup" hint="Everything set for the most frames: no cap, Performance mode, lowest quality, near view distance, fullscreen, Reflex on + boost, FPS counter. Press Apply after.">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  icon={Zap}
+                  onClick={() => fn({ frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true })}
+                >
+                  Set all
+                </Button>
+              </Row>
+              <Row title="Rendering mode" hint="Performance is Fortnite’s lightest renderer, made for high frame rates: the biggest single gain on most PCs. DirectX 12 can be smoother on fast graphics cards; DirectX 11 suits older ones.">
+                <Segmented
+                  size="sm"
+                  label="Rendering mode"
+                  value={o.fortnite.renderMode ?? (o.fortnite.performanceMode ? 'performance' : 'keep')}
+                  onChange={(v) => fn({ renderMode: v as FortniteRenderMode, performanceMode: v === 'performance' })}
+                  options={[{ value: 'performance', label: 'Performance' }, { value: 'dx12', label: 'DirectX 12' }, { value: 'dx11', label: 'DirectX 11' }, { value: 'keep', label: 'Keep' }]}
+                />
               </Row>
               <Row title="Lowest quality everywhere" hint="Shadows, effects, post-processing, textures, foliage and grass at their lowest, and DirectX 12’s Nanite, Lumen and anti-aliasing off — what most pros play with.">
                 <Switch checked={o.fortnite.lowestQuality} onChange={(v) => fn({ lowestQuality: v })} label="Lowest quality" />
@@ -208,6 +224,9 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
               </Row>
               <Row title="Show the FPS counter" hint="Fortnite’s own counter in the top corner, so you can see what you get.">
                 <Switch checked={o.fortnite.showFps} onChange={(v) => fn({ showFps: v })} label="FPS counter" />
+              </Row>
+              <Row title="Clean Fortnite caches" hint="Empties Fortnite’s logs, crash reports and web cache, and your graphics driver’s shader caches — old, bloated caches cause stutter. The first match after rebuilds its shaders, so it may hitch for a minute.">
+                <CleanCaches />
               </Row>
             </>
           )}
@@ -300,5 +319,25 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
         </div>
       )}
     </Card>
+  );
+}
+
+function CleanCaches() {
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    try {
+      const r = await api.games.fortniteCleanCaches();
+      toast.success(r.freedBytes > 0 ? `Freed ${formatBytes(r.freedBytes)}` : 'Already clean', `${r.files.toLocaleString()} files removed${r.skipped ? `, ${r.skipped} in use left alone` : ''}.`);
+    } catch (e) {
+      toast.error('Couldn’t clean the caches', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Button size="sm" variant="secondary" icon={Eraser} loading={busy} onClick={() => void run()}>
+      Clean
+    </Button>
   );
 }

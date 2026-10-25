@@ -158,7 +158,11 @@ pub fn start(app: AppHandle) {
                 if show == hidden {
                     for (label, w) in app.webview_windows() {
                         if label.starts_with(PREFIX) {
-                            let _ = if show { w.show() } else { w.hide() };
+                            if show {
+                                crate::rest::show(&w);
+                            } else {
+                                let _ = w.hide();
+                            }
                             if show {
                                 // Showing can bring back the cursor; keep clicks going through.
                                 let _ = w.set_ignore_cursor_events(true);
