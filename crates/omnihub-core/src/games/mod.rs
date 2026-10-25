@@ -36,6 +36,9 @@ use ping::{PingResult, PingTarget};
 use roblox::RobloxFlags;
 use tweaks::{AdminOp, PowerPlan};
 
+/// How long a launched game may take to appear before OmniHub says so.
+const SLOW_START: Duration = Duration::from_secs(45);
+
 pub const FORTNITE_APP: &str = "fn%3A4fe75bbc5a674f4f9b356b5c90567da5%3AFortnite";
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -156,6 +159,9 @@ pub struct Boost {
     /// Browsers, launchers' web views and sync apps at "Below normal"
     /// priority while playing.
     pub lower_background: bool,
+    /// Before the game starts, background programs hand the memory they
+    /// aren't using back to Windows, so the game starts with the most free RAM.
+    pub free_memory: bool,
     /// Windows' finest timer (0.5 ms) while playing.
     pub precise_timer: bool,
     /// Windows never slows the game down to save power.
@@ -188,6 +194,7 @@ impl Boost {
         b.game_settings = competitive;
         b.close_junk = true;
         b.lower_background = true;
+        b.free_memory = true;
         b.precise_timer = true;
         b.full_speed = true;
         // Texture filtering's fast setting is a (small) picture trade-off.
@@ -214,6 +221,7 @@ impl Default for Boost {
             game_settings: true,
             close_junk: true,
             lower_background: true,
+            free_memory: true,
             precise_timer: true,
             full_speed: true,
             fps_meter: true,
@@ -319,9 +327,12 @@ pub fn launch_target(launch: &Launch) -> Result<Option<(String, String)>, String
             (client.to_string_lossy().into_owned(), format!("--launch-product={product} --launch-patchline=live"))
         }
         Launch::Roblox { place_id: Some(id) } => (format!("roblox://experiences/start?placeId={id}"), String::new()),
+        // Roblox opens its app only when asked to (`--app`); through its
+        // link when one is set up, so its bootstrapper updates it first.
         Launch::Roblox { place_id: None } => match roblox::detect().player {
-            Some(p) => (p, String::new()),
-            None => ("roblox://".into(), String::new()),
+            Some(_) if tweaks::link_handler_installed("roblox-player") => ("roblox-player:1+launchmode:app".into(), String::new()),
+            Some(p) => (p, "--app".into()),
+            None => ("roblox-player:1+launchmode:app".into(), String::new()),
         },
     }))
 }
@@ -1105,6 +1116,15 @@ impl GameHub {
         {
             let mut inner = self.inner.lock();
             if let Some(s) = inner.session.as_ref().filter(|s| s.active()) {
+                // Still waiting for this game: Play again starts it again.
+                if launch && s.profile_id == p.id && s.phase == Phase::Waiting {
+                    drop(inner);
+                    if let Some((target, args)) = launch_target(&p.launch)? {
+                        start(&target, &args).map_err(|e| e.to_string())?;
+                    }
+                    self.update(|s| s.message = Some(format!("Started {} again", p.name)));
+                    return self.session().ok_or_else(|| "The boost ended.".into());
+                }
                 return Err(format!("{} is already boosted — stop that first.", s.name));
             }
             inner.session = Some(Session { profile_id: p.id.clone(), name: p.name.clone(), mode: p.boost.mode, phase: Phase::Starting, started_at: crate::db::now(), ended_at: None, launched: false, steps: Vec::new(), restored: Vec::new(), message: None, fps: None });
@@ -1214,6 +1234,14 @@ impl GameHub {
             let r = if lowered.is_empty() { Ok("skip: no browser, launcher or sync app was running".to_string()) } else { Ok(format!("{} at Below normal priority", lowered.join(", "))) };
             let r = if cfg!(windows) { r } else { Err("Windows only".into()) };
             self.push(step("background", "Background priority", r));
+        }
+
+        // 1c. Free memory for the game.
+        if b.free_memory {
+            let mut keep: Vec<&str> = needed_by(&p.launch).to_vec();
+            keep.push(p.process.as_str());
+            let r = tweaks::free_memory(&keep).map(|freed| if freed >= 64 << 20 { format!("{} MB of memory handed back to Windows", freed >> 20) } else { "skip: background programs were already lean".into() });
+            self.push(step("memory", "Free memory", r));
         }
 
         // 2. Power plan.
@@ -1353,6 +1381,7 @@ impl GameHub {
             self.update(|s| s.phase = Phase::Waiting);
             let t0 = Instant::now();
             let mut seen = false;
+            let mut hinted = false;
             let mut missing = 0;
             loop {
                 if stop.load(Ordering::Relaxed) {
@@ -1384,6 +1413,14 @@ impl GameHub {
                     }
                 } else if running {
                     missing = 0;
+                } else if launched && !hinted && t0.elapsed() > SLOW_START {
+                    hinted = true;
+                    let hint = match &p.launch {
+                        Launch::Epic { .. } => format!("{} hasn't opened yet — look at the Epic Games Launcher: it may be updating the game or asking you to sign in. Press Play again to retry.", p.name),
+                        Launch::Steam { .. } => format!("{} hasn't opened yet — look at Steam: it may be updating the game. Press Play again to retry.", p.name),
+                        _ => format!("{} hasn't opened yet. Press Play again to retry.", p.name),
+                    };
+                    self.update(|s| s.message = Some(hint));
                 } else if launched && t0.elapsed() > self.wait_limit {
                     self.update(|s| s.message = Some(format!("{} didn't start, so the boost ended.", p.name)));
                     break;

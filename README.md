@@ -35,6 +35,7 @@ store, no cloud.
 ## New in 0.15.0
 
 - **A much lighter app**: windows you can't see (in the tray, minimised, or behind a full-screen game) stop drawing, give back their memory and sleep until you look again; pages load only when opened; "is it running?" checks no longer take a full process sample.
+- **Games open again**: Roblox opens its app from Play, a slow game gets a hint and a **Start again** button, and a new **Free memory before the game** step gives the game the most free RAM.
 - **Fortnite**: a one-click **Max FPS setup**, a **Rendering mode** choice (Performance, DirectX 12, DirectX 11 or keep yours) and **Clean Fortnite caches** (logs, crash reports, web cache and the graphics driver's shader caches). Plus everything from 0.14.0 below.
 
 ## New in 0.14.0

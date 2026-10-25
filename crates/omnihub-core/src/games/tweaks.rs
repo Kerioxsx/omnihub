@@ -426,6 +426,41 @@ mod imp {
     /// Whether a finer timer OmniHub asks for reaches games too. Since
     /// Windows 10 2004 each program gets only the timer it asked for, and
     /// Windows 11 brings back the shared one with GlobalTimerResolutionRequests.
+    /// Ask every background program to hand the memory it isn't using back
+    /// to Windows (it pages back in when needed), so a game starts with the
+    /// most free RAM. `keep` (the game, its launcher), Windows' own core
+    /// processes and OmniHub are left alone. Returns the bytes freed.
+    pub fn free_memory(keep: &[&str]) -> Result<u64, String> {
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::ProcessStatus::K32EmptyWorkingSet;
+        use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+        use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA};
+        let in_use = || {
+            let mut m = MEMORYSTATUSEX { dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32, ..Default::default() };
+            // SAFETY: a sized out-struct.
+            unsafe { GlobalMemoryStatusEx(&mut m) }.map(|_| m.ullTotalPhys.saturating_sub(m.ullAvailPhys)).unwrap_or(0)
+        };
+        let before = in_use();
+        let mut sys = sysinfo::System::new();
+        sys.refresh_processes_specifics(sysinfo::ProcessesToUpdate::All, true, sysinfo::ProcessRefreshKind::nothing());
+        let me = std::process::id();
+        for (pid, p) in sys.processes() {
+            let name = p.name().to_string_lossy();
+            // Sound and the desktop compositor stutter when trimmed.
+            if pid.as_u32() <= 4 || pid.as_u32() == me || keep.iter().any(|k| k.eq_ignore_ascii_case(&name)) || crate::system::procs::is_protected(&name) || name.eq_ignore_ascii_case("omnihub.exe") || name.to_ascii_lowercase().starts_with("msedgewebview2") {
+                continue;
+            }
+            // SAFETY: plain process calls; programs we may not touch just fail to open.
+            unsafe {
+                if let Ok(h) = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_LIMITED_INFORMATION, false, pid.as_u32()) {
+                    let _ = K32EmptyWorkingSet(h);
+                    let _ = CloseHandle(h);
+                }
+            }
+        }
+        Ok(before.saturating_sub(in_use()))
+    }
+
     /// Whether some app is registered for `scheme:` links (Epic's, Steam's…).
     pub fn link_handler_installed(scheme: &str) -> bool {
         RegKey::predef(winreg::enums::HKEY_CLASSES_ROOT).open_subkey(scheme).is_ok_and(|k| k.get_raw_value("URL Protocol").is_ok())
@@ -562,6 +597,9 @@ mod imp {
     }
     pub fn link_handler_installed(_scheme: &str) -> bool {
         true
+    }
+    pub fn free_memory(_keep: &[&str]) -> Result<u64, String> {
+        Err(ONLY.into())
     }
     pub fn timer_reaches_games() -> Result<(), String> {
         Err(ONLY.into())

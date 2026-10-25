@@ -46,6 +46,7 @@ fn harmless(b: &Boost) -> Boost {
         wifi_low_latency: false,
         close_junk: false,
         lower_background: false,
+        free_memory: false,
         precise_timer: false,
         full_speed: false,
         fps_meter: false,

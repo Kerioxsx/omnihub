@@ -28,7 +28,7 @@ const TEMPLATES: Record<GameKind, { name: string; launch: GameLaunch; process: s
 export function withMode(b: GameBoost, mode: BoostMode): GameBoost {
   if (mode === 'custom') return { ...b, mode };
   const competitive = mode === 'competitive';
-  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, preciseTimer: true, fullSpeed: true, nvidiaProfile: competitive };
+  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, freeMemory: true, preciseTimer: true, fullSpeed: true, nvidiaProfile: competitive };
 }
 
 const defaultMode = (kind: GameKind): BoostMode => (kind === 'gta5' || kind === 'cyberpunk' || kind === 'custom' ? 'quality' : 'competitive');
@@ -44,7 +44,7 @@ function template(kind: GameKind): GameProfile {
     launch: t.launch,
     process: t.process,
     exePath: kind === 'fortnite' ? 'C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe' : kind === 'roblox' ? 'C:\\Users\\You\\AppData\\Local\\Roblox\\Versions\\version-6d3a1b2c4e5f4a1b\\RobloxPlayerBeta.exe' : null,
-    boost: withMode({ mode: 'custom', powerPlan: 'ultimate', priority: 'high', closeApps: [], reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, fullscreenOptimizationsOff: false, wifiLowLatency: true, networkPriority: false, startHighPriority: false, gameSettings: true, closeJunk: true, lowerBackground: true, preciseTimer: true, fullSpeed: true, fpsMeter: true, nvidiaProfile: false }, defaultMode(kind)),
+    boost: withMode({ mode: 'custom', powerPlan: 'ultimate', priority: 'high', closeApps: [], reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, fullscreenOptimizationsOff: false, wifiLowLatency: true, networkPriority: false, startHighPriority: false, gameSettings: true, closeJunk: true, lowerBackground: true, freeMemory: true, preciseTimer: true, fullSpeed: true, fpsMeter: true, nvidiaProfile: false }, defaultMode(kind)),
     pingHost: null,
     roblox: { ...ROBLOX_DEFAULT },
     lastPlayed: null,
@@ -128,6 +128,7 @@ export function play(id: string, launch: boolean): GameSession {
   const closed = [...b.closeApps.map((a) => a.replace(/\.exe$/i, '')), ...(b.closeJunk ? ['OneDrive', 'Widgets', 'Phone Link', 'Edge updater'] : [])].filter((x, i, l) => l.indexOf(x) === i);
   if (closed.length) steps.push({ id: 'apps', label: 'Background apps', status: 'done', detail: `Closed ${closed.join(', ')}` });
   if (b.lowerBackground) steps.push({ id: 'background', label: 'Background priority', status: 'done', detail: 'brave, steamwebhelper, Spotify at Below normal priority' });
+  if (b.freeMemory) steps.push({ id: 'memory', label: 'Free memory', status: 'done', detail: '2140 MB of memory handed back to Windows' });
   if (b.powerPlan !== 'keep') steps.push({ id: 'power', label: 'Power plan', status: 'done', detail: b.powerPlan === 'ultimate' ? 'Ultimate Performance' : 'High performance' });
   if (b.silenceNotifications) steps.push({ id: 'notifications', label: 'Notifications', status: 'done', detail: 'Pop-ups paused' });
   if (b.gameMode) steps.push({ id: 'gamemode', label: 'Game Mode', status: 'skipped', detail: 'already on' });

@@ -56,7 +56,7 @@ const NEVER = new Set(['omnihub.exe', 'explorer.exe', 'steam.exe', 'steamwebhelp
 function withMode(b: GameBoost, mode: BoostMode): GameBoost {
   if (mode === 'custom') return { ...b, mode };
   const competitive = mode === 'competitive';
-  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, preciseTimer: true, fullSpeed: true, nvidiaProfile: competitive };
+  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, freeMemory: true, preciseTimer: true, fullSpeed: true, nvidiaProfile: competitive };
 }
 
 const MODES: { value: BoostMode; icon: LucideIcon; title: string; blurb: (game: string, hasSettings: boolean) => string }[] = [
@@ -312,6 +312,9 @@ export function ProfileEditor({ profile, session, busy, activeHere, onSaved, onD
           </Row>
           <Row title="Background apps at lower priority" hint="Browsers, Steam and Epic web views, Spotify and sync apps run at “Below normal” while you play, so the game gets the processor first.">
             <Switch checked={b.lowerBackground} disabled={set} onChange={(v) => boost({ lowerBackground: v })} label="Background apps at lower priority" />
+          </Row>
+          <Row title="Free memory before the game" hint="Background programs hand the memory they aren’t using back to Windows just before the game starts, so it has the most free RAM (helps most with 16 GB or less). They take it back as they need it.">
+            <Switch checked={b.freeMemory} disabled={set} onChange={(v) => boost({ freeMemory: v })} label="Free memory before the game" />
           </Row>
           <Row title="Precise timer (0.5 ms)" hint="Windows’ finest timer while you play: games with frame limiters keep steadier frame times. Windows 11 needs “Precise timer for games” in Optimize PC once.">
             <Switch checked={b.preciseTimer} disabled={set} onChange={(v) => boost({ preciseTimer: v })} label="Precise timer" />

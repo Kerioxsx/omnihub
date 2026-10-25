@@ -1254,6 +1254,8 @@ export interface GameBoost {
   closeJunk: boolean;
   /** Browsers, launchers' web views and sync apps at Below normal while playing. */
   lowerBackground: boolean;
+  /** Before the game starts, background programs hand unused memory back to Windows. */
+  freeMemory: boolean;
   /** Windows' finest timer (0.5 ms) while playing. */
   preciseTimer: boolean;
   /** Windows never slows the game down to save power. */

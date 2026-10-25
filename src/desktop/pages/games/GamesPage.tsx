@@ -304,9 +304,16 @@ function SessionCard({ session, onDismiss }: { session: GameSession; onDismiss: 
               Dismiss
             </Button>
           ) : (
-            <Button variant="secondary" icon={Square} loading={stopping || session.phase === 'restoring'} onClick={() => void stop()} title="Ends the boost; the game keeps running">
-              Stop boost
-            </Button>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <Button variant="secondary" icon={Square} loading={stopping || session.phase === 'restoring'} onClick={() => void stop()} title="Ends the boost; the game keeps running">
+                Stop boost
+              </Button>
+              {session.phase === 'waiting' && session.launched && (
+                <Button variant="ghost" size="sm" icon={Rocket} onClick={() => void api.games.play(session.profileId, true).catch((e: unknown) => toast.error(`Could not start ${session.name}`, errorText(e)))} title="The game didn’t open? Start it again">
+                  Start again
+                </Button>
+              )}
+            </div>
           )}
         </div>
       </Card>
