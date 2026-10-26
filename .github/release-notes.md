@@ -1,17 +1,11 @@
 ## New in this version
 
-**A much lighter OmniHub, more Fortnite frames, Roblox shaders, every Roblox flag, and Govee floor lamps in full colour.**
+**Roblox starts again, and no more duplicate games.**
 
-- **Lighter on your PC**: a window you can't see — in the tray, minimised, or behind a full-screen game or video — stops drawing, drops to WebView2's low memory level and is suspended like a sleeping browser tab, so it uses next to no processor and gives memory back while you play. It catches up the moment you look again. Pages load only when you open them (the glow and case-screen windows no longer load the whole app), fast streams only go to windows that show them, and "is it running?" checks take a quick name lookup instead of a full process sample.
-- **Fortnite Max FPS setup**: one click sets no frame cap, Performance mode, the lowest quality everywhere, near view distance, fullscreen, NVIDIA Reflex on + boost and the FPS counter. New **Rendering mode** choice: Performance, DirectX 12, DirectX 11 or keep yours.
-- **Roblox opens from OmniHub again**: Play now opens the Roblox app (through Roblox's own link, so it updates first) instead of starting the player with nothing to do. If a game is slow to open, OmniHub says what to check (the Epic Games Launcher may be updating Fortnite or asking you to sign in) and **Start again** launches it again without ending the boost.
-- **Free memory before the game**: just before the game starts, background programs hand the memory they aren't using back to Windows, so the game starts with the most free RAM (on in both boost modes).
-- **Clean Fortnite caches**: empties Fortnite's logs, crash reports and web cache and the graphics driver's shader caches (NVIDIA, AMD, Intel, DirectX), and says how much it freed. Only while Fortnite is closed; the first match after rebuilds shaders.
-- **Roblox shaders**: in a Roblox game profile, turn on *Shaders* and pick a look: **Realistic**, **Vivid**, **Cinematic**, **Soft**, **Sharp** (lightest on frame rate) or **Custom**, with a strength slider. OmniHub downloads the official ReShade (the build Roblox allows) and effects from SweetFX and qUINT, and puts them back after each Roblox update when you start Roblox from OmniHub. In the game, **Home** opens ReShade's menu and **End** turns the effects off and on.
-- **Every Roblox flag**: *All flags* lists every flag Roblox's client has, with the value Roblox uses now, searchable, the ones Roblox still reads marked. Add any flag, edit its value, and switch each one **on or off** without deleting it.
-- **Govee floor lamps on Auto**: lights that ignore streaming but have segments (like the H6076, known as 14 segments) get a colour per segment by themselves.
+- **Roblox starts again**: Roblox's recent security changes stop it from starting with ReShade in its folder ("Failed to load library: d3d11.dll", then "Roblox encountered an unexpected error"); Bloxshade is down for the same reason. OmniHub takes out the shaders 0.15.0 put in Roblox as soon as it starts, also from Bloxstrap's and Fishstrap's folders, and no longer installs them. Another tool's ReShade is left alone, but OmniHub tells you if one is still there.
+- **No duplicate games**: games in Steam's main folder showed up twice under *On this PC* (Steam writes that folder two ways). Each game is listed once now.
 
-How many frames you get depends on your processor and graphics card: OmniHub removes every limit it can and gets everything else out of the way.
+Also in 0.15.0: a much lighter OmniHub (windows you can't see sleep), Fortnite's Max FPS setup, rendering mode and cache cleaner, Roblox opening from Play, free memory before the game, and every Roblox flag with on/off switches.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

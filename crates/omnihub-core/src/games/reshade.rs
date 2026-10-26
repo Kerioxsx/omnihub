@@ -16,6 +16,9 @@ use serde::{Deserialize, Serialize};
 
 pub const SITE: &str = "https://reshade.me";
 pub const RAW: &str = "https://raw.githubusercontent.com";
+/// Why shaders can't be turned on (Roblox's security changes in 2026).
+pub const BLOCKED: &str = "Roblox now blocks shader tools (Bloxshade is down for the same reason): with ReShade in its folder Roblox won't start, so OmniHub keeps it out.";
+
 /// Beside `dxgi.dll` when the copy is OmniHub's.
 pub const MARKER: &str = "OmniHub.reshade";
 

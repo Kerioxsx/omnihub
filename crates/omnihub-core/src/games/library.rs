@@ -192,12 +192,15 @@ fn epic(dir: &Path) -> Vec<InstalledGame> {
 }
 
 fn steam(root: &Path) -> Vec<InstalledGame> {
+    // Steam writes its own folder as "c:/program files (x86)/steam" in one
+    // place and "C:\\Program Files (x86)\\Steam" in another: one library.
+    let same = |p: &Path| p.to_string_lossy().replace('/', "\\").trim_end_matches('\\').to_lowercase();
     let mut libraries = vec![root.to_path_buf()];
     if let Ok(t) = std::fs::read_to_string(root.join("steamapps").join("libraryfolders.vdf")) {
         for (k, v) in vdf_pairs(&t) {
             if k == "path" {
                 let p = PathBuf::from(&v);
-                if !libraries.contains(&p) {
+                if !libraries.iter().any(|l| same(l) == same(&p)) {
                     libraries.push(p);
                 }
             }
@@ -278,6 +281,8 @@ pub fn scan(roots: &Roots, roblox_player: Option<String>) -> Vec<InstalledGame> 
         out.push(InstalledGame { key: "roblox:player".into(), name: "Roblox".into(), source: "roblox".into(), kind: GameKind::Roblox, launch: Launch::Roblox { place_id: None }, process: super::roblox::PLAYER_EXE.into(), exe_path: Some(p), install_dir: None, profile_id: None });
     }
     out.sort_by_key(|g| g.name.to_lowercase());
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|g| seen.insert(g.key.clone()));
     out
 }
 
@@ -288,6 +293,22 @@ mod tests {
     fn write(p: &Path, s: &str) {
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, s).unwrap();
+    }
+
+    #[test]
+    fn steam_folder_written_two_ways_is_one_library() {
+        let t = tempfile::tempdir().unwrap();
+        let steam = t.path().join("Steam");
+        // The same folder by another spelling (Windows ignores case).
+        let other = t.path().join("STEAM");
+        std::fs::create_dir_all(&steam).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&steam, &other).unwrap();
+        write(&steam.join("steamapps").join("libraryfolders.vdf"), &format!("\"libraryfolders\" {{ \"0\" {{ \"path\" \"{}\" }} }}", other.display().to_string().replace('\\', "\\\\")));
+        write(&steam.join("steamapps").join("appmanifest_1.acf"), "\"AppState\" { \"appid\" \"1\" \"name\" \"Road 96\" \"installdir\" \"Road\" }");
+        std::fs::create_dir_all(steam.join("steamapps").join("common").join("Road")).unwrap();
+        let games = scan(&Roots { epic_manifests: None, steam: Some(steam), riot_metadata: None, minecraft: None }, None);
+        assert_eq!(games.iter().filter(|g| g.name == "Road 96").count(), 1, "{games:?}");
     }
 
     #[test]

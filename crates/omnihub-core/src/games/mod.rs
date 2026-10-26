@@ -811,15 +811,21 @@ impl GameHub {
         st
     }
 
-    /// Put shaders in Roblox (downloading ReShade the first time) or take
-    /// OmniHub's out.
+    /// Roblox's anti-tamper now stops Roblox from starting with ReShade in
+    /// its folder ("Failed to load library: d3d11.dll"; Bloxshade is down for
+    /// the same reason), so shaders are only ever taken out.
     pub fn apply_roblox_shaders(&self, s: &reshade::ShaderSettings) -> Result<reshade::ShaderStatus, String> {
-        let sh = self.shaders();
+        let st = self.remove_roblox_shaders()?;
         if s.enabled {
-            let ev = self.events.clone();
-            sh.download(&mut |text| ev.emit("games:roblox-shaders", serde_json::json!({ "text": text })))?;
+            return Err(reshade::BLOCKED.into());
         }
-        sh.apply(s, &roblox::player_dirs(&self.roblox_roots.lock()))
+        Ok(st)
+    }
+
+    /// Take OmniHub's ReShade out of every Roblox folder (another tool's stays).
+    pub fn remove_roblox_shaders(&self) -> Result<reshade::ShaderStatus, String> {
+        let off = reshade::ShaderSettings { enabled: false, ..Default::default() };
+        self.shaders().apply(&off, &roblox::player_dirs(&self.roblox_roots.lock()))
     }
 
     /// Every flag Roblox's client has (from a community tracker, cached a
@@ -1335,9 +1341,9 @@ impl GameHub {
             let r = self.write_roblox(&p.roblox).map(|files| format!("{} flags written ({} file{})", p.roblox.to_flags().len(), files.len(), if files.len() == 1 { "" } else { "s" }));
             self.push(step("roblox", "Roblox flags", r));
         }
-        // Shaders are put back after each Roblox update (a new version folder).
+        // Roblox no longer starts with ReShade in its folder: take ours out.
         if p.kind == GameKind::Roblox && p.roblox.shaders.enabled {
-            let r = self.apply_roblox_shaders(&p.roblox.shaders).map(|st| format!("ReShade in {} folder{}", st.applied, if st.applied == 1 { "" } else { "s" }));
+            let r = self.remove_roblox_shaders().map(|_| format!("skip: {}", reshade::BLOCKED));
             self.push(step("shaders", "Roblox shaders", r));
         }
 
@@ -1647,6 +1653,10 @@ impl GameHub {
     }
 
     pub fn recover(&self) {
+        // Shaders an earlier OmniHub put in Roblox stop it from starting.
+        if let Err(e) = self.remove_roblox_shaders() {
+            tracing::warn!("games: could not take ReShade out of Roblox: {e}");
+        }
         let Some(j) = std::fs::read(&self.journal_path).ok().and_then(|b| serde_json::from_slice::<Journal>(&b).ok()) else { return };
         tracing::info!("games: restoring settings from an unfinished boost");
         // Don't relaunch apps hours later.
