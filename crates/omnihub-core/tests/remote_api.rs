@@ -415,6 +415,14 @@ fn sound_calls_and_open_apps_from_the_phone() {
         assert_eq!(post("/api/sound/mic", json!({})).await.unwrap().status(), StatusCode::BAD_REQUEST);
         assert_eq!(post("/api/sound/app", json!({ "key": "nothing.exe", "muted": true })).await.unwrap().status(), StatusCode::BAD_REQUEST);
 
+        // Monitor brightness from the phone.
+        let d: Value = c.get(format!("{base}/api/displays")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        let id = d[1]["id"].as_str().unwrap().to_string();
+        assert_eq!(post("/api/displays/set", json!({ "id": id, "setting": "brightness", "value": 30 })).await.unwrap().status(), StatusCode::NO_CONTENT);
+        let d: Value = c.get(format!("{base}/api/displays")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(d[1]["brightness"], 30);
+        assert_eq!(post("/api/displays/set", json!({ "id": "nope#0", "setting": "contrast", "value": 30 })).await.unwrap().status(), StatusCode::BAD_REQUEST);
+
         // Open apps: close Spotify politely; Explorer is never quit.
         let l: Value = c.get(format!("{base}/api/open-apps")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
         let apps = l["apps"].as_array().unwrap();
@@ -435,6 +443,7 @@ fn sound_calls_and_open_apps_from_the_phone() {
         // Turned off on the PC: refused.
         core.update_settings(&json!({ "media": { "allowPhone": false }, "remote": { "allowTasks": false } })).unwrap();
         assert_eq!(c.get(format!("{base}/api/sound")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+        assert_eq!(c.get(format!("{base}/api/displays")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
         assert_eq!(c.get(format!("{base}/api/open-apps")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
     });
     omnihub_core::media::mixer::reset_fake();

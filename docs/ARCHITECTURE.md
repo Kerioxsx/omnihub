@@ -254,6 +254,12 @@ or the UI:
   follows settings, monitors, full-screen apps (`SHQueryUserNotificationState`)
   and game boosts once a second.
 
+`system/displays.rs` lists monitors (EnumDisplayMonitors, names from the
+display configuration) and reads or sets brightness (VCP 0x10) and contrast
+(0x12) over DDC/CI through dxva2, one message at a time behind a lock; a
+built-in laptop screen uses WMI's WmiMonitorBrightness. The UI sends the
+newest slider value at most every 150 ms.
+
 `games/` keeps profiles in `games.json`. `games/reshade.rs` handled Roblox shaders (ReShade as `dxgi.dll` with a
 marker); Roblox's anti-tamper now refuses to start with it, so the hub only
 takes OmniHub's copies out (at start and before each Roblox launch). Play runs a session on its own

@@ -86,6 +86,8 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/sound/master", post(sound_master))
         .route("/api/sound/app", post(sound_app))
         .route("/api/sound/mic", post(sound_mic))
+        .route("/api/displays", get(displays_get))
+        .route("/api/displays/set", post(displays_set))
         .route("/api/games", get(games_list))
         .route("/api/games/stop", post(games_stop))
         .route("/api/games/ping", post(games_ping))
@@ -706,6 +708,28 @@ async fn sound_mic(State(core): State<Ctx>, Extension(dev): Extension<Device>, J
     let r = tokio::task::spawn_blocking(move || crate::media::mixer::set_mic(fake, muted)).await?;
     core.audit.record(&actor(&dev), if muted { "microphone.mute" } else { "microphone.unmute" }, "all recording devices", r.is_ok());
     Ok(Json(r.map_err(ApiError::bad)?))
+}
+
+// ---------- monitor brightness ----------
+
+async fn displays_get(State(core): State<Ctx>) -> ApiResult<Json<Vec<crate::system::displays::Display>>> {
+    media_allowed(&core)?;
+    let fake = core.media.is_fake();
+    Ok(Json(tokio::task::spawn_blocking(move || if fake { crate::system::displays::fake_list() } else { crate::system::displays::list() }).await?))
+}
+
+#[derive(Deserialize)]
+struct DisplayReq {
+    id: String,
+    setting: crate::system::displays::Setting,
+    value: u8,
+}
+
+async fn displays_set(State(core): State<Ctx>, Json(req): Json<DisplayReq>) -> ApiResult<StatusCode> {
+    media_allowed(&core)?;
+    let fake = core.media.is_fake();
+    tokio::task::spawn_blocking(move || if fake { crate::system::displays::fake_set(&req.id, req.setting, req.value) } else { crate::system::displays::set(&req.id, req.setting, req.value) }).await?.map_err(ApiError::bad)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Put text from the phone on this PC's clipboard.

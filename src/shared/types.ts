@@ -2691,3 +2691,16 @@ export interface SrvNet {
   java: string | null;
   firewall: FirewallReport | null;
 }
+
+/** A monitor whose brightness OmniHub can set (DDC/CI, or Windows for a laptop screen). */
+export interface Display {
+  id: string;
+  name: string;
+  primary: boolean;
+  builtin: boolean;
+  /** 0–100; null when the monitor doesn't answer (DDC/CI off in its menu). */
+  brightness: number | null;
+  contrast: number | null;
+}
+
+export type DisplaySetting = 'brightness' | 'contrast';

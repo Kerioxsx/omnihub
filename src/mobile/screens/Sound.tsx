@@ -1,4 +1,4 @@
-// Volume & calls: the PC's volume, each app's volume and mute, the
+// Volume & brightness: monitor brightness, the PC's volume, each app's volume and mute, the
 // microphone, and the apps in a call right now (Discord, WhatsApp, Nyxen,
 // Teams…) with "mute my mic" and "deafen".
 
@@ -9,6 +9,7 @@ import { toast, useApp } from '../state';
 import { PullToRefresh } from '../ui/PullToRefresh';
 import { Empty, ErrorState, ListSkeleton, SectionTitle } from '../ui/common';
 import { SubHeader } from './More';
+import { BrightnessCard, useDisplays } from './Brightness';
 import { cx, errorMessage, useInterval, usePageVisible, vibrate } from '../lib/util';
 
 const HUES = [262, 199, 330, 152, 28, 220, 285, 175];
@@ -256,12 +257,18 @@ export function SoundPanel({ api }: { api: MixerApi }) {
 
 export function SoundPage({ active, onBack }: { active: boolean; onBack: () => void }) {
   const api = useMixer(active);
+  const screens = useDisplays(active);
   const calls = api.mixer?.calls.length ?? 0;
   return (
     <div className="flex h-full flex-col">
-      <SubHeader title="Volume & calls" subtitle={calls ? `${calls === 1 ? 'A call' : `${calls} calls`} in progress` : 'Every app on the PC'} onBack={onBack} />
-      <PullToRefresh onRefresh={api.reload} className="min-h-0 flex-1">
-        <div className="px-safe pb-tabbar">{api.enabled ? <SoundPanel api={api} /> : <Empty icon={<VolumeX size={28} />} title="Turned off on the PC" body="Music and sound from the phone are off in OmniHub → Settings → Music." />}</div>
+      <SubHeader title="Volume & brightness" subtitle={calls ? `${calls === 1 ? 'A call' : `${calls} calls`} in progress` : 'Every app and monitor on the PC'} onBack={onBack} />
+      <PullToRefresh onRefresh={() => Promise.all([api.reload(), screens.reload()]).then(() => undefined)} className="min-h-0 flex-1">
+        <div className="px-safe pb-tabbar">
+          <div className="mb-4">
+            <BrightnessCard api={screens} />
+          </div>
+          {api.enabled ? <SoundPanel api={api} /> : <Empty icon={<VolumeX size={28} />} title="Turned off on the PC" body="Music and sound from the phone are off in OmniHub → Settings → Music." />}
+        </div>
       </PullToRefresh>
     </div>
   );

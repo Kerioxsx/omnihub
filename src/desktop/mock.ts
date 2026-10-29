@@ -98,6 +98,11 @@ const handlers: Record<string, Handler> = {
   games_config_apply: (a) => optimize.apply(str(a, 'game') as ConfigGame),
   games_config_restore: (a) => optimize.restore(str(a, 'game') as ConfigGame),
   games_fortnite_clean: () => ({ freedBytes: 1_284_000_000, files: 2316, skipped: 3 }),
+  displays_list: () => [
+    { id: '\\\\.\\DISPLAY1#0', name: 'LG ULTRAGEAR', primary: true, builtin: false, brightness: 70, contrast: 75 },
+    { id: '\\\\.\\DISPLAY2#0', name: 'DELL S2421H', primary: false, builtin: false, brightness: 55, contrast: 50 },
+  ],
+  displays_set: () => null,
   games_library: () => optimize.library(),
   games_add_installed: (a) => optimize.addInstalled(str(a, 'key')),
   games_load_test: (a) => games.loadTest(optStr(a, 'id')),

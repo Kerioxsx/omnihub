@@ -200,6 +200,10 @@ export const api = {
     fpsInstall: () => call<T.FpsOverview>('games_fps_install'),
     fpsAllow: () => call<T.FpsOverview>('games_fps_allow'),
   },
+  displays: {
+    list: () => call<T.Display[]>('displays_list'),
+    set: (id: string, setting: T.DisplaySetting, value: number) => call<void>('displays_set', { id, setting, value }),
+  },
 
   pc: {
     status: () => call<T.PcStatus>('pc_status'),

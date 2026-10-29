@@ -433,6 +433,8 @@ pub fn run(args: Vec<String>) {
             commands::games_config_apply,
             commands::games_config_restore,
             commands::games_fortnite_clean,
+            commands::displays_list,
+            commands::displays_set,
             commands::games_load_test,
             commands::games_fps,
             commands::games_fps_install,

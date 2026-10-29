@@ -1597,6 +1597,16 @@ pub async fn games_config_apply(core: Core<'_>, game: games::configs::ConfigGame
 }
 
 #[tauri::command]
+pub async fn displays_list() -> Res<Vec<omnihub_core::system::displays::Display>> {
+    blocking(|| Ok(omnihub_core::system::displays::list())).await
+}
+
+#[tauri::command]
+pub async fn displays_set(id: String, setting: omnihub_core::system::displays::Setting, value: u8) -> Res<()> {
+    blocking(move || omnihub_core::system::displays::set(&id, setting, value)).await
+}
+
+#[tauri::command]
 pub async fn games_fortnite_clean(core: Core<'_>) -> Res<games::CacheClean> {
     let core = core.inner().clone();
     blocking(move || {

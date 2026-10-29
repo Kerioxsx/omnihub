@@ -138,6 +138,18 @@ export interface Call {
   sinceMs: number | null;
 }
 
+/** A PC monitor whose brightness can be set (DDC/CI, or Windows for a laptop screen). */
+export interface Display {
+  id: string;
+  name: string;
+  primary: boolean;
+  builtin: boolean;
+  /** 0–100; null when the monitor doesn't answer. */
+  brightness: number | null;
+  contrast: number | null;
+}
+export type DisplaySetting = 'brightness' | 'contrast';
+
 export interface Mixer {
   master: { level: number; muted: boolean } | null;
   mic: { muted: boolean; devices: number } | null;
@@ -252,6 +264,8 @@ export const client = {
   soundMaster: (patch: { level?: number; muted?: boolean }) => request<Mixer>('POST', '/api/sound/master', patch),
   soundApp: (key: string, patch: { level?: number; muted?: boolean }) => request<Mixer>('POST', '/api/sound/app', { key, ...patch }),
   soundMic: (muted: boolean) => request<Mixer>('POST', '/api/sound/mic', { muted }),
+  displays: () => request<Display[]>('GET', '/api/displays'),
+  displaySet: (id: string, setting: DisplaySetting, value: number) => request<void>('POST', '/api/displays/set', { id, setting, value }),
   openApps: () => request<{ apps: OpenApp[] }>('GET', '/api/open-apps'),
   closeApp: (key: string) => request<{ windows: number }>('POST', '/api/open-apps/close', { key }),
   openAppIcon: (key: string) => request<{ icon: string | null }>('GET', `/api/open-apps/icon?key=${encodeURIComponent(key)}`),

@@ -2,6 +2,7 @@
 
 pub mod awake;
 pub mod clipboard;
+pub mod displays;
 pub mod dpapi;
 pub mod elevation;
 pub mod firewall;

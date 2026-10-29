@@ -1,11 +1,11 @@
 ## New in this version
 
-**Roblox starts again, and no more duplicate games.**
+**Your monitors' brightness from your phone.**
 
-- **Roblox starts again**: Roblox's recent security changes stop it from starting with ReShade in its folder ("Failed to load library: d3d11.dll", then "Roblox encountered an unexpected error"); Bloxshade is down for the same reason. OmniHub takes out the shaders 0.15.0 put in Roblox as soon as it starts, also from Bloxstrap's and Fishstrap's folders, and no longer installs them. Another tool's ReShade is left alone, but OmniHub tells you if one is still there.
-- **No duplicate games**: games in Steam's main folder showed up twice under *On this PC* (Steam writes that folder two ways). Each game is listed once now.
+- **On the phone**: More → **Volume & brightness** now starts with *Monitor brightness*: a slider for every PC monitor, contrast where the monitor has it, and one for all of them. It works with the phone's music control switch (OmniHub → Settings → Music).
+- **On the PC**: My PC → **Monitors** has the same sliders: a brightness slider for every monitor, contrast where the monitor has it, and one slider for all of them. OmniHub changes each monitor's own setting over DDC/CI, as its buttons do (the same way Twinkle Tray works, so both run fine side by side); a laptop's built-in screen goes through Windows. A monitor that doesn't answer gets a hint: turn on DDC/CI in its own menu.
 
-Also in 0.15.0: a much lighter OmniHub (windows you can't see sleep), Fortnite's Max FPS setup, rendering mode and cache cleaner, Roblox opening from Play, free memory before the game, and every Roblox flag with on/off switches.
+Also in 0.15.1: Roblox starts again (OmniHub takes out the ReShade Roblox now blocks) and each game is listed once.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 
