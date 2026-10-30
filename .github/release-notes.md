@@ -1,10 +1,15 @@
 ## New in this version
 
-**Capri, on and off with one switch.**
+**Search everything, app updates, Wi-Fi QR codes, and imports from other password managers.**
 
-- **Capri** ([mochiiwuff/capri-desktop](https://github.com/mochiiwuff/capri-desktop)), the desktop companion who narrates what Claude Code, Codex or Antigravity are doing: a **Capri** switch at the top of **Chats** (and in the tray menu). The first time you switch her on, OmniHub downloads her official release from her GitHub page, checks it against GitHub's checksum and installs it for your user (about 100 MB, no administrator); then she starts, and starts with OmniHub until you switch her off. Off closes her and takes her out of Windows' startup list. When her page has a newer version, an update button shows next to the switch. Capri is mochiiwuff's free, non-commercial project; OmniHub doesn't include her, it fetches her for you.
+- **Search everything (Ctrl+K)**: type in the command palette and it finds files (from your latest scan of each drive), notes and ideas, apps, screenshots (by their text too) and, while the vault is open, vault entries by title. Enter opens it: a file in Explorer, an app starts, a vault entry opens in the vault.
+- **App updates**: Apps → **Updates** lists every installed app with a newer version (through winget, Windows' own package manager), with **Update** per app and **Update all**.
+- **Pin a screenshot on top**: in a screenshot, **Pin on top** keeps it in a small window above everything else. Drag it, resize it from its edges, scroll to fade it, double-click or Esc to close.
+- **Wi-Fi QR code**: a Wi-Fi entry in the vault has **Show Wi-Fi QR code**: guests point their phone's camera at it and join without typing the password.
+- **Import from another password manager**: Vault → settings → **From another password manager…** reads Bitwarden (CSV or unencrypted JSON), Chrome, Edge, Brave, Opera, Firefox, 1Password, KeePass, LastPass or any CSV with name, URL, username and password columns. Logins already in the vault are skipped, two-factor secrets come along, and OmniHub offers to delete the export file afterwards (it has your passwords in plain text).
+- **Phone**: *Get the PC's clipboard* on Home copies the PC's clipboard text onto the phone (never a password copied from the vault). On Android, with OmniHub added to the home screen, **Share → OmniHub** from any app sends a link or text to the PC: open it there, copy it there, or save it as an idea.
 
-Also in 0.16.0: your monitors' brightness from your phone (More → Volume & brightness) and on the PC (My PC → Monitors).
+Also in 0.16.1: a Capri switch at the top of Chats.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

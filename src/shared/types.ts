@@ -2715,3 +2715,12 @@ export interface CapriStatus {
   /** The newest release on her page, when asked for. */
   latest: string | null;
 }
+
+/** An installed app winget has a newer version of. */
+export interface AppUpdate {
+  name: string;
+  id: string;
+  version: string;
+  available: string;
+  source: string;
+}

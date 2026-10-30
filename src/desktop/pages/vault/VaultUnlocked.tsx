@@ -2,7 +2,7 @@ import { primaryProvider } from '@shared/accounts';
 import { formatDate, formatRelative } from '@shared/format';
 import type { Entry, EntryKind, EntrySummary, VaultStatus } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { ClipboardCheck, Copy, ExternalLink, Eye, EyeOff, Globe, KeyRound, LockKeyhole, Pencil, Plus, Settings2, ShieldAlert, ShieldCheck, Star, Timer, Trash } from 'lucide-react';
+import { ClipboardCheck, Copy, ExternalLink, Eye, EyeOff, Globe, KeyRound, LockKeyhole, Pencil, Plus, QrCode, Settings2, ShieldAlert, ShieldCheck, Star, Timer, Trash } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -11,6 +11,7 @@ import { SearchInput, Select } from '../../components/ui/Form';
 import { Callout, EmptyState } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { useEvent, useMediaQuery, useNow } from '../../lib/hooks';
+import { useRoute } from '../../lib/router';
 import { formatCountdown, prettyUrl } from '../../lib/util';
 import { confirm } from '../../state/dialogs';
 import { useLive } from '../../state/live';
@@ -226,6 +227,7 @@ function Detail({ id, onEdit, onDeleted, onChanged }: { id: string; onEdit: (e: 
           </div>
         )}
         {entry.totp && <TotpRow id={entry.id} onCopy={() => void copy('totp')} copied={left('totp')} />}
+        {entry.kind === 'wifi' && entry.username && <WifiQr id={entry.id} />}
         {entry.url && (
           <FieldRow label="Website" onCopy={() => void copy('url')} copied={left('url')}>
             <button type="button" onClick={() => void api.app.openUrl(entry.url)} className="inline-flex items-center gap-1.5 text-accent hover:underline">
@@ -263,6 +265,35 @@ function Detail({ id, onEdit, onDeleted, onChanged }: { id: string; onEdit: (e: 
   );
 }
 
+/** "Join this Wi-Fi" as a QR code, for guests' phone cameras. */
+function WifiQr({ id }: { id: string }) {
+  const [svg, setSvg] = useState<string | null>(null);
+  useEffect(() => setSvg(null), [id]);
+  const show = async () => {
+    try {
+      setSvg(await api.vault.wifiQr(id));
+    } catch (e) {
+      toast.error('Couldn’t make the QR code', errorText(e));
+    }
+  };
+  return svg ? (
+    <div className="flex items-center gap-4 rounded-xl border border-line bg-white p-3">
+      {/* Our own generator's SVG (qrcode crate), not user markup. */}
+      <div className="h-40 w-40 shrink-0 [&_svg]:h-full [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: svg }} />
+      <div className="text-[12.5px] text-neutral-700">
+        Point a phone’s camera at it to join this Wi-Fi without typing the password.
+        <button type="button" onClick={() => setSvg(null)} className="mt-2 block text-[12px] font-medium text-neutral-900 underline">
+          Hide
+        </button>
+      </div>
+    </div>
+  ) : (
+    <Button size="sm" variant="secondary" icon={QrCode} onClick={() => void show()}>
+      Show Wi-Fi QR code
+    </Button>
+  );
+}
+
 export function VaultUnlocked({ status }: { status: VaultStatus }) {
   const [entries, setEntries] = useState<EntrySummary[] | null>(null);
   const [q, setQ] = useState('');
@@ -276,6 +307,11 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
   const [locksAt, setLocksAt] = useState(() => (status.locksIn != null ? Date.now() + status.locksIn * 1000 : null));
   const now = useNow(1000);
   const lastTouch = useRef(0);
+  // Opened from search (Ctrl+K): that entry.
+  const wanted = useRoute().params.get('id');
+  useEffect(() => {
+    if (wanted) setSelected(wanted);
+  }, [wanted]);
 
   const load = useCallback(async () => {
     try {

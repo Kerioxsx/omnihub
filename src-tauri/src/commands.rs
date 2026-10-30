@@ -762,6 +762,35 @@ pub async fn vault_get(core: Core<'_>, id: String) -> Res<Entry> {
     core.vault.get(&id).map_err(err)
 }
 
+/// Logins from another password manager's export; (added, read).
+#[tauri::command]
+pub async fn vault_import_file(core: Core<'_>, path: String) -> Res<(usize, usize)> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let bytes = std::fs::read(&path).map_err(err)?;
+        if bytes.len() > 64 << 20 {
+            return Err("That file is too big to be a password export.".into());
+        }
+        let items = omnihub_core::vault::import::parse(&bytes)?;
+        let read = items.len();
+        let r = core.vault.import_entries(items).map_err(err);
+        core.audit.record("desktop", "vault.import-file", &format!("{read} read"), r.is_ok());
+        Ok((r?, read))
+    })
+    .await
+}
+
+/// A QR code that joins a saved Wi-Fi network (point a phone's camera at it).
+#[tauri::command]
+pub async fn vault_wifi_qr(core: Core<'_>, id: String) -> Res<String> {
+    let e = core.vault.get(&id).map_err(err)?;
+    if e.kind != omnihub_core::vault::EntryKind::Wifi || e.username.is_empty() {
+        return Err("That entry isn't a Wi-Fi network with a name.".into());
+    }
+    core.audit.record("desktop", "vault.wifi-qr", &e.title, true);
+    Ok(omnihub_core::remote::net::qr_svg(&omnihub_core::vault::wifi_qr_text(&e.username, &e.password)))
+}
+
 #[tauri::command]
 pub async fn vault_save(core: Core<'_>, input: EntryInput) -> Res<EntrySummary> {
     core.vault.save(input).map_err(err)
@@ -1592,6 +1621,47 @@ pub async fn games_config_apply(core: Core<'_>, game: games::configs::ConfigGame
         core.audit.record("desktop", "game.settings", &format!("{} ({} changes)", game.label(), r.as_ref().map(Vec::len).unwrap_or(0)), r.is_ok());
         r?;
         Ok(game_configs(&core))
+    })
+    .await
+}
+
+/// A screenshot in its own small window above everything else, to look at
+/// while working (drag to move, edges to resize, Esc or × to close).
+#[tauri::command]
+pub async fn shots_pin(app: AppHandle, core: Core<'_>, id: String) -> Res<()> {
+    let shot = core.screenshots.get(&id).map_err(err)?;
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    // At most 640 wide or 480 high to start with, never bigger than the picture.
+    let (w, h) = (shot.width.max(1) as f64, shot.height.max(1) as f64);
+    let scale = (640.0 / w).min(480.0 / h).min(1.0);
+    let url = format!("index.html#/pin?id={}", id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect::<String>());
+    tauri::WebviewWindowBuilder::new(&app, format!("pin-{n}"), tauri::WebviewUrl::App(url.into()))
+        .title("Pinned screenshot")
+        .decorations(false)
+        .always_on_top(true)
+        .resizable(true)
+        .skip_taskbar(true)
+        .inner_size((w * scale).max(160.0), (h * scale).max(120.0))
+        .focused(true)
+        .build()
+        .map(|_| ())
+        .map_err(err)
+}
+
+/// Installed apps winget has a newer version of.
+#[tauri::command]
+pub async fn apps_updates() -> Res<Vec<omnihub_core::winget::AppUpdate>> {
+    blocking(omnihub_core::winget::updates).await
+}
+
+#[tauri::command]
+pub async fn apps_update(core: Core<'_>, id: String) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = omnihub_core::winget::update(&id);
+        core.audit.record("desktop", "apps.update", &id, r.is_ok());
+        r
     })
     .await
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Cpu, MemoryStick, HardDrive, Download, X, Inbox, Sparkles, Send, FolderOpen, MonitorPlay, Power, Clock, Lightbulb, ChevronRight, NotebookPen, Copy, ExternalLink, Link2, Type, Share, ClipboardPaste, Music2, Pause, Play, SkipForward, SlidersVertical, AppWindow } from 'lucide-react';
 import { basename, formatBytes, formatRelative } from '@shared/format';
 import type { InboxItem } from '@shared/types';
+import { copyText } from '../lib/clipboard';
 import { client, type MediaState, type Status } from '../client';
 import { useEvent } from '../lib/events';
 import { useApp, useInbox, usePower, toast, type Tab } from '../state';
@@ -365,6 +366,24 @@ function ClipboardComposer() {
       toast.info('Paste into the box', 'This browser does not let the page read the clipboard.');
     }
   };
+  const [getting, setGetting] = useState(false);
+  /** The PC's clipboard onto the phone's (a second tap on Copy if the browser wants one). */
+  const fromPc = async () => {
+    setGetting(true);
+    try {
+      const { text: t } = await client.pcClipboard();
+      if (!t) return toast.info('Nothing to get', 'The PC clipboard has no text right now.');
+      if (await copyText(t)) toast.success('Copied from the PC', t.length > 60 ? `${t.slice(0, 60)}…` : t);
+      else {
+        setText(t);
+        toast.info('Here it is', 'Tap and hold the box to copy it.');
+      }
+    } catch (e) {
+      toast.error("Couldn't get it", errorMessage(e));
+    } finally {
+      setGetting(false);
+    }
+  };
   const send = async () => {
     if (!text.trim()) return;
     setBusy(true);
@@ -380,7 +399,7 @@ function ClipboardComposer() {
   };
   return (
     <>
-      <SectionTitle>Send to PC clipboard</SectionTitle>
+      <SectionTitle>Clipboard</SectionTitle>
       <section className="card p-4">
         <textarea className="field min-h-[72px] resize-none leading-relaxed" placeholder="A link, a code, an address…" value={text} onChange={(e) => setText(e.target.value)} aria-label="Text for the PC clipboard" />
         <div className="mt-3 flex gap-2">
@@ -393,6 +412,9 @@ function ClipboardComposer() {
             Copy on PC
           </Button>
         </div>
+        <Button variant="soft" className="mt-2 w-full" loading={getting} onClick={fromPc} icon={<ClipboardPaste size={17} />}>
+          Get the PC’s clipboard
+        </Button>
       </section>
     </>
   );

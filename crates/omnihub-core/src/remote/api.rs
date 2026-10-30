@@ -76,7 +76,7 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/inbox", get(inbox_list))
         .route("/api/inbox/{id}/ticket", post(inbox_ticket))
         .route("/api/inbox/{id}", axum::routing::delete(inbox_dismiss))
-        .route("/api/clipboard", post(clipboard_set))
+        .route("/api/clipboard", post(clipboard_set).get(clipboard_get))
         .route("/api/media", get(media_get))
         .route("/api/media/art", get(media_art))
         .route("/api/media/control", post(media_control))
@@ -103,6 +103,7 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/apps", get(apps_list))
         .route("/api/apps/{id}/icon", get(app_icon))
         .route("/api/apps/{id}/launch", post(app_launch))
+        .route("/api/open-link", post(open_link))
         .route("/api/notes", get(notes_list).post(notes_create))
         .route("/api/notes/{id}", get(notes_get))
         .route("/api/chats", get(chats_list))
@@ -732,6 +733,16 @@ async fn displays_set(State(core): State<Ctx>, Json(req): Json<DisplayReq>) -> A
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// The PC's clipboard text, for the phone (never a password OmniHub copied from the vault).
+async fn clipboard_get(State(core): State<Ctx>, Extension(dev): Extension<Device>) -> ApiResult<Json<serde_json::Value>> {
+    if !core.settings.get().remote.allow_clipboard {
+        return Err(ApiError::forbidden("the PC does not share its clipboard with phones"));
+    }
+    let text = tokio::task::spawn_blocking(crate::system::clipboard::get_text).await?.filter(|t| !t.is_empty() && t.len() <= transfer::MAX_TEXT);
+    core.audit.record(&actor(&dev), "clipboard.to-phone", &text.as_ref().map(|t| format!("{} characters", t.chars().count())).unwrap_or_else(|| "nothing".into()), true);
+    Ok(Json(json!({ "text": text })))
+}
+
 /// Put text from the phone on this PC's clipboard.
 async fn clipboard_set(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(c): Json<ClipboardText>) -> ApiResult<StatusCode> {
     if !core.settings.get().remote.allow_clipboard {
@@ -949,6 +960,26 @@ async fn app_launch(State(core): State<Ctx>, Extension(dev): Extension<Device>, 
     let name = core.apps.launch(&id).map_err(|e| ApiError::bad(e.to_string()))?;
     core.audit.record(&actor(&dev), "apps.launch", &name, true);
     Ok(Json(json!({ "launched": name })))
+}
+
+#[derive(Deserialize)]
+struct LinkReq {
+    url: String,
+}
+
+/// Open a web link from the phone in the PC's browser ("Share → OmniHub").
+async fn open_link(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<LinkReq>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_app_launch {
+        return Err(ApiError::forbidden("opening things on the PC from the phone is turned off"));
+    }
+    let url = req.url.trim().to_string();
+    if !(url.starts_with("https://") || url.starts_with("http://")) || url.len() > 4096 || url.chars().any(char::is_whitespace) {
+        return Err(ApiError::bad("only web links (http or https) can be opened"));
+    }
+    let host = url.split('/').nth(2).unwrap_or_default().to_string();
+    tokio::task::spawn_blocking(move || crate::system::shell::open_url(&url)).await?.map_err(|e| ApiError::bad(e.to_string()))?;
+    core.audit.record(&actor(&dev), "link.open", &host, true);
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ---------- notes ----------

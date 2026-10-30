@@ -7,6 +7,7 @@ pub mod crypto;
 pub mod generator;
 pub mod health;
 pub mod hello;
+pub mod import;
 pub mod totp;
 
 use std::path::{Path, PathBuf};
@@ -610,6 +611,51 @@ impl Vault {
         })
     }
 
+    /// Add logins from another password manager's export (see `import`);
+    /// ones already here (same title, username and site) are skipped.
+    /// Returns how many were added.
+    pub fn import_entries(&self, items: Vec<import::Imported>) -> Result<usize, VaultError> {
+        let now = crate::db::now();
+        self.with_open(|o| {
+            let key = |t: &str, u: &str, l: &str| (t.trim().to_lowercase(), u.trim().to_lowercase(), l.trim().trim_end_matches('/').to_lowercase());
+            let mut have: std::collections::HashSet<_> = o.entries.iter().map(|e| key(&e.title, &e.username, &e.url)).collect();
+            let mut added = 0;
+            for it in items {
+                if !have.insert(key(&it.title, &it.username, &it.url)) {
+                    continue;
+                }
+                // Entry wipes itself when dropped, so it is filled field by field.
+                let mut e = Entry::default();
+                e.id = uuid::Uuid::new_v4().to_string();
+                e.kind = it.kind;
+                e.title = it.title;
+                e.username = it.username;
+                e.password = it.password;
+                e.url = it.url;
+                e.tags = it.tags;
+                e.favorite = it.favorite;
+                e.created = now;
+                e.updated = now;
+                e.password_changed = now;
+                // A two-factor secret Windows can't read stays in the notes rather than being lost.
+                if !it.totp.is_empty() && totp::parse(&it.totp).is_ok() {
+                    e.totp = it.totp;
+                    e.notes = it.notes;
+                } else if !it.totp.is_empty() {
+                    e.notes = [it.notes, format!("2FA: {}", it.totp)].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n");
+                } else {
+                    e.notes = it.notes;
+                }
+                o.entries.push(e);
+                added += 1;
+            }
+            if added > 0 {
+                self.write_file(o)?;
+            }
+            Ok(added)
+        })
+    }
+
     pub fn enable_hello(&self) -> Result<(), VaultError> {
         let key = self.with_open(|o| Ok(o.keys.key.clone()))?;
         let challenge = crypto::random_bytes::<32>();
@@ -684,6 +730,22 @@ pub fn session_locked() -> bool {
 #[cfg(not(windows))]
 pub fn session_locked() -> bool {
     false
+}
+
+/// The text a phone camera reads as "join this Wi-Fi" (`WIFI:T:WPA;S:…;P:…;;`).
+pub fn wifi_qr_text(ssid: &str, password: &str) -> String {
+    let esc = |s: &str| s.chars().fold(String::new(), |mut o, c| {
+        if matches!(c, '\\' | ';' | ',' | ':' | '"') {
+            o.push('\\');
+        }
+        o.push(c);
+        o
+    });
+    if password.is_empty() {
+        format!("WIFI:T:nopass;S:{};;", esc(ssid))
+    } else {
+        format!("WIFI:T:WPA;S:{};P:{};;", esc(ssid), esc(password))
+    }
 }
 
 #[cfg(test)]
@@ -775,5 +837,22 @@ mod tests {
         assert!(is_primary_account("https://appleid.apple.com", "", "someone@gmail.com"));
         assert!(is_primary_account("login.live.com", "", ""));
         assert!(is_primary_account("", "", "someone@icloud.com"));
+    }
+
+    #[test]
+    fn wifi_qr_escapes() {
+        assert_eq!(super::wifi_qr_text("Home;Net", "pa:ss\\1"), "WIFI:T:WPA;S:Home\\;Net;P:pa\\:ss\\\\1;;");
+        assert_eq!(super::wifi_qr_text("Cafe", ""), "WIFI:T:nopass;S:Cafe;;");
+    }
+
+    #[test]
+    fn imports_skip_what_is_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let v = vault(dir.path());
+        v.create("correct horse battery").unwrap();
+        let items = import::parse(b"name,url,username,password\nGitHub,https://github.com,me,pw\nGitHub,https://github.com,me,pw\nMail,https://mail.example,you,pw2\n").unwrap();
+        assert_eq!(v.import_entries(items.clone()).unwrap(), 2, "the repeated row is skipped");
+        assert_eq!(v.import_entries(items).unwrap(), 0, "already in the vault");
+        assert_eq!(v.list().unwrap().len(), 2);
     }
 }

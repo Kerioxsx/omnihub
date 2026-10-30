@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Camera, CornerDownLeft, Crop, Gauge, HardDrive, Lightbulb, LockKeyhole, Moon, Music2, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, Sun } from 'lucide-react';
+import { AppWindow, Camera, CornerDownLeft, Crop, File, Folder, Gauge, HardDrive, Image, KeyRound, Lightbulb, LockKeyhole, Moon, Music2, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, StickyNote, Sun } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../api';
@@ -22,7 +22,7 @@ interface Cmd {
   label: string;
   hint?: string;
   icon: LucideIcon;
-  group: 'Pages' | 'Actions' | 'Drives';
+  group: 'Pages' | 'Actions' | 'Drives' | 'Files' | 'Notes' | 'Apps' | 'Screenshots' | 'Vault';
   keywords?: string;
   shortcut?: string;
   run: () => void | Promise<void>;
@@ -109,6 +109,52 @@ function useCommands(): Cmd[] {
   }, [volumes, settings?.general.theme, remote?.running]);
 }
 
+/** Everything else that matches: files (from the latest scan of each drive), notes, apps, screenshots and vault titles. */
+function useEverything(query: string, open: boolean): Cmd[] {
+  const [found, setFound] = useState<Cmd[]>([]);
+  const vaultOpen = !!useLive((s) => s.vault?.unlocked);
+  const apps = useRef<Awaited<ReturnType<typeof api.apps.list>> | null>(null);
+  useEffect(() => {
+    if (!open) apps.current = null;
+  }, [open]);
+  useEffect(() => {
+    const q = query.trim();
+    if (!open || q.length < 2) {
+      setFound([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(async () => {
+      const low = q.toLowerCase();
+      const out: Cmd[] = [];
+      const safe = async <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
+      const [scans, notes, shots, vault, appList] = await Promise.all([
+        safe(api.storage.scans()),
+        safe(api.notes.list({ query: q, limit: 5 })),
+        safe(api.shots.list({ query: q, limit: 5 })),
+        vaultOpen ? safe(api.vault.list()) : Promise.resolve(null),
+        apps.current ? Promise.resolve(apps.current) : safe(api.apps.list()),
+      ]);
+      if (appList) apps.current = appList;
+      // The newest scan of each drive.
+      const latest = new Map<string, NonNullable<typeof scans>[number]>();
+      for (const s of scans ?? []) if (!latest.has(s.root) || latest.get(s.root)!.scannedAt < s.scannedAt) latest.set(s.root, s);
+      const files = (await Promise.all([...latest.values()].map((s) => safe(api.storage.search(s.scanId, { text: q, limit: 6, excludeHidden: true }))))).flatMap((r) => r?.items ?? []);
+      for (const f of files.slice(0, 8)) out.push({ id: `file-${f.path}`, label: f.name, hint: `${f.path}${f.isDir ? '' : ` · ${formatBytes(f.size)}`}`, icon: f.isDir ? Folder : File, group: 'Files', run: () => attempt('Couldn’t open it', () => (f.isDir ? api.app.openPath(f.path) : api.app.revealPath(f.path))) });
+      for (const n of notes ?? []) out.push({ id: `note-${n.id}`, label: n.title || 'Untitled note', hint: n.kind === 'idea' ? 'Idea for Claude' : 'Note', icon: n.kind === 'idea' ? Lightbulb : StickyNote, group: 'Notes', run: () => navigate('notes', { id: n.id }) });
+      for (const a of (appList ?? []).filter((a) => a.name.toLowerCase().includes(low)).slice(0, 5)) out.push({ id: `app-${a.id}`, label: a.name, hint: `Open · ${a.publisher || a.source}`, icon: AppWindow, group: 'Apps', run: () => attempt('Couldn’t open it', () => api.apps.launch(a.id)) });
+      for (const sh of shots ?? []) out.push({ id: `shot-${sh.id}`, label: sh.appTitle || sh.path.split(/[\\/]/).pop() || 'Screenshot', hint: `${sh.width}×${sh.height}${sh.note ? ` · ${sh.note}` : ''}`, icon: Image, group: 'Screenshots', run: () => attempt('Couldn’t open it', () => api.app.openPath(sh.path)) });
+      for (const e of (vault ?? []).filter((e) => `${e.title} ${e.username} ${e.url}`.toLowerCase().includes(low)).slice(0, 5)) out.push({ id: `vault-${e.id}`, label: e.title, hint: e.username || e.url || 'Vault entry', icon: KeyRound, group: 'Vault', run: () => navigate('vault', { id: e.id }) });
+      if (alive) setFound(out);
+    }, 200);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [query, open, vaultOpen]);
+  return found;
+}
+
 export function CommandPalette() {
   const open = usePalette((s) => s.open);
   const setOpen = usePalette((s) => s.setOpen);
@@ -124,14 +170,20 @@ export function CommandPalette() {
     }
   }, [open]);
 
+  const everything = useEverything(q, open);
   const results = useMemo(() => {
     const query = q.trim().toLowerCase();
-    return commands
+    const cmds = commands
       .map((c) => ({ c, s: Math.max(score(query, c.label), score(query, `${c.keywords ?? ''} ${c.hint ?? ''}`) * 0.5) }))
       .filter((x) => x.s > 0)
       .sort((a, b) => (query ? b.s - a.s : 0))
       .map((x) => x.c);
-  }, [commands, q]);
+    // The best pages and actions first, each group once, then what was found.
+    const top = cmds.slice(0, query ? 6 : cmds.length);
+    const order = ['Pages', 'Actions', 'Drives'];
+    if (query) top.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
+    return [...top, ...everything];
+  }, [commands, q, everything]);
 
   useEffect(() => setActive(0), [q]);
   useEffect(() => {
@@ -155,7 +207,7 @@ export function CommandPalette() {
             data-autofocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Jump to a page or run an action…"
+            placeholder="Search files, notes, apps, screenshots, the vault… or run an action"
             className="h-14 flex-1 bg-transparent text-[15px] text-fg outline-none placeholder:text-faint"
             aria-label="Command"
             role="combobox"

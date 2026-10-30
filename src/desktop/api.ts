@@ -99,6 +99,8 @@ export const api = {
     list: (refresh = false) => call<T.AppInfo[]>('apps_list', { refresh }),
     icon: (id: string) => call<string | null>('apps_icon', { id }),
     launch: (id: string) => call<void>('apps_launch', { id }),
+    updates: () => call<T.AppUpdate[]>('apps_updates'),
+    update: (id: string) => call<void>('apps_update', { id }),
     uninstall: (id: string) => call<void>('apps_uninstall', { id }),
     screenshots: (id: string) => call<T.Screenshot[]>('apps_screenshots', { id }),
     startup: () => call<T.StartupItem[]>('startup_list'),
@@ -116,6 +118,7 @@ export const api = {
     regionCancel: () => call<void>('shots_region_cancel'),
     thumb: (id: string) => call<string>('shots_thumb', { id }),
     image: (id: string) => call<string>('shots_image', { id }),
+    pin: (id: string) => call<void>('shots_pin', { id }),
     update: (id: string, patch: { tags?: string[]; note?: string; favorite?: boolean }) =>
       call<T.Screenshot>('shots_update', { id, tags: patch.tags ?? null, note: patch.note ?? null, favorite: patch.favorite ?? null }),
     delete: (id: string, trash = true) => call<void>('shots_delete', { id, trash }),
@@ -148,6 +151,9 @@ export const api = {
     lock: () => call<void>('vault_lock'),
     touch: () => call<void>('vault_touch'),
     list: () => call<T.EntrySummary[]>('vault_list'),
+    wifiQr: (id: string) => call<string>('vault_wifi_qr', { id }),
+    /** Logins from another password manager's export: [added, read]. */
+    importFile: (path: string) => call<[number, number]>('vault_import_file', { path }),
     get: (id: string) => call<T.Entry>('vault_get', { id }),
     save: (input: T.EntryInput) => call<T.EntrySummary>('vault_save', { input }),
     delete: (id: string) => call<void>('vault_delete', { id }),

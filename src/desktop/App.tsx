@@ -41,7 +41,7 @@ const VaultPage = lazy(() => import('./pages/vault/VaultPage').then((m) => ({ de
 const Onboarding = lazy(() => import('./pages/onboarding/Onboarding').then((m) => ({ default: m.Onboarding })));
 const PlayerHost = lazy(() => import('./components/music/PlayerHost').then((m) => ({ default: m.PlayerHost })));
 
-const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen'>, ComponentType> = {
+const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen' | 'pin'>, ComponentType> = {
   home: HomePage,
   storage: StoragePage,
   apps: AppsPage,
@@ -140,7 +140,7 @@ export function App() {
 
   if (!settings) return <Splash error={error} onRetry={() => void load()} />;
 
-  const pageId = route.id === 'overlay' || route.id === 'ambient' || route.id === 'casescreen' ? 'home' : route.id;
+  const pageId = route.id === 'overlay' || route.id === 'ambient' || route.id === 'casescreen' || route.id === 'pin' ? 'home' : route.id;
   const PageComp = PAGES[pageId];
   const showOnboarding = onboardingForced || !settings.general.onboarded;
 

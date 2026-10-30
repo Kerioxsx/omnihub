@@ -13,6 +13,7 @@ import { useBackHandler } from './lib/back';
 import { copyToClipboard, cx, errorMessage, useInterval } from './lib/util';
 import { TabBar } from './ui/TabBar';
 import { Toasts } from './ui/Toasts';
+import { ShareSheet, takeShared, type Shared } from './screens/ShareIn';
 import { Logo } from './ui/Logo';
 import { Button } from './ui/common';
 import { PairScreen } from './screens/Pair';
@@ -42,6 +43,8 @@ export function App() {
   const { info, setInfo, setSocket, setOnline, tab, prevTab, setTab, refreshInfo } = useApp();
   const [visited, setVisited] = useState<Set<Tab>>(new Set(['home']));
   const [morePage, setMorePage] = useState<MorePage | null>(null);
+  // "Share → OmniHub" from another app.
+  const [shared, setShared] = useState<Shared | null>(() => takeShared());
 
   const boot = useCallback(async () => {
     try {
@@ -246,6 +249,7 @@ export function App() {
       </main>
       <BackToHome active={tab !== 'home' && !(tab === 'more' && morePage)} onBack={() => setTab('home')} />
       <TabBar hidden={hidden} badges={{ files: activeUploads, home: inboxCount }} />
+      <ShareSheet shared={shared} onClose={() => setShared(null)} />
       <Toasts aboveTabs />
     </div>
   );

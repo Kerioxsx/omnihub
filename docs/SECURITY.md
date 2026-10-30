@@ -202,6 +202,16 @@ and lets a phone do some of that. This is what protects each part.
   Roblox's own settings file,
   `ClientSettings\ClientAppSettings.json`, where OmniHub writes Fast Flags
   (keeping any flags it did not write).
+- Phone clipboard: with "clipboard from phones" on, a paired phone can also
+  read the PC's clipboard text (`GET /api/clipboard`); a password OmniHub
+  copied from the vault is never returned. "Share → OmniHub" links open on the
+  PC only through `POST /api/open-link`, which takes http(s) links only and
+  needs "launch apps from the phone".
+- Password imports read the chosen export file on the PC only; nothing is
+  sent. OmniHub offers to delete the export afterwards (permanently, not to
+  the Recycle Bin), since it holds the passwords in plain text.
+- App updates run `winget upgrade --id <id> --exact --silent` for a package id
+  that winget itself listed (letters, digits and `.-_+` only).
 - Capri (off by default): switching her on asks api.github.com for the newest
   release of github.com/mochiiwuff/capri-desktop, downloads only an installer
   hosted on that repository's releases (`Capri-Setup-*.exe`, under 400 MB),

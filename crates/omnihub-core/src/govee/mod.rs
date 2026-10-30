@@ -1672,10 +1672,25 @@ mod tests {
     use super::*;
     use lan::tests::FakeLight;
 
+    /// A free port below the range the OS hands out for "any port" (32768+
+    /// on Linux, 49152+ on Windows), so no other test's socket can take it
+    /// between this check and the hub binding it, which would leave the hub
+    /// retrying for 10 seconds.
+    fn answer_port() -> u16 {
+        static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
+        let base = 20_000 + (std::process::id() % 500) as u16 * 20;
+        loop {
+            let p = base + NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % 2_000;
+            if std::net::UdpSocket::bind(("127.0.0.1", p)).is_ok() {
+                return p;
+            }
+        }
+    }
+
     fn hub(dir: &Path) -> (Arc<GoveeHub>, FakeLight, EventBus) {
         let events = EventBus::new();
-        // Find a free answer port, then start the light on it.
-        let listen = std::net::UdpSocket::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        // A free answer port, then the light answering on it.
+        let listen = answer_port();
         let fake = FakeLight::start(listen, "aa:bb:cc:dd:ee:ff:00:11", "H6199");
         let cfg = LanConfig { addr: Ipv4Addr::LOCALHOST, ports: Ports { listen, ..fake.ports }, multicast: false };
         let visual = crate::media::visual::VisualHub::new(events.clone(), true);

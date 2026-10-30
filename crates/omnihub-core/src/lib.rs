@@ -32,3 +32,4 @@ pub mod system;
 pub mod thumbs;
 pub mod update;
 pub mod vault;
+pub mod winget;

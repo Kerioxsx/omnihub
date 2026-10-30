@@ -229,6 +229,8 @@ export const client = {
     return new File([blob], t.name, { type: blob.type || 'application/octet-stream' });
   },
   sendClipboard: (text: string) => request<void>('POST', '/api/clipboard', { text }),
+  pcClipboard: () => request<{ text: string | null }>('GET', '/api/clipboard'),
+  openLink: (url: string) => request<void>('POST', '/api/open-link', { url }),
   dismiss: (id: string) => request<void>('DELETE', `/api/inbox/${id}`),
 
   power: () => request<{ enabled: boolean; actions: { action: PowerAction; label: string; destructive: boolean }[]; pending: PendingPower | null; delaySeconds: number }>('GET', '/api/power'),

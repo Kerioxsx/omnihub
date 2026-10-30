@@ -1,7 +1,7 @@
 import { formatBytes, formatDateTime } from '@shared/format';
 import type { Screenshot } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Clipboard, ExternalLink, FolderSearch, PenTool, ScanText, Smartphone, Star, Tag, Trash, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clipboard, Pin, ExternalLink, FolderSearch, PenTool, ScanText, Smartphone, Star, Tag, Trash, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { type PointerEvent, type WheelEvent, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -251,6 +251,9 @@ function Details({ shot, onChange, onDeleted, onCreated }: { shot: Screenshot; o
         </Button>
         <Button size="sm" icon={ScanText} onClick={() => setReading(true)}>
           Copy text
+        </Button>
+        <Button size="sm" icon={Pin} onClick={act('Could not pin it', () => api.shots.pin(shot.id))} title="Keep it in a small window above everything else">
+          Pin on top
         </Button>
         <Button size="sm" icon={Clipboard} onClick={act('Could not copy', () => api.shots.copy(shot.id), 'Copied to the clipboard')}>
           Copy

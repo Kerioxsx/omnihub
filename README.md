@@ -32,6 +32,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.17.0
+
+- **Search everything** from Ctrl+K (files, notes, apps, screenshots, vault titles), **app updates** through winget, **pin a screenshot on top**, **Wi-Fi QR codes** in the vault, **imports from Bitwarden, Chrome, Firefox, 1Password, KeePass and CSV**, and on the phone: get the PC's clipboard and **Share → OmniHub** (Android).
+
 ## New in 0.16.1
 
 - **Capri** switch at the top of Chats (and in the tray): installs [Capri](https://github.com/mochiiwuff/capri-desktop) from her official release the first time, starts her with OmniHub while on, and closes her when off.

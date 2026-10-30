@@ -1,7 +1,7 @@
 import { formatBytes, formatDate } from '@shared/format';
 import type { AppInfo, AppSource } from '@shared/types';
 import { motion } from 'motion/react';
-import { ArrowUpDown, LayoutGrid, LayoutList, PackageSearch, Power, RefreshCw, Star } from 'lucide-react';
+import { ArrowUpCircle, ArrowUpDown, LayoutGrid, LayoutList, PackageSearch, Power, RefreshCw, Star } from 'lucide-react';
 import { type CSSProperties, useMemo, useState } from 'react';
 import { api } from '../../api';
 import { AppIcon } from '../../components/AppIcon';
@@ -18,9 +18,10 @@ import { useSettings } from '../../state/settings';
 import { AppDrawer } from './AppDrawer';
 import { SOURCE_LABEL, SizeHint } from './shared';
 import { StartupPanel } from './StartupPanel';
+import { UpdatesPanel } from './UpdatesPanel';
 
 type Sort = 'name' | 'size' | 'date' | 'publisher';
-type Filter = 'all' | 'favorites' | 'startup' | AppSource;
+type Filter = 'all' | 'favorites' | 'startup' | 'updates' | AppSource;
 
 export function AppsPage() {
   const apps = useAsync(() => api.apps.list(false), []);
@@ -29,7 +30,7 @@ export function AppsPage() {
   const [view, setView] = useStoredState<'grid' | 'list'>('omnihub.apps.view', 'grid');
   // ?filter=startup opens the startup apps (from Games → Optimize PC).
   const route = useRoute();
-  const [filter, setFilter] = useState<Filter>(() => (route.params.get('filter') === 'startup' ? 'startup' : 'all'));
+  const [filter, setFilter] = useState<Filter>(() => (route.params.get('filter') === 'startup' ? 'startup' : route.params.get('filter') === 'updates' ? 'updates' : 'all'));
   const [open, setOpen] = useState<AppInfo | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -42,7 +43,7 @@ export function AppsPage() {
   );
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const out = all.filter((a) => (filter === 'all' || filter === 'startup' || (filter === 'favorites' ? favSet.has(a.id) : a.source === filter)) && (!needle || `${a.name} ${a.publisher}`.toLowerCase().includes(needle)));
+    const out = all.filter((a) => (filter === 'all' || filter === 'startup' || filter === 'updates' || (filter === 'favorites' ? favSet.has(a.id) : a.source === filter)) && (!needle || `${a.name} ${a.publisher}`.toLowerCase().includes(needle)));
     const by: Record<Sort, (a: AppInfo, b: AppInfo) => number> = {
       name: (a, b) => a.name.localeCompare(b.name),
       size: (a, b) => (b.size ?? -1) - (a.size ?? -1),
@@ -90,7 +91,7 @@ export function AppsPage() {
     <Page
       title="Apps"
       subtitle={apps.data ? `${counts.all} installed · ${counts.store} from the Microsoft Store · ${formatBytes(totalSize)} shown` : 'Reading installed programs…'}
-      scroll={view === 'grid' || filter === 'startup'}
+      scroll={view === 'grid' || filter === 'startup' || filter === 'updates'}
       actions={
         <>
           <SearchInput value={q} onChange={setQ} placeholder="Search apps or publishers" className="w-64" aria-label="Search apps" />
@@ -122,11 +123,14 @@ export function AppsPage() {
             { value: 'store', label: <span>Store <span className="text-faint">{counts.store}</span></span> },
             { value: 'startMenu', label: <span>Start menu <span className="text-faint">{counts.startMenu}</span></span> },
             { value: 'startup', icon: Power, label: 'Startup apps' },
+            { value: 'updates', icon: ArrowUpCircle, label: 'Updates' },
           ]}
         />
       }
     >
-      {filter === 'startup' ? (
+      {filter === 'updates' ? (
+        <UpdatesPanel q={q} />
+      ) : filter === 'startup' ? (
         <StartupPanel q={q} />
       ) : apps.error ? (
         <ErrorState title="Could not list apps" error={apps.error} onRetry={apps.reload} />

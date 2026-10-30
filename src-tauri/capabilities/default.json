@@ -6,7 +6,8 @@
     "main",
     "overlay",
     "ambient-*",
-    "casescreen"
+    "casescreen",
+    "pin-*"
   ],
   "permissions": [
     "core:default",
