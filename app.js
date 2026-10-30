@@ -448,6 +448,7 @@
     ['send', 'Files both ways', 'Big uploads that resume, downloads with resume, and "Send to phone" from anywhere on the PC.'],
     ['power', 'Power from the couch', 'Lock, sleep, restart or shut down from your phone — with a countdown anyone can cancel.'],
     ['lock', 'Encrypted vault', 'Passwords, Wi-Fi keys and notes with Windows Hello unlock and a clipboard that clears itself.'],
+    ['shield', 'Hidden files and locked notes', 'Hide any file of any size — a zip, videos, documents — encrypted under your vault password, and lock any note with it too.'],
     ['key', 'Bring your passwords', 'Import from Bitwarden, Chrome, Firefox, 1Password, KeePass or any CSV — and share Wi-Fi with a QR code.'],
     ['key', 'Browser autofill', 'A small extension for Brave, Chrome and Edge that talks only to OmniHub on your PC.'],
     ['camera', 'Screenshots + text', 'Capture with hotkeys, mark up, copy the text out of any screenshot, and pin one on top of everything.'],
