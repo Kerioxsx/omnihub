@@ -94,8 +94,9 @@ jobs:
             -map 0:v -map 1:a -c:a aac -b:a 160k -c:v mpeg2video -g 60 \
             -f segment -segment_time 2 -segment_format mpegts -reset_timestamps 0 seg/seg%06d.ts
           ls seg
-          for s in seg/seg*.ts; do echo "file '$PWD/$s'"; done > list.txt
-          "$f" -hide_banner -loglevel error -y -f concat -safe 0 -i list.txt -c copy -movflags +faststart clip.mp4
+          # Names relative to the list (Git Bash paths like /d/a/... mean nothing to a Windows program).
+          for s in seg/seg*.ts; do echo "file '$(basename "$s")'"; done > seg/list.txt
+          "$f" -hide_banner -loglevel error -y -f concat -safe 0 -i seg/list.txt -c copy -movflags +faststart clip.mp4
           test -s clip.mp4
 
       - name: Checksum
