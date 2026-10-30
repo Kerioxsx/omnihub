@@ -859,6 +859,8 @@ export interface ChatSettings {
   claudeMode: ClaudeCodeMode;
   /** Codex's sandbox unless a message picks another. */
   codexSandbox: CodexSandbox;
+  /** Capri, the desktop companion who narrates Claude Code: started with OmniHub while on. */
+  capri: boolean;
 }
 
 // ---------- Aurora: music-reactive light, scene and lyrics ----------
@@ -2704,3 +2706,12 @@ export interface Display {
 }
 
 export type DisplaySetting = 'brightness' | 'contrast';
+
+/** Capri (github.com/mochiiwuff/capri-desktop), installed and run by OmniHub on request. */
+export interface CapriStatus {
+  installed: boolean;
+  version: string | null;
+  running: boolean;
+  /** The newest release on her page, when asked for. */
+  latest: string | null;
+}

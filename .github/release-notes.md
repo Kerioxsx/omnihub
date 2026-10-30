@@ -1,11 +1,10 @@
 ## New in this version
 
-**Your monitors' brightness from your phone.**
+**Capri, on and off with one switch.**
 
-- **On the phone**: More → **Volume & brightness** now starts with *Monitor brightness*: a slider for every PC monitor, contrast where the monitor has it, and one for all of them. It works with the phone's music control switch (OmniHub → Settings → Music).
-- **On the PC**: My PC → **Monitors** has the same sliders: a brightness slider for every monitor, contrast where the monitor has it, and one slider for all of them. OmniHub changes each monitor's own setting over DDC/CI, as its buttons do (the same way Twinkle Tray works, so both run fine side by side); a laptop's built-in screen goes through Windows. A monitor that doesn't answer gets a hint: turn on DDC/CI in its own menu.
+- **Capri** ([mochiiwuff/capri-desktop](https://github.com/mochiiwuff/capri-desktop)), the desktop companion who narrates what Claude Code, Codex or Antigravity are doing: a **Capri** switch at the top of **Chats** (and in the tray menu). The first time you switch her on, OmniHub downloads her official release from her GitHub page, checks it against GitHub's checksum and installs it for your user (about 100 MB, no administrator); then she starts, and starts with OmniHub until you switch her off. Off closes her and takes her out of Windows' startup list. When her page has a newer version, an update button shows next to the switch. Capri is mochiiwuff's free, non-commercial project; OmniHub doesn't include her, it fetches her for you.
 
-Also in 0.15.1: Roblox starts again (OmniHub takes out the ReShade Roblox now blocks) and each game is listed once.
+Also in 0.16.0: your monitors' brightness from your phone (More → Volume & brightness) and on the PC (My PC → Monitors).
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

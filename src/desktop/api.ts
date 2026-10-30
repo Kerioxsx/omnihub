@@ -200,6 +200,11 @@ export const api = {
     fpsInstall: () => call<T.FpsOverview>('games_fps_install'),
     fpsAllow: () => call<T.FpsOverview>('games_fps_allow'),
   },
+  capri: {
+    status: (check = false) => call<T.CapriStatus>('capri_status', { check }),
+    set: (on: boolean) => call<T.CapriStatus>('capri_set', { on }),
+    update: () => call<T.CapriStatus>('capri_update'),
+  },
   displays: {
     list: () => call<T.Display[]>('displays_list'),
     set: (id: string, setting: T.DisplaySetting, value: number) => call<void>('displays_set', { id, setting, value }),

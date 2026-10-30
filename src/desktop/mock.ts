@@ -17,6 +17,8 @@ import { serversMock as sv } from './mock/servers';
 import * as optimize from './mock/optimize';
 import * as updates from './mock/update';
 
+let capriOn = false;
+let capriInstalled = false;
 const mockScanTask = { on: false };
 import { volumes } from './mock/drives';
 import * as media from './mock/media';
@@ -103,6 +105,13 @@ const handlers: Record<string, Handler> = {
     { id: '\\\\.\\DISPLAY2#0', name: 'DELL S2421H', primary: false, builtin: false, brightness: 55, contrast: 50 },
   ],
   displays_set: () => null,
+  capri_status: (a) => ({ installed: capriOn || capriInstalled, version: capriOn || capriInstalled ? '0.4.4' : null, running: capriOn, latest: a.check ? '0.4.4' : null }),
+  capri_set: (a) => {
+    capriOn = !!a.on;
+    if (capriOn) capriInstalled = true;
+    return { installed: capriInstalled, version: capriInstalled ? '0.4.4' : null, running: capriOn, latest: null };
+  },
+  capri_update: () => ({ installed: true, version: '0.4.4', running: capriOn, latest: '0.4.4' }),
   games_library: () => optimize.library(),
   games_add_installed: (a) => optimize.addInstalled(str(a, 'key')),
   games_load_test: (a) => games.loadTest(optStr(a, 'id')),

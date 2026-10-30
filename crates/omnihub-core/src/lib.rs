@@ -10,6 +10,7 @@ pub mod browser;
 pub mod capture;
 pub mod chats;
 pub mod claude;
+pub mod companion;
 pub mod core;
 pub mod crashlog;
 pub mod db;

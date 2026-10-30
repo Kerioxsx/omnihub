@@ -1596,6 +1596,45 @@ pub async fn games_config_apply(core: Core<'_>, game: games::configs::ConfigGame
     .await
 }
 
+// ---------- Capri ----------
+
+#[tauri::command]
+pub async fn capri_status(core: Core<'_>, check: bool) -> Res<omnihub_core::companion::CapriStatus> {
+    let core = core.inner().clone();
+    blocking(move || Ok(omnihub_core::companion::status(&core.procs, check))).await
+}
+
+/// Switch Capri on (installing her the first time) or off, and remember it.
+#[tauri::command]
+pub async fn capri_set(app: AppHandle, core: Core<'_>, on: bool) -> Res<omnihub_core::companion::CapriStatus> {
+    let core = core.inner().clone();
+    let r = blocking(move || {
+        let dir = core.paths.data.join("tools").join("capri");
+        let ev = core.events.clone();
+        let r = omnihub_core::companion::set(&core.procs, &dir, on, &mut |text| ev.emit("capri:progress", serde_json::json!({ "text": text })));
+        core.audit.record("desktop", if on { "capri.on" } else { "capri.off" }, "Capri", r.is_ok());
+        let st = r?;
+        core.update_settings(&serde_json::json!({ "chats": { "capri": on } })).map_err(err)?;
+        Ok(st)
+    })
+    .await;
+    crate::tray::refresh(&app);
+    r
+}
+
+#[tauri::command]
+pub async fn capri_update(core: Core<'_>) -> Res<omnihub_core::companion::CapriStatus> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let dir = core.paths.data.join("tools").join("capri");
+        let ev = core.events.clone();
+        let r = omnihub_core::companion::update(&core.procs, &dir, &mut |text| ev.emit("capri:progress", serde_json::json!({ "text": text })));
+        core.audit.record("desktop", "capri.update", "Capri", r.is_ok());
+        r
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn displays_list() -> Res<Vec<omnihub_core::system::displays::Display>> {
     blocking(|| Ok(omnihub_core::system::displays::list())).await

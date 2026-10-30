@@ -43,11 +43,14 @@ pub struct ChatSettings {
     /// Codex's sandbox unless a message picks another (`read-only` or
     /// `workspace-write`).
     pub codex_sandbox: String,
+    /// Capri, the desktop companion who narrates Claude Code: started with
+    /// OmniHub while on (see `companion`).
+    pub capri: bool,
 }
 
 impl Default for ChatSettings {
     fn default() -> Self {
-        ChatSettings { allow_phone: true, phone_agents: true, claude_mode: "acceptEdits".into(), codex_sandbox: "workspace-write".into() }
+        ChatSettings { allow_phone: true, phone_agents: true, claude_mode: "acceptEdits".into(), codex_sandbox: "workspace-write".into(), capri: false }
     }
 }
 

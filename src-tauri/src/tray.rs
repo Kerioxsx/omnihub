@@ -34,10 +34,11 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let remote = CheckMenuItem::with_id(app, "remote", "Phone companion", true, remote_on, None::<&str>)?;
     let pair = MenuItem::with_id(app, "pair", "Pair a phone…", remote_on, None::<&str>)?;
     let lock = MenuItem::with_id(app, "lock", "Lock vault", vault_open, None::<&str>)?;
+    let capri = CheckMenuItem::with_id(app, "capri", "Capri", true, s.chats.capri, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit OmniHub", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
-    Menu::with_items(app, &[&open, &sep1, &shot, &scan, &idea, &remote, &pair, &lock, &sep2, &quit])
+    Menu::with_items(app, &[&open, &sep1, &shot, &scan, &idea, &remote, &pair, &lock, &capri, &sep2, &quit])
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
@@ -76,6 +77,22 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                         }
                         if let Err(e) = res {
                             crate::shortcuts::notify(&app, "Phone companion", &e.to_string());
+                        }
+                        refresh(&app);
+                    });
+                }
+                "capri" => {
+                    let app = app.clone();
+                    std::thread::spawn(move || {
+                        let on = !core.settings.get().chats.capri;
+                        let dir = core.paths.data.join("tools").join("capri");
+                        let ev = core.events.clone();
+                        let r = omnihub_core::companion::set(&core.procs, &dir, on, &mut |text| ev.emit("capri:progress", serde_json::json!({ "text": text })));
+                        match r {
+                            Ok(_) => {
+                                let _ = core.update_settings(&serde_json::json!({ "chats": { "capri": on } }));
+                            }
+                            Err(e) => crate::shortcuts::notify(&app, "Capri", &e),
                         }
                         refresh(&app);
                     });

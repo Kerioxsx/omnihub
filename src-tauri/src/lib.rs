@@ -190,6 +190,15 @@ pub fn run(args: Vec<String>) {
             ambient::start(handle.clone());
             rig::start(handle.clone());
             rest::start(handle.clone());
+            // Capri starts with OmniHub while she is switched on.
+            if core.settings.get().chats.capri {
+                let c = core.clone();
+                std::thread::spawn(move || {
+                    if let Err(e) = omnihub_core::companion::start(&c.procs) {
+                        tracing::warn!("capri: {e}");
+                    }
+                });
+            }
 
             // Autostart passes --minimized; "Start minimized" decides whether
             // that start stays in the tray. A normal launch always shows.
@@ -435,6 +444,9 @@ pub fn run(args: Vec<String>) {
             commands::games_fortnite_clean,
             commands::displays_list,
             commands::displays_set,
+            commands::capri_status,
+            commands::capri_set,
+            commands::capri_update,
             commands::games_load_test,
             commands::games_fps,
             commands::games_fps_install,

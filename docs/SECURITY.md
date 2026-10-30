@@ -202,6 +202,13 @@ and lets a phone do some of that. This is what protects each part.
   Roblox's own settings file,
   `ClientSettings\ClientAppSettings.json`, where OmniHub writes Fast Flags
   (keeping any flags it did not write).
+- Capri (off by default): switching her on asks api.github.com for the newest
+  release of github.com/mochiiwuff/capri-desktop, downloads only an installer
+  hosted on that repository's releases (`Capri-Setup-*.exe`, under 400 MB),
+  checks it against the SHA-256 GitHub publishes for it when there is one, and
+  runs it with `/S` (her per-user installer: no administrator). OmniHub starts
+  her `Capri.exe`, and switching her off ends it and deletes her entries from
+  `HKCU\…\Run`. Nothing about you is sent.
 - Roblox shaders: Roblox's anti-tamper now stops Roblox from starting with
   ReShade in its folder, so OmniHub no longer installs it. At start (and
   before each Roblox launch) it deletes the `dxgi.dll`, `ReShade.ini` and

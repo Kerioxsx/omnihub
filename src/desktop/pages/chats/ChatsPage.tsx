@@ -14,6 +14,7 @@ import { Callout } from '../../components/ui/States';
 import { navigate, useRoute } from '../../lib/router';
 import { toast } from '../../state/toasts';
 import { ClaudeSettingsModal } from '../mods/shared';
+import { CapriToggle } from './CapriToggle';
 import { ChatsTab } from './ChatsTab';
 import { IdeasTab } from './IdeasTab';
 import { CLAUDE_MODES, CODEX_SANDBOXES, KindIcon } from './shared';
@@ -196,9 +197,12 @@ export function ChatsPage() {
       title="Chats"
       subtitle="Claude, ChatGPT, Claude Code and Codex in one place, and on your phone. Save anything as an idea, and see what you’ve used."
       actions={
-        <Button variant="secondary" icon={KeyRound} onClick={() => setKeys(true)}>
-          Keys and access
-        </Button>
+        <div className="flex items-center gap-2">
+          <CapriToggle />
+          <Button variant="secondary" icon={KeyRound} onClick={() => setKeys(true)}>
+            Keys and access
+          </Button>
+        </div>
       }
       headerExtra={
         <Tabs
