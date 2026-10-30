@@ -2,7 +2,7 @@ import { formatDateTime, formatRelative } from '@shared/format';
 import type { Note } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
-import { Bell, BellOff, Bold, Check, CircleAlert, Code, Columns2, Eye, FolderOpen, Heading, Italic, LayoutTemplate, Link, List, ListChecks, LoaderCircle, Palette, PenLine, Pin, PinOff, Send, Sparkles, Tag, Trash, X } from 'lucide-react';
+import { Bell, BellOff, Bold, Check, CircleAlert, Code, Columns2, Eye, FolderOpen, Heading, Italic, LayoutTemplate, Link, List, ListChecks, LoaderCircle, LockKeyhole, LockKeyholeOpen, Palette, PenLine, Pin, PinOff, Send, Sparkles, Tag, Trash, X } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -46,6 +46,7 @@ export function NoteEditor({
   onExported,
   onUpdated,
   onSaveTemplate,
+  onToggleLock,
 }: {
   note: Note;
   draft: Draft;
@@ -57,6 +58,8 @@ export function NoteEditor({
   /** A change made on the server side (reminder). */
   onUpdated?: (n: Note) => void;
   onSaveTemplate?: () => void;
+  /** Lock with the vault password, or take the lock off. */
+  onToggleLock?: () => void;
 }) {
   const [mode, setMode] = useStoredState<Mode>('omnihub.notes.mode', 'split');
   const [tagInput, setTagInput] = useState('');
@@ -150,10 +153,18 @@ export function NoteEditor({
             )}
           </AnimatePresence>
         </div>
+        {onToggleLock && <IconButton icon={note.locked ? LockKeyhole : LockKeyholeOpen} label={note.locked ? 'Locked — click to take the lock off' : 'Lock with the vault password'} active={note.locked} onClick={onToggleLock} className={note.locked ? 'text-accent' : undefined} />}
         <ReminderButton note={note} onUpdated={onUpdated ?? onExported} />
         {onSaveTemplate && <IconButton icon={LayoutTemplate} label="Save as template" onClick={onSaveTemplate} />}
         <IconButton icon={Trash} label="Delete" variant="danger" onClick={onDelete} />
       </div>
+      {note.locked && (
+        <div className="-mt-1 flex items-center gap-1.5 px-5 pb-2 text-[12px]">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft px-2.5 py-0.5 text-accent">
+            <LockKeyhole size={12} /> Locked · only your vault password opens it · the title stays visible
+          </span>
+        </div>
+      )}
       {note.remindAt != null && (
         <div className="-mt-1 flex items-center gap-1.5 px-5 pb-2 text-[12px]">
           <span className={cx('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5', note.reminded ? 'border-line text-faint' : 'border-warn/40 bg-warn/10 text-warn')}>
@@ -225,7 +236,7 @@ export function NoteEditor({
         {mode !== 'edit' && <div className="markdown min-h-0 overflow-y-auto px-6 py-4" dangerouslySetInnerHTML={{ __html: html }} />}
       </div>
 
-      {isIdea && (
+      {isIdea && !note.locked && (
         <div className="border-t border-line bg-surface/60 px-5 py-3">
           {!claudeFolder ? (
             <Callout tone="accent" icon={FolderOpen} title="Choose where ideas go" action={<Button size="sm" variant="primary" icon={FolderOpen} onClick={() => void pickFolder()}>Choose folder</Button>}>

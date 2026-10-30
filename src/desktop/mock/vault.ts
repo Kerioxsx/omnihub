@@ -2,7 +2,7 @@ import { primaryProvider } from '@shared/accounts';
 // Password vault for the mock backend. No real crypto — the point is the
 // state machine (none → unlocked ⇄ locked), throttling and auto-lock.
 
-import type { BrowserClient, BrowserPairRequest, BrowserStatus, Entry, HealthItem, HealthReport, EntryInput, EntrySummary, GeneratorOptions, Strength, VaultStatus } from '@shared/types';
+import type { BrowserClient, BrowserPairRequest, BrowserStatus, Entry, HealthItem, HealthReport, EntryInput, EntrySummary, GeneratorOptions, HiddenFile, HiddenResult, Strength, VaultStatus } from '@shared/types';
 import { emit } from './bus';
 import { audit, onSettingsChange, settings } from './core';
 import { DAY, NOW } from './rng';
@@ -75,6 +75,78 @@ function requireOpen() {
   if (!exists) throw new Error('No vault yet. Create one first.');
   if (!unlocked) throw new Error('The vault is locked.');
   lastTouch = Date.now();
+}
+
+/** For locked notes. */
+export function requireUnlocked() {
+  if (!exists) throw new Error('Locked notes use your vault password: create the vault first.');
+  if (!unlocked) throw new Error('the vault is locked');
+  lastTouch = Date.now();
+}
+
+// ---------- hidden files ----------
+
+const GB = 1024 ** 3;
+let hiddenFiles: HiddenFile[] = [
+  { id: 'a1'.padEnd(32, '0'), name: 'Old projects.zip', size: Math.round(3.4 * GB), modified: Math.floor(NOW - 40 * DAY), hiddenAt: Math.floor(NOW - 9 * DAY), folder: 'D:\\Backups' },
+  { id: 'b2'.padEnd(32, '0'), name: 'Tax return 2025.pdf', size: 1_284_000, modified: Math.floor(NOW - 120 * DAY), hiddenAt: Math.floor(NOW - 3 * DAY), folder: 'C:\\Users\\Player\\Documents' },
+  { id: 'c3'.padEnd(32, '0'), name: 'Passport scan.jpg', size: 2_310_000, modified: Math.floor(NOW - 300 * DAY), hiddenAt: Math.floor(NOW - 1 * DAY), folder: 'C:\\Users\\Player\\Pictures' },
+];
+const stops = new Set<string>();
+
+/** Pretend to stream through `total` bytes, with progress events and Stop. */
+async function crunch(job: string, name: string, total: number) {
+  const steps = total > 200e6 ? 14 : 4;
+  for (let i = 1; i <= steps; i++) {
+    await new Promise((r) => setTimeout(r, 140));
+    if (stops.delete(job)) throw new Error('Stopped.');
+    lastTouch = Date.now();
+    emit('hidden:progress', { job, name, done: Math.round((total * i) / steps), total });
+  }
+}
+
+export function hiddenList(): HiddenFile[] {
+  requireOpen();
+  return [...hiddenFiles].sort((a, b) => b.hiddenAt - a.hiddenAt);
+}
+
+export async function hide(path: string, job: string): Promise<HiddenResult> {
+  requireOpen();
+  const name = path.split(/[\\/]/).pop() || 'file';
+  const size = /\.(zip|7z|rar|iso|mp4|mkv)$/i.test(name) ? Math.round((1 + Math.random() * 6) * GB) : Math.round(50_000 + Math.random() * 8e6);
+  await crunch(job, name, size);
+  const file: HiddenFile = { id: Math.random().toString(16).slice(2).padEnd(32, '0').slice(0, 32), name, size, modified: Math.floor(Date.now() / 1000) - 86400, hiddenAt: Math.floor(Date.now() / 1000), folder: path.slice(0, Math.max(0, path.length - name.length - 1)) };
+  hiddenFiles.push(file);
+  audit('desktop', 'vault.hide', name);
+  return { file, originalLeft: false };
+}
+
+function hiddenFind(id: string): HiddenFile {
+  requireOpen();
+  const f = hiddenFiles.find((x) => x.id === id);
+  if (!f) throw new Error('entry not found');
+  return f;
+}
+
+export async function unhide(id: string, folder: string | null, job: string): Promise<string> {
+  const f = hiddenFind(id);
+  await crunch(job, f.name, f.size);
+  hiddenFiles = hiddenFiles.filter((x) => x.id !== id);
+  return `${folder ?? f.folder}\\${f.name}`;
+}
+
+export async function hiddenCopy(id: string, job: string): Promise<void> {
+  const f = hiddenFind(id);
+  await crunch(job, f.name, f.size);
+}
+
+export function hiddenRemove(id: string): void {
+  hiddenFind(id);
+  hiddenFiles = hiddenFiles.filter((x) => x.id !== id);
+}
+
+export function hiddenCancel(job: string): void {
+  stops.add(job);
 }
 
 export function lock(reason: string) {

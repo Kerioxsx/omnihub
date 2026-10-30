@@ -666,13 +666,26 @@ pub async fn notes_get(core: Core<'_>, id: String) -> Res<Note> {
 
 #[tauri::command]
 pub async fn notes_save(core: Core<'_>, input: NoteInput) -> Res<Note> {
-    let note = core.notes.save(input).map_err(err)?;
+    let note = core.notes.save_with(input, Some(&core.vault)).map_err(err)?;
     let s = core.settings.get().notes;
-    if note.kind == omnihub_core::notes::NoteKind::Idea && s.auto_export_ideas {
+    if note.kind == omnihub_core::notes::NoteKind::Idea && s.auto_export_ideas && !note.locked {
         if let Some(folder) = s.claude_folder {
             return core.notes.export(&note.id, Path::new(&folder), &core.export_options()).map_err(err);
         }
     }
+    Ok(note)
+}
+
+/// A locked note's text (needs the vault unlocked).
+#[tauri::command]
+pub async fn notes_read_locked(core: Core<'_>, id: String) -> Res<String> {
+    core.notes.read_locked(&id, &core.vault).map(|b| b.to_string()).map_err(err)
+}
+
+#[tauri::command]
+pub async fn notes_set_locked(core: Core<'_>, id: String, locked: bool) -> Res<Note> {
+    let note = core.notes.set_locked(&id, locked, &core.vault).map_err(err)?;
+    core.audit.record("desktop", if locked { "notes.lock" } else { "notes.unlock" }, &note.title, true);
     Ok(note)
 }
 
@@ -876,6 +889,83 @@ pub async fn vault_export(core: Core<'_>, path: String) -> Res<()> {
 pub async fn vault_import(core: Core<'_>, path: String, password: String) -> Res<usize> {
     let core = core.inner().clone();
     blocking(move || core.vault.import_backup(Path::new(&path), &password).map_err(err)).await
+}
+
+// ---------- hidden files ----------
+
+/// Stop flags of running hide/unhide jobs, by the job id the page chose.
+static HIDDEN_JOBS: std::sync::LazyLock<parking_lot::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>>> = std::sync::LazyLock::new(Default::default);
+
+/// Run a hidden-files job with a stop flag and `hidden:progress` events (a few a second).
+async fn hidden_job<T: Send + 'static>(core: &Arc<AppCore>, job: String, name: String, f: impl FnOnce(&AppCore, &mut dyn FnMut(u64, u64), &std::sync::atomic::AtomicBool) -> Res<T> + Send + 'static) -> Res<T> {
+    let core = core.clone();
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    HIDDEN_JOBS.lock().insert(job.clone(), stop.clone());
+    let r = blocking({
+        let job = job.clone();
+        move || {
+            let mut last = std::time::Instant::now() - Duration::from_secs(1);
+            let events = core.events.clone();
+            let mut progress = |done: u64, total: u64| {
+                if last.elapsed() >= Duration::from_millis(200) || done == total {
+                    last = std::time::Instant::now();
+                    events.emit("hidden:progress", serde_json::json!({ "job": &job, "name": &name, "done": done, "total": total }));
+                }
+            };
+            f(&core, &mut progress, &stop)
+        }
+    })
+    .await;
+    HIDDEN_JOBS.lock().remove(&job);
+    r
+}
+
+#[tauri::command]
+pub async fn hidden_list(core: Core<'_>) -> Res<Vec<omnihub_core::vault::hidden::HiddenFile>> {
+    let core = core.inner().clone();
+    blocking(move || core.vault.hidden_list().map_err(err)).await
+}
+
+#[tauri::command]
+pub async fn hidden_hide(core: Core<'_>, path: String, job: String) -> Res<omnihub_core::vault::hidden::Hidden> {
+    let name = Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let h = hidden_job(core.inner(), job, name, move |c, p, stop| c.vault.hide(Path::new(&path), p, stop).map_err(err)).await?;
+    core.audit.record("desktop", "vault.hide", &h.file.name, true);
+    Ok(h)
+}
+
+#[tauri::command]
+pub async fn hidden_unhide(core: Core<'_>, id: String, folder: Option<String>, job: String) -> Res<String> {
+    let to = hidden_job(core.inner(), job, String::new(), move |c, p, stop| c.vault.unhide(&id, folder.as_deref().map(Path::new), p, stop).map_err(err)).await?;
+    core.audit.record("desktop", "vault.unhide", &to.display().to_string(), true);
+    Ok(to.display().to_string())
+}
+
+#[tauri::command]
+pub async fn hidden_save_copy(core: Core<'_>, id: String, path: String, job: String) -> Res<()> {
+    hidden_job(core.inner(), job, String::new(), move |c, p, stop| c.vault.hidden_save_copy(&id, Path::new(&path), p, stop).map_err(err)).await
+}
+
+/// Decrypt a temporary copy and open it in its app (the copy goes when the vault locks).
+#[tauri::command]
+pub async fn hidden_open(core: Core<'_>, id: String, job: String) -> Res<()> {
+    let path = hidden_job(core.inner(), job, String::new(), move |c, p, stop| c.vault.hidden_open(&id, p, stop).map_err(err)).await?;
+    omnihub_core::system::shell::open_path(&path).map_err(err)
+}
+
+#[tauri::command]
+pub async fn hidden_delete(core: Core<'_>, id: String) -> Res<()> {
+    core.vault.hidden_delete(&id).map_err(err)?;
+    core.audit.record("desktop", "vault.hidden_delete", &id, true);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn hidden_cancel(job: String) -> Res<()> {
+    if let Some(stop) = HIDDEN_JOBS.lock().get(&job) {
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    Ok(())
 }
 
 // ---------- phone companion & power ----------

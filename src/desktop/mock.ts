@@ -273,6 +273,8 @@ const handlers: Record<string, Handler> = {
   notes_list: (a) => notes.notesList(obj<NoteFilter>(a, 'filter')),
   notes_get: (a) => notes.noteGet(str(a, 'id')),
   notes_save: (a) => notes.noteSave(obj<NoteInput>(a, 'input')),
+  notes_read_locked: (a) => notes.noteReadLocked(str(a, 'id')),
+  notes_set_locked: (a) => notes.noteSetLocked(str(a, 'id'), bool(a, 'locked')),
   notes_delete: (a) => notes.noteDelete(str(a, 'id')),
   notes_remind: (a) => notes.noteRemind(str(a, 'id'), a.at == null ? null : num(a, 'at')),
   notes_tags: () => notes.noteTags(),
@@ -282,6 +284,13 @@ const handlers: Record<string, Handler> = {
 
   // vault
   vault_status: () => vault.status(),
+  hidden_list: () => vault.hiddenList(),
+  hidden_hide: (a) => vault.hide(str(a, 'path'), str(a, 'job')),
+  hidden_unhide: (a) => vault.unhide(str(a, 'id'), optStr(a, 'folder'), str(a, 'job')),
+  hidden_save_copy: (a) => vault.hiddenCopy(str(a, 'id'), str(a, 'job')),
+  hidden_open: (a) => vault.hiddenCopy(str(a, 'id'), str(a, 'job')),
+  hidden_delete: (a) => vault.hiddenRemove(str(a, 'id')),
+  hidden_cancel: (a) => vault.hiddenCancel(str(a, 'job')),
   vault_create: (a) => vault.create(str(a, 'password')),
   vault_unlock: (a) => vault.unlock(str(a, 'password')),
   vault_lock: () => vault.lock('manual'),

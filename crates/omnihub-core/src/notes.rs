@@ -4,6 +4,10 @@
 //! front matter, optionally a JSON sidecar) into a folder of the user's
 //! choosing that Claude reads from. The folder is watched so replies Claude
 //! writes there show up in the app.
+//!
+//! A note can be locked: its body is then sealed with the vault key (see
+//! [`NoteKey`]) and only the title stays readable. Locked bodies never leave
+//! this module unsealed except through [`Notes::read_locked`].
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -54,6 +58,8 @@ pub struct Note {
     pub remind_at: Option<i64>,
     /// The reminder has been shown.
     pub reminded: bool,
+    /// Locked with the vault password: `body` is empty here.
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -66,6 +72,8 @@ pub struct NoteInput {
     pub tags: Vec<String>,
     pub pinned: bool,
     pub color: Option<String>,
+    /// Keep (or make) the note locked; needs the vault unlocked.
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -105,10 +113,20 @@ pub enum NotesError {
     NoFolder,
     #[error("that file is outside the Claude folder")]
     OutsideFolder,
+    #[error("this note is locked: unlock it with your vault password first")]
+    Locked,
+    #[error("{0}")]
+    Key(String),
     #[error(transparent)]
     Db(#[from] rusqlite::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+}
+
+/// Seals and opens locked notes' bodies (the vault, while unlocked).
+pub trait NoteKey {
+    fn seal(&self, id: &str, body: &str) -> Result<String, String>;
+    fn open(&self, id: &str, sealed: &str) -> Result<zeroize::Zeroizing<String>, String>;
 }
 
 pub struct Notes {
@@ -119,11 +137,13 @@ pub struct Notes {
 
 fn row_to_note(r: &Row) -> rusqlite::Result<Note> {
     let tags: String = r.get(4)?;
+    let locked: bool = r.get(13)?;
     Ok(Note {
         id: r.get(0)?,
         kind: NoteKind::parse(&r.get::<_, String>(1)?),
         title: r.get(2)?,
-        body: r.get(3)?,
+        // A locked body is sealed text; it is read only through `read_locked`.
+        body: if locked { String::new() } else { r.get(3)? },
         tags: serde_json::from_str(&tags).unwrap_or_default(),
         pinned: r.get(5)?,
         color: r.get(6)?,
@@ -133,10 +153,11 @@ fn row_to_note(r: &Row) -> rusqlite::Result<Note> {
         exported_at: r.get(10)?,
         remind_at: r.get(11)?,
         reminded: r.get(12)?,
+        locked,
     })
 }
 
-const COLUMNS: &str = "id, kind, title, body, tags, pinned, color, created, updated, exported_path, exported_at, remind_at, reminded";
+const COLUMNS: &str = "id, kind, title, body, tags, pinned, color, created, updated, exported_path, exported_at, remind_at, reminded, locked";
 
 /// File-name friendly version of a title.
 pub fn slugify(title: &str) -> String {
@@ -214,7 +235,19 @@ impl Notes {
             .ok_or(NotesError::NotFound)
     }
 
+    /// (locked, stored body) of a note.
+    fn raw(&self, id: &str) -> Result<(bool, String), NotesError> {
+        self.db.with(|c| c.query_row("SELECT locked, body FROM notes WHERE id = ?1", params![id], |r| Ok((r.get(0)?, r.get(1)?))).optional())?.ok_or(NotesError::NotFound)
+    }
+
+    /// Save without a vault: locked notes can't be changed or created.
     pub fn save(&self, input: NoteInput) -> Result<Note, NotesError> {
+        self.save_with(input, None)
+    }
+
+    /// Save, sealing the body when `input.locked`. Changing a locked note,
+    /// or taking its lock off, needs `key` (the unlocked vault).
+    pub fn save_with(&self, input: NoteInput, key: Option<&dyn NoteKey>) -> Result<Note, NotesError> {
         let t = now();
         let tags: Vec<String> = {
             let mut v: Vec<String> = input.tags.iter().map(|t| t.trim().trim_start_matches('#').to_string()).filter(|t| !t.is_empty()).collect();
@@ -222,33 +255,62 @@ impl Notes {
             v
         };
         let tags_json = serde_json::to_string(&tags).unwrap();
-        let id = match input.id.filter(|i| !i.is_empty()) {
-            Some(id) => {
-                let n = self.db.with(|c| {
-                    c.execute(
-                        "UPDATE notes SET kind=?2, title=?3, body=?4, tags=?5, pinned=?6, color=?7, updated=?8 WHERE id=?1",
-                        params![id, input.kind.as_str(), input.title, input.body, tags_json, input.pinned, input.color, t],
-                    )
-                })?;
-                if n == 0 {
-                    return Err(NotesError::NotFound);
+        let existing = input.id.filter(|i| !i.is_empty());
+        let id = existing.clone().unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        if existing.is_some() {
+            let (was_locked, stored) = self.raw(&id)?;
+            if was_locked {
+                let key = key.ok_or(NotesError::Locked)?;
+                if !input.locked {
+                    // Taking the lock off: only with the vault that sealed it.
+                    key.open(&id, &stored).map_err(NotesError::Key)?;
                 }
-                id
             }
-            None => {
-                let id = uuid::Uuid::new_v4().to_string();
-                self.db.with(|c| {
-                    c.execute(
-                        "INSERT INTO notes (id, kind, title, body, tags, pinned, color, created, updated) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?8)",
-                        params![id, input.kind.as_str(), input.title, input.body, tags_json, input.pinned, input.color, t],
-                    )
-                })?;
-                id
-            }
-        };
+        }
+        let body = if input.locked { key.ok_or(NotesError::Locked)?.seal(&id, &input.body).map_err(NotesError::Key)? } else { input.body };
+        if existing.is_some() {
+            self.db.with(|c| {
+                c.execute(
+                    "UPDATE notes SET kind=?2, title=?3, body=?4, tags=?5, pinned=?6, color=?7, updated=?8, locked=?9 WHERE id=?1",
+                    params![id, input.kind.as_str(), input.title, body, tags_json, input.pinned, input.color, t, input.locked],
+                )
+            })?;
+        } else {
+            self.db.with(|c| {
+                c.execute(
+                    "INSERT INTO notes (id, kind, title, body, tags, pinned, color, created, updated, locked) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?8,?9)",
+                    params![id, input.kind.as_str(), input.title, body, tags_json, input.pinned, input.color, t, input.locked],
+                )
+            })?;
+        }
         let note = self.get(&id)?;
         self.events.emit("notes:changed", serde_json::json!({ "id": note.id }));
         Ok(note)
+    }
+
+    /// A note's body; a locked one is opened with `key`.
+    pub fn read_locked(&self, id: &str, key: &dyn NoteKey) -> Result<zeroize::Zeroizing<String>, NotesError> {
+        match self.raw(id)? {
+            (true, sealed) => key.open(id, &sealed).map_err(NotesError::Key),
+            (false, body) => Ok(zeroize::Zeroizing::new(body)),
+        }
+    }
+
+    /// Lock a note (seal its body) or take the lock off.
+    pub fn set_locked(&self, id: &str, locked: bool, key: &dyn NoteKey) -> Result<Note, NotesError> {
+        let (was, stored) = self.raw(id)?;
+        if was != locked {
+            let body = if locked { key.seal(id, &stored).map_err(NotesError::Key)? } else { key.open(id, &stored).map_err(NotesError::Key)?.to_string() };
+            // A locked note isn't sent to Claude; one already sent stays where it is.
+            self.db.with(|c| c.execute("UPDATE notes SET body=?2, locked=?3 WHERE id=?1", params![id, body, locked]))?;
+            self.events.emit("notes:changed", serde_json::json!({ "id": id }));
+        }
+        self.get(id)
+    }
+
+    /// How many notes are locked.
+    pub fn count_locked(&self) -> Result<usize, NotesError> {
+        Ok(self.db.with(|c| c.query_row("SELECT COUNT(*) FROM notes WHERE locked = 1", [], |r| r.get::<_, i64>(0)))? as usize)
     }
 
     /// Set or clear a note's reminder.
@@ -297,6 +359,9 @@ impl Notes {
     /// file as long as it is still inside the folder.
     pub fn export(&self, id: &str, folder: &Path, opts: &ExportOptions) -> Result<Note, NotesError> {
         let note = self.get(id)?;
+        if note.locked {
+            return Err(NotesError::Locked);
+        }
         std::fs::create_dir_all(folder)?;
         let folder = crate::paths::canonical(folder)?;
         let previous = note
@@ -452,7 +517,7 @@ mod tests {
     fn reminders_fire_once() {
         let db = Arc::new(crate::db::Db::in_memory().unwrap());
         let notes = Notes::new(db, crate::events::EventBus::new());
-        let n = notes.save(NoteInput { id: None, kind: NoteKind::Note, title: "Call the bank".into(), body: String::new(), tags: vec![], pinned: false, color: None }).unwrap();
+        let n = notes.save(NoteInput { id: None, kind: NoteKind::Note, title: "Call the bank".into(), body: String::new(), tags: vec![], pinned: false, color: None, locked: false }).unwrap();
         assert!(n.remind_at.is_none());
         notes.set_reminder(&n.id, Some(1000)).unwrap();
         assert!(notes.take_due_reminders(999).unwrap().is_empty());
@@ -527,6 +592,35 @@ mod tests {
         let outside = dir.path().join("secret.txt");
         std::fs::write(&outside, "no").unwrap();
         assert!(matches!(n.read_folder_file(&folder, &outside), Err(NotesError::OutsideFolder)));
+    }
+
+    #[test]
+    fn locked_notes_need_the_vault() {
+        let n = notes();
+        let dir = tempfile::tempdir().unwrap();
+        let v = crate::vault::Vault::with_options(&dir.path().join("v.ohv"), EventBus::new(), crate::vault::crypto::KdfParams { m_cost: 256, t_cost: 1, p_cost: 1 }, false);
+        v.create("a long master password").unwrap();
+        let note = n.save_with(NoteInput { title: "Diary".into(), body: "my secret".into(), locked: true, ..Default::default() }, Some(&v)).unwrap();
+        assert!(note.locked && note.body.is_empty(), "the list never shows a locked body");
+        let stored: String = n.db.with(|c| c.query_row("SELECT body FROM notes WHERE id = ?1", params![note.id], |r| r.get(0))).unwrap();
+        assert!(stored.starts_with(crate::vault::SEALED_NOTE) && !stored.contains("secret"));
+        assert_eq!(*n.read_locked(&note.id, &v).unwrap(), "my secret");
+        assert!(n.list(&NoteFilter { query: "secret".into(), ..Default::default() }).unwrap().is_empty(), "search doesn't see inside");
+        // Without the vault: no overwriting, no exporting, no reading.
+        assert!(matches!(n.save(NoteInput { id: Some(note.id.clone()), title: "x".into(), ..Default::default() }), Err(NotesError::Locked)));
+        assert!(matches!(n.export(&note.id, dir.path(), &ExportOptions::default()), Err(NotesError::Locked)));
+        v.lock();
+        assert!(n.read_locked(&note.id, &v).is_err());
+        assert!(n.save_with(NoteInput { id: Some(note.id.clone()), body: String::new(), ..Default::default() }, Some(&v)).is_err(), "taking the lock off needs the vault open");
+        assert!(n.set_locked(&note.id, false, &v).is_err());
+        v.unlock("a long master password").unwrap();
+        // Editing keeps it locked; taking the lock off puts the text back.
+        n.save_with(NoteInput { id: Some(note.id.clone()), title: "Diary".into(), body: "my secret, edited".into(), locked: true, ..Default::default() }, Some(&v)).unwrap();
+        let open = n.set_locked(&note.id, false, &v).unwrap();
+        assert!(!open.locked);
+        assert_eq!(open.body, "my secret, edited");
+        assert!(n.set_locked(&note.id, true, &v).unwrap().locked);
+        assert_eq!(n.count_locked().unwrap(), 1);
     }
 
     #[test]

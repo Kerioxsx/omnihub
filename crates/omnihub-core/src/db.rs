@@ -94,6 +94,10 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE notes ADD COLUMN remind_at INTEGER;
     ALTER TABLE notes ADD COLUMN reminded INTEGER NOT NULL DEFAULT 0;
     "#,
+    // 5: locked notes (the body is sealed with the vault key).
+    r#"
+    ALTER TABLE notes ADD COLUMN locked INTEGER NOT NULL DEFAULT 0;
+    "#,
 ];
 
 impl Db {

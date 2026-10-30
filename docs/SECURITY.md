@@ -60,6 +60,43 @@ and lets a phone do some of that. This is what protects each part.
   Microsoft, Apple, Yahoo or Proton account and recommends passkeys, app
   passwords and 2-step verification instead of storing that password.
 
+### Hidden files
+
+- **Hide** encrypts a file into a store and then deletes the original
+  (permanently, not to the Recycle Bin). Each hidden file has its own random
+  256-bit key, wrapped with the vault key (AES-256-GCM), so changing the
+  master password re-wraps nothing and the files stay readable.
+- The contents are encrypted 1 MiB at a time as they stream (so any size
+  works) with AES-256-GCM. Each chunk's nonce is a random per-file prefix,
+  the chunk number and a last-chunk flag (the STREAM construction): a chunk
+  that is changed, moved, dropped, or a file that is cut short, fails to
+  decrypt. The name, size, date and original folder are in an encrypted
+  header; the store holds only `<random id>.ohh` files.
+- A file is stored on its own drive (a hidden `OmniHub Hidden` folder at the
+  drive's root, listed in `hidden\stores.txt`) or, on the system drive, in
+  `%LOCALAPPDATA%\OmniHub\hidden`. Nothing is copied across drives.
+- Unhide and Save a copy write to a temporary name and rename only once the
+  whole file has decrypted and verified. **Open** decrypts a copy into
+  `%TEMP%\OmniHub Open`, which is emptied when the vault locks and when
+  OmniHub starts (a copy an app still has open stays until the next time).
+- Limits, stated plainly: deleting the original does not overwrite its old
+  disk blocks, so recovery tools may find traces of it on a hard drive
+  (SSDs usually erase them soon after). Hidden files open only with this
+  vault: the vault can't be deleted while any exist, and an exported vault
+  backup doesn't include them. Folders must be zipped first.
+
+### Locked notes
+
+- A locked note's body is sealed with the vault key (AES-256-GCM, bound to
+  the note's id so a sealed body can't be moved to another note) and stored
+  as `ohnote1:` + base64 in the notes database. The title, tags and colour
+  stay readable, so the list can show it.
+- Listing, search, reminders and the phone never see a locked body; only
+  `notes_read_locked` returns it, and only while the vault is unlocked.
+  Editing, exporting to the Claude folder or taking the lock off needs the
+  vault unlocked too. Writing in a locked note keeps the vault awake; when
+  the vault locks, the open note's text is cleared from the page.
+
 ## Browser autofill
 
 - The extension (in `browser-extension/`, loaded unpacked) has no access to

@@ -949,7 +949,7 @@ pub fn save_idea(core: &crate::core::AppCore, text: &str, from: Option<&str>) ->
         Some(f) if !f.trim().is_empty() => format!("{text}\n\n— from {}", ellipsize(f, 120)),
         _ => text.to_string(),
     };
-    let note = core.notes.save(crate::notes::NoteInput { id: None, kind: crate::notes::NoteKind::Idea, title, body, tags: vec!["chat".into()], pinned: false, color: None }).map_err(|e| e.to_string())?;
+    let note = core.notes.save(crate::notes::NoteInput { id: None, kind: crate::notes::NoteKind::Idea, title, body, tags: vec!["chat".into()], pinned: false, color: None, locked: false }).map_err(|e| e.to_string())?;
     let s = core.settings.get().notes;
     match (s.auto_export_ideas, s.claude_folder) {
         (true, Some(folder)) => core.notes.export(&note.id, Path::new(&folder), &core.export_options()).map_err(|e| e.to_string()),

@@ -7,10 +7,12 @@ pub mod crypto;
 pub mod generator;
 pub mod health;
 pub mod hello;
+pub mod hidden;
 pub mod import;
 pub mod totp;
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
@@ -193,6 +195,8 @@ pub struct Vault {
     auto_lock: Mutex<Duration>,
     throttle: Mutex<Throttle>,
     events: EventBus,
+    /// Hidden files, opened with the vault key.
+    pub hidden: hidden::Store,
 }
 
 /// Identity providers whose account unlocks many others.
@@ -229,6 +233,9 @@ pub fn is_primary_account(url: &str, username: &str, email: &str) -> bool {
 }
 
 const HELLO_AAD: &[u8] = b"omnihub-hello-v1";
+const NOTE_AAD: &str = "omnihub-note-v1:";
+/// How a locked note's body is stored.
+pub const SEALED_NOTE: &str = "ohnote1:";
 
 impl Vault {
     pub fn new(path: &Path, events: EventBus) -> Self {
@@ -236,6 +243,9 @@ impl Vault {
     }
 
     pub fn with_options(path: &Path, events: EventBus, kdf: KdfParams, use_dpapi: bool) -> Self {
+        // Open's copies go to %TEMP%, one folder per vault file.
+        let tag = &blake3::hash(path.to_string_lossy().as_bytes()).to_hex()[..12];
+        let hidden = hidden::Store::new(path.parent().unwrap_or(Path::new(".")).join("hidden"), std::env::temp_dir().join("OmniHub Open").join(tag));
         Vault {
             path: path.to_path_buf(),
             hello_path: path.with_extension("hello"),
@@ -246,6 +256,7 @@ impl Vault {
             auto_lock: Mutex::new(Duration::from_secs(300)),
             throttle: Mutex::new(Throttle { failures: 0, until: None }),
             events,
+            hidden,
         }
     }
 
@@ -296,8 +307,46 @@ impl Vault {
 
     pub fn lock_with_reason(&self, reason: &str) {
         if self.open.lock().take().is_some() {
+            self.hidden.clean_opened();
             self.events.emit("vault:locked", serde_json::json!({ "reason": reason }));
         }
+    }
+
+    /// A copy of the vault key while unlocked (long jobs don't hold the vault).
+    fn key(&self) -> Result<Zeroizing<[u8; 32]>, VaultError> {
+        self.with_open(|o| Ok(o.keys.key.clone()))
+    }
+
+    pub fn hidden_list(&self) -> Result<Vec<hidden::HiddenFile>, VaultError> {
+        let key = self.key()?;
+        Ok(self.hidden.list(&key))
+    }
+
+    /// Hide a file (see [`hidden`]); `progress` gets (done, total) bytes.
+    pub fn hide(&self, path: &Path, progress: &mut dyn FnMut(u64, u64), cancel: &AtomicBool) -> Result<hidden::Hidden, VaultError> {
+        let key = self.key()?;
+        // A long job keeps the vault from locking itself under it.
+        self.hidden.hide(&key, path, &mut |d, t| (self.touch(), progress(d, t)).1, cancel)
+    }
+
+    pub fn unhide(&self, id: &str, folder: Option<&Path>, progress: &mut dyn FnMut(u64, u64), cancel: &AtomicBool) -> Result<PathBuf, VaultError> {
+        let key = self.key()?;
+        self.hidden.unhide(&key, id, folder, &mut |d, t| (self.touch(), progress(d, t)).1, cancel)
+    }
+
+    pub fn hidden_save_copy(&self, id: &str, dest: &Path, progress: &mut dyn FnMut(u64, u64), cancel: &AtomicBool) -> Result<(), VaultError> {
+        let key = self.key()?;
+        self.hidden.save_copy(&key, id, dest, &mut |d, t| (self.touch(), progress(d, t)).1, cancel)
+    }
+
+    pub fn hidden_open(&self, id: &str, progress: &mut dyn FnMut(u64, u64), cancel: &AtomicBool) -> Result<PathBuf, VaultError> {
+        let key = self.key()?;
+        self.hidden.open_copy(&key, id, &mut |d, t| (self.touch(), progress(d, t)).1, cancel)
+    }
+
+    pub fn hidden_delete(&self, id: &str) -> Result<(), VaultError> {
+        self.key()?;
+        self.hidden.delete(id)
     }
 
     fn read_file(&self) -> Result<(u8, Zeroizing<Vec<u8>>), VaultError> {
@@ -696,10 +745,32 @@ impl Vault {
         if !self.is_unlocked() {
             return Err(VaultError::Locked);
         }
+        let n = self.hidden.count();
+        if n > 0 {
+            return Err(VaultError::Invalid(format!("Unhide or delete your {n} hidden files first: only this vault opens them.")));
+        }
         self.lock();
         self.disable_hello();
         std::fs::remove_file(&self.path)?;
         Ok(())
+    }
+}
+
+/// Locked notes: the body sealed with the vault key, bound to the note's id.
+impl crate::notes::NoteKey for Vault {
+    fn seal(&self, id: &str, body: &str) -> Result<String, String> {
+        use base64::Engine;
+        let key = self.key().map_err(|e| e.to_string())?;
+        let sealed = crypto::seal_with(&key, body.as_bytes(), format!("{NOTE_AAD}{id}").as_bytes());
+        Ok(format!("{SEALED_NOTE}{}", base64::engine::general_purpose::STANDARD.encode(sealed)))
+    }
+
+    fn open(&self, id: &str, sealed: &str) -> Result<Zeroizing<String>, String> {
+        use base64::Engine;
+        let key = self.key().map_err(|e| e.to_string())?;
+        let raw = sealed.strip_prefix(SEALED_NOTE).and_then(|b| base64::engine::general_purpose::STANDARD.decode(b).ok()).ok_or("this locked note is damaged")?;
+        let plain = crypto::open_with(&key, &raw, format!("{NOTE_AAD}{id}").as_bytes()).ok_or("this note was locked with another vault")?;
+        String::from_utf8(plain.to_vec()).map(Zeroizing::new).map_err(|_| "this locked note is damaged".into())
     }
 }
 

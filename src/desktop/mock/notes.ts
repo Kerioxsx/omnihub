@@ -3,6 +3,7 @@
 import type { FolderFile, Note, NoteFilter, NoteInput } from '@shared/types';
 import { emit } from './bus';
 import { settings } from './core';
+import { requireUnlocked } from './vault';
 import { DAY, NOW } from './rng';
 
 let seq = 0;
@@ -197,7 +198,12 @@ const notes: Note[] = SEEDS.map(([kind, title, body, tags, pinned, color, c, u, 
   exportedAt: exAgo == null ? null : Math.floor(NOW - exAgo * DAY),
   remindAt: null,
   reminded: false,
+  locked: false,
 }));
+notes.push({ id: nid(), kind: 'note', title: 'Bank and router PINs', body: '- Bank card PIN: 4821\n- Router admin: hunter2-router\n- Safe: 19-04-77', tags: ['private'], pinned: false, color: 'rose', created: Math.floor(NOW - 30 * DAY), updated: Math.floor(NOW - 2 * DAY), exportedPath: null, exportedAt: null, remindAt: null, reminded: false, locked: true });
+
+/** What leaves the "backend": a locked note's body stays behind. */
+const view = (n: Note): Note => ({ ...n, body: n.locked ? '' : n.body, tags: [...n.tags] });
 
 // ---------- Claude folder ----------
 
@@ -261,10 +267,10 @@ const sortNotes = (a: Note, b: Note) => Number(b.pinned) - Number(a.pinned) || b
 
 export function notesList(f: NoteFilter): Note[] {
   const q = (f.query ?? '').trim().toLowerCase();
-  let out = notes.filter((n) => (!f.kind || n.kind === f.kind) && (!f.tag || n.tags.includes(f.tag)) && (!q || `${n.title}\n${n.body}\n${n.tags.join(' ')}`.toLowerCase().includes(q)));
+  let out = notes.filter((n) => (!f.kind || n.kind === f.kind) && (!f.tag || n.tags.includes(f.tag)) && (!q || `${n.title}\n${n.locked ? '' : n.body}\n${n.tags.join(' ')}`.toLowerCase().includes(q)));
   out.sort(sortNotes);
   if (f.limit) out = out.slice(0, f.limit);
-  return out.map((n) => ({ ...n, tags: [...n.tags] }));
+  return out.map(view);
 }
 
 function find(id: string): Note {
@@ -274,7 +280,21 @@ function find(id: string): Note {
 }
 
 export function noteGet(id: string): Note {
-  return { ...find(id) };
+  return view(find(id));
+}
+
+export function noteReadLocked(id: string): string {
+  const n = find(id);
+  if (n.locked) requireUnlocked();
+  return n.body;
+}
+
+export function noteSetLocked(id: string, locked: boolean): Note {
+  const n = find(id);
+  requireUnlocked();
+  n.locked = locked;
+  emit('notes:changed', { id });
+  return view(n);
 }
 
 export function noteSave(input: NoteInput): Note {
@@ -282,14 +302,16 @@ export function noteSave(input: NoteInput): Note {
   let n: Note;
   if (input.id) {
     n = find(input.id);
-    Object.assign(n, { kind: input.kind, title: input.title, body: input.body, tags: [...input.tags], pinned: input.pinned, color: input.color ?? null, updated: now });
+    if (n.locked || input.locked) requireUnlocked();
+    Object.assign(n, { locked: !!input.locked, kind: input.kind, title: input.title, body: input.body, tags: [...input.tags], pinned: input.pinned, color: input.color ?? null, updated: now });
   } else {
-    n = { id: nid(), kind: input.kind, title: input.title, body: input.body, tags: [...input.tags], pinned: input.pinned, color: input.color ?? null, created: now, updated: now, exportedPath: null, exportedAt: null, remindAt: null, reminded: false };
+    n = { id: nid(), kind: input.kind, title: input.title, body: input.body, tags: [...input.tags], pinned: input.pinned, color: input.color ?? null, created: now, updated: now, exportedPath: null, exportedAt: null, remindAt: null, reminded: false, locked: !!input.locked };
+    if (n.locked) requireUnlocked();
     notes.push(n);
   }
   emit('notes:changed', { id: n.id });
-  if (n.kind === 'idea' && settings.notes.autoExportIdeas && settings.notes.claudeFolder) return noteExport(n.id);
-  return { ...n, tags: [...n.tags] };
+  if (n.kind === 'idea' && !n.locked && settings.notes.autoExportIdeas && settings.notes.claudeFolder) return noteExport(n.id);
+  return view(n);
 }
 
 export function noteDelete(id: string): void {
@@ -318,6 +340,7 @@ export function noteExport(id: string): Note {
   const folder = settings.notes.claudeFolder;
   if (!folder) throw new Error('No Claude folder is set. Choose one first (Settings → Notes).');
   const n = find(id);
+  if (n.locked) throw new Error('this note is locked: unlock it with your vault password first');
   const sameFolder = n.exportedPath && n.exportedPath.slice(0, n.exportedPath.lastIndexOf('\\')).toLowerCase() === folder.toLowerCase();
   const name = sameFolder ? n.exportedPath!.split('\\').pop()! : `${new Date(n.created * 1000).toISOString().slice(0, 10)}-${slugify(n.title)}.md`;
   const now = Math.floor(Date.now() / 1000);

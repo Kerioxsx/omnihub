@@ -32,6 +32,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.18.0
+
+- **Hide any file, of any size**: Vault → **Hidden files**. Drop a zip (or anything) on the window: it's encrypted with your vault key and removed from where it was. Open a temporary copy, save a copy, or **Unhide** it back to its folder. **Lock any note** with the same password: the lock button in a note seals its text, and only the unlocked vault opens it.
+
 ## New in 0.17.0
 
 - **Search everything** from Ctrl+K (files, notes, apps, screenshots, vault titles), **app updates** through winget, **pin a screenshot on top**, **Wi-Fi QR codes** in the vault, **imports from Bitwarden, Chrome, Firefox, 1Password, KeePass and CSV**, and on the phone: get the PC's clipboard and **Share → OmniHub** (Android).

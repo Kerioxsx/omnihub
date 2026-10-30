@@ -1,15 +1,12 @@
 ## New in this version
 
-**Search everything, app updates, Wi-Fi QR codes, and imports from other password managers.**
+**Hide any file under your vault password, and lock any note.**
 
-- **Search everything (Ctrl+K)**: type in the command palette and it finds files (from your latest scan of each drive), notes and ideas, apps, screenshots (by their text too) and, while the vault is open, vault entries by title. Enter opens it: a file in Explorer, an app starts, a vault entry opens in the vault.
-- **App updates**: Apps → **Updates** lists every installed app with a newer version (through winget, Windows' own package manager), with **Update** per app and **Update all**.
-- **Pin a screenshot on top**: in a screenshot, **Pin on top** keeps it in a small window above everything else. Drag it, resize it from its edges, scroll to fade it, double-click or Esc to close.
-- **Wi-Fi QR code**: a Wi-Fi entry in the vault has **Show Wi-Fi QR code**: guests point their phone's camera at it and join without typing the password.
-- **Import from another password manager**: Vault → settings → **From another password manager…** reads Bitwarden (CSV or unencrypted JSON), Chrome, Edge, Brave, Opera, Firefox, 1Password, KeePass, LastPass or any CSV with name, URL, username and password columns. Logins already in the vault are skipped, two-factor secrets come along, and OmniHub offers to delete the export file afterwards (it has your passwords in plain text).
-- **Phone**: *Get the PC's clipboard* on Home copies the PC's clipboard text onto the phone (never a password copied from the vault). On Android, with OmniHub added to the home screen, **Share → OmniHub** from any app sends a link or text to the PC: open it there, copy it there, or save it as an idea.
+- **Hidden files**: Vault → **Hidden files**. Drop any file on the window (or **Hide files…**): a zip, videos, documents, however big. OmniHub encrypts it with your vault key and removes it from where it was, so it's gone from Explorer and from search. With the vault unlocked: **Open** a temporary copy (deleted when the vault locks), **Save a copy** somewhere and keep it hidden, **Unhide** it back to its folder (or another), or delete it for good. Big files show their progress and can be stopped. Files on another drive stay on that drive, so a 50 GB zip on D: doesn't fill C:.
+- **Locked notes**: the lock button at the top of a note locks it with the same vault password (or Windows Hello). Its text is encrypted; the title stays visible in the list. When the vault locks, the note's text goes away until you unlock it again. Locked notes aren't sent to Claude or shown on the phone.
+- How it's protected: every hidden file has its own key, wrapped by your vault key; the contents are encrypted 1 MB at a time (AES-256-GCM), and even file names are encrypted. Changing your master password keeps everything readable. Folders need zipping first; deleting a file the normal way can leave traces on a hard drive, and that applies here too.
 
-Also in 0.16.1: a Capri switch at the top of Chats.
+Also in 0.17.0: search everything (Ctrl+K), app updates, pin a screenshot on top, Wi-Fi QR codes, imports from other password managers.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

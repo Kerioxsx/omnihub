@@ -7,7 +7,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Badge, Card, Skeleton, Spinner } from '../../components/ui/Card';
-import { SearchInput, Select } from '../../components/ui/Form';
+import { Segmented, SearchInput, Select } from '../../components/ui/Form';
 import { Callout, EmptyState } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { useEvent, useMediaQuery, useNow } from '../../lib/hooks';
@@ -20,6 +20,7 @@ import { toast } from '../../state/toasts';
 import { EntryForm } from './EntryForm';
 import { KINDS, StrengthMeter, kindIcon, useStrength } from './shared';
 import { BrowserAutofill } from './BrowserAutofill';
+import { HiddenFiles } from './HiddenFiles';
 import { VaultHealth } from './VaultHealth';
 import { VaultSettings } from './VaultSettings';
 
@@ -304,11 +305,13 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
+  const params = useRoute().params;
+  const [view, setView] = useState<'entries' | 'files'>(params.get('tab') === 'files' ? 'files' : 'entries');
   const [locksAt, setLocksAt] = useState(() => (status.locksIn != null ? Date.now() + status.locksIn * 1000 : null));
   const now = useNow(1000);
   const lastTouch = useRef(0);
   // Opened from search (Ctrl+K): that entry.
-  const wanted = useRoute().params.get('id');
+  const wanted = params.get('id');
   useEffect(() => {
     if (wanted) setSelected(wanted);
   }, [wanted]);
@@ -354,6 +357,17 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3" onMouseMove={touch} onKeyDown={touch}>
       <div className="flex items-center gap-2">
+        <Segmented
+          label="Vault section"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'entries', label: wide ? 'Passwords' : '', icon: KeyRound, title: 'Passwords' },
+            { value: 'files', label: wide ? 'Hidden files' : '', icon: EyeOff, title: 'Hidden files' },
+          ]}
+        />
+        {view === 'entries' && (
+          <>
         <SearchInput value={q} onChange={setQ} placeholder="Search entries" className="w-60 min-w-[140px] shrink" aria-label="Search entries" />
         <Select value={kind} onChange={(e) => setKind(e.target.value as '' | EntryKind)} aria-label="Kind" className="w-[136px] shrink-0">
           <option value="">All kinds</option>
@@ -370,6 +384,8 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
           {weak > 0 ? <ShieldAlert size={14} aria-hidden /> : <ShieldCheck size={14} aria-hidden />}
           {weak > 0 ? `${weak} weak` : 'Health'}
         </button>
+          </>
+        )}
         <div className="flex-1" />
         {secs != null && (
           <span className={cx('flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1 text-[12px] tabular', secs < 60 ? 'border-warn/40 bg-warn/10 text-warn' : 'border-line bg-surface text-dim')} title="The vault locks itself after inactivity">
@@ -391,10 +407,15 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
         ) : (
           <IconButton icon={LockKeyhole} label="Lock" variant="secondary" onClick={() => void lock()} />
         )}
-        <Button variant="primary" icon={Plus} onClick={() => setForm({ open: true, entry: null })}>
-          New entry
-        </Button>
+        {view === 'entries' && (
+          <Button variant="primary" icon={Plus} onClick={() => setForm({ open: true, entry: null })}>
+            New entry
+          </Button>
+        )}
       </div>
+      {view === 'files' ? (
+        <HiddenFiles />
+      ) : (
       <div className="grid min-h-0 flex-1 grid-cols-[340px_minmax(0,1fr)] gap-3">
         <Card className="flex min-h-0 flex-col overflow-hidden p-1.5">
           {!entries ? (
@@ -455,6 +476,7 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
           )}
         </Card>
       </div>
+      )}
       <EntryForm
         open={form.open}
         entry={form.entry}

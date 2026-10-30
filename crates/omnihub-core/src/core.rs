@@ -94,6 +94,8 @@ impl AppCore {
         );
         let s = settings.get();
         vault.set_auto_lock(s.vault.auto_lock_minutes);
+        // Copies Open left behind last time (an app still had them open).
+        vault.hidden.clean_opened();
         let procs = Arc::new(crate::system::procs::ProcessMonitor::new());
         let media = crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media);
         let games = crate::games::GameHub::new(&paths.data, events.clone(), procs.clone());

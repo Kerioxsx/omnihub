@@ -294,6 +294,8 @@ export interface Note {
   remindAt: number | null;
   /** the reminder was shown */
   reminded: boolean;
+  /** locked with the vault password: `body` is empty here (read it with notes.readLocked) */
+  locked: boolean;
 }
 
 export interface NoteInput {
@@ -304,6 +306,34 @@ export interface NoteInput {
   tags: string[];
   pinned: boolean;
   color?: string | null;
+  /** keep (or make) it locked; needs the vault unlocked */
+  locked?: boolean;
+}
+
+/** A file hidden in the vault (decrypted from its encrypted header). */
+export interface HiddenFile {
+  id: string;
+  name: string;
+  size: number;
+  /** the original file's last change (Unix seconds) */
+  modified: number;
+  hiddenAt: number;
+  /** where it came from: Unhide puts it back there */
+  folder: string;
+}
+
+export interface HiddenResult {
+  file: HiddenFile;
+  /** the original couldn't be removed (open in another app) */
+  originalLeft: boolean;
+}
+
+/** `hidden:progress` */
+export interface HiddenProgress {
+  job: string;
+  name: string;
+  done: number;
+  total: number;
 }
 
 export interface NoteFilter {

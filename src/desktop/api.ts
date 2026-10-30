@@ -134,6 +134,9 @@ export const api = {
     list: (filter: T.NoteFilter = {}) => call<T.Note[]>('notes_list', { filter }),
     get: (id: string) => call<T.Note>('notes_get', { id }),
     save: (input: T.NoteInput) => call<T.Note>('notes_save', { input }),
+    /** A locked note's text (the vault must be unlocked). */
+    readLocked: (id: string) => call<string>('notes_read_locked', { id }),
+    setLocked: (id: string, locked: boolean) => call<T.Note>('notes_set_locked', { id, locked }),
     delete: (id: string) => call<void>('notes_delete', { id }),
     /** Set (Unix seconds) or clear (null) a reminder. */
     remind: (id: string, at: number | null) => call<T.Note>('notes_remind', { id, at }),
@@ -170,6 +173,19 @@ export const api = {
     helloUnlock: () => call<void>('vault_hello_unlock'),
     exportBackup: (path: string) => call<void>('vault_export', { path }),
     importBackup: (path: string, password: string) => call<number>('vault_import', { path, password }),
+  },
+
+  /** Files hidden in the vault (encrypted with the vault key). `job` names a run for progress and Stop. */
+  hidden: {
+    list: () => call<T.HiddenFile[]>('hidden_list'),
+    hide: (path: string, job: string) => call<T.HiddenResult>('hidden_hide', { path, job }),
+    /** Back where it came from (or into `folder`); returns where it went. */
+    unhide: (id: string, folder: string | null, job: string) => call<string>('hidden_unhide', { id, folder, job }),
+    saveCopy: (id: string, path: string, job: string) => call<void>('hidden_save_copy', { id, path, job }),
+    /** Open a temporary copy in its app (removed when the vault locks). */
+    open: (id: string, job: string) => call<void>('hidden_open', { id, job }),
+    remove: (id: string) => call<void>('hidden_delete', { id }),
+    cancel: (job: string) => call<void>('hidden_cancel', { job }),
   },
 
   update: {

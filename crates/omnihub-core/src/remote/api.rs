@@ -1032,7 +1032,7 @@ async fn notes_create(State(core): State<Ctx>, Extension(dev): Extension<Device>
     if !tags.iter().any(|t| t == "from-phone") {
         tags.push("from-phone".into());
     }
-    let note = core.notes.save(crate::notes::NoteInput { id: None, kind: n.kind, title: n.title, body: n.body, tags, pinned: false, color: None })?;
+    let note = core.notes.save(crate::notes::NoteInput { id: None, kind: n.kind, title: n.title, body: n.body, tags, pinned: false, color: None, locked: false })?;
     let s = core.settings.get().notes;
     let export = n.send_to_claude || (note.kind == crate::notes::NoteKind::Idea && s.auto_export_ideas);
     let note = match (export, s.claude_folder) {

@@ -8,7 +8,7 @@
 │        │                                                                                     │
 │  omnihub-core (crates/omnihub-core) ── AppCore ─────────────────────────────────────────────┐ │
 │    storage   engine · MFT reader · USN · snapshot cache · walker · tree · cleanup · dupes   │ │
-│    vault     Argon2id/AES-GCM · DPAPI · Windows Hello · auto-lock · clipboard               │ │
+│    vault     Argon2id/AES-GCM · DPAPI · Hello · hidden files · locked notes · auto-lock     │ │
 │    notes     SQLite · Markdown export · Claude folder watcher                               │ │
 │    apps      registry · Get-StartApps · Appx · shell icons                                  │ │
 │    capture   screenshots library · DXGI/GDI capture · JPEG streamer · input · bridges       │ │
