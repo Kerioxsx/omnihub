@@ -150,7 +150,7 @@ export function ClipsTab() {
                   title="Get the recorder once"
                   action={
                     <Button size="sm" variant="primary" icon={Download} loading={!!install} onClick={() => void getRecorder()}>
-                      {install?.total ? `${Math.round((install.done / install.total) * 100)}%` : 'Download (about 90 MB)'}
+                      {install?.total ? `${Math.round((install.done / install.total) * 100)}%` : 'Download (about 130 MB)'}
                     </Button>
                   }
                 >
