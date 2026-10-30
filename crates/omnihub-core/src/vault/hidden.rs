@@ -553,7 +553,9 @@ mod tests {
         // Something new took its name: it comes back beside it.
         std::fs::write(&secret, b"new").unwrap();
         let back = s.unhide(&key, &h.file.id, None, &mut no_progress, &AtomicBool::new(false)).unwrap();
-        assert_eq!(back, docs.join("secret plans (2).zip"));
+        // The same folder (Windows may spell a temp folder with its short name, RUNNER~1).
+        assert_eq!(back.file_name().unwrap(), "secret plans (2).zip");
+        assert_eq!(crate::paths::canonical(back.parent().unwrap()).unwrap(), crate::paths::canonical(&docs).unwrap());
         assert_eq!(std::fs::read(&back).unwrap(), data);
         assert_eq!(s.count(), 0);
 
