@@ -372,7 +372,21 @@ export function browserStatus(): BrowserStatus {
     enabled: on,
     listening: on,
     host: 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\OmniHub.exe',
-    browsers: ['Brave', 'Chrome', 'Edge', 'Chromium'].map((browser) => ({ browser, registered: on && browser !== 'Chromium' })),
+    browsers: (
+      [
+        ['chrome', 'Chrome', 'chromium', true, 'chrome://extensions'],
+        ['edge', 'Edge', 'chromium', true, 'edge://extensions'],
+        ['brave', 'Brave', 'chromium', true, 'brave://extensions'],
+        ['opera', 'Opera', 'chromium', false, 'opera://extensions'],
+        ['opera-gx', 'Opera GX', 'chromium', true, 'opera://extensions'],
+        ['vivaldi', 'Vivaldi', 'chromium', false, 'vivaldi://extensions'],
+        ['chromium', 'Chromium', 'chromium', false, 'chrome://extensions'],
+        ['firefox', 'Firefox', 'firefox', true, 'about:debugging#/runtime/this-firefox'],
+      ] as const
+    ).map(([id, browser, kind, installed, page]) => {
+      const picked = settings.vault.browsers.length ? settings.vault.browsers.includes(id) : installed;
+      return { id, browser, kind, installed, registered: on && picked, page };
+    }),
     clients: browserClients.map((c) => ({ ...c })),
     pending: pendingPair,
     extensionDir: 'C:\\Users\\Player\\AppData\\Local\\OmniHub\\browser-extension',

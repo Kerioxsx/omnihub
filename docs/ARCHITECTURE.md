@@ -461,3 +461,16 @@ updated itself start again with it (`resume.json`), as do servers set to
 start with OmniHub, and ones left running by a crash are ended at start
 (`running.json`). The phone reaches
 it through `/api/servers*`.
+
+### Clips & Capri (`play/`)
+
+`PlayHub` checks every two seconds (names only) whether a known game runs,
+and only while one does starts what is switched on: the replay buffer
+(`clips.rs`: FFmpeg with `ddagrab` and a hardware encoder writing two-second
+MPEG-TS segments, game sound from WASAPI loopback on stdin, joined into an MP4
+with the concat demuxer), the voice listener (`voice.rs`: WinRT
+`SpeechRecognizer` with a list constraint of the "Capri …" sentences), CS2's
+game-state receiver (`cs2.rs`) and League's live-data poller (`lol.rs`).
+Everything that happens goes through one worker thread, which saves clips and
+has Capri speak through her local bridge (`companion::say`).
+

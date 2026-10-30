@@ -60,6 +60,8 @@ pub struct AppCore {
     pub browser: crate::browser::BrowserBridge,
     pub procs: Arc<crate::system::procs::ProcessMonitor>,
     pub games: Arc<crate::games::GameHub>,
+    /// Capri and your games: reactions, voice commands, instant replay.
+    pub play: Arc<crate::play::PlayHub>,
     pub updater: Arc<crate::update::Updater>,
     pub media: Arc<crate::media::MediaHub>,
     /// Listens to the PC's sound for the music visuals (only while one is shown).
@@ -99,6 +101,7 @@ impl AppCore {
         let procs = Arc::new(crate::system::procs::ProcessMonitor::new());
         let media = crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media);
         let games = crate::games::GameHub::new(&paths.data, events.clone(), procs.clone());
+        let play = crate::play::PlayHub::new(&paths.data, events.clone());
         let mods = crate::mods::ModHub::new(&paths.data, events.clone(), games.clone(), procs.clone());
         let chats = crate::chats::ChatHub::new(&paths.data, events.clone(), mods.claude.clone());
         let mcserver = crate::mcserver::ServerHub::new(&paths.data, events.clone(), mods.clone());
@@ -115,6 +118,7 @@ impl AppCore {
             browser: crate::browser::BrowserBridge::new(db.clone(), events.clone()),
             browser_integration: opts.browser_integration,
             games,
+            play,
             mods,
             chats,
             mcserver,
@@ -142,6 +146,7 @@ impl AppCore {
 
     /// Start timers, watchers and (if enabled) the companion server.
     pub fn start_background(self: &Arc<Self>) {
+        self.play.start(self);
         let weak = Arc::downgrade(self);
         std::thread::Builder::new()
             .name("vault-timer".into())
@@ -200,7 +205,7 @@ impl AppCore {
             return;
         }
         if on {
-            if let Err(e) = crate::browser::register::register(&self.paths.data) {
+            if let Err(e) = crate::browser::register::register(&self.paths.data, &self.settings.get().vault.browsers) {
                 tracing::warn!("could not register the browser host: {e}");
             }
         } else {
@@ -382,7 +387,7 @@ impl AppCore {
         if before.visuals != after.visuals {
             self.apply_visuals(&after.visuals);
         }
-        if before.vault.browser_autofill != after.vault.browser_autofill {
+        if before.vault.browser_autofill != after.vault.browser_autofill || (after.vault.browser_autofill && before.vault.browsers != after.vault.browsers) {
             self.enable_browser_autofill(after.vault.browser_autofill);
         }
         let r0 = &before.remote;

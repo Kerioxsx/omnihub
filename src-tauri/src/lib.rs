@@ -107,6 +107,7 @@ pub fn run(args: Vec<String>) {
     let rig_hub = core.rig.clone();
     let govee_hub = core.govee.clone();
     let server_hub = core.mcserver.clone();
+    let play_hub = core.play.clone();
     #[cfg(windows)]
     let session_logs = logs_dir.clone();
 
@@ -450,6 +451,13 @@ pub fn run(args: Vec<String>) {
             commands::vault_wifi_qr,
             commands::vault_import_file,
             commands::hidden_list,
+            commands::play_status,
+            commands::play_install,
+            commands::play_clip,
+            commands::play_record,
+            commands::play_clips,
+            commands::play_clip_delete,
+            commands::play_hello,
             commands::hidden_hide,
             commands::hidden_unhide,
             commands::hidden_save_copy,
@@ -471,6 +479,7 @@ pub fn run(args: Vec<String>) {
             commands::pc_set,
             commands::browser_status,
             commands::browser_repair,
+            commands::browser_open_page,
             commands::browser_pair_respond,
             commands::browser_revoke,
             commands::vault_totp,
@@ -628,6 +637,8 @@ pub fn run(args: Vec<String>) {
                 rig_hub.shutdown();
                 // Streaming Govee lights go back to their own modes.
                 govee_hub.shutdown();
+                // The recorder and the microphone stop.
+                play_hub.shutdown();
                 // Minecraft servers save their worlds and stop.
                 server_hub.shutdown(Duration::from_secs(25));
                 omnihub_core::crashlog::end_session(&logs_dir);

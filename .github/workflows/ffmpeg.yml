@@ -1,0 +1,110 @@
+name: FFmpeg
+
+# Fetches an LGPL build of FFmpeg (BtbN/FFmpeg-Builds) for OmniHub's instant
+# replay, checks it has what the app uses (desktop capture, the graphics-card
+# encoders, segments and joining them), and hands it to the release
+# workflow, which publishes it as OmniHub-ffmpeg-x64.exe and builds its
+# SHA-256 into the app. The app checks every download against that checksum.
+
+on:
+  pull_request:
+    paths: ['.github/workflows/ffmpeg.yml']
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      sha256:
+        description: SHA-256 of OmniHub-ffmpeg-x64.exe
+        value: ${{ jobs.fetch.outputs.sha256 }}
+      version:
+        description: The FFmpeg build it came from
+        value: ${{ jobs.fetch.outputs.version }}
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    name: Fetch and check FFmpeg
+    runs-on: windows-latest
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
+      version: ${{ steps.download.outputs.version }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download the newest release-branch LGPL build
+        id: download
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir ff dl
+          found=""
+          # Dated builds only (never the moving "latest" tag), so a release always names one build.
+          for tag in $(gh release list --repo BtbN/FFmpeg-Builds --limit 15 --json tagName --jq '.[].tagName' | grep -v '^latest$'); do
+            name=$(gh release view "$tag" --repo BtbN/FFmpeg-Builds --json assets --jq '.assets[].name' | grep -E '^ffmpeg-n[0-9.]+-.*-win64-lgpl-[0-9.]+\.zip$' | sort -V | tail -n 1 || true)
+            if [ -n "$name" ]; then
+              gh release download "$tag" --repo BtbN/FFmpeg-Builds --pattern "$name" --dir dl
+              found="$tag/$name"
+              break
+            fi
+          done
+          if [ -z "$found" ]; then
+            echo "::error::No BtbN release has a win64 LGPL release-branch build"
+            exit 1
+          fi
+          7z x -y -odl dl/*.zip > /dev/null
+          exe=$(find dl -path '*/bin/ffmpeg.exe' | head -n 1)
+          cp "$exe" ff/OmniHub-ffmpeg-x64.exe
+          lic=$(find dl -maxdepth 2 -name 'LICENSE.txt' | head -n 1)
+          {
+            echo "OmniHub's instant replay uses FFmpeg (https://ffmpeg.org), licensed under the"
+            echo "GNU Lesser General Public License 2.1 or later; the license text follows."
+            echo "This build: https://github.com/BtbN/FFmpeg-Builds/releases/tag/${found%%/*} (${found##*/})."
+            echo "Its source code: https://github.com/FFmpeg/FFmpeg (the version in the file name above)"
+            echo "and the build scripts at https://github.com/BtbN/FFmpeg-Builds."
+            echo
+            cat "$lic"
+          } > ff/OmniHub-ffmpeg-LICENSE.txt
+          echo "version=${found##*/}" >> "$GITHUB_OUTPUT"
+          echo "FFmpeg $found"
+          ls -l ff
+
+      # Desktop capture can't run on a runner (no screen), so this proves the
+      # parts instead, then makes, segments and joins a short clip with sound.
+      - name: Check what the app uses
+        shell: bash
+        run: |
+          set -euo pipefail
+          f=ff/OmniHub-ffmpeg-x64.exe
+          # Lists are read whole first (a pipe into grep -q would break under pipefail).
+          "$f" -hide_banner -version > version.txt
+          head -n 1 version.txt
+          filters=$("$f" -hide_banner -filters 2>/dev/null)
+          encoders=$("$f" -hide_banner -encoders 2>/dev/null)
+          muxers=$("$f" -hide_banner -muxers 2>/dev/null)
+          demuxers=$("$f" -hide_banner -demuxers 2>/dev/null)
+          grep -qE '\bddagrab\b' <<< "$filters" || { echo "::error::no ddagrab"; exit 1; }
+          for enc in h264_nvenc h264_amf h264_qsv h264_mf aac mpeg2video; do
+            grep -qE "\b$enc\b" <<< "$encoders" || { echo "::error::no $enc encoder"; exit 1; }
+          done
+          grep -qE '\bsegment\b' <<< "$muxers" || { echo "::error::no segment muxer"; exit 1; }
+          grep -qE '\bconcat\b' <<< "$demuxers" || { echo "::error::no concat demuxer"; exit 1; }
+          mkdir seg
+          "$f" -hide_banner -loglevel error -f lavfi -i testsrc=size=320x240:rate=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 7 \
+            -map 0:v -map 1:a -c:a aac -b:a 160k -c:v mpeg2video -g 60 \
+            -f segment -segment_time 2 -segment_format mpegts -reset_timestamps 0 seg/seg%06d.ts
+          ls seg
+          for s in seg/seg*.ts; do echo "file '$PWD/$s'"; done > list.txt
+          "$f" -hide_banner -loglevel error -y -f concat -safe 0 -i list.txt -c copy -movflags +faststart clip.mp4
+          test -s clip.mp4
+
+      - name: Checksum
+        id: hash
+        shell: bash
+        run: echo "sha256=$(sha256sum ff/OmniHub-ffmpeg-x64.exe | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omnihub-ffmpeg
+          path: ff/
+          if-no-files-found: error

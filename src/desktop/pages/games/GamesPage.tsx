@@ -4,7 +4,7 @@
 import { formatRelative } from '@shared/format';
 import type { GameKind, GameProfile, GameSession, GameStep, InstalledGame } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, CircleSlash, Gamepad2, Gauge, HardDriveDownload, LoaderCircle, Plus, Rocket, Square, XCircle, Zap } from 'lucide-react';
+import { CheckCircle2, CircleSlash, Clapperboard, Gamepad2, Gauge, HardDriveDownload, LoaderCircle, Plus, Rocket, Square, XCircle, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -17,6 +17,7 @@ import { cx } from '../../lib/cx';
 import { useEvent } from '../../lib/hooks';
 import { navigate, useRoute } from '../../lib/router';
 import { toast } from '../../state/toasts';
+import { ClipsTab } from './ClipsTab';
 import { LiveFps, MODE_LABEL, useFpsLive } from './FpsCard';
 import { PcOptimize } from './PcOptimize';
 import { ProfileEditor } from './ProfileEditor';
@@ -40,7 +41,8 @@ export function GamesPage() {
   const [profiles, setProfiles] = useState<GameProfile[] | null>(null);
   const [session, setSession] = useState<GameSession | null>(null);
   const [installed, setInstalled] = useState<InstalledGame[] | null>(null);
-  const tab = route.params.get('tab') === 'pc' ? 'pc' : 'games';
+  const wantTab = route.params.get('tab');
+  const tab = wantTab === 'pc' ? 'pc' : wantTab === 'clips' ? 'clips' : 'games';
   const selected = route.params.get('id') ?? profiles?.[0]?.id ?? null;
 
   const loadInstalled = () => void api.games.library().then(setInstalled, () => setInstalled([]));
@@ -112,9 +114,10 @@ export function GamesPage() {
       <Tabs
         className="-mt-1 mb-5"
         value={tab}
-        onChange={(t) => navigate('games', t === 'pc' ? { tab: 'pc' } : {})}
+        onChange={(t) => navigate('games', t === 'games' ? {} : { tab: t })}
         items={[
           { value: 'games', label: 'Games', icon: Gamepad2 },
+          { value: 'clips', label: 'Clips & Capri', icon: Clapperboard },
           { value: 'pc', label: 'Optimize PC', icon: Gauge },
         ]}
       />
@@ -122,6 +125,8 @@ export function GamesPage() {
 
       {tab === 'pc' ? (
         <PcOptimize />
+      ) : tab === 'clips' ? (
+        <ClipsTab />
       ) : profiles && profiles.length === 0 ? (
         <Card className="mt-2 p-8">
           <EmptyState icon={Gamepad2} title="Add your first game" description="Pick a game and OmniHub sets up a boost profile for it: power plan, background apps, GPU, Wi-Fi and more — all put back when you stop playing." />

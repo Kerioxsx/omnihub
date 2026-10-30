@@ -165,6 +165,41 @@ mod win {
         }
     }
 
+    impl Loopback {
+        /// Like [`Source::read`], but stereo (left, right interleaved) for recording.
+        pub fn read_stereo(&mut self, out: &mut Vec<f32>) -> Result<(), String> {
+            let e = |e: windows::core::Error| e.message().to_string();
+            unsafe {
+                loop {
+                    if self.capture.GetNextPacketSize().map_err(e)? == 0 {
+                        return Ok(());
+                    }
+                    let (mut data, mut frames, mut flags) = (std::ptr::null_mut(), 0u32, 0u32);
+                    self.capture.GetBuffer(&mut data, &mut frames, &mut flags, None, None).map_err(e)?;
+                    let n = frames as usize;
+                    if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 || data.is_null() {
+                        out.extend(std::iter::repeat_n(0.0, n * 2));
+                    } else {
+                        let bytes = std::slice::from_raw_parts(data, n * self.block);
+                        let width = self.block / self.channels;
+                        let sample = |ch: &[u8]| match self.kind {
+                            Kind::F32 => f32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]),
+                            Kind::I16 => i16::from_le_bytes([ch[0], ch[1]]) as f32 / 32_768.0,
+                            Kind::I24 => (i32::from_le_bytes([0, ch[0], ch[1], ch[2]]) >> 8) as f32 / 8_388_608.0,
+                            Kind::I32 => i32::from_le_bytes([ch[0], ch[1], ch[2], ch[3]]) as f32 / 2_147_483_648.0,
+                        };
+                        for frame in bytes.chunks_exact(self.block) {
+                            let left = sample(&frame[..width]);
+                            let right = if self.channels > 1 { sample(&frame[width..2 * width]) } else { left };
+                            out.extend([left, right]);
+                        }
+                    }
+                    self.capture.ReleaseBuffer(frames).map_err(e)?;
+                }
+            }
+        }
+    }
+
     impl Drop for Loopback {
         fn drop(&mut self) {
             unsafe {

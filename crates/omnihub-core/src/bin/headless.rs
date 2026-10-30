@@ -24,7 +24,7 @@ fn main() -> anyhow::Result<()> {
         std::process::exit(code);
     }
     if let Some(origin) = omnihub_core::browser::host::invoked_as_host(&args) {
-        omnihub_core::browser::host::run(origin);
+        omnihub_core::browser::host::run(&origin);
         return Ok(());
     }
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into())).init();

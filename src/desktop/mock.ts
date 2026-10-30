@@ -17,6 +17,12 @@ import { serversMock as sv } from './mock/servers';
 import * as optimize from './mock/optimize';
 import * as updates from './mock/update';
 
+let playInstalled = false;
+let playRecording = false;
+let playClips: { path: string; name: string; size: number; created: number }[] = [
+  { path: 'C:\\Users\\Player\\Videos\\OmniHub Clips\\Fortnite highlight 2026-10-29 21-14-07.mp4', name: 'Fortnite highlight 2026-10-29 21-14-07', size: 48_200_000, created: Math.floor(Date.now() / 1000) - 86_400 },
+  { path: 'C:\\Users\\Player\\Videos\\OmniHub Clips\\Counter-Strike 2 2026-10-28 18-02-51.mp4', name: 'Counter-Strike 2 2026-10-28 18-02-51', size: 61_900_000, created: Math.floor(Date.now() / 1000) - 2 * 86_400 },
+];
 let capriOn = false;
 let capriInstalled = false;
 const mockScanTask = { on: false };
@@ -112,6 +118,57 @@ const handlers: Record<string, Handler> = {
     return { installed: capriInstalled, version: capriInstalled ? '0.4.4' : null, running: capriOn, latest: null };
   },
   capri_update: () => ({ installed: true, version: '0.4.4', running: capriOn, latest: '0.4.4' }),
+  play_status: () => ({
+    supported: true,
+    game: core.settings.play.replay || core.settings.play.voice || core.settings.play.capriReacts ? 'Fortnite' : null,
+    since: Math.floor(Date.now() / 1000) - 754,
+    recorderInstalled: playInstalled,
+    installing: false,
+    replaying: core.settings.play.replay && playInstalled,
+    buffered: Math.min(core.settings.play.replayMinutes * 60, 754),
+    recording: playRecording,
+    encoder: core.settings.play.replay && playInstalled ? 'NVIDIA NVENC' : null,
+    replayError: null,
+    listening: core.settings.play.voice,
+    voiceError: null,
+    capriRunning: capriOn,
+    folder: core.settings.play.folder ?? 'C:\\Users\\Player\\Videos\\OmniHub Clips',
+    heard: core.settings.play.voice ? 'capri clip that' : null,
+  }),
+  play_install: () =>
+    new Promise((r) => {
+      let done = 0;
+      const t = setInterval(() => {
+        done += 9_000_000;
+        emit('play:install', { done: Math.min(done, 92_000_000), total: 92_000_000 });
+        if (done >= 92_000_000) {
+          clearInterval(t);
+          playInstalled = true;
+          emit('play:changed', {});
+          r(null);
+        }
+      }, 120);
+    }),
+  play_clip: (a) => {
+    const name = `Fortnite ${new Date().toISOString().slice(0, 19).replace('T', ' ').replace(/:/g, '-')}`;
+    playClips.unshift({ path: `C:\\Users\\Player\\Videos\\OmniHub Clips\\${name}.mp4`, name, size: num(a, 'seconds') * 1_900_000, created: Math.floor(Date.now() / 1000) });
+    emit('play:clip', { path: playClips[0].path, seconds: num(a, 'seconds') });
+    return playClips[0].path;
+  },
+  play_record: (a) => {
+    playRecording = bool(a, 'start');
+    emit('play:changed', {});
+    return null;
+  },
+  play_clips: () => playClips,
+  play_clip_delete: (a) => {
+    playClips = playClips.filter((c) => c.path !== str(a, 'path'));
+    return null;
+  },
+  play_hello: () => {
+    if (!capriOn) throw new Error("Capri isn't running.");
+    return null;
+  },
   games_library: () => optimize.library(),
   games_add_installed: (a) => optimize.addInstalled(str(a, 'key')),
   games_load_test: (a) => games.loadTest(optStr(a, 'id')),
@@ -315,6 +372,7 @@ const handlers: Record<string, Handler> = {
   // browser autofill
   browser_status: () => vault.browserStatus(),
   browser_repair: () => vault.browserStatus().browsers,
+  browser_open_page: () => null,
   browser_pair_respond: (a) => vault.browserRespond(str(a, 'id'), bool(a, 'allow')),
   browser_revoke: (a) => vault.browserRevoke(str(a, 'id')),
 

@@ -83,6 +83,8 @@ libc = "0.2"
 [target.'cfg(windows)'.dependencies]
 xcap = "0.9.8"
 winreg = "0.56"
+# The WinRT collections windows 0.62 uses (IIterable for the speech phrases).
+windows-collections = "0.3.2"
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Devices_DeviceAndDriverInstallation",
@@ -136,6 +138,7 @@ windows = { version = "0.62", features = [
   "Graphics_Imaging",
   "Media_Control",
   "Media_Ocr",
+  "Media_SpeechRecognition",
   "Security_Credentials",
   "Security_Cryptography",
   "Storage_Streams",

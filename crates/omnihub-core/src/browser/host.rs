@@ -1,4 +1,4 @@
-//! The native-messaging host: Brave, Chrome and Edge start it for the
+//! The native-messaging host: the browsers start it for the
 //! OmniHub extension, and it relays the browser's messages (on stdin/stdout)
 //! to the running OmniHub app over its local pipe, and back.
 //!
@@ -111,9 +111,14 @@ async fn not_running(name: &str) -> bool {
 }
 
 /// The calling extension's origin when the browser started this process as
-/// the native-messaging host (`<exe> chrome-extension://<id>/ …`).
-pub fn invoked_as_host(args: &[String]) -> Option<&str> {
-    args.get(1).map(String::as_str).filter(|a| a.starts_with("chrome-extension://"))
+/// the native-messaging host: `<exe> chrome-extension://<id>/ …` from a
+/// Chromium browser, `<exe> <manifest path> <extension id>` from Firefox.
+pub fn invoked_as_host(args: &[String]) -> Option<String> {
+    let first = args.get(1)?;
+    if first.starts_with("chrome-extension://") {
+        return Some(first.clone());
+    }
+    (first.ends_with(".json") && args.get(2).map(String::as_str) == Some(super::FIREFOX_ID)).then(super::firefox_origin)
 }
 
 /// Relay between the browser (stdin/stdout) and the running app until
@@ -132,4 +137,19 @@ pub fn run(origin: &str) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chromium_and_firefox_start_the_host() {
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(invoked_as_host(&a(&["omnihub.exe", "chrome-extension://abc/", "--parent-window=0"])).as_deref(), Some("chrome-extension://abc/"));
+        assert_eq!(invoked_as_host(&a(&["omnihub.exe", r"C:\data\browser\app.omnihub.vault.firefox.json", crate::browser::FIREFOX_ID])), Some(crate::browser::firefox_origin()));
+        assert_eq!(invoked_as_host(&a(&["omnihub.exe", "x.json", "someone-else@example.com"])), None);
+        assert_eq!(invoked_as_host(&a(&["omnihub.exe", "--minimized"])), None);
+        assert!(crate::browser::origin_allowed(&crate::browser::firefox_origin()));
+    }
 }

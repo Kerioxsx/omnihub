@@ -3840,7 +3840,7 @@ dependencies = [
 
 [[package]]
 name = "omnihub"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "anyhow",
  "omnihub-core",
@@ -3865,7 +3865,7 @@ dependencies = [
 
 [[package]]
 name = "omnihub-core"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3927,6 +3927,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "windows",
+ "windows-collections",
  "winreg 0.56.0",
  "xcap",
  "zeroize",

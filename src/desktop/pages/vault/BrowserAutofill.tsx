@@ -1,10 +1,10 @@
 import { formatRelative } from '@shared/format';
 import type { BrowserStatus } from '@shared/types';
-import { Check, Copy, FolderOpen, Globe, RefreshCw, Trash, Wrench } from 'lucide-react';
+import { Check, Copy, ExternalLink, FolderOpen, Globe, RefreshCw, Trash, Wrench } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
-import { Badge, Spinner } from '../../components/ui/Card';
+import { Spinner } from '../../components/ui/Card';
 import { Switch } from '../../components/ui/Form';
 import { Modal } from '../../components/ui/Overlay';
 import { Callout } from '../../components/ui/States';
@@ -47,7 +47,7 @@ function CopyChip({ text, label }: { text: string; label?: string }) {
   );
 }
 
-/** Brave / Chrome / Edge extension setup, paired browsers and options. */
+/** The extension in the browsers you pick (Chromium family and Firefox), paired browsers and options. */
 export function BrowserAutofill({ open, onClose }: { open: boolean; onClose: () => void }) {
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
@@ -67,6 +67,25 @@ export function BrowserAutofill({ open, onClose }: { open: boolean; onClose: () 
   if (!settings) return null;
   const enabled = settings.vault.browserAutofill;
   const registered = st?.browsers.filter((b) => b.registered).map((b) => b.browser) ?? [];
+  const known = st?.browsers ?? [];
+  // The picked browsers: the saved list, else every installed one.
+  const picked = settings.vault.browsers.length ? settings.vault.browsers : known.filter((b) => b.installed).map((b) => b.id);
+  const pick = async (id: string, on: boolean) => {
+    const next = on ? [...new Set([...picked, id])] : picked.filter((x) => x !== id);
+    await update({ vault: { browsers: next.length ? next : ['none'] } });
+    load();
+  };
+  const shown = known.filter((b) => b.installed || picked.includes(b.id));
+  const firefox = shown.some((b) => b.kind === 'firefox' && picked.includes(b.id));
+  const chromium = shown.filter((b) => b.kind === 'chromium' && picked.includes(b.id));
+  const openPage = async (id: string, page: string) => {
+    try {
+      await api.browser.openPage(id);
+    } catch (e) {
+      void copyText(page);
+      toast.info('Type this in its address bar', `${page} (copied) — ${errorText(e)}`);
+    }
+  };
 
   const toggle = async (on: boolean) => {
     setBusy(true);
@@ -95,7 +114,7 @@ export function BrowserAutofill({ open, onClose }: { open: boolean; onClose: () 
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Browser autofill" description="Fill usernames, emails, passwords and 2FA codes in Brave, Chrome and Edge." icon={Globe} size="lg">
+    <Modal open={open} onClose={onClose} title="Browser autofill" description="Fill usernames, emails, passwords and 2FA codes in Chrome, Edge, Brave, Opera, Vivaldi or Firefox — one browser or several." icon={Globe} size="lg">
       <div className="space-y-5 pb-2">
         <div className="flex items-center justify-between gap-4 rounded-xl border border-line bg-surface px-4 py-3">
           <div>
@@ -108,43 +127,62 @@ export function BrowserAutofill({ open, onClose }: { open: boolean; onClose: () 
         {enabled && (
           <>
             <ol className="pl-1">
-              <Step n={1} done={registered.length > 0} title="OmniHub is registered with your browsers">
+              <Step n={1} done={registered.length > 0} title="Choose your browsers">
                 {st ? (
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    {st.browsers.map((b) => (
-                      <Badge key={b.browser} tone={b.registered ? 'good' : 'neutral'}>
-                        {b.browser}
-                        {b.registered ? '' : ' — not found'}
-                      </Badge>
-                    ))}
+                  <div className="mt-1 space-y-1.5">
+                    {shown.length === 0 && <div className="text-faint">No supported browser found. Chrome, Edge, Brave, Opera, Opera GX, Vivaldi, Chromium and Firefox work.</div>}
+                    {shown.map((b) => {
+                      const on = picked.includes(b.id);
+                      return (
+                        <div key={b.id} className="flex items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2">
+                          <Switch checked={on} onChange={(v) => void pick(b.id, v)} label={b.browser} />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[13px] font-medium text-fg">{b.browser}</div>
+                            <div className="text-[11.5px] text-faint">{!b.installed ? 'Not found on this PC' : !on ? 'Not set up' : b.registered ? 'Ready for the extension' : 'Setting up…'}</div>
+                          </div>
+                          {on && b.installed && (
+                            <Button size="sm" variant="ghost" icon={ExternalLink} onClick={() => void openPage(b.id, b.page)} title={b.page}>
+                              Open its extensions page
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
                     <Button size="sm" variant="ghost" icon={Wrench} onClick={() => void repair()}>
                       Repair
                     </Button>
-                  </span>
+                  </div>
                 ) : (
                   <Spinner size={14} />
                 )}
               </Step>
-              <Step n={2} title="Open the extensions page">
-                Type this in the address bar (Chrome: <span className="font-mono">chrome://extensions</span>, Edge: <span className="font-mono">edge://extensions</span>):
-                <div>
-                  <CopyChip text="brave://extensions" />
-                </div>
-              </Step>
-              <Step n={3} title={<>Turn on “Developer mode” (top right)</>} />
-              <Step n={4} title={<>Click “Load unpacked” and choose this folder</>}>
-                {st?.extensionDir ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CopyChip text={st.extensionDir} />
-                    <Button size="sm" variant="ghost" icon={FolderOpen} onClick={() => st.extensionDir && void api.app.revealPath(st.extensionDir)}>
-                      Show in Explorer
-                    </Button>
-                  </div>
-                ) : (
-                  <span className="text-warn">The extension folder is missing — reinstall OmniHub.</span>
-                )}
-              </Step>
-              <Step n={5} done={(st?.clients.length ?? 0) > 0} title="Click the OmniHub icon in the browser and choose “Connect”">
+              {chromium.length > 0 && (
+                <Step n={2} title={`${chromium.map((b) => b.browser).join(', ')}: add the extension`}>
+                  On its extensions page ({[...new Set(chromium.map((b) => b.page))].join(', ')}), turn on <b>Developer mode</b> (top right, Opera: top left), click <b>Load unpacked</b> and choose this folder:
+                  {st?.extensionDir ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CopyChip text={st.extensionDir} />
+                      <Button size="sm" variant="ghost" icon={FolderOpen} onClick={() => st.extensionDir && void api.app.revealPath(st.extensionDir)}>
+                        Show in Explorer
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="text-warn"> The extension folder is missing — reinstall OmniHub.</span>
+                  )}
+                </Step>
+              )}
+              {firefox && (
+                <Step n={chromium.length ? 3 : 2} title="Firefox: add the extension">
+                  On <span className="font-mono">about:debugging</span> → <b>This Firefox</b>, click <b>Load Temporary Add-on…</b> and choose <span className="font-mono">manifest.json</span> in the same folder{st?.extensionDir ? ':' : '.'}
+                  {st?.extensionDir && (
+                    <div>
+                      <CopyChip text={`${st.extensionDir}\\manifest.json`} />
+                    </div>
+                  )}
+                  <div className="mt-1 text-faint">Regular Firefox removes add-ons Mozilla hasn’t signed when it restarts, so you load it again then. Firefox Developer Edition or Nightly keep it if you set <span className="font-mono">xpinstall.signatures.required</span> to false in about:config.</div>
+                </Step>
+              )}
+              <Step n={(chromium.length ? 1 : 0) + (firefox ? 1 : 0) + 2} done={(st?.clients.length ?? 0) > 0} title="Click the OmniHub icon in the browser and choose “Connect”">
                 OmniHub then asks you here to allow it, with a code to compare. Pin the icon from the puzzle-piece menu so it stays in view.
               </Step>
             </ol>

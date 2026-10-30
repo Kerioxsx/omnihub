@@ -10,7 +10,7 @@ fn main() {
     // Started by Brave/Chrome/Edge for the OmniHub extension: relay to the
     // running app and exit (no window).
     if let Some(origin) = omnihub_core::browser::host::invoked_as_host(&args) {
-        omnihub_core::browser::host::run(origin);
+        omnihub_core::browser::host::run(&origin);
         return;
     }
     omnihub_lib::run(args);

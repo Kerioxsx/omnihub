@@ -4,5 +4,5 @@
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    omnihub_core::browser::host::run(omnihub_core::browser::host::invoked_as_host(&args).unwrap_or_default());
+    omnihub_core::browser::host::run(&omnihub_core::browser::host::invoked_as_host(&args).unwrap_or_default());
 }

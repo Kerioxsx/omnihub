@@ -27,6 +27,61 @@ pub struct Settings {
     pub updates: UpdateSettings,
     pub visuals: VisualSettings,
     pub chats: ChatSettings,
+    pub play: PlaySettings,
+}
+
+/// Capri and your games: reactions, voice commands and instant replay (see `play`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PlaySettings {
+    /// Capri reacts to your games (she must be on).
+    pub capri_reacts: bool,
+    /// "Capri, clip that" and the other voice commands.
+    pub voice: bool,
+    /// Listen only while a game runs (otherwise whenever OmniHub runs).
+    pub voice_only_in_games: bool,
+    /// What Capri calls you.
+    pub nickname: String,
+    /// Your own names for "Capri, call me …" (OmniHub knows some already).
+    pub nicknames: Vec<String>,
+    /// Keep the last minutes of the screen while a game runs.
+    pub replay: bool,
+    /// How many minutes (1–20).
+    pub replay_minutes: u32,
+    /// What "clip that" saves, in seconds.
+    pub clip_seconds: u32,
+    /// 30 or 60.
+    pub fps: u32,
+    pub quality: crate::play::clips::Quality,
+    /// The game's sound in clips.
+    pub game_audio: bool,
+    /// Which monitor (0 = the first).
+    pub monitor: u32,
+    /// Where clips go; empty = Videos\OmniHub Clips.
+    pub folder: Option<String>,
+    /// Clip big moments by itself (CS2 multi-kills, League multikills).
+    pub auto_clip: bool,
+}
+
+impl Default for PlaySettings {
+    fn default() -> Self {
+        PlaySettings {
+            capri_reacts: false,
+            voice: false,
+            voice_only_in_games: true,
+            nickname: String::new(),
+            nicknames: Vec::new(),
+            replay: false,
+            replay_minutes: 10,
+            clip_seconds: 30,
+            fps: 60,
+            quality: Default::default(),
+            game_audio: true,
+            monitor: 0,
+            folder: None,
+            auto_clip: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -726,15 +781,17 @@ pub struct VaultSettings {
     /// Let paired phones list and reveal entries (needs HTTPS and the master password).
     pub allow_phone: bool,
     pub hello_enabled: bool,
-    /// Let the OmniHub browser extension (Brave, Chrome, Edge) fill logins.
+    /// Let the OmniHub browser extension fill logins.
     pub browser_autofill: bool,
     /// The extension offers to save logins typed on websites.
     pub browser_offer_save: bool,
+    /// The browsers to set up for it (ids like "chrome", "firefox"); empty = every installed one.
+    pub browsers: Vec<String>,
 }
 
 impl Default for VaultSettings {
     fn default() -> Self {
-        VaultSettings { auto_lock_minutes: 5, clipboard_clear_seconds: 20, lock_on_session_lock: true, allow_phone: false, hello_enabled: false, browser_autofill: false, browser_offer_save: true }
+        VaultSettings { auto_lock_minutes: 5, clipboard_clear_seconds: 20, lock_on_session_lock: true, allow_phone: false, hello_enabled: false, browser_autofill: false, browser_offer_save: true, browsers: Vec::new() }
     }
 }
 

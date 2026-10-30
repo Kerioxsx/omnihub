@@ -1,32 +1,115 @@
-//! Tell Brave, Chrome, Edge and Chromium where the native-messaging host
-//! is: a manifest naming the OmniHub executable (see [`host_path`]) and
-//! allowing only the OmniHub extension, registered per user (no
-//! administrator rights).
+//! Tell the browsers where the native-messaging host is: a manifest naming
+//! the OmniHub executable (see [`host_path`]) and allowing only the OmniHub
+//! extension, registered per user (no administrator rights), for the
+//! browsers the user picked.
 //!
 //! * Windows: `HKCU\Software\<browser>\NativeMessagingHosts\app.omnihub.vault`
-//!   → path of the manifest.
+//!   → path of the manifest. Opera, Opera GX and Vivaldi read Chrome's key;
+//!   Firefox reads Mozilla's, with its own manifest (`allowed_extensions`).
 //! * Linux: the manifest copied into each browser's `NativeMessagingHosts`
-//!   folder under `~/.config`.
+//!   folder under `~/.config` (Firefox: `~/.mozilla/native-messaging-hosts`).
 
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::{extension_origin, ipc, HOST_NAME};
+use super::{extension_origin, ipc, FIREFOX_ID, HOST_NAME};
 
-/// Browsers we register with: display name, Windows registry path, Linux config dir.
-const BROWSERS: &[(&str, &str, &str)] = &[
-    ("Brave", r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts", "BraveSoftware/Brave-Browser"),
-    ("Chrome", r"Software\Google\Chrome\NativeMessagingHosts", "google-chrome"),
-    ("Edge", r"Software\Microsoft\Edge\NativeMessagingHosts", "microsoft-edge"),
-    ("Chromium", r"Software\Chromium\NativeMessagingHosts", "chromium"),
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Kind {
+    Chromium,
+    Firefox,
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+struct Browser {
+    id: &'static str,
+    name: &'static str,
+    kind: Kind,
+    /// The HKCU key it reads hosts from.
+    key: &'static str,
+    /// Its folder under `~/.config` on Linux ("" = none).
+    linux: &'static str,
+    /// Where its program usually is: (folder variable, path below it).
+    exe: &'static [(&'static str, &'static str)],
+    /// Its name under Windows' "App Paths", when it registers one.
+    app_path: &'static str,
+    /// Its extensions page.
+    page: &'static str,
+}
+
+const CHROME_KEY: &str = r"Software\Google\Chrome\NativeMessagingHosts";
+const PF: &str = "ProgramFiles";
+const PF86: &str = "ProgramFiles(x86)";
+const LAD: &str = "LOCALAPPDATA";
+
+const BROWSERS: &[Browser] = &[
+    Browser { id: "chrome", name: "Chrome", kind: Kind::Chromium, key: CHROME_KEY, linux: "google-chrome", exe: &[(PF, r"Google\Chrome\Application\chrome.exe"), (PF86, r"Google\Chrome\Application\chrome.exe"), (LAD, r"Google\Chrome\Application\chrome.exe")], app_path: "chrome.exe", page: "chrome://extensions" },
+    Browser { id: "edge", name: "Edge", kind: Kind::Chromium, key: r"Software\Microsoft\Edge\NativeMessagingHosts", linux: "microsoft-edge", exe: &[(PF86, r"Microsoft\Edge\Application\msedge.exe"), (PF, r"Microsoft\Edge\Application\msedge.exe")], app_path: "msedge.exe", page: "edge://extensions" },
+    Browser { id: "brave", name: "Brave", kind: Kind::Chromium, key: r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts", linux: "BraveSoftware/Brave-Browser", exe: &[(PF, r"BraveSoftware\Brave-Browser\Application\brave.exe"), (LAD, r"BraveSoftware\Brave-Browser\Application\brave.exe")], app_path: "brave.exe", page: "brave://extensions" },
+    Browser { id: "opera", name: "Opera", kind: Kind::Chromium, key: CHROME_KEY, linux: "opera", exe: &[(LAD, r"Programs\Opera\opera.exe"), (PF, r"Opera\opera.exe")], app_path: "", page: "opera://extensions" },
+    Browser { id: "opera-gx", name: "Opera GX", kind: Kind::Chromium, key: CHROME_KEY, linux: "", exe: &[(LAD, r"Programs\Opera GX\opera.exe"), (PF, r"Opera GX\opera.exe")], app_path: "", page: "opera://extensions" },
+    Browser { id: "vivaldi", name: "Vivaldi", kind: Kind::Chromium, key: CHROME_KEY, linux: "vivaldi", exe: &[(LAD, r"Vivaldi\Application\vivaldi.exe"), (PF, r"Vivaldi\Application\vivaldi.exe")], app_path: "vivaldi.exe", page: "vivaldi://extensions" },
+    Browser { id: "chromium", name: "Chromium", kind: Kind::Chromium, key: r"Software\Chromium\NativeMessagingHosts", linux: "chromium", exe: &[(LAD, r"Chromium\Application\chrome.exe")], app_path: "", page: "chrome://extensions" },
+    Browser { id: "firefox", name: "Firefox", kind: Kind::Firefox, key: r"Software\Mozilla\NativeMessagingHosts", linux: "", exe: &[(PF, r"Mozilla Firefox\firefox.exe"), (PF86, r"Mozilla Firefox\firefox.exe"), (LAD, r"Mozilla Firefox\firefox.exe"), (PF, r"Firefox Developer Edition\firefox.exe"), (PF, r"Firefox Nightly\firefox.exe")], app_path: "firefox.exe", page: "about:debugging#/runtime/this-firefox" },
 ];
+
+/// The browser's program, if it is installed.
+fn exe_of(b: &Browser) -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+        if !b.app_path.is_empty() {
+            for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
+                let found = winreg::RegKey::predef(root)
+                    .open_subkey(format!(r"Software\Microsoft\Windows\CurrentVersion\App Paths\{}", b.app_path))
+                    .and_then(|k| k.get_value::<String, _>(""))
+                    .map(|p| PathBuf::from(p.trim_matches('"')));
+                if let Ok(p) = found {
+                    // Opera's and Firefox's "App Paths" can name another edition: only the expected one counts.
+                    if p.is_file() && b.exe.iter().any(|(_, rel)| p.ends_with(rel)) {
+                        return Some(p);
+                    }
+                }
+            }
+        }
+        b.exe.iter().filter_map(|(var, rel)| std::env::var_os(var).map(|base| PathBuf::from(base).join(rel))).find(|p| p.is_file())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = b;
+        None
+    }
+}
+
+fn installed(b: &Browser) -> bool {
+    if cfg!(windows) {
+        exe_of(b).is_some()
+    } else {
+        linux_dir(b).is_some_and(|d| d.parent().is_some_and(Path::is_dir))
+    }
+}
+
+/// Where the browser looks for host manifests on Linux.
+fn linux_dir(b: &Browser) -> Option<PathBuf> {
+    match b.kind {
+        Kind::Firefox => dirs::home_dir().map(|h| h.join(".mozilla").join("native-messaging-hosts")),
+        Kind::Chromium if !b.linux.is_empty() => dirs::config_dir().map(|c| c.join(b.linux).join("NativeMessagingHosts")),
+        Kind::Chromium => None,
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Registration {
+    pub id: String,
     pub browser: String,
+    pub kind: Kind,
+    pub installed: bool,
     pub registered: bool,
+    /// Its extensions page (to type in the address bar).
+    pub page: String,
 }
 
 /// File name start of the host copies in `data/browser`.
@@ -105,37 +188,62 @@ pub fn manifest(host: &Path) -> serde_json::Value {
     })
 }
 
-fn manifest_file(dir: &Path) -> PathBuf {
-    dir.join(format!("{HOST_NAME}.json"))
+/// Firefox's manifest names the extension by its ID instead.
+pub fn firefox_manifest(host: &Path) -> serde_json::Value {
+    serde_json::json!({
+        "name": HOST_NAME,
+        "description": "OmniHub vault for the OmniHub browser extension",
+        "path": host.to_string_lossy(),
+        "type": "stdio",
+        "allowed_extensions": [FIREFOX_ID],
+    })
 }
 
-/// Write the manifest into `data_dir` and register it with every browser.
-pub fn register(data_dir: &Path) -> std::io::Result<Vec<Registration>> {
+fn manifest_file(dir: &Path, kind: Kind) -> PathBuf {
+    match kind {
+        Kind::Chromium => dir.join(format!("{HOST_NAME}.json")),
+        Kind::Firefox => dir.join(format!("{HOST_NAME}.firefox.json")),
+    }
+}
+
+/// The browsers to set up: `ids`, or every installed one when empty.
+fn chosen(ids: &[String]) -> Vec<&'static Browser> {
+    BROWSERS.iter().filter(|b| if ids.is_empty() { installed(b) } else { ids.iter().any(|i| i == b.id) }).collect()
+}
+
+/// Write the manifests into `data_dir` and register them with the browsers
+/// in `ids` (every installed one when empty); browsers left out are
+/// unregistered unless one that is chosen shares their key.
+pub fn register(data_dir: &Path, ids: &[String]) -> std::io::Result<Vec<Registration>> {
     let host = host_path(data_dir).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "cannot find the OmniHub executable"))?;
     let dir = data_dir.join("browser");
     std::fs::create_dir_all(&dir)?;
-    let file = manifest_file(&dir);
-    crate::settings::write_atomic(&file, &serde_json::to_vec_pretty(&manifest(&host))?)?;
+    crate::settings::write_atomic(&manifest_file(&dir, Kind::Chromium), &serde_json::to_vec_pretty(&manifest(&host))?)?;
+    crate::settings::write_atomic(&manifest_file(&dir, Kind::Firefox), &serde_json::to_vec_pretty(&firefox_manifest(&host))?)?;
+    let picked = chosen(ids);
     #[cfg(windows)]
     {
         use winreg::enums::HKEY_CURRENT_USER;
         let hkcu = winreg::RegKey::predef(HKEY_CURRENT_USER);
-        for (_, key, _) in BROWSERS {
-            let (k, _) = hkcu.create_subkey(format!(r"{key}\{HOST_NAME}"))?;
-            k.set_value("", &file.to_string_lossy().to_string())?;
+        for b in BROWSERS {
+            let path = format!(r"{}\{HOST_NAME}", b.key);
+            if picked.iter().any(|p| p.key == b.key) {
+                let (k, _) = hkcu.create_subkey(&path)?;
+                k.set_value("", &manifest_file(&dir, b.kind).to_string_lossy().to_string())?;
+            } else {
+                let _ = hkcu.delete_subkey_all(&path);
+            }
         }
     }
     #[cfg(unix)]
     {
-        if let Some(config) = dirs::config_dir() {
-            for (_, _, sub) in BROWSERS {
-                let browser_dir = config.join(sub);
-                // Only for browsers that are installed (have a profile folder).
-                if browser_dir.is_dir() {
-                    let target = browser_dir.join("NativeMessagingHosts");
-                    std::fs::create_dir_all(&target)?;
-                    std::fs::copy(&file, manifest_file(&target))?;
-                }
+        for b in BROWSERS {
+            let Some(target) = linux_dir(b) else { continue };
+            if picked.iter().any(|p| p.id == b.id) && target.parent().is_some_and(Path::is_dir) {
+                std::fs::create_dir_all(&target)?;
+                std::fs::copy(manifest_file(&dir, b.kind), manifest_file(&target, Kind::Chromium))?;
+            } else if !picked.iter().any(|p| linux_dir(p) == Some(target.clone())) {
+                let _ = std::fs::remove_file(manifest_file(&target, Kind::Chromium));
             }
         }
     }
@@ -147,36 +255,43 @@ pub fn unregister() {
     {
         use winreg::enums::HKEY_CURRENT_USER;
         let hkcu = winreg::RegKey::predef(HKEY_CURRENT_USER);
-        for (_, key, _) in BROWSERS {
-            let _ = hkcu.delete_subkey_all(format!(r"{key}\{HOST_NAME}"));
+        for b in BROWSERS {
+            let _ = hkcu.delete_subkey_all(format!(r"{}\{HOST_NAME}", b.key));
         }
     }
     #[cfg(unix)]
-    if let Some(config) = dirs::config_dir() {
-        for (_, _, sub) in BROWSERS {
-            let _ = std::fs::remove_file(manifest_file(&config.join(sub).join("NativeMessagingHosts")));
+    for b in BROWSERS {
+        if let Some(d) = linux_dir(b) {
+            let _ = std::fs::remove_file(manifest_file(&d, Kind::Chromium));
         }
     }
 }
 
-/// Which browsers currently point at a manifest.
+/// Every browser OmniHub knows, whether it is installed and set up.
 pub fn status() -> Vec<Registration> {
     BROWSERS
         .iter()
-        .map(|(name, _key, _sub)| {
+        .map(|b| {
             #[cfg(windows)]
             let registered = {
                 use winreg::enums::HKEY_CURRENT_USER;
                 winreg::RegKey::predef(HKEY_CURRENT_USER)
-                    .open_subkey(format!(r"{_key}\{HOST_NAME}"))
+                    .open_subkey(format!(r"{}\{HOST_NAME}", b.key))
                     .and_then(|k| k.get_value::<String, _>(""))
-                    .is_ok_and(|p| Path::new(&p).is_file())
+                    .is_ok_and(|p| Path::new(&p).is_file() && Path::new(&p).file_name() == manifest_file(Path::new(""), b.kind).file_name())
             };
             #[cfg(unix)]
-            let registered = dirs::config_dir().is_some_and(|c| manifest_file(&c.join(_sub).join("NativeMessagingHosts")).is_file());
-            Registration { browser: name.to_string(), registered }
+            let registered = linux_dir(b).is_some_and(|d| manifest_file(&d, Kind::Chromium).is_file());
+            Registration { id: b.id.into(), browser: b.name.into(), kind: b.kind, installed: installed(b), registered, page: b.page.into() }
         })
         .collect()
+}
+
+/// Open a browser's extensions page (where its extension is added).
+pub fn open_page(id: &str) -> std::io::Result<()> {
+    let b = BROWSERS.iter().find(|b| b.id == id).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "unknown browser"))?;
+    let exe = exe_of(b).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("{} isn't installed", b.name)))?;
+    std::process::Command::new(exe).arg(b.page).spawn().map(|_| ())
 }
 
 #[cfg(test)]
@@ -207,6 +322,20 @@ mod tests {
         assert_eq!(std::fs::read(copy_host(&app, &hosts).unwrap()).unwrap(), b"version one, rebuilt");
         let leftovers: Vec<_> = std::fs::read_dir(&hosts).unwrap().flatten().map(|e| e.file_name()).collect();
         assert_eq!(leftovers.len(), 2, "the copy and app-path.txt: {leftovers:?}");
+    }
+
+    #[test]
+    fn firefox_gets_its_own_manifest() {
+        let m = firefox_manifest(Path::new("C:/OmniHub/omnihub.exe"));
+        assert_eq!(m["allowed_extensions"], serde_json::json!([FIREFOX_ID]));
+        assert!(m.get("allowed_origins").is_none());
+        assert_ne!(manifest_file(Path::new("d"), Kind::Firefox), manifest_file(Path::new("d"), Kind::Chromium));
+        // Every browser has a unique id and an extensions page.
+        let mut ids: Vec<_> = BROWSERS.iter().map(|b| b.id).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), BROWSERS.len());
+        assert!(BROWSERS.iter().all(|b| !b.page.is_empty() && !b.exe.is_empty()));
     }
 
     #[test]

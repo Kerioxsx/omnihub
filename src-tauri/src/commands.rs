@@ -968,6 +968,61 @@ pub async fn hidden_cancel(job: String) -> Res<()> {
     Ok(())
 }
 
+// ---------- Capri and your games ----------
+
+#[tauri::command]
+pub async fn play_status(core: Core<'_>) -> Res<omnihub_core::play::PlayStatus> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.play.status(&core.settings.get().play))).await
+}
+
+/// Download the recorder (FFmpeg) from this release.
+#[tauri::command]
+pub async fn play_install(core: Core<'_>) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || core.play.install_recorder()).await
+}
+
+/// Save the last `seconds` of the replay; returns the clip's path.
+#[tauri::command]
+pub async fn play_clip(core: Core<'_>, seconds: u32) -> Res<String> {
+    let core = core.inner().clone();
+    blocking(move || core.play.clip(&core, seconds, false).map(|p| p.display().to_string())).await
+}
+
+#[tauri::command]
+pub async fn play_record(core: Core<'_>, start: bool) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || {
+        if start {
+            core.play.start_recording(&core.settings.get().play);
+        } else {
+            core.play.stop_recording(&core);
+        }
+        Ok(())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn play_clips(core: Core<'_>) -> Res<Vec<omnihub_core::play::Clip>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.play.clips(&core.settings.get().play))).await
+}
+
+/// Move a clip to the Recycle Bin (only files in the clips folder).
+#[tauri::command]
+pub async fn play_clip_delete(core: Core<'_>, path: String) -> Res<()> {
+    core.play.delete_clip(&core.settings.get().play, Path::new(&path))
+}
+
+/// Capri says hello (to check she hears OmniHub).
+#[tauri::command]
+pub async fn play_hello(core: Core<'_>) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || core.play.hello(&core)).await
+}
+
 // ---------- phone companion & power ----------
 
 #[tauri::command]
@@ -2101,7 +2156,13 @@ pub async fn browser_status(app: AppHandle, core: Core<'_>) -> Res<BrowserStatus
 #[tauri::command]
 pub async fn browser_repair(core: Core<'_>) -> Res<Vec<Registration>> {
     let core = core.inner().clone();
-    blocking(move || omnihub_core::browser::register::register(&core.paths.data).map_err(err)).await
+    blocking(move || omnihub_core::browser::register::register(&core.paths.data, &core.settings.get().vault.browsers).map_err(err)).await
+}
+
+/// Open a browser's extensions page, where the OmniHub extension is added.
+#[tauri::command]
+pub async fn browser_open_page(id: String) -> Res<()> {
+    omnihub_core::browser::register::open_page(&id).map_err(err)
 }
 
 #[tauri::command]

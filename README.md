@@ -32,6 +32,11 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.19.0
+
+- **Clips & Capri** (Games → Clips & Capri): instant replay keeps the last minutes of your game on the graphics card; say **“Capri, clip that”**, **“Capri, record the last ten minutes”**, **“Capri, call me …”** and more. Capri reacts to your games, and follows Counter-Strike 2 and League of Legends matches (kills, rounds, wins), clipping big moments by herself.
+- **Autofill in any browser**: pick one or several of Chrome, Edge, Brave, Opera, Opera GX, Vivaldi, Chromium and Firefox.
+
 ## New in 0.18.0
 
 - **Hide any file, of any size**: Vault → **Hidden files**. Drop a zip (or anything) on the window: it's encrypted with your vault key and removed from where it was. Open a temporary copy, save a copy, or **Unhide** it back to its folder. **Lock any note** with the same password: the lock button in a note seals its text, and only the unlocked vault opens it.

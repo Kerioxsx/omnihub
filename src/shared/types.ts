@@ -463,8 +463,14 @@ export interface BrowserPairRequest {
 }
 
 export interface BrowserRegistration {
+  /** 'chrome', 'edge', 'brave', 'opera', 'opera-gx', 'vivaldi', 'chromium', 'firefox' */
+  id: string;
   browser: string;
+  kind: 'chromium' | 'firefox';
+  installed: boolean;
   registered: boolean;
+  /** its extensions page, e.g. chrome://extensions */
+  page: string;
 }
 
 export interface BrowserStatus {
@@ -809,10 +815,12 @@ export interface Settings {
     lockOnSessionLock: boolean;
     allowPhone: boolean;
     helloEnabled: boolean;
-    /** Brave/Chrome/Edge extension may fill logins. */
+    /** The OmniHub browser extension may fill logins. */
     browserAutofill: boolean;
     /** Offer to save logins typed in the browser. */
     browserOfferSave: boolean;
+    /** Browsers to set up (ids like 'chrome', 'firefox'); empty = every installed one. */
+    browsers: string[];
   };
   remote: {
     enabled: boolean;
@@ -878,6 +886,54 @@ export interface Settings {
     autoInstall: boolean;
   };
   chats: ChatSettings;
+  play: PlaySettings;
+}
+
+/** Capri and your games: reactions, voice commands, instant replay. */
+export interface PlaySettings {
+  capriReacts: boolean;
+  voice: boolean;
+  voiceOnlyInGames: boolean;
+  /** what Capri calls you */
+  nickname: string;
+  /** your own names for "Capri, call me …" */
+  nicknames: string[];
+  replay: boolean;
+  /** 1–20 */
+  replayMinutes: number;
+  clipSeconds: number;
+  fps: number;
+  quality: 'standard' | 'high';
+  gameAudio: boolean;
+  monitor: number;
+  folder: string | null;
+  autoClip: boolean;
+}
+
+export interface PlayStatus {
+  supported: boolean;
+  game: string | null;
+  since: number | null;
+  recorderInstalled: boolean;
+  installing: boolean;
+  replaying: boolean;
+  /** seconds kept so far */
+  buffered: number;
+  recording: boolean;
+  encoder: string | null;
+  replayError: string | null;
+  listening: boolean;
+  voiceError: string | null;
+  capriRunning: boolean;
+  folder: string;
+  heard: string | null;
+}
+
+export interface PlayClip {
+  path: string;
+  name: string;
+  size: number;
+  created: number;
 }
 
 export interface ChatSettings {

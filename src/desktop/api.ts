@@ -175,6 +175,20 @@ export const api = {
     importBackup: (path: string, password: string) => call<number>('vault_import', { path, password }),
   },
 
+  /** Capri and your games: instant replay, clips, voice. */
+  play: {
+    status: () => call<T.PlayStatus>('play_status'),
+    /** Download the recorder (FFmpeg) published with this release. */
+    install: () => call<void>('play_install'),
+    /** Save the last `seconds`; returns the clip's path. */
+    clip: (seconds: number) => call<string>('play_clip', { seconds }),
+    record: (start: boolean) => call<void>('play_record', { start }),
+    clips: () => call<T.PlayClip[]>('play_clips'),
+    deleteClip: (path: string) => call<void>('play_clip_delete', { path }),
+    /** Capri says hello. */
+    hello: () => call<void>('play_hello'),
+  },
+
   /** Files hidden in the vault (encrypted with the vault key). `job` names a run for progress and Stop. */
   hidden: {
     list: () => call<T.HiddenFile[]>('hidden_list'),
@@ -292,6 +306,8 @@ export const api = {
   browser: {
     status: () => call<T.BrowserStatus>('browser_status'),
     repair: () => call<T.BrowserRegistration[]>('browser_repair'),
+    /** Open a browser's extensions page. */
+    openPage: (id: string) => call<void>('browser_open_page', { id }),
     respond: (id: string, allow: boolean) => call<boolean>('browser_pair_respond', { id, allow }),
     revoke: (id: string) => call<boolean>('browser_revoke', { id }),
   },

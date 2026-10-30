@@ -160,6 +160,54 @@ pub fn update(procs: &ProcessMonitor, dir: &Path, progress: &mut dyn FnMut(&str)
     Ok(status(procs, false))
 }
 
+/// The port of her local bridge (where Claude Code's hooks reach her).
+fn bridge_port() -> u16 {
+    std::env::var("CAPRI_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(47_823)
+}
+
+/// Is she running and listening?
+pub fn listening() -> bool {
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_millis(600))).build().into();
+    agent.get(format!("http://127.0.0.1:{}/health", bridge_port())).call().is_ok()
+}
+
+/// What her settings say about hearing others: (follows Claude Code, her assistant).
+fn her_settings() -> (bool, String) {
+    // Electron keeps it under her app's name in %APPDATA% (her package or product name).
+    let cfg: serde_json::Value = dirs::config_dir()
+        .into_iter()
+        .flat_map(|d| ["capri-desktop", "Capri"].map(|n| d.join(n).join("config.json")))
+        .find_map(|f| std::fs::read_to_string(f).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    (cfg["claude"].as_bool() != Some(false), cfg["assistant"].as_str().unwrap_or("auto").to_string())
+}
+
+/// Make Capri say `text` (shown in her panel, tagged `title`), through the
+/// same local bridge Claude Code's hooks use: a notification she shows as is.
+pub fn say(title: &str, text: &str) -> Result<(), String> {
+    let (watching, assistant) = her_settings();
+    if !watching {
+        return Err("Capri only listens while she follows your coding assistant: turn that on in her menu.".into());
+    }
+    // She hears only the assistant she watches; its events are marked like this.
+    let session = match assistant.as_str() {
+        "codex" => "codex:omnihub-play",
+        "antigravity" | "gemini" | "agy" => "agy:omnihub-play",
+        _ => "omnihub-play",
+    };
+    let body = serde_json::json!({
+        "hook_event_name": "Notification",
+        "session_id": session,
+        "session_title": title,
+        "cwd": "OmniHub",
+        "notification_type": "omnihub",
+        "message": text,
+    });
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_millis(800))).build().into();
+    agent.post(format!("http://127.0.0.1:{}/event", bridge_port())).header("content-type", "application/json").send(body.to_string()).map(|_| ()).map_err(|_| "Capri isn't running.".to_string())
+}
+
 #[cfg(windows)]
 mod imp {
     use std::os::windows::process::CommandExt;

@@ -22,6 +22,7 @@ pub mod mcserver;
 pub mod media;
 pub mod mods;
 pub mod notes;
+pub mod play;
 pub mod paths;
 pub mod remote;
 pub mod rig;

@@ -105,7 +105,13 @@ and lets a phone do some of that. This is what protects each part.
   (on Windows a copy of it in OmniHub's data folder, so it never locks the
   installed program), and the host relays requests to the running app over a per-user named
   pipe. The host manifest allows exactly one origin, the extension's fixed
-  ID (`chrome-extension://hfkbdbcemgoondnmkeeoclpcmcjjbdeg/`).
+  ID (`chrome-extension://hfkbdbcemgoondnmkeeoclpcmcjjbdeg/`); Firefox gets
+  its own manifest allowing only the extension's Firefox ID
+  (`vault@omnihub.app`), which Firefox passes to the host itself.
+- The host is registered only with the browsers you pick (Chrome, Edge,
+  Brave, Opera, Opera GX, Vivaldi, Chromium, Firefox), in your user's part of
+  the registry; unpicked browsers are unregistered (Opera and Vivaldi read
+  Chrome's key, so it stays while any of the three is picked).
 - Each browser profile must be **paired**: the app shows a 4-digit code that
   must match the one in the extension, and the PC user approves it. Paired
   browsers can be revoked in Vault → Browser autofill.
@@ -165,6 +171,37 @@ and lets a phone do some of that. This is what protects each part.
   reveals, deletions from the desktop. Kept 180 days.
 - Content-Security-Policy, `X-Frame-Options: DENY`, `nosniff` and
   `no-referrer` on every response.
+
+## Clips, voice commands and Capri in games
+
+- Off until switched on (Games → Clips & Capri). With voice set to "only
+  while a game runs" (the default), the microphone and the recorder run
+  only while a game is open; Windows shows its microphone indicator then.
+- **Voice**: Windows' own speech recognizer with a fixed list of sentences
+  (all starting with "Capri"), not dictation: it runs on the PC and nothing
+  is sent anywhere. What it hears is never recorded or saved; the last
+  recognized sentence is shown on the page.
+- **Instant replay**: FFmpeg (LGPL, published with each release as
+  `OmniHub-ffmpeg-x64.exe`, its SHA-256 built into the app and checked on
+  download) captures one monitor with Windows' desktop duplication and
+  encodes on the graphics card. Two-second segments go to
+  `%LOCALAPPDATA%\OmniHub\replay`; older ones are deleted as new ones
+  arrive, and the folder is removed when the replay stops. The game's sound
+  is a copy of what Windows plays (WASAPI loopback), never the microphone.
+  Clips are only saved when you ask (or for a big moment, if that switch is
+  on), to `Videos\OmniHub Clips`, and deleted to the Recycle Bin.
+- **Capri** is reached through her own bridge on `127.0.0.1:47823` (the one
+  Claude Code's hooks use): OmniHub posts a notification with the text she
+  shows. Nothing else is sent to her.
+- **Counter-Strike 2**: a `gamestate_integration_omnihub.cfg` in CS2's
+  `cfg` folder makes CS2 post its state to `http://127.0.0.1:47830`, with a
+  random token kept in OmniHub's data folder; posts without the token are
+  ignored, and the listener runs only while CS2 does. This is Valve's own
+  integration, used by many overlays, and doesn't touch the game.
+- **League of Legends**: Riot's own live-data service on
+  `https://127.0.0.1:2999` is read once a second while a match runs. It
+  uses Riot's own certificate, so its check is skipped for that loopback
+  address only.
 
 ## Games
 

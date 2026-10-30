@@ -1,6 +1,7 @@
 //! Browser autofill.
 //!
-//! The OmniHub extension for Brave, Chrome and Edge fills usernames, emails
+//! The OmniHub extension for Chrome, Edge, Brave, Opera, Vivaldi, Chromium
+//! and Firefox fills usernames, emails
 //! and passwords from the vault. The browser starts the OmniHub executable
 //! as its native-messaging host (only our extension ID may launch it,
 //! [`host`]), which relays
@@ -43,8 +44,21 @@ pub const EXTENSION_ID: &str = "hfkbdbcemgoondnmkeeoclpcmcjjbdeg";
 pub const MAX_MESSAGE: usize = 1 << 20;
 const PAIR_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// The same extension in Firefox (its `browser_specific_settings.gecko.id`).
+pub const FIREFOX_ID: &str = "vault@omnihub.app";
+
 pub fn extension_origin() -> String {
     format!("chrome-extension://{EXTENSION_ID}/")
+}
+
+/// How the host reports Firefox's extension (Firefox passes its ID, not an origin).
+pub fn firefox_origin() -> String {
+    format!("moz-extension://{FIREFOX_ID}/")
+}
+
+/// The OmniHub extension, in a Chromium browser or in Firefox.
+pub fn origin_allowed(origin: &str) -> bool {
+    origin == extension_origin() || origin == firefox_origin()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -240,7 +254,7 @@ fn str_field<'a>(req: &'a Value, k: &str) -> &'a str {
 pub fn handle(core: &Arc<AppCore>, session: &Mutex<Session>, req: &Value) -> Option<Value> {
     let kind = str_field(req, "type");
     if kind == "host-hello" {
-        session.lock().origin_ok = str_field(req, "origin") == extension_origin();
+        session.lock().origin_ok = origin_allowed(str_field(req, "origin"));
         return None;
     }
     let mut out = handle_inner(core, session, kind, req);
