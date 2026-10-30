@@ -464,8 +464,19 @@ mod tests {
                         let zeros = vec![0u8; 64 * 1024];
                         while c.write_all(&zeros).is_ok() {}
                     } else {
-                        // Read the (chunked) upload to its end.
-                        let mut tail: Vec<u8> = buf[..n].to_vec();
+                        // Read the (chunked) upload to its end. The headers come first and aren't
+                        // part of it: they can end in "0\r\n\r\n" too (a Host port ending in 0).
+                        let mut head: Vec<u8> = buf[..n].to_vec();
+                        let body = loop {
+                            if let Some(i) = head.windows(4).position(|w| w == b"\r\n\r\n") {
+                                break i + 4;
+                            }
+                            match c.read(&mut buf) {
+                                Ok(0) | Err(_) => return,
+                                Ok(n) => head.extend_from_slice(&buf[..n]),
+                            }
+                        };
+                        let mut tail: Vec<u8> = head[body..].to_vec();
                         while !tail.ends_with(b"0\r\n\r\n") {
                             match c.read(&mut buf) {
                                 Ok(0) | Err(_) => return,
