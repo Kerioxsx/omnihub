@@ -5,9 +5,14 @@
 
 pub mod crypto;
 pub mod generator;
+pub mod health;
 pub mod hello;
+pub mod hidden;
+pub mod import;
+pub mod totp;
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
@@ -62,6 +67,9 @@ pub struct Entry {
     pub updated: i64,
     #[serde(default)]
     pub password_changed: i64,
+    /// Two-factor secret: an `otpauth://totp/…` link or a base32 secret.
+    #[serde(default)]
+    pub totp: String,
 }
 
 impl std::fmt::Debug for Entry {
@@ -74,6 +82,7 @@ impl Drop for Entry {
     fn drop(&mut self) {
         self.password.zeroize();
         self.notes.zeroize();
+        self.totp.zeroize();
         self.username.zeroize();
         self.email.zeroize();
     }
@@ -98,6 +107,8 @@ pub struct EntrySummary {
     /// Apple...). The UI warns and suggests passkeys or app passwords.
     pub primary_account: bool,
     pub password_score: u8,
+    /// A two-factor secret is saved (the code itself is never listed).
+    pub has_totp: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -114,6 +125,8 @@ pub struct EntryInput {
     pub notes: Option<String>,
     pub tags: Vec<String>,
     pub favorite: bool,
+    /// `None` keeps the current two-factor secret; `Some("")` removes it.
+    pub totp: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -150,6 +163,8 @@ pub enum VaultError {
     Crypto(#[from] CryptoError),
     #[error("{0}")]
     Hello(String),
+    #[error("{0}")]
+    Invalid(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
@@ -180,19 +195,47 @@ pub struct Vault {
     auto_lock: Mutex<Duration>,
     throttle: Mutex<Throttle>,
     events: EventBus,
+    /// Hidden files, opened with the vault key.
+    pub hidden: hidden::Store,
 }
 
+/// Identity providers whose account unlocks many others.
 const PRIMARY_DOMAINS: &[&str] = &[
-    "google.com", "gmail.com", "googlemail.com", "accounts.google", "microsoft.com", "live.com", "outlook.com", "hotmail.com",
-    "msn.com", "apple.com", "icloud.com", "me.com", "appleid", "yahoo.com", "proton.me", "protonmail.com",
+    "google.com", "gmail.com", "googlemail.com", "microsoft.com", "microsoftonline.com", "live.com", "outlook.com", "hotmail.com", "msn.com", "apple.com", "icloud.com", "me.com", "yahoo.com", "proton.me", "protonmail.com",
 ];
 
+fn url_host(url: &str) -> Option<String> {
+    let u = url.trim();
+    if u.is_empty() {
+        return None;
+    }
+    let rest = u.split_once("://").map_or(u, |(_, r)| r);
+    let authority = rest.split(['/', '?', '#']).next()?;
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host = host.split(':').next()?.trim_end_matches('.').to_lowercase();
+    (!host.is_empty()).then_some(host)
+}
+
+fn is_provider(domain: &str) -> bool {
+    let d = domain.to_lowercase();
+    PRIMARY_DOMAINS.iter().any(|p| d == *p || d.ends_with(&format!(".{p}")))
+}
+
+/// The account at a big identity provider itself (Google, Microsoft, Apple,
+/// Yahoo, Proton) — not every site where one of their addresses is the
+/// login: a GitHub login with a Gmail address is not a Google account.
 pub fn is_primary_account(url: &str, username: &str, email: &str) -> bool {
-    let hay = format!("{} {} {}", url, username, email).to_lowercase();
-    PRIMARY_DOMAINS.iter().any(|d| hay.contains(d))
+    match url_host(url) {
+        Some(host) => is_provider(&host),
+        // No website: an entry that is just the address itself.
+        None => [email, username].iter().any(|id| id.rsplit_once('@').is_some_and(|(_, d)| is_provider(d))),
+    }
 }
 
 const HELLO_AAD: &[u8] = b"omnihub-hello-v1";
+const NOTE_AAD: &str = "omnihub-note-v1:";
+/// How a locked note's body is stored.
+pub const SEALED_NOTE: &str = "ohnote1:";
 
 impl Vault {
     pub fn new(path: &Path, events: EventBus) -> Self {
@@ -200,6 +243,9 @@ impl Vault {
     }
 
     pub fn with_options(path: &Path, events: EventBus, kdf: KdfParams, use_dpapi: bool) -> Self {
+        // Open's copies go to %TEMP%, one folder per vault file.
+        let tag = &blake3::hash(path.to_string_lossy().as_bytes()).to_hex()[..12];
+        let hidden = hidden::Store::new(path.parent().unwrap_or(Path::new(".")).join("hidden"), std::env::temp_dir().join("OmniHub Open").join(tag));
         Vault {
             path: path.to_path_buf(),
             hello_path: path.with_extension("hello"),
@@ -210,6 +256,7 @@ impl Vault {
             auto_lock: Mutex::new(Duration::from_secs(300)),
             throttle: Mutex::new(Throttle { failures: 0, until: None }),
             events,
+            hidden,
         }
     }
 
@@ -260,8 +307,46 @@ impl Vault {
 
     pub fn lock_with_reason(&self, reason: &str) {
         if self.open.lock().take().is_some() {
+            self.hidden.clean_opened();
             self.events.emit("vault:locked", serde_json::json!({ "reason": reason }));
         }
+    }
+
+    /// A copy of the vault key while unlocked (long jobs don't hold the vault).
+    fn key(&self) -> Result<Zeroizing<[u8; 32]>, VaultError> {
+        self.with_open(|o| Ok(o.keys.key.clone()))
+    }
+
+    pub fn hidden_list(&self) -> Result<Vec<hidden::HiddenFile>, VaultError> {
+        let key = self.key()?;
+        Ok(self.hidden.list(&key))
+    }
+
+    /// Hide a file (see [`hidden`]); `progress` gets (done, total) bytes.
+    pub fn hide(&self, path: &Path, progress: &mut dyn FnMut(u64, u64), cancel: &AtomicBool) -> Result<hidden::Hidden, VaultError> {
+        let key = self.key()?;
+        // A long job keeps the vault from locking itself under it.
+        self.hidden.hide(&key, path, &mut |d, t| (self.touch(), progress(d, t)).1, cancel)
+    }
+
+    pub fn unhide(&self, id: &str, folder: Option<&Path>, progress: &mut dyn FnMut(u64, u64), cancel: &AtomicBool) -> Result<PathBuf, VaultError> {
+        let key = self.key()?;
+        self.hidden.unhide(&key, id, folder, &mut |d, t| (self.touch(), progress(d, t)).1, cancel)
+    }
+
+    pub fn hidden_save_copy(&self, id: &str, dest: &Path, progress: &mut dyn FnMut(u64, u64), cancel: &AtomicBool) -> Result<(), VaultError> {
+        let key = self.key()?;
+        self.hidden.save_copy(&key, id, dest, &mut |d, t| (self.touch(), progress(d, t)).1, cancel)
+    }
+
+    pub fn hidden_open(&self, id: &str, progress: &mut dyn FnMut(u64, u64), cancel: &AtomicBool) -> Result<PathBuf, VaultError> {
+        let key = self.key()?;
+        self.hidden.open_copy(&key, id, &mut |d, t| (self.touch(), progress(d, t)).1, cancel)
+    }
+
+    pub fn hidden_delete(&self, id: &str) -> Result<(), VaultError> {
+        self.key()?;
+        self.hidden.delete(id)
     }
 
     fn read_file(&self) -> Result<(u8, Zeroizing<Vec<u8>>), VaultError> {
@@ -424,6 +509,7 @@ impl Vault {
             has_notes: !e.notes.is_empty(),
             primary_account: is_primary_account(&e.url, &e.username, &e.email),
             password_score: if e.password.is_empty() { 0 } else { generator::strength(&e.password).score },
+            has_totp: !e.totp.is_empty(),
         }
     }
 
@@ -433,6 +519,29 @@ impl Vault {
             v.sort_by(|a, b| b.favorite.cmp(&a.favorite).then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase())));
             Ok(v)
         })
+    }
+
+    /// Weak, reused, old passwords and accounts without 2FA codes.
+    pub fn health(&self) -> Result<health::HealthReport, VaultError> {
+        self.with_open(|o| Ok(health::report(&o.entries, crate::db::now())))
+    }
+
+    /// Entries whose password appears in known breaches (with how often),
+    /// using `fetch` for the range API (see [`health`]); the vault is not
+    /// held locked while the network is asked.
+    pub fn breach_check(&self, fetch: &dyn Fn(&str) -> Result<String, String>) -> Result<Vec<health::HealthItem>, VaultError> {
+        let hashed: Vec<(health::HealthItem, String)> = self.with_open(|o| Ok(o.entries.iter().filter(|e| !e.password.is_empty()).map(|e| (health::item(e, 0), health::sha1_hex(&e.password))).collect()))?;
+        let hashes: Vec<String> = hashed.iter().map(|(_, h)| h.clone()).collect();
+        let counts = health::breach_counts(&hashes, fetch).map_err(VaultError::Invalid)?;
+        let mut found: Vec<health::HealthItem> = hashed
+            .into_iter()
+            .filter_map(|(mut i, h)| {
+                i.detail = *counts.get(&h)?;
+                Some(i)
+            })
+            .collect();
+        found.sort_by_key(|i| std::cmp::Reverse(i.detail));
+        Ok(found)
     }
 
     pub fn get(&self, id: &str) -> Result<Entry, VaultError> {
@@ -469,6 +578,13 @@ impl Vault {
             if let Some(n) = input.notes {
                 e.notes = n;
             }
+            if let Some(t) = input.totp {
+                let t = t.trim().to_string();
+                if !t.is_empty() {
+                    totp::parse(&t).map_err(|e| VaultError::Invalid(e.to_string()))?;
+                }
+                e.totp = t;
+            }
             e.updated = now;
             let summary = Self::summary(e);
             self.write_file(o)?;
@@ -496,11 +612,18 @@ impl Vault {
             "email" => entry.email.clone(),
             "url" => entry.url.clone(),
             "notes" => entry.notes.clone(),
+            "totp" => totp::code_now(&entry.totp).map_err(|e| VaultError::Invalid(e.to_string()))?,
             _ => return Err(VaultError::NotFound),
         };
         let value = Zeroizing::new(value);
         crate::system::clipboard::copy_secret(&value, clear_after)?;
         Ok(())
+    }
+
+    /// The current two-factor code of an entry and seconds until it changes.
+    pub fn totp_code(&self, id: &str) -> Result<(String, u64), VaultError> {
+        let entry = self.get(id)?;
+        totp::current(&entry.totp).map_err(|e| VaultError::Invalid(e.to_string()))
     }
 
     /// Encrypted, password-protected backup (without the DPAPI layer, so it
@@ -533,6 +656,51 @@ impl Vault {
                 }
             }
             self.write_file(o)?;
+            Ok(added)
+        })
+    }
+
+    /// Add logins from another password manager's export (see `import`);
+    /// ones already here (same title, username and site) are skipped.
+    /// Returns how many were added.
+    pub fn import_entries(&self, items: Vec<import::Imported>) -> Result<usize, VaultError> {
+        let now = crate::db::now();
+        self.with_open(|o| {
+            let key = |t: &str, u: &str, l: &str| (t.trim().to_lowercase(), u.trim().to_lowercase(), l.trim().trim_end_matches('/').to_lowercase());
+            let mut have: std::collections::HashSet<_> = o.entries.iter().map(|e| key(&e.title, &e.username, &e.url)).collect();
+            let mut added = 0;
+            for it in items {
+                if !have.insert(key(&it.title, &it.username, &it.url)) {
+                    continue;
+                }
+                // Entry wipes itself when dropped, so it is filled field by field.
+                let mut e = Entry::default();
+                e.id = uuid::Uuid::new_v4().to_string();
+                e.kind = it.kind;
+                e.title = it.title;
+                e.username = it.username;
+                e.password = it.password;
+                e.url = it.url;
+                e.tags = it.tags;
+                e.favorite = it.favorite;
+                e.created = now;
+                e.updated = now;
+                e.password_changed = now;
+                // A two-factor secret Windows can't read stays in the notes rather than being lost.
+                if !it.totp.is_empty() && totp::parse(&it.totp).is_ok() {
+                    e.totp = it.totp;
+                    e.notes = it.notes;
+                } else if !it.totp.is_empty() {
+                    e.notes = [it.notes, format!("2FA: {}", it.totp)].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n");
+                } else {
+                    e.notes = it.notes;
+                }
+                o.entries.push(e);
+                added += 1;
+            }
+            if added > 0 {
+                self.write_file(o)?;
+            }
             Ok(added)
         })
     }
@@ -577,10 +745,32 @@ impl Vault {
         if !self.is_unlocked() {
             return Err(VaultError::Locked);
         }
+        let n = self.hidden.count();
+        if n > 0 {
+            return Err(VaultError::Invalid(format!("Unhide or delete your {n} hidden files first: only this vault opens them.")));
+        }
         self.lock();
         self.disable_hello();
         std::fs::remove_file(&self.path)?;
         Ok(())
+    }
+}
+
+/// Locked notes: the body sealed with the vault key, bound to the note's id.
+impl crate::notes::NoteKey for Vault {
+    fn seal(&self, id: &str, body: &str) -> Result<String, String> {
+        use base64::Engine;
+        let key = self.key().map_err(|e| e.to_string())?;
+        let sealed = crypto::seal_with(&key, body.as_bytes(), format!("{NOTE_AAD}{id}").as_bytes());
+        Ok(format!("{SEALED_NOTE}{}", base64::engine::general_purpose::STANDARD.encode(sealed)))
+    }
+
+    fn open(&self, id: &str, sealed: &str) -> Result<Zeroizing<String>, String> {
+        use base64::Engine;
+        let key = self.key().map_err(|e| e.to_string())?;
+        let raw = sealed.strip_prefix(SEALED_NOTE).and_then(|b| base64::engine::general_purpose::STANDARD.decode(b).ok()).ok_or("this locked note is damaged")?;
+        let plain = crypto::open_with(&key, &raw, format!("{NOTE_AAD}{id}").as_bytes()).ok_or("this note was locked with another vault")?;
+        String::from_utf8(plain.to_vec()).map(Zeroizing::new).map_err(|_| "this locked note is damaged".into())
     }
 }
 
@@ -611,6 +801,22 @@ pub fn session_locked() -> bool {
 #[cfg(not(windows))]
 pub fn session_locked() -> bool {
     false
+}
+
+/// The text a phone camera reads as "join this Wi-Fi" (`WIFI:T:WPA;S:…;P:…;;`).
+pub fn wifi_qr_text(ssid: &str, password: &str) -> String {
+    let esc = |s: &str| s.chars().fold(String::new(), |mut o, c| {
+        if matches!(c, '\\' | ';' | ',' | ':' | '"') {
+            o.push('\\');
+        }
+        o.push(c);
+        o
+    });
+    if password.is_empty() {
+        format!("WIFI:T:nopass;S:{};;", esc(ssid))
+    } else {
+        format!("WIFI:T:WPA;S:{};P:{};;", esc(ssid), esc(password))
+    }
 }
 
 #[cfg(test)]
@@ -696,5 +902,28 @@ mod tests {
         assert!(is_primary_account("https://accounts.google.com", "", ""));
         assert!(is_primary_account("", "someone@outlook.com", ""));
         assert!(!is_primary_account("https://github.com", "octocat", ""));
+        // A Gmail address as the login elsewhere is not the Google account.
+        assert!(!is_primary_account("https://github.com/login", "octocat", "someone@gmail.com"));
+        assert!(!is_primary_account("https://google.com.evil.example", "", ""));
+        assert!(is_primary_account("https://appleid.apple.com", "", "someone@gmail.com"));
+        assert!(is_primary_account("login.live.com", "", ""));
+        assert!(is_primary_account("", "", "someone@icloud.com"));
+    }
+
+    #[test]
+    fn wifi_qr_escapes() {
+        assert_eq!(super::wifi_qr_text("Home;Net", "pa:ss\\1"), "WIFI:T:WPA;S:Home\\;Net;P:pa\\:ss\\\\1;;");
+        assert_eq!(super::wifi_qr_text("Cafe", ""), "WIFI:T:nopass;S:Cafe;;");
+    }
+
+    #[test]
+    fn imports_skip_what_is_there() {
+        let dir = tempfile::tempdir().unwrap();
+        let v = vault(dir.path());
+        v.create("correct horse battery").unwrap();
+        let items = import::parse(b"name,url,username,password\nGitHub,https://github.com,me,pw\nGitHub,https://github.com,me,pw\nMail,https://mail.example,you,pw2\n").unwrap();
+        assert_eq!(v.import_entries(items.clone()).unwrap(), 2, "the repeated row is skipped");
+        assert_eq!(v.import_entries(items).unwrap(), 0, "already in the vault");
+        assert_eq!(v.list().unwrap().len(), 2);
     }
 }

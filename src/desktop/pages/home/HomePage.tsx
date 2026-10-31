@@ -1,22 +1,24 @@
 import { formatBytes, formatRelative } from '@shared/format';
-import type { Note, SystemStats, VolumeInfo } from '@shared/types';
+import type { Note, ProcessGroup, ProcessSort, SystemStats, VolumeInfo } from '@shared/types';
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowRight, Camera, Cpu, Crop, HardDrive, Lightbulb, LockKeyhole, MemoryStick, QrCode, Send, Smartphone, StickyNote, Usb, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRight, Camera, Cpu, Crop, HardDrive, Lightbulb, LockKeyhole, MemoryStick, QrCode, Send, Smartphone, Sparkles, StickyNote, Usb, XCircle, Zap } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
+import { NowPlayingCard } from '../../components/NowPlaying';
 import { PowerBanner } from '../../components/PowerBanner';
 import { ShotThumb } from '../../components/ShotThumb';
 import { Button } from '../../components/ui/Button';
 import { Badge, Card, CardHeader, Dot, SectionTitle, Skeleton } from '../../components/ui/Card';
-import { Switch } from '../../components/ui/Form';
+import { Segmented, Switch } from '../../components/ui/Form';
 import { ProgressRing } from '../../components/ui/Progress';
-import { EmptyState } from '../../components/ui/States';
+import { Callout, EmptyState } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { useAsync, useEvent, useInterval } from '../../lib/hooks';
 import { navigate } from '../../lib/router';
 import { formatUptime, greeting, plainSnippet } from '../../lib/util';
+import { confirm } from '../../state/dialogs';
 import { connectedCount, useLive } from '../../state/live';
 import { useSettings } from '../../state/settings';
 import { jobFraction, rootKey, useStorage } from '../../state/storage';
@@ -292,6 +294,107 @@ function PhoneCard() {
   );
 }
 
+/** Programs using the most CPU or memory right now, with "End task". */
+function TopAppsCard() {
+  const [sort, setSort] = useState<ProcessSort>('cpu');
+  const [list, setList] = useState<ProcessGroup[] | null>(null);
+  const poll = async () => {
+    try {
+      setList(await api.app.processes(sort, 6));
+    } catch {
+      /* keep the last list */
+    }
+  };
+  useInterval(() => void poll(), 4000);
+  useAsync(poll, [sort]);
+  const end = async (p: ProcessGroup) => {
+    const ok = await confirm({
+      title: `End ${p.name}?`,
+      description: `${p.count > 1 ? `All ${p.count} of its processes are` : 'It is'} closed at once. Unsaved work in it is lost.`,
+      tone: 'danger',
+      confirmLabel: 'End task',
+    });
+    if (!ok) return;
+    try {
+      const n = await api.app.endProcess(p.name);
+      toast.success(`Ended ${p.name}`, `${n} process${n > 1 ? 'es' : ''} closed.`);
+      void poll();
+    } catch (e) {
+      toast.error(`Could not end ${p.name}`, errorText(e));
+    }
+  };
+  const top = list?.[0];
+  const max = Math.max(1, ...(list ?? []).map((p) => (sort === 'cpu' ? p.cpu : p.memory)));
+  return (
+    <Card className="flex h-full flex-col p-4">
+      <CardHeader icon={Activity} title="Top apps" subtitle="Using this PC right now" actions={<Segmented size="sm" label="Sort by" value={sort} onChange={setSort} options={[{ value: 'cpu', label: 'CPU' }, { value: 'memory', label: 'Memory' }]} />} />
+      <div className="mt-3 flex-1 space-y-0.5">
+        {!list && [0, 1, 2, 3, 4].map((i) => <Skeleton key={i} className="mb-1 h-9" />)}
+        {list?.map((p) => {
+          const v = sort === 'cpu' ? p.cpu : p.memory;
+          return (
+            <div key={p.name} className="group relative flex items-center gap-2.5 overflow-hidden rounded-lg px-2 py-1.5">
+              <div className="absolute inset-y-1 left-0 rounded-md bg-accent/10" style={{ width: `${Math.max(2, (v / max) * 100)}%` }} aria-hidden />
+              <span className="relative min-w-0 flex-1 truncate text-[13px] text-fg" title={p.exe ?? p.name}>
+                {p.name.replace(/\.exe$/i, '')}
+                {p.count > 1 && <span className="ml-1.5 text-[11px] text-faint">×{p.count}</span>}
+              </span>
+              <span className="relative w-12 text-right text-[12px] tabular text-dim">{p.cpu.toFixed(1)}%</span>
+              <span className="relative w-16 text-right text-[12px] tabular text-dim">{formatBytes(p.memory, 1)}</span>
+              {p.canEnd ? (
+                <button type="button" onClick={() => void end(p)} className="relative text-faint opacity-0 transition-opacity hover:text-bad focus-visible:opacity-100 group-hover:opacity-100" aria-label={`End ${p.name}`} title="End task">
+                  <XCircle size={15} />
+                </button>
+              ) : (
+                <span className="relative w-[15px]" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <button type="button" onClick={() => navigate('tasks')} className="mt-2 flex items-center gap-1 self-start rounded-md px-2 py-1 text-[12.5px] font-medium text-accent hover:bg-accent-soft">
+        All tasks, with GPU and disk <ArrowRight size={13} />
+      </button>
+      {top && sort === 'cpu' && top.cpu > 50 && (
+        <div className="mt-2 flex items-center gap-2 rounded-lg bg-warn/10 px-2.5 py-1.5 text-[12px] text-warn">
+          <Sparkles size={13} /> {top.name.replace(/\.exe$/i, '')} is using {Math.round(top.cpu)}% of the CPU.
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** A warning for fixed drives that are nearly full. */
+function LowSpaceBanner() {
+  const volumes = useStorage((s) => s.volumes);
+  const storage = useSettings((s) => s.settings?.storage);
+  if (!storage?.lowSpaceAlert) return null;
+  const low = volumes.filter((v) => v.kind === 'fixed' && v.total > 0 && (v.free / v.total) * 100 < storage.lowSpacePercent);
+  if (!low.length) return null;
+  const v = low[0];
+  return (
+    <motion.div variants={rise}>
+      <Callout
+        tone="warn"
+        icon={AlertTriangle}
+        title={`${v.root.replace(/\\$/, '')} is almost full — ${formatBytes(v.free)} left (${Math.round((v.free / v.total) * 100)}%)`}
+        action={
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" onClick={() => navigate('storage', { root: v.root, tab: 'largest' })}>
+              See what's big
+            </Button>
+            <Button size="sm" variant="primary" onClick={() => navigate('storage', { root: v.root, tab: 'cleanup' })}>
+              Clean up
+            </Button>
+          </div>
+        }
+      >
+        {low.length > 1 ? `${low.length - 1} more drive${low.length > 2 ? 's are' : ' is'} low on space too. ` : ''}Windows slows down and updates fail when a drive runs out of space.
+      </Callout>
+    </motion.div>
+  );
+}
+
 function ShotsStrip() {
   const shots = useAsync(() => api.shots.list({ limit: 12 }), []);
   useEvent('screenshots:new', () => void shots.reload());
@@ -334,12 +437,16 @@ export function HomePage() {
   const volumes = useStorage((s) => s.volumes);
   const loaded = useStorage((s) => s.volumesLoaded);
   const info = useSettings((s) => s.info);
+  const displayName = useSettings((s) => s.settings?.general.displayName);
+  const name = (displayName || info?.userName || '').trim();
   const power = useLive((s) => s.power);
   const date = useMemo(() => new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }), []);
   return (
-    <Page title={<span className="gradient-text">{greeting()}, Alex</span>} subtitle={`${date} · ${info?.hostname ?? ''}`}>
+    <Page title={<span className="gradient-text">{name ? `${greeting()}, ${name}` : greeting()}</span>} subtitle={`${date} · ${info?.hostname ?? ''}`}>
       <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
         {power && <PowerBanner inline />}
+        <LowSpaceBanner />
+        <NowPlayingCard />
         <div className="grid grid-cols-12 gap-3">
           <motion.div variants={stagger} className="col-span-12 grid grid-cols-3 gap-3 xl:col-span-8">
             {loaded ? volumes.map((v) => <DriveCard key={v.root} v={v} />) : [0, 1, 2].map((i) => <Skeleton key={i} className="h-[140px] rounded-2xl" />)}
@@ -350,10 +457,13 @@ export function HomePage() {
         </div>
         <QuickActions />
         <motion.div variants={rise} className="grid grid-cols-12 gap-3">
-          <div className="col-span-12 xl:col-span-7">
+          <div className="col-span-12 lg:col-span-6 xl:col-span-5">
             <NotesCard />
           </div>
-          <div className="col-span-12 xl:col-span-5">
+          <div className="col-span-12 lg:col-span-6 xl:col-span-4">
+            <TopAppsCard />
+          </div>
+          <div className="col-span-12 xl:col-span-3">
             <PhoneCard />
           </div>
         </motion.div>

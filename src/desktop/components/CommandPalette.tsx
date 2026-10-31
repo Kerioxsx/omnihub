@@ -1,11 +1,12 @@
 import type { LucideIcon } from 'lucide-react';
-import { Camera, CornerDownLeft, Crop, HardDrive, Lightbulb, LockKeyhole, Moon, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, Sun } from 'lucide-react';
+import { AppWindow, Calculator, Camera, CornerDownLeft, Crop, File, Folder, Gauge, HardDrive, Image, KeyRound, Lightbulb, LockKeyhole, Moon, Music2, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, StickyNote, Sun } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../api';
 import { cx } from '../lib/cx';
 import { navigate } from '../lib/router';
-import { MOD_LABEL } from '../lib/util';
+import { quickAnswers } from '../lib/quickTools';
+import { copyText, MOD_LABEL } from '../lib/util';
 import { usePalette } from '../state/dialogs';
 import { useLive } from '../state/live';
 import { useSettings } from '../state/settings';
@@ -13,6 +14,7 @@ import { useStorage } from '../state/storage';
 import { toast } from '../state/toasts';
 import { formatBytes } from '@shared/format';
 import { NAV } from './nav';
+import { usePlayer } from '../lib/nowPlaying';
 import { Kbd } from './ui/Card';
 import { Modal } from './ui/Overlay';
 
@@ -21,7 +23,7 @@ interface Cmd {
   label: string;
   hint?: string;
   icon: LucideIcon;
-  group: 'Pages' | 'Actions' | 'Drives';
+  group: 'Answer' | 'Pages' | 'Actions' | 'Drives' | 'Files' | 'Notes' | 'Apps' | 'Screenshots' | 'Vault';
   keywords?: string;
   shortcut?: string;
   run: () => void | Promise<void>;
@@ -51,7 +53,7 @@ function useCommands(): Cmd[] {
   const settings = useSettings((s) => s.settings);
   const remote = useLive((s) => s.remote);
   return useMemo(() => {
-    const pages: Cmd[] = NAV.map((n, i) => ({ id: `page-${n.id}`, label: n.label, hint: n.description, icon: n.icon, group: 'Pages', shortcut: `${MOD_LABEL} ${i + 1}`, run: () => navigate(n.id) }));
+    const pages: Cmd[] = NAV.map((n, i) => ({ id: `page-${n.id}`, label: n.label, hint: n.description, icon: n.icon, group: 'Pages', shortcut: i < 9 ? `${MOD_LABEL} ${i + 1}` : undefined, run: () => navigate(n.id) }));
     const light = settings?.general.theme === 'light';
     const actions: Cmd[] = [
       { id: 'shot-region', label: 'Capture a region', hint: 'Freeze the screen and drag a rectangle', icon: Crop, group: 'Actions', keywords: 'screenshot snip', run: () => attempt('Could not start the capture', () => api.shots.regionBegin()) },
@@ -64,6 +66,8 @@ function useCommands(): Cmd[] {
         keywords: 'capture',
         run: () => attempt('Screenshot failed', () => api.shots.capture('screen', 0)),
       },
+      { id: 'player', label: 'Full-screen lyrics', hint: 'What the PC plays, Apple Music style', icon: Music2, group: 'Actions', keywords: 'music song player now playing', run: () => usePlayer.getState().show() },
+      { id: 'optimize-pc', label: 'Optimize this PC for games', hint: 'Refresh rate, power plan, Game DVR and more', icon: Gauge, group: 'Actions', keywords: 'fps boost performance', run: () => navigate('games', { tab: 'pc' }) },
       { id: 'new-note', label: 'New note', icon: NotebookPen, group: 'Actions', keywords: 'write', run: () => navigate('notes', { new: 'note' }) },
       { id: 'new-idea', label: 'New idea for Claude', icon: Lightbulb, group: 'Actions', keywords: 'claude prompt', run: () => navigate('notes', { new: 'idea' }) },
       { id: 'pair', label: 'Pair a phone', hint: remote?.running ? 'Show the QR code and PIN' : 'Turns on the companion first', icon: QrCode, group: 'Actions', keywords: 'qr connect', run: () => navigate('phone', { pair: '1' }) },
@@ -106,6 +110,84 @@ function useCommands(): Cmd[] {
   }, [volumes, settings?.general.theme, remote?.running]);
 }
 
+/** Everything else that matches: files (from the latest scan of each drive), notes, apps, screenshots and vault titles. */
+function useEverything(query: string, open: boolean): Cmd[] {
+  const [found, setFound] = useState<Cmd[]>([]);
+  const vaultOpen = !!useLive((s) => s.vault?.unlocked);
+  const apps = useRef<Awaited<ReturnType<typeof api.apps.list>> | null>(null);
+  useEffect(() => {
+    if (!open) apps.current = null;
+  }, [open]);
+  useEffect(() => {
+    const q = query.trim();
+    if (!open || q.length < 2) {
+      setFound([]);
+      return;
+    }
+    let alive = true;
+    const t = setTimeout(async () => {
+      const low = q.toLowerCase();
+      const out: Cmd[] = [];
+      const safe = async <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
+      const [scans, notes, shots, vault, appList] = await Promise.all([
+        safe(api.storage.scans()),
+        safe(api.notes.list({ query: q, limit: 5 })),
+        safe(api.shots.list({ query: q, limit: 5 })),
+        vaultOpen ? safe(api.vault.list()) : Promise.resolve(null),
+        apps.current ? Promise.resolve(apps.current) : safe(api.apps.list()),
+      ]);
+      if (appList) apps.current = appList;
+      // The newest scan of each drive.
+      const latest = new Map<string, NonNullable<typeof scans>[number]>();
+      for (const s of scans ?? []) if (!latest.has(s.root) || latest.get(s.root)!.scannedAt < s.scannedAt) latest.set(s.root, s);
+      const files = (await Promise.all([...latest.values()].map((s) => safe(api.storage.search(s.scanId, { text: q, limit: 6, excludeHidden: true }))))).flatMap((r) => r?.items ?? []);
+      for (const f of files.slice(0, 8)) out.push({ id: `file-${f.path}`, label: f.name, hint: `${f.path}${f.isDir ? '' : ` · ${formatBytes(f.size)}`}`, icon: f.isDir ? Folder : File, group: 'Files', run: () => attempt('Couldn’t open it', () => (f.isDir ? api.app.openPath(f.path) : api.app.revealPath(f.path))) });
+      for (const n of notes ?? []) out.push({ id: `note-${n.id}`, label: n.title || 'Untitled note', hint: n.kind === 'idea' ? 'Idea for Claude' : 'Note', icon: n.kind === 'idea' ? Lightbulb : StickyNote, group: 'Notes', run: () => navigate('notes', { id: n.id }) });
+      for (const a of (appList ?? []).filter((a) => a.name.toLowerCase().includes(low)).slice(0, 5)) out.push({ id: `app-${a.id}`, label: a.name, hint: `Open · ${a.publisher || a.source}`, icon: AppWindow, group: 'Apps', run: () => attempt('Couldn’t open it', () => api.apps.launch(a.id)) });
+      for (const sh of shots ?? []) out.push({ id: `shot-${sh.id}`, label: sh.appTitle || sh.path.split(/[\\/]/).pop() || 'Screenshot', hint: `${sh.width}×${sh.height}${sh.note ? ` · ${sh.note}` : ''}`, icon: Image, group: 'Screenshots', run: () => attempt('Couldn’t open it', () => api.app.openPath(sh.path)) });
+      for (const e of (vault ?? []).filter((e) => `${e.title} ${e.username} ${e.url}`.toLowerCase().includes(low)).slice(0, 5)) out.push({ id: `vault-${e.id}`, label: e.title, hint: e.username || e.url || 'Vault entry', icon: KeyRound, group: 'Vault', run: () => navigate('vault', { id: e.id }) });
+      if (alive) setFound(out);
+    }, 200);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [query, open, vaultOpen]);
+  return found;
+}
+
+/** Calculator, units, Base64, JSON, UUID, hashes and timestamps: Enter copies the answer. */
+function useAnswers(query: string, open: boolean): Cmd[] {
+  const [found, setFound] = useState<Cmd[]>([]);
+  useEffect(() => {
+    if (!open || !query.trim()) {
+      setFound([]);
+      return;
+    }
+    let alive = true;
+    void quickAnswers(query).then((list) => {
+      if (!alive) return;
+      setFound(
+        list.map((a) => ({
+          id: `answer-${a.id}`,
+          label: a.value ? a.value.split('\n')[0].slice(0, 160) + (a.value.includes('\n') ? ' …' : '') : a.hint,
+          hint: a.value ? `${a.hint} · Enter copies` : undefined,
+          icon: Calculator,
+          group: 'Answer',
+          run: async () => {
+            if (!a.value) return;
+            if (await copyText(a.value)) toast.success('Copied', a.value.length > 80 ? `${a.value.slice(0, 80)}…` : a.value);
+          },
+        })),
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, [query, open]);
+  return found;
+}
+
 export function CommandPalette() {
   const open = usePalette((s) => s.open);
   const setOpen = usePalette((s) => s.setOpen);
@@ -121,14 +203,21 @@ export function CommandPalette() {
     }
   }, [open]);
 
+  const everything = useEverything(q, open);
+  const answers = useAnswers(q, open);
   const results = useMemo(() => {
     const query = q.trim().toLowerCase();
-    return commands
+    const cmds = commands
       .map((c) => ({ c, s: Math.max(score(query, c.label), score(query, `${c.keywords ?? ''} ${c.hint ?? ''}`) * 0.5) }))
       .filter((x) => x.s > 0)
       .sort((a, b) => (query ? b.s - a.s : 0))
       .map((x) => x.c);
-  }, [commands, q]);
+    // The best pages and actions first, each group once, then what was found.
+    const top = cmds.slice(0, query ? 6 : cmds.length);
+    const order = ['Pages', 'Actions', 'Drives'];
+    if (query) top.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
+    return [...answers, ...top, ...everything];
+  }, [commands, q, everything, answers]);
 
   useEffect(() => setActive(0), [q]);
   useEffect(() => {
@@ -152,7 +241,7 @@ export function CommandPalette() {
             data-autofocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Jump to a page or run an action…"
+            placeholder="Search files, notes, apps, the vault… run an action, or type 12*4, 5 km in miles, uuid"
             className="h-14 flex-1 bg-transparent text-[15px] text-fg outline-none placeholder:text-faint"
             aria-label="Command"
             role="combobox"

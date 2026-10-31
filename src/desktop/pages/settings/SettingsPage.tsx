@@ -1,10 +1,12 @@
-import type { Bind, ScanMode, Theme } from '@shared/types';
+import type { Bind, EqStatus, PrivacyUse, ScanMode, Theme } from '@shared/types';
+import { formatRelative } from '@shared/format';
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
-import { Camera, Check, FolderOpen, HardDrive, Info, KeyRound, Laptop, Moon, NotebookPen, Palette, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Smartphone, Sun, Trash, X } from 'lucide-react';
+import { Camera, Check, Download, ExternalLink, FolderOpen, HardDrive, Info, KeyRound, Laptop, Moon, Music2, NotebookPen, Palette, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Siren, Smartphone, Sun, Trash, Upload, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Logo } from '../../components/Logo';
+import { updateText, useUpdate } from '../../components/UpdateCard';
 import { Page } from '../../components/Page';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Badge, Kbd } from '../../components/ui/Card';
@@ -23,6 +25,7 @@ const SECTIONS: { id: string; label: string; icon: LucideIcon }[] = [
   { id: 'notes', label: 'Notes', icon: NotebookPen },
   { id: 'vault', label: 'Vault', icon: KeyRound },
   { id: 'phone', label: 'Phone', icon: Smartphone },
+  { id: 'music', label: 'Music', icon: Music2 },
   { id: 'screenshots', label: 'Screenshots', icon: Camera },
   { id: 'privacy', label: 'Privacy & security', icon: ShieldCheck },
   { id: 'about', label: 'About', icon: Info },
@@ -82,7 +85,7 @@ function PathRow({ title, hint, value, fallback, pickTitle, onPick, onClear }: {
 }
 
 /** Text/number input that saves on blur or Enter. */
-function CommitInput({ value, onCommit, type = 'text', className, label, validate }: { value: string; onCommit: (v: string) => void; type?: string; className?: string; label: string; validate?: (v: string) => string | null }) {
+function CommitInput({ value, onCommit, type = 'text', className, label, validate, placeholder }: { value: string; onCommit: (v: string) => void; type?: string; className?: string; label: string; validate?: (v: string) => string | null; placeholder?: string }) {
   const [v, setV] = useState(value);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => setV(value), [value]);
@@ -94,7 +97,7 @@ function CommitInput({ value, onCommit, type = 'text', className, label, validat
   };
   return (
     <div className={className}>
-      <TextInput type={type} value={v} onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()} aria-label={label} aria-invalid={!!err} inputSize="sm" />
+      <TextInput type={type} value={v} onChange={(e) => setV(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()} aria-label={label} aria-invalid={!!err} inputSize="sm" placeholder={placeholder} />
       {err && <div className="mt-1 text-[11.5px] text-bad">{err}</div>}
     </div>
   );
@@ -198,9 +201,21 @@ export function SettingsPage() {
             <Row title="Reduce motion" hint="Turns off page transitions, zoom animations and springy effects.">
               <Switch checked={s.general.reducedMotion} onChange={(v) => void update({ general: { reducedMotion: v } })} label="Reduce motion" />
             </Row>
+            <Row title="Interface size" hint="Makes text and controls larger or smaller. Ctrl+= and Ctrl+- work too.">
+              <Select value={String(s.general.uiScale)} onChange={(e) => void update({ general: { uiScale: Number(e.target.value) } })} className="w-[140px]" aria-label="Interface size">
+                {[80, 90, 100, 110, 125, 150].map((z) => (
+                  <option key={z} value={z}>
+                    {z}%{z === 100 ? ' (default)' : ''}
+                  </option>
+                ))}
+              </Select>
+            </Row>
           </Section>
 
           <Section id="general" title="General">
+            <Row title="Your name" hint="Used in the greeting on Home. Leave empty to use your Windows name.">
+              <CommitInput label="Your name" value={s.general.displayName} placeholder={info?.userName || 'Your name'} className="w-[220px]" onCommit={(v) => void update({ general: { displayName: v.trim().slice(0, 40) } })} />
+            </Row>
             <Row title="Launch at Windows sign-in" hint="OmniHub starts in the background so hotkeys and the phone companion are ready.">
               <Switch checked={s.general.launchAtLogin} onChange={(v) => void setAutostart(v)} label="Launch at login" />
             </Row>
@@ -210,10 +225,14 @@ export function SettingsPage() {
             <Row title="Close to tray" hint="The close button hides the window; quit from the tray icon.">
               <Switch checked={s.general.closeToTray} onChange={(v) => void update({ general: { closeToTray: v } })} label="Close to tray" />
             </Row>
+            <Row title="“Send to → OmniHub (phone)” in Explorer" hint="Right-click files or folders in Explorer, choose Send to, and they open here ready to send to your phone.">
+              <Switch checked={s.remote.sendToMenu} onChange={(v) => void update({ remote: { sendToMenu: v } })} label="Explorer Send to menu" />
+            </Row>
           </Section>
 
           <Section id="storage" title="Storage" description="How drives are scanned and what counts as worth cleaning.">
-            <Row title="Default scan mode" hint="Fast reads the NTFS Master File Table and asks for admin approval each time; Standard walks folders.">
+            <ScanApprovalRow />
+            <Row title="Default scan mode" hint="Fast reads the NTFS Master File Table (it needs administrator rights); Standard walks folders.">
               <Segmented<ScanMode>
                 size="sm"
                 label="Default scan mode"
@@ -237,6 +256,30 @@ export function SettingsPage() {
                   { value: 'alloc', label: 'On disk' },
                 ]}
               />
+            </Row>
+            <Row title="Explorer view" hint="How the Explorer tab shows a folder. You can also switch on the tab itself.">
+              <Select value={s.storage.explorerView} onChange={(e) => void update({ storage: { explorerView: e.target.value as typeof s.storage.explorerView } })} className="w-[200px]" aria-label="Explorer view">
+                <option value="split">Treemap + list</option>
+                <option value="list">Details list</option>
+                <option value="grid">Grid with previews</option>
+                <option value="treemap">Treemap only</option>
+                <option value="sunburst">Rings (sunburst)</option>
+              </Select>
+            </Row>
+            <Row title="Image previews in the grid" hint="Reads image files to make small previews; turn off on slow or network drives.">
+              <Switch checked={s.storage.gridPreviews} onChange={(v) => void update({ storage: { gridPreviews: v } })} label="Image previews" />
+            </Row>
+            <Row title="Warn when a drive is almost full" hint="A banner on Home, and a Windows notification when OmniHub is in the tray.">
+              <div className="flex items-center gap-2">
+                <Select value={String(s.storage.lowSpacePercent)} onChange={(e) => void update({ storage: { lowSpacePercent: Number(e.target.value) } })} disabled={!s.storage.lowSpaceAlert} className="w-[150px]" aria-label="Low space threshold">
+                  {[5, 10, 15, 20].map((p) => (
+                    <option key={p} value={p}>
+                      Under {p}% free
+                    </option>
+                  ))}
+                </Select>
+                <Switch checked={s.storage.lowSpaceAlert} onChange={(v) => void update({ storage: { lowSpaceAlert: v } })} label="Low space warning" />
+              </div>
             </Row>
             <Row title="Include hidden and system files">
               <Switch checked={s.storage.showHidden} onChange={(v) => void update({ storage: { showHidden: v } })} label="Show hidden files" />
@@ -386,6 +429,8 @@ export function SettingsPage() {
             <PathRow title="Incoming folder" hint="Files sent from phones are saved here." value={s.remote.incomingDir} fallback={info?.incomingDir} pickTitle="Choose the incoming folder" onPick={(p) => void update({ remote: { incomingDir: p } })} onClear={() => void update({ remote: { incomingDir: null } })} />
           </Section>
 
+          <MusicSection />
+
           <Section id="screenshots" title="Screenshots">
             <PathRow title="Save to" value={s.screenshots.dir} fallback={info?.screenshotDir} pickTitle="Choose the screenshot folder" onPick={(p) => void update({ screenshots: { dir: p } })} onClear={() => void update({ screenshots: { dir: null } })} />
             <Row title="Format">
@@ -419,6 +464,23 @@ export function SettingsPage() {
           </Section>
 
           <Section id="privacy" title="Privacy & security">
+            <Row title="Panic button" hint="Locks the vault, cuts every phone off, stops screen sharing, hides OmniHub and locks the PC. Also in the tray menu, and from a paired phone.">
+              <Button
+                size="sm"
+                variant="danger"
+                icon={Siren}
+                onClick={async () => {
+                  const ok = await confirm({ title: 'Lock everything now?', description: 'The vault locks, phones are cut off (phone access stays off until you turn it on in Phone) and the PC locks.', confirmLabel: 'Panic', tone: 'danger' });
+                  if (ok) await api.privacy.panic().catch((e: unknown) => toast.error('Couldn’t lock everything', errorText(e)));
+                }}
+              >
+                Panic
+              </Button>
+            </Row>
+            <Row title="Alert when a phone connects" hint="A Windows notification when a paired phone connects after being away for 10 minutes, so you know if someone else uses it.">
+              <Switch checked={s.remote.connectAlerts} onChange={(v) => void update({ remote: { connectAlerts: v } })} label="Connect alerts" />
+            </Row>
+            <PrivacyDashboard />
             <Row
               title={
                 <span className="flex items-center gap-2">
@@ -455,6 +517,34 @@ export function SettingsPage() {
                   </div>
                 </Row>
               ))}
+            <Row title="Back up settings" hint="Save every setting and window layout to a file, or restore them on this or another PC. The vault, notes, keys and paired phones are not included.">
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  icon={Download}
+                  onClick={async () => {
+                    const path = await api.app.saveFile('Save OmniHub settings', 'OmniHub settings.json');
+                    if (!path) return;
+                    await api.app.exportSettings(path).then(() => toast.success('Settings saved', path), (e: unknown) => toast.error('Could not save', errorText(e)));
+                  }}
+                >
+                  Save to file
+                </Button>
+                <Button
+                  size="sm"
+                  icon={Upload}
+                  onClick={async () => {
+                    const [path] = await api.app.pickFiles('Choose an OmniHub settings file');
+                    if (!path) return;
+                    const ok = await confirm({ title: 'Restore these settings?', description: 'Your current settings are replaced by the ones in the file.', confirmLabel: 'Restore' });
+                    if (!ok) return;
+                    await api.app.importSettings(path).then(() => toast.success('Settings restored'), (e: unknown) => toast.error('Could not restore', errorText(e)));
+                  }}
+                >
+                  Restore…
+                </Button>
+              </div>
+            </Row>
             <Row title="Activity log" hint="Pairings, transfers, power actions and vault events. Kept on this PC only.">
               <div className="flex gap-2">
                 <Button size="sm" onClick={() => navigate('phone')}>
@@ -490,9 +580,158 @@ export function SettingsPage() {
                 Show the welcome tour
               </Button>
             </div>
+            <UpdateRows />
           </Section>
         </div>
       </div>
     </Page>
+  );
+}
+
+/** "Don't ask again" for the administrator prompt of fast scans. */
+function ScanApprovalRow() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void api.storage.scanTaskStatus().then(setOn, () => setOn(false));
+  }, []);
+  const toggle = async (v: boolean) => {
+    setBusy(true);
+    try {
+      setOn(await api.storage.scanTaskSet(v));
+      toast.success(v ? 'Fast scans won’t ask again' : 'Fast scans will ask each time');
+    } catch (e) {
+      const msg = errorText(e);
+      toast.error(/declined/i.test(msg) ? 'Administrator approval was declined' : 'That did not work', msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Row
+      title="Approve fast scans once"
+      hint="Windows asks for administrator approval before every fast scan. Approve once and OmniHub keeps a Windows scheduled task that only runs its drive scan, so later scans start straight away. Best on a PC only you use."
+    >
+      <Switch checked={!!on} disabled={on === null || busy} onChange={(v) => void toggle(v)} label="Approve fast scans once" />
+    </Row>
+  );
+}
+
+/** Updates: status, check now, automatic checks and installs. */
+function UpdateRows() {
+  const s = useSettings((x) => x.settings);
+  const update = useSettings((x) => x.update);
+  const { info, check, install } = useUpdate();
+  if (!s) return null;
+  const st = info?.state;
+  const busy = st?.state === 'checking' || st?.state === 'downloading' || st?.state === 'installing';
+  return (
+    <>
+      <Row title="Updates" hint={st ? updateText(st) : 'Checking…'}>
+        <div className="flex gap-2">
+          {st?.state === 'available' && (
+            <Button size="sm" variant="primary" icon={Download} onClick={() => void install()}>
+              Update to {st.release.version}
+            </Button>
+          )}
+          <Button size="sm" variant="secondary" icon={RotateCcw} loading={busy} onClick={() => void check()}>
+            Check now
+          </Button>
+        </div>
+      </Row>
+      <Row title="Check for updates automatically" hint="When OmniHub starts and every six hours, from OmniHub's GitHub releases.">
+        <Switch checked={s.updates.check} onChange={(v) => void update({ updates: { check: v } })} label="Check for updates automatically" />
+      </Row>
+      <Row title="Install updates automatically" hint="Downloads the new version, checks it against its published checksum and installs it — but never during a game boost, screen sharing or a phone transfer. Settings and data stay.">
+        <Switch checked={s.updates.autoInstall} disabled={!s.updates.check} onChange={(v) => void update({ updates: { autoInstall: v } })} label="Install updates automatically" />
+      </Row>
+    </>
+  );
+}
+
+/** Music: phone control, online lyrics, volume, bass and treble. */
+function MusicSection() {
+  const s = useSettings((x) => x.settings);
+  const update = useSettings((x) => x.update);
+  const [eq, setEq] = useState<EqStatus | null>(null);
+  useEffect(() => {
+    void api.media.audio().then((a) => setEq(a.eq), () => undefined);
+  }, []);
+  if (!s) return null;
+  const m = s.media;
+  return (
+    <Section id="music" title="Music" description="What the PC plays, on your phone: cover, controls and time-synced lyrics.">
+      <Row title="Let phones control music" hint="Play, pause, skip, seek and volume from the phone's Music tab. Works with Spotify, Apple Music, browsers and any app in Windows' media controls.">
+        <Switch checked={m.allowPhone} onChange={(v) => void update({ media: { allowPhone: v } })} label="Phone music control" />
+      </Row>
+      <Row title="Find lyrics online" hint="Looks the song up in LRCLIB, a free lyrics database (only the title, artist and album are sent). Found lyrics are kept on this PC.">
+        <Switch checked={m.lyricsOnline} onChange={(v) => void update({ media: { lyricsOnline: v } })} label="Online lyrics" />
+      </Row>
+      <Row title="Bass and treble" hint={eq?.available ? `Through Equalizer APO${eq.hooked ? '' : ' (OmniHub adds one line to its config the first time)'}. Also adjustable from the phone.` : 'Needs the free Equalizer APO — Windows has no system-wide bass control of its own.'} stack>
+        {eq?.available ? (
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-2 text-[13px] text-dim">
+              <Switch checked={m.eqEnabled} onChange={(v) => void update({ media: { eqEnabled: v } })} label="Equaliser on" /> Equaliser on
+            </label>
+            {(['bassDb', 'trebleDb'] as const).map((k) => (
+              <div key={k} className="flex items-center gap-3">
+                <span className="w-14 text-[13px] text-dim">{k === 'bassDb' ? 'Bass' : 'Treble'}</span>
+                <input type="range" min={-12} max={12} step={0.5} value={m[k]} onChange={(e) => void update({ media: { [k]: Number(e.target.value), eqEnabled: true } }, { silent: true })} className="flex-1 accent-[var(--accent)]" aria-label={k === 'bassDb' ? 'Bass' : 'Treble'} />
+                <span className="w-16 text-right font-mono text-[12px] tabular text-fg">{m[k] > 0 ? '+' : ''}{m[k].toFixed(1)} dB</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Button size="sm" icon={ExternalLink} onClick={() => void api.app.openUrl('https://sourceforge.net/projects/equalizerapo/')}>
+            Get Equalizer APO
+          </Button>
+        )}
+      </Row>
+    </Section>
+  );
+}
+
+const PRIVACY_WHAT: Record<PrivacyUse['what'], string> = { microphone: 'Microphone', webcam: 'Camera', location: 'Location' };
+
+/** Which programs used the microphone, camera or location, from Windows' own record. */
+function PrivacyDashboard() {
+  const [list, setList] = useState<PrivacyUse[] | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (open) void api.privacy.list().then(setList, () => setList([]));
+  }, [open]);
+  const live = (list ?? []).filter((u) => u.inUse);
+  return (
+    <Row
+      stack
+      title={
+        <span className="flex items-center gap-2">
+          Privacy dashboard {live.length > 0 && <Badge tone="warn">{live.length} in use now</Badge>}
+        </span>
+      }
+      hint="Which programs used your microphone, camera or location, and when. Read from Windows on this PC; nothing is sent anywhere."
+    >
+      {!open ? (
+        <Button size="sm" onClick={() => setOpen(true)}>
+          Show
+        </Button>
+      ) : !list ? (
+        <span className="text-[12.5px] text-faint">Reading…</span>
+      ) : !list.length ? (
+        <span className="text-[12.5px] text-faint">Windows hasn’t recorded any use yet.</span>
+      ) : (
+        <div className="mt-2 max-h-72 w-full overflow-auto rounded-xl border border-line">
+          {list.map((u) => (
+            <div key={`${u.what}-${u.id}`} className="flex items-center gap-3 border-b border-line px-3 py-1.5 text-[12.5px] last:border-0">
+              <Badge tone={u.inUse ? 'warn' : 'neutral'}>{PRIVACY_WHAT[u.what]}</Badge>
+              <span className="min-w-0 flex-1 truncate text-fg" title={u.id}>
+                {u.app}
+              </span>
+              <span className="shrink-0 text-faint">{u.inUse ? 'using it now' : `last ${formatRelative(u.started)}`}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Row>
   );
 }

@@ -4,16 +4,50 @@ use std::path::Path;
 
 #[cfg(windows)]
 pub fn shell_execute(file: &str, params: &str) -> std::io::Result<()> {
-    use windows::core::HSTRING;
-    use windows::Win32::UI::Shell::ShellExecuteW;
-    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-    let r = unsafe { ShellExecuteW(None, &HSTRING::from("open"), &HSTRING::from(file), &HSTRING::from(params), None, SW_SHOWNORMAL) };
-    // ShellExecute returns a value > 32 on success.
-    if r.0 as isize > 32 {
-        Ok(())
-    } else {
-        Err(std::io::Error::other(format!("could not open {file} (error {})", r.0 as isize)))
+    shell_verb("open", file, params)
+}
+
+/// Print a file on the default printer with the program Windows uses for
+/// that kind of file (like right-click → Print).
+pub fn print(path: &Path) -> std::io::Result<()> {
+    if !path.is_file() {
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("{} does not exist", path.display())));
     }
+    #[cfg(windows)]
+    return shell_verb("print", &path.to_string_lossy(), "").map_err(|e| {
+        std::io::Error::other(if e.to_string().contains("No application is associated") || e.to_string().contains("0x80070483") { format!("Windows has no program that prints {} files.", path.extension().map(|x| x.to_string_lossy().to_uppercase()).unwrap_or_default()) } else { e.to_string() })
+    });
+    #[cfg(not(windows))]
+    std::process::Command::new("lp").arg(path).spawn().map(|_| ())
+}
+
+#[cfg(windows)]
+fn shell_verb(verb: &str, file: &str, params: &str) -> std::io::Result<()> {
+    use windows::core::HSTRING;
+    use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW};
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    // Links (steam://, com.epicgames.launcher://…) are handed to their app
+    // through COM: Windows asks for it initialised, and for NOASYNC from a
+    // thread that sleeps instead of pumping messages, or the hand-off can
+    // be lost and nothing opens.
+    let com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) }.is_ok();
+    let (verb, f, p) = (HSTRING::from(verb), HSTRING::from(file), HSTRING::from(params));
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOASYNC,
+        hwnd: crate::system::elevation::own_window(),
+        lpVerb: windows::core::PCWSTR(verb.as_ptr()),
+        lpFile: windows::core::PCWSTR(f.as_ptr()),
+        lpParameters: windows::core::PCWSTR(p.as_ptr()),
+        nShow: SW_SHOWNORMAL.0,
+        ..Default::default()
+    };
+    let r = unsafe { ShellExecuteExW(&mut info) };
+    if com {
+        unsafe { CoUninitialize() };
+    }
+    r.map_err(|e| std::io::Error::other(format!("could not open {file}: {}", e.message())))
 }
 
 #[cfg(not(windows))]
@@ -53,7 +87,8 @@ pub fn reveal(path: &Path) -> std::io::Result<()> {
 
 /// Open an http(s) or ms-settings: URL.
 pub fn open_url(url: &str) -> std::io::Result<()> {
-    let ok = url.starts_with("https://") || url.starts_with("http://") || url.starts_with("ms-settings:");
+    // Windows Security's Core isolation page (Memory Integrity) too.
+    let ok = url.starts_with("https://") || url.starts_with("http://") || url.starts_with("ms-settings:") || url == "windowsdefender://coreisolation";
     if !ok {
         return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "only web and settings links can be opened"));
     }
@@ -76,4 +111,73 @@ pub fn user_folders() -> Vec<(String, std::path::PathBuf)> {
     .into_iter()
     .filter_map(|(n, p)| p.filter(|p| p.is_dir()).map(|p| (n.to_string(), p)))
     .collect()
+}
+
+/// File name of the Explorer "Send to" shortcut.
+pub const SEND_TO_LINK: &str = "OmniHub (phone).lnk";
+/// Argument the shortcut passes; Explorer appends the selected paths.
+pub const SEND_TO_ARG: &str = "--send-to-phone";
+
+/// Add or remove "Send to → OmniHub (phone)" in Explorer's context menu.
+/// Recreated at every start so it follows the installed executable.
+#[cfg(windows)]
+pub fn set_send_to_shortcut(enabled: bool) -> std::io::Result<()> {
+    let Some(dir) = dirs::config_dir().map(|d| d.join("Microsoft").join("Windows").join("SendTo")) else { return Ok(()) };
+    let link = dir.join(SEND_TO_LINK);
+    if !enabled {
+        if link.exists() {
+            std::fs::remove_file(&link)?;
+        }
+        return Ok(());
+    }
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    let exe = std::env::current_exe()?;
+    std::thread::spawn(move || create_shortcut(&link, &exe, SEND_TO_ARG, "Send to your phone with OmniHub")).join().map_err(|_| std::io::Error::other("shortcut thread panicked"))?
+}
+
+#[cfg(not(windows))]
+pub fn set_send_to_shortcut(_enabled: bool) -> std::io::Result<()> {
+    Ok(())
+}
+
+#[cfg(windows)]
+fn create_shortcut(link: &Path, target: &Path, args: &str, description: &str) -> std::io::Result<()> {
+    use windows::core::{Interface, HSTRING};
+    use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, IPersistFile, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED};
+    use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
+    let io = |e: windows::core::Error| std::io::Error::other(e.message());
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let res = (|| {
+            let sl: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER).map_err(io)?;
+            sl.SetPath(&HSTRING::from(target.as_os_str())).map_err(io)?;
+            sl.SetArguments(&HSTRING::from(args)).map_err(io)?;
+            sl.SetDescription(&HSTRING::from(description)).map_err(io)?;
+            sl.SetIconLocation(&HSTRING::from(target.as_os_str()), 0).map_err(io)?;
+            let pf: IPersistFile = sl.cast().map_err(io)?;
+            pf.Save(&HSTRING::from(link.as_os_str()), true).map_err(io)
+        })();
+        CoUninitialize();
+        res
+    }
+}
+
+/// Paths passed after `--send-to-phone` on a command line.
+pub fn send_to_paths(argv: &[String]) -> Option<Vec<String>> {
+    let pos = argv.iter().position(|a| a == SEND_TO_ARG)?;
+    Some(argv[pos + 1..].iter().filter(|a| !a.starts_with("--")).cloned().collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn send_to_arguments() {
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(send_to_paths(&a(&["omnihub.exe"])), None);
+        assert_eq!(send_to_paths(&a(&["omnihub.exe", SEND_TO_ARG, r"C:\a b.jpg", "--minimized", r"D:\x"])), Some(a(&[r"C:\a b.jpg", r"D:\x"])));
+    }
 }

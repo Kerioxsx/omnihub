@@ -9,10 +9,17 @@ use tauri::{AppHandle, Emitter, Manager, Wry};
 
 const TRAY_ID: &str = "omnihub";
 
+/// Out of sight (the panic button).
+pub fn hide_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+}
+
 pub fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
-        let _ = w.show();
+        crate::rest::show(&w);
         let _ = w.set_focus();
     }
 }
@@ -34,10 +41,12 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let remote = CheckMenuItem::with_id(app, "remote", "Phone companion", true, remote_on, None::<&str>)?;
     let pair = MenuItem::with_id(app, "pair", "Pair a phone…", remote_on, None::<&str>)?;
     let lock = MenuItem::with_id(app, "lock", "Lock vault", vault_open, None::<&str>)?;
+    let capri = CheckMenuItem::with_id(app, "capri", "Capri", true, s.chats.capri, None::<&str>)?;
+    let panic = MenuItem::with_id(app, "panic", "Panic: lock everything", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit OmniHub", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
-    Menu::with_items(app, &[&open, &sep1, &shot, &scan, &idea, &remote, &pair, &lock, &sep2, &quit])
+    Menu::with_items(app, &[&open, &sep1, &shot, &scan, &idea, &remote, &pair, &lock, &capri, &panic, &sep2, &quit])
 }
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
@@ -80,9 +89,28 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                         refresh(&app);
                     });
                 }
+                "capri" => {
+                    let app = app.clone();
+                    std::thread::spawn(move || {
+                        let on = !core.settings.get().chats.capri;
+                        let dir = core.paths.data.join("tools").join("capri");
+                        let ev = core.events.clone();
+                        let r = omnihub_core::companion::set(&core.procs, &dir, on, &mut |text| ev.emit("capri:progress", serde_json::json!({ "text": text })));
+                        match r {
+                            Ok(_) => {
+                                let _ = core.update_settings(&serde_json::json!({ "chats": { "capri": on } }));
+                            }
+                            Err(e) => crate::shortcuts::notify(&app, "Capri", &e),
+                        }
+                        refresh(&app);
+                    });
+                }
                 "lock" => {
                     core.vault.lock();
                     refresh(app);
+                }
+                "panic" => {
+                    std::thread::spawn(move || core.panic("desktop"));
                 }
                 "quit" => {
                     core.remote.stop();

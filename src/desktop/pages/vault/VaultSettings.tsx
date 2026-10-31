@@ -1,10 +1,11 @@
 import type { VaultStatus } from '@shared/types';
-import { Download, KeyRound, Upload } from 'lucide-react';
+import { Download, FileInput, KeyRound, Upload } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
 import { Field, Select, Switch, TextInput } from '../../components/ui/Form';
 import { Modal } from '../../components/ui/Overlay';
+import { confirm } from '../../state/dialogs';
 import { useLive } from '../../state/live';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
@@ -148,7 +149,28 @@ export function VaultSettings({ open, onClose, status }: { open: boolean; onClos
             >
               Import backup…
             </Button>
+            <Button
+              size="sm"
+              icon={FileInput}
+              loading={busy === 'other'}
+              onClick={() =>
+                void run('other', async () => {
+                  const [p] = await api.app.pickFiles('Choose a password export (CSV or Bitwarden JSON)');
+                  if (!p) return;
+                  const [added, read] = await api.vault.importFile(p);
+                  toast.success(`Imported ${added} of ${read}`, added < read ? 'The others were already in the vault.' : 'Your logins are in the vault.');
+                  // The export holds every password in plain text.
+                  if (await confirm({ title: 'Delete the export file?', description: `${p.split('\\').pop()} has your passwords in plain text. Delete it for good now that they’re in the vault?`, confirmLabel: 'Delete it', tone: 'danger' })) {
+                    await api.storage.delete([p], true);
+                    toast.success('Export file deleted');
+                  }
+                })
+              }
+            >
+              From another password manager…
+            </Button>
           </div>
+          <p className="mt-2 text-[12px] text-faint">Bitwarden (CSV or unencrypted JSON), Chrome, Edge, Brave, Opera, Firefox, 1Password, KeePass, LastPass, or any CSV with name, URL, username and password columns. Logins already here are skipped.</p>
           {importPath && (
             <div className="mt-3 flex items-end gap-2 rounded-xl border border-line bg-surface p-3">
               <Field label={`Password for ${importPath.split('\\').pop()}`} htmlFor="vs-import" className="flex-1">

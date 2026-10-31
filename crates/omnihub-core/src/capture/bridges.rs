@@ -332,7 +332,7 @@ impl Bridges {
             })
             .or_else(|| which("sunshine"));
         let mut sys = sysinfo::System::new();
-        sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        sys.refresh_processes_specifics(sysinfo::ProcessesToUpdate::All, true, sysinfo::ProcessRefreshKind::nothing());
         let running = sys.processes().values().any(|p| p.name().to_string_lossy().to_lowercase().starts_with("sunshine"));
         SunshineStatus { installed: path.is_some(), path: path.map(|p| p.to_string_lossy().to_string()), running, web_ui: "https://localhost:47990".into() }
     }
