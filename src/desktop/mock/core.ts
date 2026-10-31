@@ -44,6 +44,8 @@ export const settings: Settings = {
   apps: { favorites: ['spotify-music', 'visual-studio-code'] },
   media: { allowPhone: true, lyricsOnline: true, eqEnabled: false, bassDb: 0, trebleDb: 0, lrcFolder: null, hiresArt: true },
   visuals: structuredClone(DEFAULT_VISUALS),
+  focus: { trackTime: true, blocked: ['discord.exe', 'steam.exe'] },
+  dev: { roots: ['C:\\Users\\Player\\source'] },
   updates: { check: true, autoInstall: true },
   chats: { allowPhone: true, phoneAgents: true, claudeMode: 'acceptEdits', codexSandbox: 'workspace-write', capri: false },
   play: { capriReacts: false, voice: false, voiceOnlyInGames: true, nickname: '', nicknames: [], replay: false, replayMinutes: 10, clipSeconds: 30, fps: 60, quality: 'standard', gameAudio: true, monitor: 0, folder: null, autoClip: true },

@@ -213,6 +213,41 @@ export const api = {
     installed: () => call<T.MusicInstalled>('music_installed'),
   },
 
+  /** Guest uploads: a QR code anyone nearby can scan to send files (no pairing). */
+  guests: {
+    create: (label: string, minutes: number, maxBytes: number) => call<T.GuestCreated>('guests_create', { label, minutes, maxBytes }),
+    list: () => call<T.GuestLink[]>('guests_list'),
+    stop: (code: string) => call<void>('guests_stop', { code }),
+  },
+
+  rules: {
+    list: () => call<T.FolderRule[]>('rules_list'),
+    save: (rule: T.FolderRule) => call<T.FolderRule>('rules_save', { rule }),
+    remove: (id: string) => call<void>('rules_delete', { id }),
+    log: () => call<T.RuleDone[]>('rules_log'),
+    /** Look at the folders now (they are looked at every half minute anyway). */
+    runNow: () => call<T.RuleDone[]>('rules_run'),
+  },
+
+  focus: {
+    state: () => call<T.FocusState | null>('focus_state'),
+    start: (focusMinutes: number, breakMinutes: number, blocked: string[]) => call<T.FocusState>('focus_start', { focusMinutes, breakMinutes, blocked }),
+    stop: () => call<void>('focus_stop'),
+    report: () => call<T.TimeReport>('time_report'),
+    clear: () => call<void>('time_clear'),
+  },
+
+  dev: {
+    projects: (roots: string[]) => call<T.DevProject[]>('dev_projects', { roots }),
+    environment: () => call<T.DevEnvironment>('dev_environment'),
+    setPath: (entries: string[]) => call<T.DevEnvironment>('dev_set_path', { entries }),
+    setVar: (name: string, value: string) => call<T.DevEnvironment>('dev_set_var', { name, value }),
+    removeVar: (name: string) => call<T.DevEnvironment>('dev_remove_var', { name }),
+    /** A QR code to open a local dev server (this port) on a phone on the same Wi-Fi. */
+    lanLink: (port: number, local: string) => call<T.LanLink>('dev_lan_link', { port, local }),
+    openIn: (path: string, app: 'code' | 'terminal' | 'explorer') => call<void>('dev_open', { path, app }),
+  },
+
   /** Checksums, the shredder, bulk rename and recent files. `job` names a run for progress (`tools:progress`) and Stop (`hidden.cancel`). */
   files: {
     hash: (path: string, kind: T.HashKind, job: string) => call<string>('files_hash', { path, kind, job }),

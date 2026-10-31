@@ -1,7 +1,7 @@
 // "What is using port 3000?": every port in use with its program, and End.
 
-import type { PortUse } from '@shared/types';
-import { Network, RefreshCw, X } from 'lucide-react';
+import type { LanLink, PortUse } from '@shared/types';
+import { Network, RefreshCw, Smartphone, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -20,7 +20,31 @@ function matches(p: PortUse, q: string) {
   return p.process.toLowerCase().includes(s) || p.local.includes(s) || (p.remote ?? '').includes(s);
 }
 
+/** A dev server on this PC, opened on a phone on the same Wi-Fi. */
+function PhoneQr({ p, onClose }: { p: PortUse; onClose: () => void }) {
+  const [link, setLink] = useState<LanLink | null>(null);
+  useEffect(() => void api.dev.lanLink(p.port, p.local).then(setLink, (e: unknown) => toast.error('Couldn’t make the link', errorText(e))), [p.port, p.local]);
+  return (
+    <div className="mt-3 flex items-start gap-4 rounded-xl border border-line bg-surface p-3">
+      {link?.qrSvgs[0] && <div className="h-36 w-36 shrink-0 rounded-lg bg-white p-1.5 [&_svg]:h-full [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: link.qrSvgs[0] }} />}
+      <div className="min-w-0 flex-1 text-[13px]">
+        <div className="font-semibold text-fg">
+          {p.process} on port {p.port}, on your phone
+        </div>
+        {link?.note ? <p className="mt-1 text-warn">{link.note}</p> : <p className="mt-1 text-dim">Scan with a phone on the same Wi-Fi. If it doesn’t load, allow the program through Windows Firewall.</p>}
+        {link?.urls.map((u) => (
+          <div key={u} className="mt-1 font-mono text-[12px] text-dim">
+            {u}
+          </div>
+        ))}
+      </div>
+      <IconButton size="sm" icon={X} label="Close" onClick={onClose} />
+    </div>
+  );
+}
+
 export function PortsTab() {
+  const [qr, setQr] = useState<PortUse | null>(null);
   const [list, setList] = useState<PortUse[] | null>(null);
   const [q, setQ] = useState('');
   const [show, setShow] = useState<Show>('listening');
@@ -54,6 +78,7 @@ export function PortsTab() {
         <Segmented label="Show" size="sm" value={show} onChange={setShow} options={[{ value: 'listening', label: 'Open ports' }, { value: 'all', label: 'Every connection' }]} />
         {list && <span className="text-[12px] text-faint">{shown.length} of {list.length}</span>}
       </div>
+      {qr && <PhoneQr key={`${qr.local}:${qr.port}`} p={qr} onClose={() => setQr(null)} />}
       <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-xl border border-line">
         {!list ? (
           <Skeleton className="h-60" />
@@ -67,7 +92,7 @@ export function PortsTab() {
                 <th className="px-3 py-2 font-medium">Program</th>
                 <th className="px-3 py-2 font-medium">Address</th>
                 <th className="px-3 py-2 font-medium">State</th>
-                <th className="w-10" />
+                <th className="w-16" />
               </tr>
             </thead>
             <tbody>
@@ -84,7 +109,10 @@ export function PortsTab() {
                     {p.remote && <span className="text-faint"> → {p.remote}:{p.remotePort}</span>}
                   </td>
                   <td className="px-3 py-1.5">{p.state ? <Badge tone={p.state === 'Listening' ? 'accent' : 'neutral'}>{p.state}</Badge> : <span className="text-faint">—</span>}</td>
-                  <td className="px-2 py-1">{p.pid > 4 && <IconButton size="sm" icon={X} label={`End ${p.process}`} onClick={() => void end(p)} />}</td>
+                  <td className="whitespace-nowrap px-2 py-1">
+                    {p.proto === 'TCP' && p.state === 'Listening' && p.pid > 4 && <IconButton size="sm" icon={Smartphone} label={`Open port ${p.port} on your phone`} onClick={() => setQr(p)} />}
+                    {p.pid > 4 && <IconButton size="sm" icon={X} label={`End ${p.process}`} onClick={() => void end(p)} />}
+                  </td>
                 </tr>
               ))}
             </tbody>

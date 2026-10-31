@@ -98,6 +98,22 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE notes ADD COLUMN locked INTEGER NOT NULL DEFAULT 0;
     "#,
+    // 6: time tracking and focus rounds
+    r#"
+    CREATE TABLE app_time (
+        day TEXT NOT NULL,
+        app TEXT NOT NULL,
+        seconds INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (day, app)
+    );
+    CREATE TABLE focus_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        day TEXT NOT NULL,
+        minutes INTEGER NOT NULL,
+        at INTEGER NOT NULL
+    );
+    CREATE INDEX focus_sessions_day ON focus_sessions(day);
+    "#,
 ];
 
 impl Db {

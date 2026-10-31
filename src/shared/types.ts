@@ -883,6 +883,10 @@ export interface Settings {
     hiresArt: boolean;
   };
   visuals: VisualSettings;
+  /** Focus timer and time tracking. */
+  focus: { trackTime: boolean; blocked: string[] };
+  /** Developer tools. */
+  dev: { roots: string[] };
   updates: {
     check: boolean;
     autoInstall: boolean;
@@ -2957,4 +2961,100 @@ export type PlayItem = { kind: 'track'; title: string; artist: string; album: st
 export interface MusicInstalled {
   spotify: boolean;
   appleMusic: boolean;
+}
+
+// ---------- 0.21: guests, folder rules, focus and time, dev tools ----------
+
+export interface GuestLink {
+  code: string;
+  label: string;
+  created: number;
+  /** Unix seconds. */
+  expiresAt: number;
+  maxBytes: number;
+  usedBytes: number;
+  files: number;
+}
+
+export interface GuestCreated {
+  link: GuestLink;
+  urls: string[];
+  qrSvgs: string[];
+}
+
+export type RuleAction = { kind: 'move'; to: string } | { kind: 'copy'; to: string } | { kind: 'recycle'; days: number };
+
+export interface FolderRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  folder: string;
+  extensions: string[];
+  contains: string[];
+  action: RuleAction;
+}
+
+export interface RuleDone {
+  at: number;
+  rule: string;
+  file: string;
+  what: string;
+  ok: boolean;
+}
+
+export interface AppTime {
+  app: string;
+  name: string;
+  seconds: number;
+}
+
+export interface TimeReport {
+  tracking: boolean;
+  day: string;
+  apps: AppTime[];
+  week: { day: string; seconds: number }[];
+  focusMinutesToday: number;
+  sessionsToday: number;
+}
+
+export interface FocusState {
+  phase: 'focus' | 'break';
+  /** Unix ms. */
+  endsAt: number;
+  focusMinutes: number;
+  breakMinutes: number;
+  rounds: number;
+  blocked: string[];
+  closed: string[];
+}
+
+export interface DevProject {
+  path: string;
+  name: string;
+  branch: string;
+  changes: number;
+  ahead: number;
+  behind: number;
+  upstream: boolean;
+  lastCommit: number | null;
+  lastMessage: string;
+  note: string | null;
+}
+
+export interface PathEntry {
+  path: string;
+  exists: boolean;
+}
+
+export interface DevEnvironment {
+  userPath: PathEntry[];
+  systemPath: PathEntry[];
+  userVars: [string, string][];
+}
+
+export interface LanLink {
+  urls: string[];
+  qrSvgs: string[];
+  /** Why a phone can't reach it ("" when it can). */
+  note: string;
 }

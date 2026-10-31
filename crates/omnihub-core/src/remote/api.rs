@@ -143,6 +143,10 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/ws", get(events_socket))
         .route("/api/screen/ws", get(screen_socket))
         .route("/dl/{ticket}", get(download))
+        .route("/guest.js", get(guest_js))
+        .route("/guest/{code}", get(guest_page))
+        .route("/guest/{code}/info", get(guest_info))
+        .route("/guest/{code}/file", put(guest_file))
         .merge(authed)
         .fallback(super::assets::serve)
         .layer(DefaultBodyLimit::max(1 << 20))
@@ -493,6 +497,103 @@ async fn download(State(core): State<Ctx>, UrlPath(ticket): UrlPath<String>, Que
     }
     res.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
     Ok(res)
+}
+
+// ---------- guest uploads (no pairing; see remote/guest.rs) ----------
+
+/// A code that doesn't work counts against the address (guessing is slow).
+fn guest_link(core: &AppCore, code: &str, peer: &SocketAddr) -> ApiResult<super::guest::GuestLink> {
+    if let Some(l) = core.remote.guests.get(code) {
+        return Ok(l);
+    }
+    if !core.remote.guest_limiter.allow(peer.ip()) {
+        return Err(ApiError::new(StatusCode::TOO_MANY_REQUESTS, "too many tries; wait a minute"));
+    }
+    Err(ApiError::new(StatusCode::GONE, "This link has ended. Ask for a new QR code."))
+}
+
+async fn guest_js() -> Response {
+    ([(header::CONTENT_TYPE, "text/javascript; charset=utf-8"), (header::CACHE_CONTROL, "no-store")], super::guest::PAGE_JS).into_response()
+}
+
+async fn guest_page() -> Response {
+    // The page asks for the link's details itself (an ended link says so there).
+    ([(header::CONTENT_TYPE, "text/html; charset=utf-8"), (header::CACHE_CONTROL, "no-store")], super::guest::PAGE_HTML).into_response()
+}
+
+async fn guest_info(State(core): State<Ctx>, ConnectInfo(peer): ConnectInfo<SocketAddr>, UrlPath(code): UrlPath<String>) -> ApiResult<Json<serde_json::Value>> {
+    let l = guest_link(&core, &code, &peer)?;
+    Ok(Json(json!({ "pc": core.settings.get().remote.device_name, "label": l.label, "maxBytes": l.max_bytes, "usedBytes": l.used_bytes, "expiresAt": l.expires_at })))
+}
+
+#[derive(Deserialize)]
+struct GuestFileQuery {
+    name: String,
+    size: u64,
+}
+
+async fn guest_file(State(core): State<Ctx>, ConnectInfo(peer): ConnectInfo<SocketAddr>, UrlPath(code): UrlPath<String>, Query(q): Query<GuestFileQuery>, body: Body) -> ApiResult<Json<serde_json::Value>> {
+    use tokio::io::AsyncWriteExt;
+    let link = guest_link(&core, &code, &peer)?;
+    if !core.settings.get().remote.allow_uploads {
+        return Err(ApiError::forbidden("This PC isn't taking files right now."));
+    }
+    core.remote.guests.reserve(&code, q.size).map_err(|e| ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, e))?;
+    let dir = super::guest::folder(&core.incoming_dir());
+    let name = super::guest::safe_name(&q.name);
+    let result: Result<(PathBuf, u64), ApiError> = async {
+        tokio::fs::create_dir_all(&dir).await.map_err(|e| ApiError::from(format!("couldn't make the folder: {e}")))?;
+        let tmp = dir.join(format!(".{}.omnihub-part", uuid::Uuid::new_v4()));
+        let mut file = tokio::fs::File::create(&tmp).await.map_err(ApiError::from)?;
+        let mut stream = body.into_data_stream();
+        let mut written: u64 = 0;
+        let fail = |tmp: &PathBuf, e: ApiError| {
+            let _ = std::fs::remove_file(tmp);
+            e
+        };
+        while let Some(chunk) = stream.next().await {
+            let chunk = match chunk {
+                Ok(c) => c,
+                Err(_) => {
+                    drop(file);
+                    return Err(fail(&tmp, ApiError::bad("the upload stopped")));
+                }
+            };
+            written += chunk.len() as u64;
+            if written > q.size {
+                drop(file);
+                return Err(fail(&tmp, ApiError::bad("the file is bigger than it said")));
+            }
+            if let Err(e) = file.write_all(&chunk).await {
+                drop(file);
+                return Err(fail(&tmp, ApiError::from(e)));
+            }
+        }
+        if let Err(e) = file.flush().await {
+            drop(file);
+            return Err(fail(&tmp, ApiError::from(e)));
+        }
+        drop(file);
+        if written != q.size {
+            return Err(fail(&tmp, ApiError::bad("the upload stopped")));
+        }
+        let dest = super::guest::unique_path(&dir, &name);
+        tokio::fs::rename(&tmp, &dest).await.map_err(|e| fail(&tmp, ApiError::from(e)))?;
+        Ok((dest, written))
+    }
+    .await;
+    match result {
+        Ok((dest, written)) => {
+            core.remote.guests.finish(&code, q.size, written);
+            core.audit.record(&format!("guest:{}", link.label), "files.upload", &format!("{} ({written} bytes)", display_path(&dest)), true);
+            core.events.emit("guest:received", json!({ "label": link.label, "name": name, "size": written, "path": display_path(&dest) }));
+            Ok(Json(json!({ "name": dest.file_name().map(|n| n.to_string_lossy().to_string()), "size": written })))
+        }
+        Err(e) => {
+            core.remote.guests.finish(&code, q.size, 0);
+            Err(e)
+        }
+    }
 }
 
 // ---------- uploads ----------

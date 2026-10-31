@@ -792,3 +792,43 @@ fn print_panic_and_settings_file() {
         assert!(!f.core.settings.get().remote.enabled);
     });
 }
+
+/// Guest uploads: a link anyone on the network can use to send files, without pairing.
+#[test]
+fn guest_uploads() {
+    let f = setup(false);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let base = &f.base;
+        let link = f.core.remote.guests.create("Sam", 15, 1 << 20);
+        let page = c.get(format!("{base}/guest/{}", link.code)).send().await.unwrap();
+        assert_eq!(page.status(), StatusCode::OK);
+        assert!(page.text().await.unwrap().contains("/guest.js"));
+        assert_eq!(c.get(format!("{base}/guest.js")).send().await.unwrap().status(), StatusCode::OK);
+        let info: Value = c.get(format!("{base}/guest/{}/info", link.code)).send().await.unwrap().json().await.unwrap();
+        assert_eq!(info["label"], "Sam");
+
+        // A file: saved under Incoming\Guests\<date>, with a safe name.
+        let body = b"hello from a guest".to_vec();
+        let r = c.put(format!("{base}/guest/{}/file?name=..%2F..%2Fevil.txt&size={}", link.code, body.len())).body(body.clone()).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::OK, "{:?}", r.text().await);
+        let dir = omnihub_core::remote::guest::folder(&f.incoming);
+        assert_eq!(std::fs::read(dir.join("evil.txt")).unwrap(), body);
+        assert_eq!(f.core.remote.guests.get(&link.code).unwrap().files, 1);
+        // Said one size, sent another: refused and nothing kept.
+        let r = c.put(format!("{base}/guest/{}/file?name=b.txt&size=3", link.code)).body("too long".to_string()).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        assert!(!dir.join("b.txt").exists());
+        // More than the link takes.
+        let r = c.put(format!("{base}/guest/{}/file?name=big.bin&size={}", link.code, 2 << 20)).body(vec![0u8; 16]).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        // No guest can see or download anything else.
+        assert_eq!(c.get(format!("{base}/api/fs/roots")).send().await.unwrap().status(), StatusCode::UNAUTHORIZED);
+        // An ended link.
+        f.core.remote.guests.stop(&link.code);
+        let r = c.put(format!("{base}/guest/{}/file?name=c.txt&size=1", link.code)).body("x").send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::GONE);
+        assert_eq!(c.get(format!("{base}/guest/nope/info")).send().await.unwrap().status(), StatusCode::GONE);
+    });
+}

@@ -28,6 +28,26 @@ pub struct Settings {
     pub visuals: VisualSettings,
     pub chats: ChatSettings,
     pub play: PlaySettings,
+    pub focus: FocusSettings,
+    pub dev: DevSettings,
+}
+
+/// The focus timer and the time tracker (off until turned on).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FocusSettings {
+    /// Add up which program is in front (names and minutes only, on this PC).
+    pub track_time: bool,
+    /// Programs closed when they open during a focus round ("discord.exe").
+    pub blocked: Vec<String>,
+}
+
+/// Developer tools.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DevSettings {
+    /// Folders searched for Git projects.
+    pub roots: Vec<String>,
 }
 
 /// Capri and your games: reactions, voice commands and instant replay (see `play`).

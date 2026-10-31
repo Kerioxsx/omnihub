@@ -21,6 +21,7 @@ import { useSend } from '../../state/send';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
 import { ConnectionCheck } from './ConnectionCheck';
+import { GuestCard } from './GuestCard';
 import { PairDialog } from './PairDialog';
 import { Permissions } from './Permissions';
 
@@ -349,6 +350,7 @@ export function PhonePage() {
           <div className="space-y-3">
             <Viewers />
             <Devices onPair={() => setPairOpen(true)} />
+            <GuestCard running={!!remote?.running} />
             <Transfers />
             <AuditLog />
           </div>

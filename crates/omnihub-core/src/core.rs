@@ -64,6 +64,10 @@ pub struct AppCore {
     pub play: Arc<crate::play::PlayHub>,
     /// Saved window arrangements ("Work", "Gaming").
     pub layouts: crate::system::layouts::Layouts,
+    /// Folder rules (tidy Downloads and the like).
+    pub rules: crate::rules::Rules,
+    /// The focus timer and the time tracker.
+    pub focus: crate::focus::Focus,
     pub updater: Arc<crate::update::Updater>,
     pub media: Arc<crate::media::MediaHub>,
     /// Listens to the PC's sound for the music visuals (only while one is shown).
@@ -132,6 +136,8 @@ impl AppCore {
             govee: crate::govee::GoveeHub::new(&paths.data, events.clone(), visual, media),
             low_space_warned: Default::default(),
             layouts: crate::system::layouts::Layouts::new(&paths.data),
+            rules: crate::rules::Rules::new(&paths.data),
+            focus: crate::focus::Focus::new(db.clone()),
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
             paths,
             settings,
@@ -187,6 +193,7 @@ impl AppCore {
             self.enable_browser_autofill(true);
         }
         self.start_watchers();
+        self.start_productivity();
         let games = self.games.clone();
         std::thread::spawn(move || games.recover());
         self.start_update_checks();
@@ -393,6 +400,48 @@ impl AppCore {
             self.layouts.import(layouts);
         }
         Ok(after)
+    }
+
+    /// Folder rules every half minute; the time tracker and the focus timer every few seconds.
+    fn start_productivity(self: &Arc<Self>) {
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("folder-rules".into())
+            .spawn(move || loop {
+                std::thread::sleep(Duration::from_secs(30));
+                let Some(core) = weak.upgrade() else { return };
+                let done = core.rules.run_once(std::time::SystemTime::now());
+                if !done.is_empty() {
+                    core.events.emit("rules:done", &done);
+                }
+            })
+            .ok();
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("focus".into())
+            .spawn(move || loop {
+                std::thread::sleep(crate::focus::SAMPLE);
+                let Some(core) = weak.upgrade() else { return };
+                let day = crate::focus::day_of(chrono::Local::now());
+                if core.settings.get().focus.track_time {
+                    if let Some(app) = crate::focus::foreground() {
+                        core.focus.sample(&app, crate::focus::SAMPLE.as_secs(), &day);
+                    }
+                }
+                let now_ms = chrono::Utc::now().timestamp_millis();
+                if let Some(phase) = core.focus.tick(&day, now_ms) {
+                    core.events.emit("focus:phase", serde_json::json!({ "phase": phase }));
+                    core.events.emit("focus:changed", serde_json::json!({}));
+                }
+                if core.focus.state().is_some() {
+                    let fake = core.media.is_fake();
+                    let open: Vec<String> = crate::system::open_apps::list(fake).into_iter().map(|a| a.key).collect();
+                    for key in core.focus.to_close(&open) {
+                        let _ = crate::system::open_apps::close(fake, &key);
+                    }
+                }
+            })
+            .ok();
     }
 
     /// The panic button: lock the vault (closing open hidden files), cut

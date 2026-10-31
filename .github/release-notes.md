@@ -1,21 +1,15 @@
 ## New in this version
 
-**Aurora becomes a music hub: search every music service from the player. Plus a Tools page, a panic button and voice commands for your PC.**
+**Let anyone send you files with a QR code, folder rules that tidy up by themselves, a focus timer with a time tracker, and tools for developers.**
 
-- **Search in Aurora** (the bar above the controls, or press **/**): songs, albums and artists. Pick one and it plays in the service you choose: **YouTube Music** plays the song itself; **Apple Music** opens it in the Apple Music app (or the web player); **Spotify**, **Spotify Web Player**, **SoundCloud** and **Amazon Music** open on it (press play: they only let their own signed-in apps start a song). **Automatic** uses the app that is playing, else your music app.
-- **Artist cards**: picture, a short bio, **Play** and **Shuffle**, top songs, and their albums in a carousel. Albums open to their songs.
-- **Up next** beside the song: the rest of its album and more by the artist. One click plays any of them.
-- **A big clock** at the top of Aurora (12- or 24-hour). All of it can be switched off in Aurora's settings → Music hub.
-- **Tools page**: a **checksum checker** (paste the SHA-256 from a website, pick the file), a **secure shredder** (overwrite, then delete), **bulk rename** with a live preview ({name}, {n:3}, {date}, find and replace, letter case), **recent files**, **ports** (“what is using port 3000?”, with End), and **window layouts** (save where your windows are, put them back with one click, starting missing apps).
-- **Command palette answers**: type **12*4**, **15% of 80** as **15% * 80**, **5 km in miles**, **100 f to c**, **uuid**, **base64 hello**, **sha256 text**, a Unix timestamp, or paste JSON to tidy it. Enter copies.
-- **Privacy & security**: a **panic button** (Settings, the tray menu, or your phone) locks the vault, cuts every phone off, stops screen sharing and locks the PC; a **notification when a paired phone connects**; and a **privacy dashboard** showing which apps used your microphone, camera or location, from Windows' own record.
-- **Voice**: **“Capri, lock my PC”**, **“Capri, open Spotify”** (any app in your Start menu), **“Capri, pause the music”**, **“next song”**, **“mute”**, **“Capri, panic”**.
-- **Phone**: take a **screenshot of the PC** and see it on the phone, **print** a file on the PC's printer, a **panic** button, and home-screen shortcuts (long-press the app icon: Lock PC, Screenshot, Mute PC).
-- **Settings backup** now includes your window layouts.
+- **Guest uploads** (Phone → Let someone send you files): show a QR code; anyone on your Wi-Fi scans it and sends you photos, videos or files from their browser, without pairing or installing anything. It only receives (they see nothing on your PC), works for 15 minutes to 4 hours and up to the size you pick, and you can end it any time. Files land in Incoming\Guests, and you get a notification for each one.
+- **Folder rules** (Tools → Folder rules): “PDFs in Downloads go to Documents\PDFs”, “copy photos to Pictures”, “installers older than 30 days go to the Recycle Bin”. A file is only touched once it has finished downloading, subfolders are left alone, nothing is overwritten, and deletions go to the Recycle Bin.
+- **Focus** (new page): a focus timer (25/5, 50/10 or 90/15) that closes the apps you choose (Discord, Steam…) if they open during a round, holds OmniHub's notifications until the break, and tells you when to rest. Plus a **time tracker** (off until you turn it on): how long each program was in front today and this week, only while you're at the PC; program names and minutes only, never window titles, kept on your PC.
+- **Projects** (Tools): every Git project in the folders you add, with its branch, uncommitted changes and commits to push or pull; open it in VS Code, a terminal or Explorer.
+- **PATH & variables** (Tools): edit your PATH (reorder, add, remove; missing folders crossed out) and your environment variables, the same ones System Properties edits.
+- **Dev servers on your phone** (Tools → Ports): the phone button next to a listening port shows a QR code that opens it on your phone, and says so when the server only listens on this PC.
 
-Notes: the music search uses Deezer's public catalogue and Wikipedia for bios; only what you type (and the playing song's title and artist, for Up next) is sent. The shredder can't reach copies an SSD keeps internally; BitLocker is what protects deleted files there.
-
-Also in 0.19.0: instant replay, “Capri, clip that”, Capri reacting to your games, and autofill in any browser.
+Also in 0.20.0: Aurora's music hub (search every music service from the player), the Tools page, the panic button, and more voice commands.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

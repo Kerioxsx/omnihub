@@ -143,6 +143,22 @@ disables the phone server, emits `app:panic` (the window hides) and locks
 Windows. `remote::auth::authenticate_seen` reports a phone back after ten
 minutes away (`remote:connected`).
 
+### Guests, rules, focus and dev tools
+
+`remote/guest.rs` holds guest links (code, expiry, byte and file limits with
+reservations so parallel uploads can't overshoot) and the guest page; the
+routes `/guest/{code}`, `/guest/{code}/info` and `PUT /guest/{code}/file`
+(streamed to a temporary file, then renamed) sit outside the paired-phone
+middleware. `rules.rs` keeps `rules.json` and runs every 30 s from
+`AppCore::start_productivity`, acting only on files unchanged between two
+looks. `focus.rs` samples the foreground program every 5 s (when the tracker
+is on and you aren't away) into `app_time` (migration 6), runs the focus
+timer (`focus_sessions`) and closes blocked windows through
+`system::open_apps::close`; the desktop holds non-urgent notifications during
+focus rounds. `devtools.rs` finds Git repositories (`git status
+--porcelain=v2 --branch`, read-only) and edits `HKCU\Environment`,
+broadcasting `WM_SETTINGCHANGE`.
+
 ### Aurora
 
 The music visuals are split so nothing time-critical waits on the network

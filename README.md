@@ -32,6 +32,13 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.21.0
+
+- **Guest uploads**: a QR code anyone on your Wi-Fi scans to send you files from their browser (no pairing, only receives, ends by itself).
+- **Folder rules**: move, copy or recycle files that land in a folder (only once they finish downloading; nothing overwritten).
+- **Focus**: a focus timer that keeps chosen apps closed during rounds, and a time tracker (opt-in, local, program names and minutes only).
+- **Developer tools**: Git projects dashboard, PATH and environment variable editor, phone QR codes for local dev servers.
+
 ## New in 0.20.0
 
 - **Aurora music hub**: search songs, albums and artists from the player and play them in YouTube Music, Apple Music, Spotify (app or web), SoundCloud or Amazon Music (or whichever app is playing); artist cards with bio, Play/Shuffle, top songs and an album carousel; album track lists; **Up next** from the album and artist; a big clock. Catalogue: Deezer's public API; bios: Wikipedia.

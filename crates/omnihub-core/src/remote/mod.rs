@@ -9,6 +9,7 @@
 pub mod api;
 pub mod assets;
 pub mod auth;
+pub mod guest;
 pub mod net;
 pub mod transfer;
 
@@ -99,6 +100,9 @@ pub struct RemoteServer {
     pub pairing: Pairing,
     pub tickets: Tickets,
     pub inbox: Inbox,
+    /// Guest upload links (QR codes for people without a paired phone).
+    pub guests: guest::Guests,
+    pub(crate) guest_limiter: RateLimiter,
     pub(crate) uploads: Mutex<Option<Arc<Uploads>>>,
     pub(crate) pair_limiter: RateLimiter,
     pub(crate) vault_limiter: RateLimiter,
@@ -124,6 +128,8 @@ impl RemoteServer {
             pairing: Pairing::default(),
             tickets: Tickets::default(),
             inbox: Inbox::with_db(db.clone()),
+            guests: guest::Guests::default(),
+            guest_limiter: RateLimiter::new(20, Duration::from_secs(60)),
             uploads: Mutex::new(None),
             pair_limiter: RateLimiter::new(10, Duration::from_secs(60)),
             vault_limiter: RateLimiter::new(5, Duration::from_secs(60)),
@@ -258,6 +264,7 @@ impl RemoteServer {
             }
             self.vault_sessions.lock().clear();
             self.pairing.close();
+            self.guests.stop_all();
             self.events.emit("remote:status", self.status());
         }
     }

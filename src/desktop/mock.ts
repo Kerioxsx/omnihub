@@ -3,7 +3,7 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { HashKind, MusicSource, PlayItem, RenameRule, CaptureKind, ChatSource, ConfigGame, ConfigOptions, DeepPartial, DupeOptions, EntryInput, GameKind, GameProfile, GeneratorOptions, MediaAction, ModSort, NewChatKind, NoteFilter, NoteInput, PowerAction, Priority, ProcessSort, Rect, RobloxFlags, RobloxShaders, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey, SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, TweakId } from '@shared/types';
+import type { FolderRule, HashKind, MusicSource, PlayItem, RenameRule, CaptureKind, ChatSource, ConfigGame, ConfigOptions, DeepPartial, DupeOptions, EntryInput, GameKind, GameProfile, GeneratorOptions, MediaAction, ModSort, NewChatKind, NoteFilter, NoteInput, PowerAction, Priority, ProcessSort, Rect, RobloxFlags, RobloxShaders, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey, SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, TweakId } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
@@ -18,6 +18,7 @@ import * as optimize from './mock/optimize';
 import * as updates from './mock/update';
 import * as tools from './mock/tools';
 import * as catalog from './mock/catalog';
+import * as prod from './mock/productivity';
 
 let playInstalled = false;
 let playRecording = false;
@@ -340,6 +341,28 @@ const handlers: Record<string, Handler> = {
   notes_export: (a) => notes.noteExport(str(a, 'id')),
   notes_folder_files: () => notes.folderFiles(),
   notes_folder_read: (a) => notes.folderRead(str(a, 'path')),
+
+  // guests, folder rules, focus and time, dev tools
+  guests_create: (a) => prod.guestCreate(str(a, 'label'), num(a, 'minutes'), num(a, 'maxBytes')),
+  guests_list: () => prod.guestList(),
+  guests_stop: (a) => prod.guestStop(str(a, 'code')),
+  rules_list: () => prod.ruleList(),
+  rules_save: (a) => prod.ruleSave(obj<FolderRule>(a, 'rule')),
+  rules_delete: (a) => prod.ruleDelete(str(a, 'id')),
+  rules_log: () => prod.ruleLog(),
+  rules_run: () => [],
+  focus_state: () => prod.focusState(),
+  focus_start: (a) => prod.focusStart(num(a, 'focusMinutes'), num(a, 'breakMinutes'), strList(a, 'blocked')),
+  focus_stop: () => prod.focusStop(),
+  time_report: () => prod.timeReport(core.settings.focus.trackTime),
+  time_clear: () => undefined,
+  dev_projects: (a) => prod.projects(strList(a, 'roots')),
+  dev_environment: () => prod.environment(),
+  dev_set_path: (a) => prod.setPath(strList(a, 'entries')),
+  dev_set_var: (a) => prod.setVar(str(a, 'name'), str(a, 'value')),
+  dev_remove_var: (a) => prod.removeVar(str(a, 'name')),
+  dev_lan_link: (a) => prod.lanLink(num(a, 'port'), str(a, 'local')),
+  dev_open: () => undefined,
 
   // Aurora's music hub
   music_search: (a) => catalog.search(str(a, 'query')),

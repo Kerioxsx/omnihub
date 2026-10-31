@@ -702,6 +702,40 @@ everything back if a step fails. **Ports → End** refuses Windows' own
 processes. **Window layouts** only move windows and, when you ask, start the
 programs saved in the layout from the paths recorded when it was saved.
 
+## Guest uploads
+
+A guest link (Phone → Let someone send you files) lets a device that isn't
+paired upload files, and nothing else. Its code is 18 random bytes, it ends
+after the time you picked (15 minutes to 4 hours), when you end it, or when
+the phone server stops; it takes at most the size you picked and 500 files.
+A guest gets an upload page and nothing else: no listing, no downloads, no
+other API (those still need a paired phone). File names are reduced to a
+plain name (no folders, no reserved Windows names) and never overwrite;
+a file is written under a temporary name and kept only when exactly as many
+bytes arrived as announced. Wrong codes are rate-limited per address. Like
+everything else on the phone server, only devices on your local network can
+reach it. Each file is in the activity log as `guest:<name>`.
+
+## Folder rules, time tracking and the environment editor
+
+**Folder rules** only act on files directly in the folder you picked, only
+once a file has stood still for two looks (half a minute apart) and wasn't
+changed in the last ten seconds, skip names of partial downloads, never
+overwrite (a name already taken gets " (2)"), and send deletions to the
+Recycle Bin. A rule can't watch or fill Windows' or Program Files' folders,
+and a Recycle Bin rule needs file types or words so it can't take everything.
+
+The **time tracker** is off until you turn it on. It records, every five
+seconds while you used the keyboard or mouse in the last two minutes, the
+executable name of the program in front (never window titles), summed per
+day in OmniHub's database on this PC. Clear removes all of it. The **focus
+timer** closes the programs you listed (politely, like clicking ×; never
+Windows' own) only during focus rounds.
+
+**PATH & variables** writes your user environment
+(`HKCU\Environment`) only; the system PATH is shown read-only. Changes are
+in the activity log.
+
 ## Internet
 
 There is no cloud service and no account. OmniHub itself contacts the

@@ -966,6 +966,205 @@ pub async fn hidden_cancel(job: String) -> Res<()> {
 
 // ---------- Capri and your games ----------
 
+// ---------- guests, folder rules, focus and time, dev tools ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GuestCreated {
+    link: omnihub_core::remote::guest::GuestLink,
+    urls: Vec<String>,
+    qr_svgs: Vec<String>,
+}
+
+#[tauri::command]
+pub async fn guests_create(core: Core<'_>, label: String, minutes: u32, max_bytes: u64) -> Res<GuestCreated> {
+    let status = core.remote.status();
+    if !status.running {
+        return Err("Turn on the phone companion first.".into());
+    }
+    let link = core.remote.guests.create(&label, minutes, max_bytes);
+    let urls: Vec<String> = status.urls.iter().map(|u| format!("{u}/guest/{}", link.code)).collect();
+    let qr_svgs = urls.iter().map(|u| omnihub_core::remote::net::qr_svg(u)).collect();
+    core.audit.record("desktop", "guest.link", &format!("{} for {minutes} min", link.label), true);
+    Ok(GuestCreated { link, urls, qr_svgs })
+}
+
+#[tauri::command]
+pub async fn guests_list(core: Core<'_>) -> Res<Vec<omnihub_core::remote::guest::GuestLink>> {
+    Ok(core.remote.guests.list())
+}
+
+#[tauri::command]
+pub async fn guests_stop(core: Core<'_>, code: String) -> Res<()> {
+    core.remote.guests.stop(&code);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn rules_list(core: Core<'_>) -> Res<Vec<omnihub_core::rules::Rule>> {
+    Ok(core.rules.list())
+}
+
+#[tauri::command]
+pub async fn rules_save(core: Core<'_>, rule: omnihub_core::rules::Rule) -> Res<omnihub_core::rules::Rule> {
+    let core = core.inner().clone();
+    blocking(move || core.rules.save(rule)).await
+}
+
+#[tauri::command]
+pub async fn rules_delete(core: Core<'_>, id: String) -> Res<()> {
+    core.rules.delete(&id)
+}
+
+#[tauri::command]
+pub async fn rules_log(core: Core<'_>) -> Res<Vec<omnihub_core::rules::Done>> {
+    Ok(core.rules.log())
+}
+
+#[tauri::command]
+pub async fn rules_run(core: Core<'_>) -> Res<Vec<omnihub_core::rules::Done>> {
+    let core = core.inner().clone();
+    // Twice: the first look notes the files, the second moves the ones that stood still.
+    blocking(move || {
+        let later = std::time::SystemTime::now() + Duration::from_secs(15);
+        core.rules.run_once(later);
+        Ok(core.rules.run_once(later))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn focus_state(core: Core<'_>) -> Res<Option<omnihub_core::focus::FocusState>> {
+    Ok(core.focus.state())
+}
+
+#[tauri::command]
+pub async fn focus_start(core: Core<'_>, focus_minutes: u32, break_minutes: u32, blocked: Vec<String>) -> Res<omnihub_core::focus::FocusState> {
+    let s = core.focus.start(focus_minutes, break_minutes, blocked, omnihub_core::focus::now_ms());
+    core.events.emit("focus:changed", serde_json::json!({}));
+    Ok(s)
+}
+
+#[tauri::command]
+pub async fn focus_stop(core: Core<'_>) -> Res<()> {
+    core.focus.stop(&omnihub_core::focus::today(), omnihub_core::focus::now_ms());
+    core.events.emit("focus:changed", serde_json::json!({}));
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn time_report(core: Core<'_>) -> Res<omnihub_core::focus::TimeReport> {
+    let core = core.inner().clone();
+    blocking(move || {
+        Ok(core.focus.report(&omnihub_core::focus::today(), core.settings.get().focus.track_time, &omnihub_core::focus::last_days(7)))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn time_clear(core: Core<'_>) -> Res<()> {
+    core.focus.clear()
+}
+
+#[tauri::command]
+pub async fn dev_projects(roots: Vec<String>) -> Res<Vec<omnihub_core::devtools::Project>> {
+    blocking(move || {
+        let found = omnihub_core::devtools::find_projects(&roots, 4);
+        let mut out: Vec<_> = found.iter().map(|p| omnihub_core::devtools::project(p)).collect();
+        // Work in progress first, then the most recently committed.
+        out.sort_by(|a, b| (b.changes + b.ahead > 0).cmp(&(a.changes + a.ahead > 0)).then(b.last_commit.cmp(&a.last_commit)));
+        Ok(out)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn dev_environment() -> Res<omnihub_core::devtools::Environment> {
+    blocking(|| Ok(omnihub_core::devtools::environment())).await
+}
+
+#[tauri::command]
+pub async fn dev_set_path(core: Core<'_>, entries: Vec<String>) -> Res<omnihub_core::devtools::Environment> {
+    blocking(move || omnihub_core::devtools::set_user_path(&entries)).await?;
+    core.audit.record("desktop", "env.path", "user PATH changed", true);
+    blocking(|| Ok(omnihub_core::devtools::environment())).await
+}
+
+#[tauri::command]
+pub async fn dev_set_var(core: Core<'_>, name: String, value: String) -> Res<omnihub_core::devtools::Environment> {
+    let shown = name.clone();
+    blocking(move || omnihub_core::devtools::set_var(&name, &value)).await?;
+    core.audit.record("desktop", "env.set", &shown, true);
+    blocking(|| Ok(omnihub_core::devtools::environment())).await
+}
+
+#[tauri::command]
+pub async fn dev_remove_var(core: Core<'_>, name: String) -> Res<omnihub_core::devtools::Environment> {
+    let shown = name.clone();
+    blocking(move || omnihub_core::devtools::remove_var(&name)).await?;
+    core.audit.record("desktop", "env.remove", &shown, true);
+    blocking(|| Ok(omnihub_core::devtools::environment())).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanLink {
+    urls: Vec<String>,
+    qr_svgs: Vec<String>,
+    note: String,
+}
+
+/// A local dev server (a port on this PC) as a link and QR code for a phone on the same Wi-Fi.
+#[tauri::command]
+pub async fn dev_lan_link(port: u16, local: String) -> Res<LanLink> {
+    if local.starts_with("127.") || local == "::1" {
+        return Ok(LanLink { urls: vec![], qr_svgs: vec![], note: "It only listens on this PC (127.0.0.1), so a phone can't reach it. Start it listening on all addresses (for example --host 0.0.0.0 or --host).".into() });
+    }
+    blocking(move || {
+        let mut addrs = omnihub_core::remote::net::lan_addresses();
+        addrs.sort_by_key(|a| (!a.primary, a.virtual_adapter));
+        let urls: Vec<String> = addrs.iter().filter(|a| !a.virtual_adapter).map(|a| format!("http://{}:{port}", a.ip)).collect();
+        let qr_svgs = urls.iter().map(|u| omnihub_core::remote::net::qr_svg(u)).collect();
+        let note = if urls.is_empty() { "This PC isn't on a network a phone can reach.".to_string() } else { String::new() };
+        Ok(LanLink { urls, qr_svgs, note })
+    })
+    .await
+}
+
+/// Open a project folder in VS Code, a terminal, or Explorer.
+#[tauri::command]
+pub async fn dev_open(path: String, app: String) -> Res<()> {
+    let dir = PathBuf::from(&path);
+    if !dir.is_dir() {
+        return Err("That folder is gone.".into());
+    }
+    blocking(move || {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const NO_WINDOW: u32 = 0x0800_0000;
+            const NEW_CONSOLE: u32 = 0x0000_0010;
+            match app.as_str() {
+                "code" => std::process::Command::new("cmd").args(["/C", "code", "."]).current_dir(&dir).creation_flags(NO_WINDOW).spawn().map(|_| ()).map_err(|_| "VS Code isn't installed (or isn't on PATH).".to_string()),
+                "terminal" => std::process::Command::new("wt.exe")
+                    .arg("-d")
+                    .arg(&dir)
+                    .spawn()
+                    .map(|_| ())
+                    .or_else(|_| std::process::Command::new("cmd.exe").current_dir(&dir).creation_flags(NEW_CONSOLE).spawn().map(|_| ()))
+                    .map_err(err),
+                _ => omnihub_core::system::shell::open_path(&dir).map_err(err),
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = app;
+            omnihub_core::system::shell::open_path(&dir).map_err(err)
+        }
+    })
+    .await
+}
+
 // ---------- Aurora's music hub ----------
 
 use omnihub_core::media::catalog;

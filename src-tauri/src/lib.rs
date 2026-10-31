@@ -48,6 +48,8 @@ fn init_logging(paths: &AppPaths) {
 fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String, String)> {
     match topic {
         "remote:paired" => Some(("Phone paired".into(), format!("{} can now connect to this PC.", payload["name"].as_str().unwrap_or("A phone")))),
+        "guest:received" => Some((format!("{} sent you a file", payload["label"].as_str().unwrap_or("A guest")), format!("{} · saved in Incoming\\Guests", payload["name"].as_str().unwrap_or("file")))),
+        "focus:phase" => Some(if payload["phase"] == "break" { ("Time for a break".into(), "Focus round done. Stretch, drink some water.".into()) } else { ("Back to focus".into(), "The break is over.".into()) }),
         "remote:connected" => Some((
             format!("{} connected", payload["name"].as_str().unwrap_or("A phone")),
             format!("From {}. Not you? Open OmniHub → Phone to remove it, or press the panic button.", payload["ip"].as_str().unwrap_or("your network")),
@@ -161,7 +163,10 @@ pub fn run(args: Vec<String>) {
                             let hidden = !rest::main_shown();
                             // Reminders are due now, and a phone connecting is worth
                             // knowing about: always a Windows notification.
-                            if hidden || ev.topic == "notes:reminder" || ev.topic == "remote:connected" {
+                            // During a focus round only what matters gets through.
+                            let focusing = h.state::<std::sync::Arc<omnihub_core::core::AppCore>>().focus.state().is_some_and(|f| f.phase == omnihub_core::focus::Phase::Focus);
+                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending");
+                            if (hidden || important) && (!focusing || important) {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
                                     shortcuts::notify(&h, &title, &body);
                                 }
@@ -459,6 +464,26 @@ pub fn run(args: Vec<String>) {
             commands::vault_wifi_qr,
             commands::vault_import_file,
             commands::hidden_list,
+            commands::guests_create,
+            commands::guests_list,
+            commands::guests_stop,
+            commands::rules_list,
+            commands::rules_save,
+            commands::rules_delete,
+            commands::rules_log,
+            commands::rules_run,
+            commands::focus_state,
+            commands::focus_start,
+            commands::focus_stop,
+            commands::time_report,
+            commands::time_clear,
+            commands::dev_projects,
+            commands::dev_environment,
+            commands::dev_set_path,
+            commands::dev_set_var,
+            commands::dev_remove_var,
+            commands::dev_lan_link,
+            commands::dev_open,
             commands::music_search,
             commands::music_artist,
             commands::music_album,
