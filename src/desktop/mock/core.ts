@@ -38,6 +38,7 @@ export const settings: Settings = {
     allowServers: true,
     sendToMenu: true,
     connectAlerts: true,
+    scansDir: null,
   },
   screenshots: { dir: null, format: 'png', hotkeyRegion: 'Alt+Shift+S', hotkeyFull: 'Alt+Shift+A', hotkeyWindow: 'Alt+Shift+W', copyToClipboard: true },
   screen: { preset: 'balanced', maxFps: 60, scrcpyPath: null, sunshinePath: null, airplay: { name: 'GAMING-PC (OmniHub)', quality: '1080p', fps: 60, audio: true, requirePin: true, lowLatency: true, fullscreen: false, safeMode: false }, airplayKeepOnTop: false, airplayPip: false, airplayAutoStart: false, uxplayPath: null },
@@ -46,6 +47,7 @@ export const settings: Settings = {
   visuals: structuredClone(DEFAULT_VISUALS),
   focus: { trackTime: true, blocked: ['discord.exe', 'steam.exe'] },
   dev: { roots: ['C:\\Users\\Player\\source'] },
+  approvals: { enabled: false, vault: true, admin: true, shred: true, environment: true },
   updates: { check: true, autoInstall: true },
   chats: { allowPhone: true, phoneAgents: true, claudeMode: 'acceptEdits', codexSandbox: 'workspace-write', capri: false },
   play: { capriReacts: false, voice: false, voiceOnlyInGames: true, nickname: '', nicknames: [], replay: false, replayMinutes: 10, clipSeconds: 30, fps: 60, quality: 'standard', gameAudio: true, monitor: 0, folder: null, autoClip: true },
@@ -145,7 +147,8 @@ export function pickFolder(title: string | null): string | null {
   return 'C:\\Users\\Player\\Documents';
 }
 
-export function pickFiles(): string[] {
+export function pickFiles(title?: string | null): string[] {
+  if (title && /picture/i.test(title)) return ['C:\\Users\\Player\\Pictures\\Phone\\IMG_2041.HEIC', 'C:\\Users\\Player\\Pictures\\Phone\\PXL_20261012_174203.jpg', 'C:\\Users\\Player\\Pictures\\Phone\\beach day.jpg'];
   return ['C:\\Users\\Player\\Videos\\Edits\\Phoenix Trailer\\Phoenix Trailer v3 final.mp4', 'C:\\Users\\Player\\Documents\\Work\\Roadmap 2026-10.pdf'];
 }
 

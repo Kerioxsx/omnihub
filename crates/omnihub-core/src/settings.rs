@@ -30,6 +30,28 @@ pub struct Settings {
     pub play: PlaySettings,
     pub focus: FocusSettings,
     pub dev: DevSettings,
+    pub approvals: ApprovalSettings,
+}
+
+/// Approve on your phone: which actions on the PC wait for a tap on a paired phone.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ApprovalSettings {
+    pub enabled: bool,
+    /// Opening a vault login or copying its password.
+    pub vault: bool,
+    /// Restarting OmniHub as administrator.
+    pub admin: bool,
+    /// Shredding files.
+    pub shred: bool,
+    /// Changing PATH and environment variables.
+    pub environment: bool,
+}
+
+impl Default for ApprovalSettings {
+    fn default() -> Self {
+        ApprovalSettings { enabled: false, vault: true, admin: true, shred: true, environment: true }
+    }
 }
 
 /// The focus timer and the time tracker (off until turned on).
@@ -892,6 +914,8 @@ pub struct RemoteSettings {
     pub send_to_menu: bool,
     /// A notification when a paired phone connects (after 10 minutes away).
     pub connect_alerts: bool,
+    /// Where pages scanned with the phone go (default Documents\\OmniHub Scans).
+    pub scans_dir: Option<String>,
 }
 
 impl Default for RemoteSettings {
@@ -918,6 +942,7 @@ impl Default for RemoteSettings {
             allow_servers: true,
             send_to_menu: true,
             connect_alerts: true,
+            scans_dir: None,
         }
     }
 }

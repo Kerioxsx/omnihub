@@ -159,6 +159,38 @@ focus rounds. `devtools.rs` finds Git repositories (`git status
 --porcelain=v2 --branch`, read-only) and edits `HKCU\Environment`,
 broadcasting `WM_SETTINGCHANGE`.
 
+### Phone sensors, approvals, downloads, images and video
+
+The scanner's picture work happens on the phone (`src/mobile/lib/scan.ts`):
+the page is the largest region above an Otsu threshold on a 320-px copy, its
+corners the extreme points; a homography (unit square → quad) straightens it
+with bilinear sampling, and the levels are stretched. `POST /api/scan` takes
+base64 JPEGs (route body limit 96 MB) to `AppCore::scan`: `scan.rs` writes a
+PDF by hand (DCTDecode, so the JPEGs aren't re-encoded) or the single JPEG,
+`capture::ocr::recognize_bytes` reads each page with Windows.Media.Ocr, and
+receipts and cards are parsed into fields (and a vCard). `POST /api/type`
+uses `capture::stream::input::text` (SendInput, Unicode) behind
+`allow_control`. `remote/board.rs` keeps the whiteboard's strokes in memory
+(normalised points, checked colour and width, capped counts) and emits
+`board:*` events. `remote/approvals.rs` parks a request with an `mpsc`
+channel; `AppCore::approve` emits `approval:request`, waits up to 60 s for a
+phone's `POST /api/approvals/{id}`, and remembers a yes for the same thing
+for two minutes; the Tauri commands for vault reveal/copy, restart as admin,
+shredding, the environment editor and loosening the setting call it.
+`downloads.rs` streams direct links with ureq to a temporary file (name from
+Content-Disposition or the URL, made safe), or hands HTML pages to
+`StreamTool::download` (yt-dlp with `--print after_move:filepath`, progress
+from `--newline`, FFmpeg for merging when instant replay downloaded it).
+`images.rs` strips metadata by rewriting JPEG segments (APP1/APP13/COM and
+anything after EOI go; an EXIF block with only the orientation is written
+back), PNG text/eXIf/tIME chunks and WebP EXIF/XMP chunks; resizing uses
+`fast_image_resize` (Lanczos3); HEIC and other formats `image` can't read are
+decoded by WinRT's BitmapDecoder. `videotools.rs` probes with `ffmpeg -i`,
+picks the first H.264 encoder that works (NVENC, AMF, QSV, Media Foundation,
+OpenH264, then MPEG-4 part 2) with a 15-frame test, sizes the bitrate from
+bits per pixel (or from the target size, lowering the picture's height when
+the budget is thin), and reads progress from `-progress pipe:1`.
+
 ### Aurora
 
 The music visuals are split so nothing time-critical waits on the network

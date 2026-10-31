@@ -1,7 +1,7 @@
 // "Share → OmniHub" from any app on the phone (Android, with OmniHub added
 // to the home screen): a link or text arrives here, and goes to the PC.
 
-import { ClipboardCopy, ExternalLink, Lightbulb } from 'lucide-react';
+import { ClipboardCopy, CloudDownload, ExternalLink, Lightbulb } from 'lucide-react';
 import { useState } from 'react';
 import { client } from '../client';
 import { errorMessage } from '../lib/util';
@@ -54,6 +54,15 @@ export function ShareSheet({ shared, onClose }: { shared: Shared | null; onClose
             <span className="flex-1">
               <span className="block text-[15px] font-semibold">Open on the PC</span>
               <span className="block truncate text-[12.5px] text-dim">{link}</span>
+            </span>
+          </button>
+        )}
+        {link && f?.uploads && (
+          <button type="button" className={row} disabled={!!busy} onClick={() => go('dl', () => client.downloadOnPc(link, 'auto'), 'Downloading on the PC')}>
+            <CloudDownload size={20} className="text-accent" />
+            <span className="flex-1">
+              <span className="block text-[15px] font-semibold">Download on the PC</span>
+              <span className="block text-[12.5px] text-dim">The file, or the video on the page, into Downloads\OmniHub</span>
             </span>
           </button>
         )}

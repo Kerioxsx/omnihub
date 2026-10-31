@@ -68,6 +68,10 @@ pub struct AppCore {
     pub rules: crate::rules::Rules,
     /// The focus timer and the time tracker.
     pub focus: crate::focus::Focus,
+    /// Compress, convert, cut and take the sound out of videos (FFmpeg).
+    pub video: crate::videotools::VideoTools,
+    /// Links downloaded for a phone (or the PC).
+    pub downloads: Arc<crate::downloads::Downloads>,
     pub updater: Arc<crate::update::Updater>,
     pub media: Arc<crate::media::MediaHub>,
     /// Listens to the PC's sound for the music visuals (only while one is shown).
@@ -108,6 +112,8 @@ impl AppCore {
         let media = crate::media::MediaHub::new(&paths.data, events.clone(), opts.fake_media);
         let games = crate::games::GameHub::new(&paths.data, events.clone(), procs.clone());
         let play = crate::play::PlayHub::new(&paths.data, events.clone());
+        let video = crate::videotools::VideoTools::new(play.ffmpeg_path(), events.clone());
+        let downloads = Arc::new(crate::downloads::Downloads::new(media.clone(), play.ffmpeg_path(), events.clone()));
         let mods = crate::mods::ModHub::new(&paths.data, events.clone(), games.clone(), procs.clone());
         let chats = crate::chats::ChatHub::new(&paths.data, events.clone(), mods.claude.clone());
         let mcserver = crate::mcserver::ServerHub::new(&paths.data, events.clone(), mods.clone());
@@ -138,6 +144,8 @@ impl AppCore {
             layouts: crate::system::layouts::Layouts::new(&paths.data),
             rules: crate::rules::Rules::new(&paths.data),
             focus: crate::focus::Focus::new(db.clone()),
+            video,
+            downloads,
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
             paths,
             settings,
@@ -344,6 +352,105 @@ impl AppCore {
         self.settings.get().screenshots.dir.map(PathBuf::from).unwrap_or_else(screenshots::default_dir)
     }
 
+    /// Where pages scanned with the phone go.
+    pub fn scans_dir(&self) -> PathBuf {
+        self.settings.get().remote.scans_dir.filter(|d| !d.trim().is_empty()).map(PathBuf::from).unwrap_or_else(|| dirs::document_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Documents")).join("OmniHub Scans"))
+    }
+
+    /// Pages from the phone's scanner: saved (PDF, or the picture for one
+    /// page), read with Windows' text recognition, a receipt or card read into
+    /// fields, and a note made when asked.
+    pub fn scan(&self, kind: crate::scan::Kind, title: &str, target: crate::scan::Target, pages: Vec<Vec<u8>>, from: &str) -> Result<crate::scan::Scanned, String> {
+        use crate::scan::{self, Kind, Target};
+        if pages.is_empty() || pages.len() > 60 {
+            return Err("Send between 1 and 60 pages.".into());
+        }
+        if pages.iter().any(|p| scan::jpeg_size(p).is_none()) {
+            return Err("A page isn't a JPEG picture.".into());
+        }
+        let name = scan::file_title(title, kind);
+        let file = scan::save_pages(&self.scans_dir(), &name, &pages)?;
+        let mut text = String::new();
+        for p in &pages {
+            if let Ok(t) = crate::capture::ocr::recognize_bytes(p.clone()) {
+                if !text.is_empty() && !t.trim().is_empty() {
+                    text.push_str("\n\n");
+                }
+                text.push_str(t.trim());
+            }
+        }
+        let fields = match kind {
+            Kind::Receipt => scan::parse_receipt(&text),
+            Kind::Card => scan::parse_card(&text),
+            Kind::Document => Vec::new(),
+        };
+        let mut files = vec![file.display().to_string()];
+        if target == Target::Folder && !text.trim().is_empty() {
+            let t = file.with_extension("txt");
+            std::fs::write(&t, &text).map_err(|e| e.to_string())?;
+            files.push(t.display().to_string());
+        }
+        if kind == Kind::Card && !fields.is_empty() {
+            let v = file.with_extension("vcf");
+            std::fs::write(&v, scan::vcard(&fields)).map_err(|e| e.to_string())?;
+            files.push(v.display().to_string());
+        }
+        let field = |k: &str| fields.iter().find(|(f, _)| f == k).map(|(_, v)| v.clone());
+        let note_id = if target == Target::Notes {
+            let shown = match (title.trim(), kind) {
+                (t, _) if !t.is_empty() => t.to_string(),
+                (_, Kind::Receipt) => format!("Receipt{}{}", field("Shop").map(|s| format!(" – {s}")).unwrap_or_default(), field("Total").map(|t| format!(" ({t})")).unwrap_or_default()),
+                (_, Kind::Card) => field("Name").unwrap_or_else(|| "Business card".into()),
+                _ => name.clone(),
+            };
+            let tag = match kind {
+                Kind::Document => "scan",
+                Kind::Receipt => "receipt",
+                Kind::Card => "card",
+            };
+            let note = self
+                .notes
+                .save(crate::notes::NoteInput { id: None, kind: Default::default(), title: shown, body: scan::note_body(kind, &fields, &text, &file), tags: vec![tag.into()], pinned: false, color: None, locked: false })
+                .map_err(|e| e.to_string())?;
+            Some(note.id)
+        } else {
+            None
+        };
+        self.audit.record(from, "scan", &file.display().to_string(), true);
+        self.events.emit("scan:saved", serde_json::json!({ "path": file.display().to_string(), "from": from }));
+        Ok(scan::Scanned { title: name, files, text, fields, note_id })
+    }
+
+    /// Approve on your phone: waits for a paired phone's yes when this kind
+    /// of action is chosen in Settings. Nothing is asked with no phone paired
+    /// or the phone connection off.
+    pub fn approve(&self, kind: crate::remote::approvals::Kind, detail: &str) -> Result<(), String> {
+        use crate::remote::approvals::{Kind, WAIT};
+        let s = self.settings.get();
+        let a = &s.approvals;
+        let wanted = a.enabled
+            && match kind {
+                Kind::VaultReveal => a.vault,
+                Kind::Admin => a.admin,
+                Kind::Shred => a.shred,
+                Kind::Environment => a.environment,
+                Kind::Settings => true,
+            };
+        if !wanted || !s.remote.enabled || !self.remote.devices.list().iter().any(|d| !d.revoked) || self.remote.approvals.recently(kind, detail) {
+            return Ok(());
+        }
+        let events = self.events.clone();
+        let mut id = String::new();
+        let r = self.remote.approvals.ask(kind, detail, WAIT, |req| {
+            id = req.id.clone();
+            events.emit("approval:request", req);
+        });
+        self.events.emit("approval:done", serde_json::json!({ "id": id, "approved": r.is_ok() }));
+        let device = r?;
+        self.audit.record(&format!("phone:{device}"), "approved", &format!("{} ({detail})", kind.label()), true);
+        Ok(())
+    }
+
     pub fn incoming_dir(&self) -> PathBuf {
         self.settings
             .get()
@@ -393,6 +500,12 @@ impl AppCore {
         if let Some(remote) = patch.get_mut("remote").and_then(|r| r.as_object_mut()) {
             for k in ["deviceName", "enabled", "port", "bind", "tls"] {
                 remote.remove(k);
+            }
+        }
+        // A backup can't switch approve-on-phone off behind its back.
+        if self.settings.get().approvals.enabled {
+            if let Some(o) = patch.as_object_mut() {
+                o.remove("approvals");
             }
         }
         let after = self.update_settings(&patch).map_err(|e| e.to_string())?;

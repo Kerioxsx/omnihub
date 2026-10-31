@@ -427,6 +427,7 @@ export function SettingsPage() {
               <CommitInput label="Device name" value={s.remote.deviceName} className="w-[220px]" validate={(v) => (v.trim() ? null : 'Required')} onCommit={(v) => void update({ remote: { deviceName: v.trim() } })} />
             </Row>
             <PathRow title="Incoming folder" hint="Files sent from phones are saved here." value={s.remote.incomingDir} fallback={info?.incomingDir} pickTitle="Choose the incoming folder" onPick={(p) => void update({ remote: { incomingDir: p } })} onClear={() => void update({ remote: { incomingDir: null } })} />
+            <PathRow title="Scans folder" hint="Pages scanned with the phone (More → Scan) are saved here, with their text." value={s.remote.scansDir} fallback="Documents\\OmniHub Scans" pickTitle="Choose the scans folder" onPick={(p) => void update({ remote: { scansDir: p } })} onClear={() => void update({ remote: { scansDir: null } })} />
           </Section>
 
           <MusicSection />
@@ -480,6 +481,28 @@ export function SettingsPage() {
             <Row title="Alert when a phone connects" hint="A Windows notification when a paired phone connects after being away for 10 minutes, so you know if someone else uses it.">
               <Switch checked={s.remote.connectAlerts} onChange={(v) => void update({ remote: { connectAlerts: v } })} label="Connect alerts" />
             </Row>
+            <Row title="Approve on your phone" hint="Before these happen on the PC, OmniHub asks your paired phone and waits up to a minute for Allow (open OmniHub on the phone). Turning this off needs the phone too. It slows down someone at your PC; it isn’t a lock against someone with your Windows account and time.">
+              <Switch checked={s.approvals.enabled} onChange={(v) => void update({ approvals: { enabled: v } }).catch((e: unknown) => toast.error('Not changed', errorText(e)))} label="Approve on your phone" />
+            </Row>
+            {s.approvals.enabled && (
+              <Row title="Ask for" stack>
+                <div className="grid grid-cols-2 gap-2 text-[13px]">
+                  {(
+                    [
+                      ['vault', 'Opening a vault login or copying its password'],
+                      ['admin', 'Restarting OmniHub as administrator'],
+                      ['shred', 'Shredding files'],
+                      ['environment', 'Changing PATH and environment variables'],
+                    ] as const
+                  ).map(([k, label]) => (
+                    <label key={k} className="flex items-center gap-2 rounded-lg border border-line px-3 py-2">
+                      <input type="checkbox" className="accent-[var(--accent)]" checked={s.approvals[k]} onChange={(e) => void update({ approvals: { [k]: e.target.checked } }).catch((err: unknown) => toast.error('Not changed', errorText(err)))} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </Row>
+            )}
             <PrivacyDashboard />
             <Row
               title={

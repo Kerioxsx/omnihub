@@ -230,6 +230,62 @@ impl StreamTool {
         }
     }
 
+    /// Download a page's video (or only its sound) into `dir` for "Download
+    /// from your phone". `progress` gets 0–100; `stop` cancels. Returns the file.
+    pub fn download(&self, url: &str, dir: &Path, audio_only: bool, ffmpeg: Option<&Path>, stop: &AtomicBool, progress: &mut dyn FnMut(f32)) -> Result<PathBuf, String> {
+        use std::io::BufRead;
+        if !self.status().installed {
+            return Err("The video helper isn't downloaded.".into());
+        }
+        self.update_now_and_then(crate::db::now().max(0) as u64);
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        let format = match (audio_only, ffmpeg.is_some()) {
+            (true, _) => "ba[ext=m4a]/ba",
+            (false, true) => "bv*[ext=mp4][vcodec!^=av01]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
+            // Without FFmpeg only single-file formats work.
+            (false, false) => "b[ext=mp4]/b",
+        };
+        let mut c = command(&self.ytdlp());
+        c.arg("--js-runtimes").arg(format!("deno:{}", self.deno().display()));
+        c.args(["--no-playlist", "--no-warnings", "--ignore-config", "--no-mtime", "--newline", "--progress", "--print", "after_move:filepath", "--cache-dir"]).arg(self.dir.join("cache"));
+        if let Some(f) = ffmpeg {
+            c.arg("--ffmpeg-location").arg(f).args(["--merge-output-format", "mp4"]);
+        }
+        c.args(["-f", format, "-o"]).arg(dir.join("%(title).150B [%(id)s].%(ext)s")).arg("--").arg(url);
+        let mut child = c.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().map_err(|e| format!("Could not start yt-dlp: {e}"))?;
+        let stderr = child.stderr.take();
+        let errors = std::thread::spawn(move || {
+            let mut s = String::new();
+            if let Some(mut e) = stderr {
+                let _ = std::io::Read::read_to_string(&mut e, &mut s);
+            }
+            s
+        });
+        let mut file = None;
+        if let Some(out) = child.stdout.take() {
+            for line in std::io::BufReader::new(out).lines().map_while(Result::ok) {
+                if stop.load(Ordering::SeqCst) {
+                    let _ = child.kill();
+                    break;
+                }
+                if let Some(p) = percent_in(&line) {
+                    progress(p);
+                } else if !line.starts_with('[') && Path::new(line.trim()).is_absolute() {
+                    file = Some(PathBuf::from(line.trim()));
+                }
+            }
+        }
+        let status = child.wait().map_err(|e| e.to_string())?;
+        let err = errors.join().unwrap_or_default();
+        if stop.load(Ordering::SeqCst) {
+            return Err("Cancelled.".into());
+        }
+        match file.filter(|f| f.is_file()) {
+            Some(f) if status.success() => Ok(f),
+            _ => Err(explain(&err)),
+        }
+    }
+
     /// yt-dlp updates itself (checked against its release's checksums), at
     /// most once a day, in the background.
     fn update_now_and_then(&self, now: u64) {
@@ -243,6 +299,13 @@ impl StreamTool {
             let _ = command(&exe).args(["-U", "--no-warnings"]).output();
         });
     }
+}
+
+/// "[download]  42.3% of 10.00MiB at ..." → 42.3
+pub fn percent_in(line: &str) -> Option<f32> {
+    let rest = line.strip_prefix("[download]")?.trim_start();
+    let (num, _) = rest.split_once('%')?;
+    num.trim().parse().ok()
 }
 
 fn command(exe: &Path) -> std::process::Command {

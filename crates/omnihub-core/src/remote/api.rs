@@ -103,6 +103,16 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/panic", post(panic))
         .route("/api/screenshot", post(screenshot))
         .route("/api/print", post(print_file))
+        .route("/api/approvals", get(approvals_list))
+        .route("/api/approvals/{id}", post(approvals_answer))
+        .route("/api/scan", post(scan_pages).layer(DefaultBodyLimit::max(SCAN_MAX)))
+        .route("/api/type", post(type_text))
+        .route("/api/board", get(board_get).post(board_add).delete(board_clear))
+        .route("/api/board/undo", post(board_undo))
+        .route("/api/downloads", get(downloads_list).post(downloads_start))
+        .route("/api/downloads/{id}/cancel", post(downloads_cancel))
+        .route("/api/video", get(video_list).post(video_start))
+        .route("/api/video/{id}/cancel", post(video_cancel))
         .route("/api/apps", get(apps_list))
         .route("/api/apps/{id}/icon", get(app_icon))
         .route("/api/apps/{id}/launch", post(app_launch))
@@ -954,6 +964,183 @@ async fn print_file(State(core): State<Ctx>, Extension(dev): Extension<Device>, 
     Ok(StatusCode::NO_CONTENT)
 }
 
+// ---------- approve on your phone ----------
+
+async fn approvals_list(State(core): State<Ctx>) -> Json<Vec<super::approvals::Request>> {
+    Json(core.remote.approvals.pending())
+}
+
+#[derive(Deserialize)]
+struct ApproveReq {
+    approve: bool,
+}
+
+async fn approvals_answer(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ApproveReq>) -> ApiResult<StatusCode> {
+    if !core.remote.approvals.answer(&id, req.approve, &dev.name) {
+        return Err(ApiError::not_found("that request has ended (each one waits 60 seconds)"));
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------- the phone as a scanner ----------
+
+/// Pages arrive as base64 JPEGs in one JSON body.
+const SCAN_MAX: usize = 96 << 20;
+
+#[derive(Deserialize)]
+struct ScanReq {
+    #[serde(default)]
+    kind: crate::scan::Kind,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    target: crate::scan::Target,
+    pages: Vec<String>,
+}
+
+async fn scan_pages(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<ScanReq>) -> ApiResult<Json<crate::scan::Scanned>> {
+    let s = core.settings.get().remote;
+    if !s.allow_uploads {
+        return Err(ApiError::forbidden("sending files to this PC is turned off"));
+    }
+    if req.target == crate::scan::Target::Notes && !s.allow_notes {
+        return Err(ApiError::forbidden("notes from the phone are turned off on the PC"));
+    }
+    use base64::Engine;
+    let pages = req
+        .pages
+        .iter()
+        .map(|p| base64::engine::general_purpose::STANDARD.decode(p.rsplit(',').next().unwrap_or("").trim()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| ApiError::bad("a page isn't a picture"))?;
+    let c = core.clone();
+    let who = actor(&dev);
+    let done = tokio::task::spawn_blocking(move || c.scan(req.kind, &req.title, req.target, pages, &who)).await?.map_err(ApiError::bad)?;
+    Ok(Json(done))
+}
+
+// ---------- type on the PC (barcodes, text) ----------
+
+#[derive(Deserialize)]
+struct TypeReq {
+    text: String,
+    #[serde(default)]
+    enter: bool,
+}
+
+async fn type_text(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<TypeReq>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_control {
+        return Err(ApiError::forbidden("typing from the phone is off on the PC (Settings → Phone → let phones use the mouse and keyboard)"));
+    }
+    let n = req.text.chars().count();
+    if n == 0 || n > 4000 {
+        return Err(ApiError::bad("send between 1 and 4000 characters"));
+    }
+    tokio::task::spawn_blocking(move || {
+        stream::input::text(&req.text);
+        if req.enter {
+            stream::input::chord("Enter");
+        }
+    })
+    .await?;
+    // How much, not what (it could be a password).
+    core.audit.record(&actor(&dev), "type", &format!("{n} characters"), true);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------- the phone as a whiteboard ----------
+
+async fn board_get(State(core): State<Ctx>) -> Json<Vec<super::board::Stroke>> {
+    Json(core.remote.board.strokes())
+}
+
+#[derive(Deserialize)]
+struct BoardAdd {
+    strokes: Vec<super::board::Stroke>,
+}
+
+async fn board_add(State(core): State<Ctx>, Json(req): Json<BoardAdd>) -> ApiResult<StatusCode> {
+    if req.strokes.len() > 200 {
+        return Err(ApiError::bad("too many strokes at once"));
+    }
+    let added = core.remote.board.add(req.strokes);
+    if !added.is_empty() {
+        core.events.emit("board:strokes", json!({ "strokes": added }));
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn board_undo(State(core): State<Ctx>) -> StatusCode {
+    if core.remote.board.undo() {
+        core.events.emit("board:undo", json!({}));
+    }
+    StatusCode::NO_CONTENT
+}
+
+async fn board_clear(State(core): State<Ctx>) -> StatusCode {
+    core.remote.board.clear();
+    core.events.emit("board:clear", json!({}));
+    StatusCode::NO_CONTENT
+}
+
+// ---------- download a link on the PC ----------
+
+#[derive(Deserialize)]
+struct DownloadReq {
+    url: String,
+    #[serde(default)]
+    mode: crate::downloads::Mode,
+}
+
+async fn downloads_start(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<DownloadReq>) -> ApiResult<Json<serde_json::Value>> {
+    if !core.settings.get().remote.allow_uploads {
+        return Err(ApiError::forbidden("sending files to this PC is turned off"));
+    }
+    let id = core.downloads.start(&req.url, req.mode, &dev.name).map_err(ApiError::bad)?;
+    core.audit.record(&actor(&dev), "download", &req.url.chars().take(200).collect::<String>(), true);
+    Ok(Json(json!({ "id": id })))
+}
+
+async fn downloads_list(State(core): State<Ctx>) -> Json<Vec<crate::downloads::Download>> {
+    Json(core.downloads.list().into_iter().take(30).collect())
+}
+
+async fn downloads_cancel(State(core): State<Ctx>, UrlPath(id): UrlPath<String>) -> StatusCode {
+    core.downloads.cancel(&id);
+    StatusCode::NO_CONTENT
+}
+
+// ---------- video tools on the PC's files ----------
+
+#[derive(Deserialize)]
+struct VideoReq {
+    path: String,
+    job: crate::videotools::Job,
+}
+
+async fn video_start(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<VideoReq>) -> ApiResult<Json<serde_json::Value>> {
+    if !core.settings.get().remote.allow_uploads {
+        return Err(ApiError::forbidden("sending files to this PC is turned off"));
+    }
+    let p = std::fs::canonicalize(&req.path).map_err(|_| ApiError::not_found("no such file"))?;
+    let incoming = std::fs::canonicalize(core.incoming_dir()).ok();
+    let path = if incoming.is_some_and(|i| p.starts_with(i)) { p } else { allowed_path(&core, &req.path)? };
+    let shown = display_path(&path);
+    let c = core.clone();
+    let id = tokio::task::spawn_blocking(move || c.video.start(&path, req.job)).await?.map_err(ApiError::bad)?;
+    core.audit.record(&actor(&dev), "video", &shown, true);
+    Ok(Json(json!({ "id": id })))
+}
+
+async fn video_list(State(core): State<Ctx>) -> Json<serde_json::Value> {
+    Json(json!({ "ready": core.video.ready(), "tasks": core.video.tasks().into_iter().take(20).collect::<Vec<_>>() }))
+}
+
+async fn video_cancel(State(core): State<Ctx>, UrlPath(id): UrlPath<String>) -> StatusCode {
+    core.video.cancel(&id);
+    StatusCode::NO_CONTENT
+}
+
 // ---------- tasks: what's using the PC ----------
 
 fn tasks_allowed(core: &AppCore) -> ApiResult<()> {
@@ -1613,7 +1800,7 @@ fn for_phone(ev: &crate::events::Event, device_id: &str) -> bool {
     if ev.topic == "inbox:removed" {
         return true;
     }
-    ["power:", "notes:", "media:", "games:", "chats:"].iter().any(|p| ev.topic.starts_with(p)) || matches!(ev.topic.as_str(), "mcserver:changed" | "mcserver:players" | "mcserver:guard")
+    ["power:", "notes:", "media:", "games:", "chats:", "approval:", "board:", "download:", "video:", "scan:"].iter().any(|p| ev.topic.starts_with(p)) || matches!(ev.topic.as_str(), "mcserver:changed" | "mcserver:players" | "mcserver:guard")
 }
 
 async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws: WebSocketUpgrade) -> ApiResult<Response> {

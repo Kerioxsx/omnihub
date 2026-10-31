@@ -156,6 +156,11 @@ impl PlayHub {
         self.tools.join(if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" })
     }
 
+    /// Where the recorder's FFmpeg goes (the video tools and downloads use it too).
+    pub fn ffmpeg_path(&self) -> PathBuf {
+        self.ffmpeg()
+    }
+
     /// Where clips go.
     pub fn folder(s: &PlaySettings) -> PathBuf {
         s.folder.as_ref().filter(|f| !f.trim().is_empty()).map(PathBuf::from).unwrap_or_else(|| dirs::video_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Videos")).join("OmniHub Clips"))

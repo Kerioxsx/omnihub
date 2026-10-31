@@ -248,6 +248,41 @@ export const api = {
     openIn: (path: string, app: 'code' | 'terminal' | 'explorer') => call<void>('dev_open', { path, app }),
   },
 
+  /** Remove location and camera details, resize, compress, HEIC → JPG (new files next to the originals). */
+  images: {
+    inspect: (paths: string[]) => call<T.ImageInfo[]>('images_inspect', { paths }),
+    run: (paths: string[], job: T.ImageJob) => call<T.ImageResult[]>('images_run', { paths, job }),
+  },
+
+  /** Compress (or fit a size), convert, cut and take the sound out, with FFmpeg. Progress: `video:changed`. */
+  video: {
+    status: () => call<{ ready: boolean; installing: boolean }>('video_status'),
+    probe: (path: string) => call<T.VideoMedia>('video_probe', { path }),
+    start: (path: string, job: T.VideoJob) => call<string>('video_start', { path, job }),
+    tasks: () => call<T.VideoTask[]>('video_tasks'),
+    cancel: (id: string) => call<void>('video_cancel', { id }),
+    clear: () => call<void>('video_clear'),
+  },
+
+  /** Links downloaded into Downloads\\OmniHub (from a phone or here). Progress: `download:changed`. */
+  downloads: {
+    start: (url: string, mode: T.DownloadMode) => call<string>('downloads_start', { url, mode }),
+    list: () => call<T.DownloadItem[]>('downloads_list'),
+    cancel: (id: string) => call<void>('downloads_cancel', { id }),
+    clear: () => call<void>('downloads_clear'),
+    folder: () => call<string>('downloads_folder'),
+  },
+
+  /** The phone's whiteboard (strokes arrive as `board:strokes`) and scanner. */
+  board: {
+    strokes: () => call<T.BoardStroke[]>('board_strokes'),
+    clear: () => call<void>('board_clear'),
+    undo: () => call<void>('board_undo'),
+    /** Save the drawing (a PNG data URL); returns the file. */
+    save: (png: string) => call<string>('board_save', { png }),
+    scansFolder: () => call<string>('scans_folder'),
+  },
+
   /** Checksums, the shredder, bulk rename and recent files. `job` names a run for progress (`tools:progress`) and Stop (`hidden.cancel`). */
   files: {
     hash: (path: string, kind: T.HashKind, job: string) => call<string>('files_hash', { path, kind, job }),

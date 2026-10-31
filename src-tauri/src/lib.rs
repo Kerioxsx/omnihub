@@ -49,6 +49,10 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
     match topic {
         "remote:paired" => Some(("Phone paired".into(), format!("{} can now connect to this PC.", payload["name"].as_str().unwrap_or("A phone")))),
         "guest:received" => Some((format!("{} sent you a file", payload["label"].as_str().unwrap_or("A guest")), format!("{} · saved in Incoming\\Guests", payload["name"].as_str().unwrap_or("file")))),
+        "video:done" => Some((format!("{} is done", payload["label"].as_str().unwrap_or("Video")), payload["output"].as_str().unwrap_or("").rsplit(['\\', '/']).next().unwrap_or("").to_string())),
+        "download:done" => Some(("Downloaded".into(), format!("{} · in Downloads\\OmniHub", payload["name"].as_str().unwrap_or("file")))),
+        "scan:saved" => Some((format!("Scan from {}", payload["from"].as_str().unwrap_or("your phone").trim_start_matches("phone:")), payload["path"].as_str().unwrap_or("").rsplit(['\\', '/']).next().unwrap_or("").to_string())),
+        "approval:request" => Some(("Approve on your phone".into(), format!("{} — tap Allow in OmniHub on your phone.", payload["title"].as_str().unwrap_or("OmniHub is waiting")))),
         "focus:phase" => Some(if payload["phase"] == "break" { ("Time for a break".into(), "Focus round done. Stretch, drink some water.".into()) } else { ("Back to focus".into(), "The break is over.".into()) }),
         "remote:connected" => Some((
             format!("{} connected", payload["name"].as_str().unwrap_or("A phone")),
@@ -165,7 +169,7 @@ pub fn run(args: Vec<String>) {
                             // knowing about: always a Windows notification.
                             // During a focus round only what matters gets through.
                             let focusing = h.state::<std::sync::Arc<omnihub_core::core::AppCore>>().focus.state().is_some_and(|f| f.phase == omnihub_core::focus::Phase::Focus);
-                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending");
+                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request");
                             if (hidden || important) && (!focusing || important) {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
                                     shortcuts::notify(&h, &title, &body);
@@ -465,6 +469,24 @@ pub fn run(args: Vec<String>) {
             commands::vault_import_file,
             commands::hidden_list,
             commands::guests_create,
+            commands::images_inspect,
+            commands::images_run,
+            commands::video_status,
+            commands::video_probe,
+            commands::video_start,
+            commands::video_tasks,
+            commands::video_cancel,
+            commands::video_clear,
+            commands::downloads_start,
+            commands::downloads_list,
+            commands::downloads_cancel,
+            commands::downloads_clear,
+            commands::downloads_folder,
+            commands::board_strokes,
+            commands::board_clear,
+            commands::board_undo,
+            commands::board_save,
+            commands::scans_folder,
             commands::guests_list,
             commands::guests_stop,
             commands::rules_list,

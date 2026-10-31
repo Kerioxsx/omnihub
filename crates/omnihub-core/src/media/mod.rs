@@ -749,6 +749,11 @@ impl MediaHub {
         }
     }
 
+    /// yt-dlp (for "Download from your phone").
+    pub fn stream_tool(&self) -> &stream::StreamTool {
+        &self.stream
+    }
+
     pub fn stream_status(&self) -> stream::StreamToolStatus {
         self.stream.status()
     }

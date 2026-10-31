@@ -36,7 +36,9 @@ import {
   ArrowUpAZ,
 } from 'lucide-react';
 import { formatBytes, formatDate, formatDateTime, formatRelative } from '@shared/format';
+import type { VideoJob, VideoTask } from '@shared/types';
 import { client, type FsEntry } from '../client';
+import { useEvent } from '../lib/events';
 import { useApp, toast } from '../state';
 import { useUploads } from '../uploads';
 import { PullToRefresh } from '../ui/PullToRefresh';
@@ -166,6 +168,7 @@ function crumbsFor(path: string, roots: RootT[]): { name: string; path: string }
 }
 
 export function FilesScreen({ active }: { active: boolean }) {
+  useVideoDone();
   const prefs = useFiles();
   const { path, setPath } = prefs;
   const features = useApp((s) => s.info?.features);
@@ -590,14 +593,42 @@ function GridTile({ entry: e, selected, selecting, onOpen, onLongPress }: { entr
 
 // ---------- sheets ----------
 
+/** Video jobs this phone started (to say when they're done). */
+const myVideoJobs = new Set<string>();
+
+/** "Fit in 10 MB is done" with a Download button, for jobs started here. */
+function useVideoDone() {
+  useEvent<VideoTask>('video:changed', (t) => {
+    if (!t?.id || !myVideoJobs.has(t.id) || t.state === 'running') return;
+    myVideoJobs.delete(t.id);
+    const name = t.output.split(/[\\/]/).pop() ?? '';
+    if (t.state === 'done') toast.success(`${t.label}: done`, name, { label: 'Download', run: () => void client.download(t.output).catch((e) => toast.error("Couldn't download", errorMessage(e))) });
+    else if (t.state === 'failed') toast.error(`${t.label} failed`, t.error ?? undefined);
+  });
+}
+
 function PreviewSheet({ entry, onClose }: { entry: FsEntry | null; onClose: () => void }) {
   const [last, setLast] = useState<FsEntry | null>(entry);
   useEffect(() => {
     if (entry) setLast(entry);
   }, [entry]);
   const e = entry ?? last;
-  const [busy, setBusy] = useState<'dl' | 'open' | 'print' | null>(null);
+  const [busy, setBusy] = useState<'dl' | 'open' | 'print' | 'video' | null>(null);
   const isImage = e ? kindOf(e.name, e.kind) === 'image' : false;
+  const isVideo = !!e && /\.(mp4|mov|mkv|webm|avi|m4v|ts)$/i.test(e.name);
+  const video = async (job: VideoJob, what: string) => {
+    if (!e) return;
+    setBusy('video');
+    try {
+      const { id } = await client.videoStart(e.path, job);
+      myVideoJobs.add(id);
+      toast.info(`${what}: working on it on the PC`, 'You’ll get a note here when it’s done.');
+    } catch (err) {
+      toast.error('Couldn’t start', errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
   const printable = !!e && /\.(pdf|docx?|txt|rtf|xlsx?|pptx?|png|jpe?g|gif|bmp|tiff?|webp)$/i.test(e.name);
   const print = async () => {
     if (!e) return;
@@ -633,17 +664,29 @@ function PreviewSheet({ entry, onClose }: { entry: FsEntry | null; onClose: () =
       subtitle={e ? `${formatBytes(e.size)} · ${formatDate(e.modified)}` : undefined}
       footer={
         e && (
-          <div className="flex gap-2.5">
-            <Button className="flex-1" icon={<Download size={18} />} loading={busy === 'dl'} onClick={() => act(false)}>
-              Download
-            </Button>
-            <Button variant="ghost" className="flex-1" icon={<ExternalLink size={18} />} loading={busy === 'open'} onClick={() => act(true)}>
-              Open
-            </Button>
-            {printable && (
-              <Button variant="ghost" className="flex-1" icon={<Printer size={18} />} loading={busy === 'print'} onClick={print}>
-                Print
+          <div>
+            <div className="flex gap-2.5">
+              <Button className="flex-1" icon={<Download size={18} />} loading={busy === 'dl'} onClick={() => act(false)}>
+                Download
               </Button>
+              <Button variant="ghost" className="flex-1" icon={<ExternalLink size={18} />} loading={busy === 'open'} onClick={() => act(true)}>
+                Open
+              </Button>
+              {printable && (
+                <Button variant="ghost" className="flex-1" icon={<Printer size={18} />} loading={busy === 'print'} onClick={print}>
+                  Print
+                </Button>
+              )}
+            </div>
+            {isVideo && (
+              <div className="mt-2.5 flex gap-2.5">
+                <Button variant="soft" className="flex-1" size="sm" loading={busy === 'video'} onClick={() => void video({ kind: 'compress', size: 'balanced', maxHeight: null, targetMb: 10 }, 'Fit in 10 MB')}>
+                  Fit in 10 MB
+                </Button>
+                <Button variant="soft" className="flex-1" size="sm" loading={busy === 'video'} onClick={() => void video({ kind: 'audio', to: 'mp3' }, 'Sound only')}>
+                  Sound only (MP3)
+                </Button>
+              </div>
             )}
           </div>
         )

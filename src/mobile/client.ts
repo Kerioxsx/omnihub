@@ -120,7 +120,7 @@ export interface Status {
 // ---------- music ----------
 
 export type { AudioInfo, FpsLive, GameKind, GameSession, GameStep, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, PingResult, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
-import type { AudioInfo, FpsLive, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
+import type { ApprovalRequest, BoardStroke, DownloadItem, DownloadMode, Scanned, ScanKind, ScanTarget, VideoJob, VideoTask, AudioInfo, FpsLive, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
 
 /** One app in the PC's volume mixer. */
 export interface AppVolume {
@@ -242,6 +242,24 @@ export const client = {
   screenshot: () => request<{ url: string; name: string; width: number; height: number }>('POST', '/api/screenshot'),
   /** Print a file on the PC's default printer. */
   print: (path: string) => request<void>('POST', '/api/print', { path }),
+  /** Things the PC is waiting for this phone to approve. */
+  approvals: () => request<ApprovalRequest[]>('GET', '/api/approvals'),
+  answerApproval: (id: string, approve: boolean) => request<void>('POST', `/api/approvals/${encodeURIComponent(id)}`, { approve }),
+  /** Pages (JPEG, base64) to the PC: saved, read, and made a note when asked. */
+  scan: (body: { kind: ScanKind; title: string; target: ScanTarget; pages: string[] }) => request<Scanned>('POST', '/api/scan', body),
+  /** Type text on the PC where the cursor is (needs mouse and keyboard control on). */
+  typeText: (text: string, enter: boolean) => request<void>('POST', '/api/type', { text, enter }),
+  board: () => request<BoardStroke[]>('GET', '/api/board'),
+  boardAdd: (strokes: BoardStroke[]) => request<void>('POST', '/api/board', { strokes }),
+  boardUndo: () => request<void>('POST', '/api/board/undo'),
+  boardClear: () => request<void>('DELETE', '/api/board'),
+  /** The PC downloads a link into Downloads\\OmniHub. */
+  downloadOnPc: (url: string, mode: DownloadMode) => request<{ id: string }>('POST', '/api/downloads', { url, mode }),
+  downloads: () => request<DownloadItem[]>('GET', '/api/downloads'),
+  cancelDownload: (id: string) => request<void>('POST', `/api/downloads/${encodeURIComponent(id)}/cancel`),
+  /** Compress, convert, cut or take the sound out of a video on the PC. */
+  videoStart: (path: string, job: VideoJob) => request<{ id: string }>('POST', '/api/video', { path, job }),
+  videoTasks: () => request<{ ready: boolean; tasks: VideoTask[] }>('GET', '/api/video'),
 
   apps: () => request<{ apps: { id: string; name: string; publisher: string; source: string }[] }>('GET', '/api/apps'),
   appIcon: (id: string) => request<{ icon: string | null }>('GET', `/api/apps/${id}/icon`),

@@ -847,6 +847,8 @@ export interface Settings {
     sendToMenu: boolean;
     /** A notification when a paired phone connects after 10 minutes away. */
     connectAlerts: boolean;
+    /** Where phone scans go (null = Documents\\OmniHub Scans). */
+    scansDir: string | null;
   };
   screenshots: {
     dir: string | null;
@@ -887,6 +889,8 @@ export interface Settings {
   focus: { trackTime: boolean; blocked: string[] };
   /** Developer tools. */
   dev: { roots: string[] };
+  /** Approve on your phone: which actions wait for a paired phone's yes. */
+  approvals: ApprovalSettings;
   updates: {
     check: boolean;
     autoInstall: boolean;
@@ -3057,4 +3061,116 @@ export interface LanLink {
   qrSvgs: string[];
   /** Why a phone can't reach it ("" when it can). */
   note: string;
+}
+
+// ---------- 0.22: phone as a sensor, downloads, image and video tools ----------
+
+export interface ApprovalSettings {
+  enabled: boolean;
+  vault: boolean;
+  admin: boolean;
+  shred: boolean;
+  environment: boolean;
+}
+
+export type ApprovalKind = 'vaultReveal' | 'admin' | 'shred' | 'environment' | 'settings';
+
+export interface ApprovalRequest {
+  id: string;
+  kind: ApprovalKind;
+  title: string;
+  detail: string;
+  /** Unix seconds. */
+  expiresAt: number;
+}
+
+export type ImageJob = { kind: 'clean' } | { kind: 'resize'; maxSide: number } | { kind: 'compress'; quality: number } | { kind: 'toJpg' };
+
+export interface ImageInfo {
+  path: string;
+  bytes: number;
+  width: number;
+  height: number;
+  hasLocation: boolean;
+  taken: string | null;
+  camera: string | null;
+}
+
+export interface ImageDone {
+  source: string;
+  output: string;
+  before: number;
+  after: number;
+  note: string | null;
+}
+
+export interface ImageResult {
+  source: string;
+  done: ImageDone | null;
+  error: string | null;
+}
+
+export type VideoSize = 'small' | 'balanced' | 'high';
+export type VideoJob =
+  | { kind: 'compress'; size: VideoSize; maxHeight: number | null; targetMb: number | null }
+  | { kind: 'convert'; to: 'mp4' | 'webm' | 'gif' }
+  | { kind: 'trim'; start: number; end: number; exact: boolean }
+  | { kind: 'audio'; to: 'mp3' | 'm4a' | 'wav' };
+
+export interface VideoMedia {
+  duration: number;
+  width: number;
+  height: number;
+  fps: number;
+  videoCodec: string | null;
+  audioCodec: string | null;
+  bitrate: number | null;
+}
+
+export interface VideoTask {
+  id: string;
+  source: string;
+  output: string;
+  label: string;
+  percent: number;
+  state: JobState;
+  error: string | null;
+  before: number;
+  after: number;
+  startedAt: number;
+}
+
+export type DownloadMode = 'auto' | 'audio';
+
+export interface DownloadItem {
+  id: string;
+  url: string;
+  name: string | null;
+  path: string | null;
+  state: JobState;
+  percent: number | null;
+  bytes: number;
+  error: string | null;
+  from: string;
+  startedAt: number;
+}
+
+export interface BoardStroke {
+  /** 0–1 across the board. */
+  points: [number, number][];
+  color: string;
+  /** Fraction of the board's width. */
+  width: number;
+  eraser?: boolean;
+}
+
+export type ScanKind = 'document' | 'receipt' | 'card';
+export type ScanTarget = 'folder' | 'notes';
+
+export interface Scanned {
+  title: string;
+  files: string[];
+  text: string;
+  fields: [string, string][];
+  noteId: string | null;
 }

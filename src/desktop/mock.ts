@@ -3,7 +3,7 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { FolderRule, HashKind, MusicSource, PlayItem, RenameRule, CaptureKind, ChatSource, ConfigGame, ConfigOptions, DeepPartial, DupeOptions, EntryInput, GameKind, GameProfile, GeneratorOptions, MediaAction, ModSort, NewChatKind, NoteFilter, NoteInput, PowerAction, Priority, ProcessSort, Rect, RobloxFlags, RobloxShaders, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey, SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, TweakId } from '@shared/types';
+import type { DownloadMode, ImageJob, VideoJob, FolderRule, HashKind, MusicSource, PlayItem, RenameRule, CaptureKind, ChatSource, ConfigGame, ConfigOptions, DeepPartial, DupeOptions, EntryInput, GameKind, GameProfile, GeneratorOptions, MediaAction, ModSort, NewChatKind, NoteFilter, NoteInput, PowerAction, Priority, ProcessSort, Rect, RobloxFlags, RobloxShaders, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey, SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, TweakId } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
@@ -19,6 +19,7 @@ import * as updates from './mock/update';
 import * as tools from './mock/tools';
 import * as catalog from './mock/catalog';
 import * as prod from './mock/productivity';
+import * as sensors from './mock/sensors';
 
 let playInstalled = false;
 let playRecording = false;
@@ -262,7 +263,7 @@ const handlers: Record<string, Handler> = {
     core.auditLog.length = 0;
   },
   pick_folder: (a) => core.pickFolder(optStr(a, 'title')),
-  pick_files: () => core.pickFiles(),
+  pick_files: (a) => core.pickFiles(optStr(a, 'title')),
   pick_save_file: (a) => `C:\\Users\\Player\\Documents\\${str(a, 'defaultName')}`,
   set_autostart: (a) => {
     core.updateSettings({ general: { launchAtLogin: bool(a, 'enabled') } });
@@ -363,6 +364,26 @@ const handlers: Record<string, Handler> = {
   dev_remove_var: (a) => prod.removeVar(str(a, 'name')),
   dev_lan_link: (a) => prod.lanLink(num(a, 'port'), str(a, 'local')),
   dev_open: () => undefined,
+
+  // image and video tools, downloads, the phone's whiteboard
+  images_inspect: (a) => sensors.imageInspect(strList(a, 'paths')),
+  images_run: (a) => sensors.imageRun(strList(a, 'paths'), obj<ImageJob>(a, 'job')),
+  video_status: () => ({ ready: true, installing: false }),
+  video_probe: () => sensors.videoMedia(),
+  video_start: (a) => sensors.videoStart(str(a, 'path'), obj<VideoJob>(a, 'job')),
+  video_tasks: () => sensors.videoTasks(),
+  video_cancel: (a) => sensors.videoCancel(str(a, 'id')),
+  video_clear: () => sensors.videoClear(),
+  downloads_start: (a) => sensors.downloadStart(str(a, 'url'), str(a, 'mode') as DownloadMode),
+  downloads_list: () => sensors.downloadList(),
+  downloads_cancel: (a) => sensors.downloadCancel(str(a, 'id')),
+  downloads_clear: () => sensors.downloadClear(),
+  downloads_folder: () => 'C:\\Users\\Player\\Downloads\\OmniHub',
+  board_strokes: () => sensors.boardStrokes(),
+  board_clear: () => sensors.boardClear(),
+  board_undo: () => sensors.boardUndo(),
+  board_save: () => 'C:\\Users\\Player\\Pictures\\OmniHub Whiteboard\\Whiteboard 2026-10-31 14-02.png',
+  scans_folder: () => 'C:\\Users\\Player\\Documents\\OmniHub Scans',
 
   // Aurora's music hub
   music_search: (a) => catalog.search(str(a, 'query')),

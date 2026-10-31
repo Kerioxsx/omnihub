@@ -24,6 +24,7 @@ import { PowerScreen, autoScreenshot } from './screens/Power';
 import { MusicScreen } from './screens/Music';
 import { MoreScreen, type MorePage } from './screens/More';
 import { ChatsScreen } from './screens/Chats';
+import { ApprovalSheet } from './screens/Approve';
 
 type Phase = 'boot' | 'pair' | 'ready' | 'unreachable';
 
@@ -266,6 +267,7 @@ export function App() {
       <BackToHome active={tab !== 'home' && !(tab === 'more' && morePage)} onBack={() => setTab('home')} />
       <TabBar hidden={hidden} badges={{ files: activeUploads, home: inboxCount }} />
       <ShareSheet shared={shared} onClose={() => setShared(null)} />
+      <ApprovalSheet />
       <Toasts aboveTabs />
     </div>
   );

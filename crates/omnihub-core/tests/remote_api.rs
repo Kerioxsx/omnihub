@@ -832,3 +832,109 @@ fn guest_uploads() {
         assert_eq!(c.get(format!("{base}/guest/nope/info")).send().await.unwrap().status(), StatusCode::GONE);
     });
 }
+
+/// The phone as a sensor: approve on the phone, the scanner, typing on the
+/// PC, the whiteboard, downloads and video jobs.
+#[test]
+fn phone_sensors() {
+    let f = setup(false);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let base = &f.base;
+        let pairing = f.core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "Pixel 9" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+        use omnihub_core::remote::approvals::Kind;
+
+        // Off: nothing is asked.
+        assert!(f.core.approve(Kind::Shred, "C:\\old").is_ok());
+        f.core.update_settings(&json!({ "approvals": { "enabled": true } })).unwrap();
+        // On: the PC waits; the phone sees the request and allows it.
+        let core = f.core.clone();
+        let waiting = std::thread::spawn(move || core.approve(Kind::VaultReveal, "Gmail"));
+        let mut pending: Vec<Value> = Vec::new();
+        for _ in 0..50 {
+            pending = c.get(format!("{base}/api/approvals")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+            if !pending.is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert_eq!(pending[0]["title"], "Show a vault password on the PC");
+        assert_eq!(pending[0]["detail"], "Gmail");
+        let id = pending[0]["id"].as_str().unwrap();
+        let r = c.post(format!("{base}/api/approvals/{id}")).header("authorization", &auth).json(&json!({ "approve": true })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::NO_CONTENT);
+        assert!(waiting.join().unwrap().is_ok());
+        // Asked again a moment later: no second prompt.
+        assert!(f.core.approve(Kind::VaultReveal, "Gmail").is_ok());
+        // Declined.
+        let core = f.core.clone();
+        let waiting = std::thread::spawn(move || core.approve(Kind::Shred, "C:\\taxes"));
+        let id = loop {
+            let p: Vec<Value> = c.get(format!("{base}/api/approvals")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+            if let Some(r) = p.first() {
+                break r["id"].as_str().unwrap().to_string();
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        };
+        c.post(format!("{base}/api/approvals/{id}")).header("authorization", &auth).json(&json!({ "approve": false })).send().await.unwrap();
+        assert_eq!(waiting.join().unwrap().unwrap_err(), "Declined on Pixel 9.");
+        let r = c.post(format!("{base}/api/approvals/gone")).header("authorization", &auth).json(&json!({ "approve": true })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
+        f.core.update_settings(&json!({ "approvals": { "enabled": false } })).unwrap();
+
+        // The scanner: two pages become a PDF in the scans folder; a card makes a note.
+        let scans = f._dir.path().join("scans");
+        f.core.update_settings(&json!({ "remote": { "scansDir": scans.to_string_lossy() } })).unwrap();
+        let page = {
+            let img = image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(120, 160, image::Rgb([250, 250, 250])));
+            use base64::Engine;
+            base64::engine::general_purpose::STANDARD.encode(omnihub_core::images::jpeg(&img, 80).unwrap())
+        };
+        let r = c.post(format!("{base}/api/scan")).header("authorization", &auth).json(&json!({ "kind": "document", "title": "Lease / 2026", "pages": [page, page] })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::OK, "{:?}", r.text().await);
+        let s: Value = r.json().await.unwrap();
+        let pdf = std::path::PathBuf::from(s["files"][0].as_str().unwrap());
+        assert!(pdf.starts_with(&scans) && pdf.extension().unwrap() == "pdf" && pdf.file_name().unwrap().to_string_lossy().starts_with("Lease _ 2026"));
+        assert!(std::fs::read(&pdf).unwrap().starts_with(b"%PDF-"));
+        let r: Value = c.post(format!("{base}/api/scan")).header("authorization", &auth).json(&json!({ "kind": "card", "target": "notes", "pages": [page] })).send().await.unwrap().json().await.unwrap();
+        let note = f.core.notes.get(r["noteId"].as_str().unwrap()).unwrap();
+        assert_eq!(note.title, "Business card");
+        assert!(note.tags.contains(&"card".to_string()));
+        let r = c.post(format!("{base}/api/scan")).header("authorization", &auth).json(&json!({ "pages": ["bm90IGEganBlZw=="] })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+
+        // Typing needs mouse-and-keyboard control on.
+        let r = c.post(format!("{base}/api/type")).header("authorization", &auth).json(&json!({ "text": "4006381333931" })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+
+        // The whiteboard: bad strokes dropped, undo, clear.
+        let r = c
+            .post(format!("{base}/api/board"))
+            .header("authorization", &auth)
+            .json(&json!({ "strokes": [{ "points": [[0.1, 0.1], [0.5, 0.5]], "color": "#ff0000", "width": 0.01 }, { "points": [[0.2, 0.2]], "color": "url(x)", "width": 0.01 }] }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), StatusCode::NO_CONTENT);
+        let b: Vec<Value> = c.get(format!("{base}/api/board")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(b.len(), 1);
+        c.post(format!("{base}/api/board/undo")).header("authorization", &auth).send().await.unwrap();
+        assert!(f.core.remote.board.strokes().is_empty());
+
+        // Downloads: web links only.
+        let r = c.post(format!("{base}/api/downloads")).header("authorization", &auth).json(&json!({ "url": "file:///C:/Windows/win.ini" })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        let l: Vec<Value> = c.get(format!("{base}/api/downloads")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert!(l.is_empty());
+
+        // Video jobs only on files the phone may see.
+        let secret = f._dir.path().join("secret.txt");
+        let r = c.post(format!("{base}/api/video")).header("authorization", &auth).json(&json!({ "path": secret.to_string_lossy(), "job": { "kind": "audio", "to": "mp3" } })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        let v: Value = c.get(format!("{base}/api/video")).header("authorization", &auth).send().await.unwrap().json().await.unwrap();
+        assert_eq!(v["tasks"].as_array().unwrap().len(), 0);
+    });
+}

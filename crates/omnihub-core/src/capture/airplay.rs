@@ -530,7 +530,7 @@ impl Drop for AirPlay {
     }
 }
 
-fn agent() -> ureq::Agent {
+pub(crate) fn agent() -> ureq::Agent {
     let tls = ureq::tls::TlsConfig::builder().root_certs(ureq::tls::RootCerts::PlatformVerifier).build();
     ureq::Agent::config_builder().tls_config(tls).timeout_connect(Some(Duration::from_secs(20))).build().new_agent()
 }

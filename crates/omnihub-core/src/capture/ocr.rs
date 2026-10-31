@@ -7,6 +7,11 @@ use std::path::Path;
 /// Recognise the text in an image file; lines are separated by newlines.
 pub fn recognize(path: &Path) -> Result<String, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("cannot read the image: {e}"))?;
+    recognize_bytes(bytes)
+}
+
+/// The same, for an image already in memory.
+pub fn recognize_bytes(bytes: Vec<u8>) -> Result<String, String> {
     #[cfg(windows)]
     {
         // WinRT calls block here; keep them off any UI or async thread.

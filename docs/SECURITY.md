@@ -736,6 +736,35 @@ Windows' own) only during focus rounds.
 (`HKCU\Environment`) only; the system PATH is shown read-only. Changes are
 in the activity log.
 
+## Phone as a sensor, approvals and downloads
+
+**Scans** are only accepted from paired phones with “send files to this PC”
+on (and notes on, for a note); each page must be a JPEG, at most 60 pages and
+96 MB per request. Text recognition is Windows' own, on the PC. **Typing on
+the PC** (barcodes) needs “let phones use the mouse and keyboard”, is capped
+at 4,000 characters, and the activity log records how many characters, never
+the text. The **whiteboard** keeps strokes in memory only (until you clear it
+or OmniHub closes); colours must be `#rrggbb`, coordinates are clamped and
+counts capped.
+
+**Approve on your phone** is off by default. When on, the chosen actions
+wait for a paired phone's Allow (60 seconds, then refused); a yes covers the
+same action for two minutes. Turning it off or unchecking an action needs a
+phone's yes too, and a settings backup can't change it. With no phone paired
+or the phone connection off nothing is asked (so you can't lock yourself
+out). It is meant to slow down someone at your PC; it doesn't protect against
+someone who has your Windows account and time (they could unpair your phone,
+which shows in the activity log and on your phone).
+
+**Download on the PC** accepts only http(s) links from paired phones with
+file sending on; files are written under a temporary name and renamed when
+complete, with names made safe for Windows and never overwriting. Video pages
+go through yt-dlp (`--no-playlist`, your yt-dlp config ignored). **Video
+tools** from the phone only work on files the phone may browse (or files it
+sent), and every tool writes a new file next to the original. **Image tools**
+never change the original; “Remove details” takes out EXIF (location,
+camera, date), XMP, IPTC and comments, keeping only the orientation.
+
 ## Internet
 
 There is no cloud service and no account. OmniHub itself contacts the

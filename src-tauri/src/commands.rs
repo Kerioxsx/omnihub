@@ -204,6 +204,12 @@ pub async fn settings_get(core: Core<'_>) -> Res<Settings> {
 pub async fn settings_update(app: AppHandle, core: Core<'_>, patch: serde_json::Value) -> Res<Settings> {
     let core = core.inner().clone();
     let before = core.settings.get();
+    // Turning approve-on-phone (or one of its checks) off needs a phone's yes too.
+    let loosens = ["enabled", "vault", "admin", "shred", "environment"].iter().any(|k| patch.pointer(&format!("/approvals/{k}")) == Some(&serde_json::Value::Bool(false)));
+    if before.approvals.enabled && loosens {
+        let c = core.clone();
+        blocking(move || c.approve(omnihub_core::remote::approvals::Kind::Settings, "")).await?;
+    }
     let after = blocking(move || core.update_settings(&patch).map_err(err)).await?;
     if before.screenshots != after.screenshots {
         crate::shortcuts::register(&app);
@@ -246,7 +252,9 @@ pub async fn open_url(url: String) -> Res<()> {
 }
 
 #[tauri::command]
-pub async fn restart_elevated(app: AppHandle) -> Res<()> {
+pub async fn restart_elevated(app: AppHandle, core: Core<'_>) -> Res<()> {
+    let c = core.inner().clone();
+    blocking(move || c.approve(omnihub_core::remote::approvals::Kind::Admin, "")).await?;
     let pid = std::process::id().to_string();
     omnihub_core::system::elevation::relaunch_elevated(&["--replace".into(), pid]).map_err(err)?;
     app.exit(0);
@@ -763,7 +771,12 @@ pub async fn vault_list(core: Core<'_>) -> Res<Vec<EntrySummary>> {
 
 #[tauri::command]
 pub async fn vault_get(core: Core<'_>, id: String) -> Res<Entry> {
-    core.vault.get(&id).map_err(err)
+    let e = core.vault.get(&id).map_err(err)?;
+    if !e.password.is_empty() {
+        let (c, title) = (core.inner().clone(), e.title.clone());
+        blocking(move || c.approve(omnihub_core::remote::approvals::Kind::VaultReveal, &title)).await?;
+    }
+    Ok(e)
 }
 
 /// Logins from another password manager's export; (added, read).
@@ -807,6 +820,11 @@ pub async fn vault_delete(core: Core<'_>, id: String) -> Res<()> {
 
 #[tauri::command]
 pub async fn vault_copy(core: Core<'_>, id: String, field: String) -> Res<()> {
+    if field == "password" {
+        let title = core.vault.get(&id).map_err(err)?.title.clone();
+        let c = core.inner().clone();
+        blocking(move || c.approve(omnihub_core::remote::approvals::Kind::VaultReveal, &title)).await?;
+    }
     let secs = core.settings.get().vault.clipboard_clear_seconds;
     core.vault.copy_field(&id, &field, Duration::from_secs(secs as u64)).map_err(err)?;
     if field == "password" {
@@ -1085,6 +1103,8 @@ pub async fn dev_environment() -> Res<omnihub_core::devtools::Environment> {
 
 #[tauri::command]
 pub async fn dev_set_path(core: Core<'_>, entries: Vec<String>) -> Res<omnihub_core::devtools::Environment> {
+    let c = core.inner().clone();
+    blocking(move || c.approve(omnihub_core::remote::approvals::Kind::Environment, "PATH")).await?;
     blocking(move || omnihub_core::devtools::set_user_path(&entries)).await?;
     core.audit.record("desktop", "env.path", "user PATH changed", true);
     blocking(|| Ok(omnihub_core::devtools::environment())).await
@@ -1092,6 +1112,8 @@ pub async fn dev_set_path(core: Core<'_>, entries: Vec<String>) -> Res<omnihub_c
 
 #[tauri::command]
 pub async fn dev_set_var(core: Core<'_>, name: String, value: String) -> Res<omnihub_core::devtools::Environment> {
+    let (c, n) = (core.inner().clone(), name.clone());
+    blocking(move || c.approve(omnihub_core::remote::approvals::Kind::Environment, &n)).await?;
     let shown = name.clone();
     blocking(move || omnihub_core::devtools::set_var(&name, &value)).await?;
     core.audit.record("desktop", "env.set", &shown, true);
@@ -1100,6 +1122,8 @@ pub async fn dev_set_var(core: Core<'_>, name: String, value: String) -> Res<omn
 
 #[tauri::command]
 pub async fn dev_remove_var(core: Core<'_>, name: String) -> Res<omnihub_core::devtools::Environment> {
+    let (c, n) = (core.inner().clone(), name.clone());
+    blocking(move || c.approve(omnihub_core::remote::approvals::Kind::Environment, &n)).await?;
     let shown = name.clone();
     blocking(move || omnihub_core::devtools::remove_var(&name)).await?;
     core.audit.record("desktop", "env.remove", &shown, true);
@@ -1212,6 +1236,8 @@ pub async fn files_hash(core: Core<'_>, path: String, kind: omnihub_core::files:
 /// Overwrite and delete for good (the page asks you to type the name first).
 #[tauri::command]
 pub async fn files_shred(core: Core<'_>, path: String, job: String) -> Res<usize> {
+    let (c, p) = (core.inner().clone(), path.clone());
+    blocking(move || c.approve(omnihub_core::remote::approvals::Kind::Shred, &p)).await?;
     let name = Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let shown = path.clone();
     let n = progress_job(core.inner(), "tools:progress", job, name, move |_, _, stop| omnihub_core::files::shred(Path::new(&path), stop)).await?;
@@ -2506,4 +2532,136 @@ pub struct TotpCode {
 pub async fn vault_totp(core: Core<'_>, id: String) -> Res<TotpCode> {
     let (code, remaining) = core.vault.totp_code(&id).map_err(err)?;
     Ok(TotpCode { code, remaining })
+}
+
+// ---------- images ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageResult {
+    source: String,
+    done: Option<omnihub_core::images::Done>,
+    error: Option<String>,
+}
+
+#[tauri::command]
+pub async fn images_inspect(paths: Vec<String>) -> Res<Vec<omnihub_core::images::Info>> {
+    blocking(move || Ok(paths.iter().take(500).filter_map(|p| omnihub_core::images::inspect(Path::new(p)).ok()).collect())).await
+}
+
+/// Each picture gets a new file next to it; the originals stay as they are.
+#[tauri::command]
+pub async fn images_run(core: Core<'_>, paths: Vec<String>, job: omnihub_core::images::Job) -> Res<Vec<ImageResult>> {
+    let n = paths.len();
+    let out = blocking(move || {
+        Ok(paths
+            .into_iter()
+            .take(500)
+            .map(|p| match omnihub_core::images::run(Path::new(&p), job) {
+                Ok(d) => ImageResult { source: p, done: Some(d), error: None },
+                Err(e) => ImageResult { source: p, done: None, error: Some(e) },
+            })
+            .collect::<Vec<_>>())
+    })
+    .await?;
+    core.audit.record("desktop", "images", &format!("{n} pictures"), true);
+    Ok(out)
+}
+
+// ---------- videos ----------
+
+#[tauri::command]
+pub async fn video_status(core: Core<'_>) -> Res<serde_json::Value> {
+    let st = core.play.status(&core.settings.get().play);
+    Ok(serde_json::json!({ "ready": core.video.ready(), "installing": st.installing }))
+}
+
+#[tauri::command]
+pub async fn video_probe(core: Core<'_>, path: String) -> Res<omnihub_core::videotools::Media> {
+    let c = core.inner().clone();
+    blocking(move || c.video.probe(Path::new(&path))).await
+}
+
+#[tauri::command]
+pub async fn video_start(core: Core<'_>, path: String, job: omnihub_core::videotools::Job) -> Res<String> {
+    let c = core.inner().clone();
+    blocking(move || c.video.start(Path::new(&path), job)).await
+}
+
+#[tauri::command]
+pub async fn video_tasks(core: Core<'_>) -> Res<Vec<omnihub_core::videotools::Task>> {
+    Ok(core.video.tasks())
+}
+
+#[tauri::command]
+pub async fn video_cancel(core: Core<'_>, id: String) -> Res<()> {
+    core.video.cancel(&id);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn video_clear(core: Core<'_>) -> Res<()> {
+    core.video.clear();
+    Ok(())
+}
+
+// ---------- downloads ----------
+
+#[tauri::command]
+pub async fn downloads_start(core: Core<'_>, url: String, mode: omnihub_core::downloads::Mode) -> Res<String> {
+    core.downloads.start(&url, mode, "This PC")
+}
+
+#[tauri::command]
+pub async fn downloads_list(core: Core<'_>) -> Res<Vec<omnihub_core::downloads::Download>> {
+    Ok(core.downloads.list())
+}
+
+#[tauri::command]
+pub async fn downloads_cancel(core: Core<'_>, id: String) -> Res<()> {
+    core.downloads.cancel(&id);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn downloads_clear(core: Core<'_>) -> Res<()> {
+    core.downloads.clear();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn downloads_folder() -> Res<String> {
+    Ok(omnihub_core::downloads::folder().display().to_string())
+}
+
+// ---------- the phone's whiteboard and scanner ----------
+
+#[tauri::command]
+pub async fn board_strokes(core: Core<'_>) -> Res<Vec<omnihub_core::remote::board::Stroke>> {
+    Ok(core.remote.board.strokes())
+}
+
+#[tauri::command]
+pub async fn board_clear(core: Core<'_>) -> Res<()> {
+    core.remote.board.clear();
+    core.events.emit("board:clear", serde_json::json!({}));
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn board_undo(core: Core<'_>) -> Res<()> {
+    if core.remote.board.undo() {
+        core.events.emit("board:undo", serde_json::json!({}));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn board_save(png: String) -> Res<String> {
+    blocking(move || omnihub_core::remote::board::save_png(&png).map(|p| p.display().to_string())).await
+}
+
+#[tauri::command]
+pub async fn scans_folder(core: Core<'_>) -> Res<String> {
+    Ok(core.scans_dir().display().to_string())
 }
