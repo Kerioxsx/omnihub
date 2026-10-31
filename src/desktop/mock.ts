@@ -3,7 +3,7 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { CaptureKind, ChatSource, ConfigGame, ConfigOptions, DeepPartial, DupeOptions, EntryInput, GameKind, GameProfile, GeneratorOptions, MediaAction, ModSort, NewChatKind, NoteFilter, NoteInput, PowerAction, Priority, ProcessSort, Rect, RobloxFlags, RobloxShaders, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey, SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, TweakId } from '@shared/types';
+import type { HashKind, MusicSource, PlayItem, RenameRule, CaptureKind, ChatSource, ConfigGame, ConfigOptions, DeepPartial, DupeOptions, EntryInput, GameKind, GameProfile, GeneratorOptions, MediaAction, ModSort, NewChatKind, NoteFilter, NoteInput, PowerAction, Priority, ProcessSort, Rect, RobloxFlags, RobloxShaders, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey, SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, TweakId } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
@@ -16,6 +16,8 @@ import { pollMock } from './mock/mcCover';
 import { serversMock as sv } from './mock/servers';
 import * as optimize from './mock/optimize';
 import * as updates from './mock/update';
+import * as tools from './mock/tools';
+import * as catalog from './mock/catalog';
 
 let playInstalled = false;
 let playRecording = false;
@@ -338,6 +340,32 @@ const handlers: Record<string, Handler> = {
   notes_export: (a) => notes.noteExport(str(a, 'id')),
   notes_folder_files: () => notes.folderFiles(),
   notes_folder_read: (a) => notes.folderRead(str(a, 'path')),
+
+  // Aurora's music hub
+  music_search: (a) => catalog.search(str(a, 'query')),
+  music_artist: (a) => catalog.artist(str(a, 'id')),
+  music_album: (a) => catalog.albumPage(str(a, 'id')),
+  music_up_next: (a) => catalog.upNext(str(a, 'title'), str(a, 'artist')),
+  music_play: (a) => catalog.play(obj<PlayItem>(a, 'item'), str(a, 'source') as MusicSource),
+  music_installed: () => ({ spotify: true, appleMusic: false }),
+
+  // file tools, ports, layouts, privacy
+  files_hash: (a) => tools.hash(str(a, 'path'), str(a, 'kind') as HashKind, str(a, 'job')),
+  files_shred: (a) => tools.shred(str(a, 'path'), str(a, 'job')),
+  files_rename_plan: (a) => tools.renamePlan(strList(a, 'files'), obj<RenameRule>(a, 'rule')),
+  files_rename: (a) => tools.rename(strList(a, 'files'), obj<RenameRule>(a, 'rule')),
+  files_recent: () => tools.recent(),
+  ports_list: () => tools.ports(),
+  ports_end: (a) => tools.endPort(num(a, 'pid')),
+  layouts_list: () => tools.layouts(),
+  layouts_save: (a) => tools.saveLayout(str(a, 'name')),
+  layouts_apply: (a) => tools.applyLayout(str(a, 'name'), bool(a, 'launch')),
+  layouts_delete: (a) => tools.removeLayout(str(a, 'name')),
+  privacy_list: () => tools.privacy(),
+  panic_now: () => {
+    vault.lock('manual');
+    emit('app:panic', { by: 'desktop' });
+  },
 
   // vault
   vault_status: () => vault.status(),

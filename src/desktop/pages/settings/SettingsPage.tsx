@@ -1,7 +1,8 @@
-import type { Bind, EqStatus, ScanMode, Theme } from '@shared/types';
+import type { Bind, EqStatus, PrivacyUse, ScanMode, Theme } from '@shared/types';
+import { formatRelative } from '@shared/format';
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
-import { Camera, Check, Download, ExternalLink, FolderOpen, HardDrive, Info, KeyRound, Laptop, Moon, Music2, NotebookPen, Palette, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Smartphone, Sun, Trash, Upload, X } from 'lucide-react';
+import { Camera, Check, Download, ExternalLink, FolderOpen, HardDrive, Info, KeyRound, Laptop, Moon, Music2, NotebookPen, Palette, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Siren, Smartphone, Sun, Trash, Upload, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Logo } from '../../components/Logo';
@@ -463,6 +464,23 @@ export function SettingsPage() {
           </Section>
 
           <Section id="privacy" title="Privacy & security">
+            <Row title="Panic button" hint="Locks the vault, cuts every phone off, stops screen sharing, hides OmniHub and locks the PC. Also in the tray menu, and from a paired phone.">
+              <Button
+                size="sm"
+                variant="danger"
+                icon={Siren}
+                onClick={async () => {
+                  const ok = await confirm({ title: 'Lock everything now?', description: 'The vault locks, phones are cut off (phone access stays off until you turn it on in Phone) and the PC locks.', confirmLabel: 'Panic', tone: 'danger' });
+                  if (ok) await api.privacy.panic().catch((e: unknown) => toast.error('Couldn’t lock everything', errorText(e)));
+                }}
+              >
+                Panic
+              </Button>
+            </Row>
+            <Row title="Alert when a phone connects" hint="A Windows notification when a paired phone connects after being away for 10 minutes, so you know if someone else uses it.">
+              <Switch checked={s.remote.connectAlerts} onChange={(v) => void update({ remote: { connectAlerts: v } })} label="Connect alerts" />
+            </Row>
+            <PrivacyDashboard />
             <Row
               title={
                 <span className="flex items-center gap-2">
@@ -499,7 +517,7 @@ export function SettingsPage() {
                   </div>
                 </Row>
               ))}
-            <Row title="Back up settings" hint="Save every setting to a file, or restore them on this or another PC. The vault and notes are not included.">
+            <Row title="Back up settings" hint="Save every setting and window layout to a file, or restore them on this or another PC. The vault, notes, keys and paired phones are not included.">
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -670,5 +688,50 @@ function MusicSection() {
         )}
       </Row>
     </Section>
+  );
+}
+
+const PRIVACY_WHAT: Record<PrivacyUse['what'], string> = { microphone: 'Microphone', webcam: 'Camera', location: 'Location' };
+
+/** Which programs used the microphone, camera or location, from Windows' own record. */
+function PrivacyDashboard() {
+  const [list, setList] = useState<PrivacyUse[] | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (open) void api.privacy.list().then(setList, () => setList([]));
+  }, [open]);
+  const live = (list ?? []).filter((u) => u.inUse);
+  return (
+    <Row
+      stack
+      title={
+        <span className="flex items-center gap-2">
+          Privacy dashboard {live.length > 0 && <Badge tone="warn">{live.length} in use now</Badge>}
+        </span>
+      }
+      hint="Which programs used your microphone, camera or location, and when. Read from Windows on this PC; nothing is sent anywhere."
+    >
+      {!open ? (
+        <Button size="sm" onClick={() => setOpen(true)}>
+          Show
+        </Button>
+      ) : !list ? (
+        <span className="text-[12.5px] text-faint">Reading…</span>
+      ) : !list.length ? (
+        <span className="text-[12.5px] text-faint">Windows hasn’t recorded any use yet.</span>
+      ) : (
+        <div className="mt-2 max-h-72 w-full overflow-auto rounded-xl border border-line">
+          {list.map((u) => (
+            <div key={`${u.what}-${u.id}`} className="flex items-center gap-3 border-b border-line px-3 py-1.5 text-[12.5px] last:border-0">
+              <Badge tone={u.inUse ? 'warn' : 'neutral'}>{PRIVACY_WHAT[u.what]}</Badge>
+              <span className="min-w-0 flex-1 truncate text-fg" title={u.id}>
+                {u.app}
+              </span>
+              <span className="shrink-0 text-faint">{u.inUse ? 'using it now' : `last ${formatRelative(u.started)}`}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Row>
   );
 }

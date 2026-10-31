@@ -45,4 +45,5 @@ export const DEFAULT_VISUALS: VisualSettings = {
   },
   scene: { enabled: true, style: 'visual', intensity: 0.8, speed: 1, blur: 0.1, saturation: 1.1, opacity: 0.9, artwork: true, waveform: false, effects: { ...DEFAULT_EFFECTS }, backdrop: 'auto', musicVideos: true, directVideos: true, syncVideos: true, mirrorApp: true, animatedCovers: true, coverFit: 'whole', coverMotion: 0.5, dim: 0.3, corners: 0.5, videoFit: 'fill', videoFocus: 0.5, videoQuality: 'best' },
   desktop: { enabled: false, lyrics: false, display: 'primary', clearTaskbar: true, hideFullscreen: true, startWithApp: false },
+  hub: { clock: true, clock24: false, search: true, upNext: true, source: 'auto' },
 };

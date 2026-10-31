@@ -1,11 +1,12 @@
 import type { LucideIcon } from 'lucide-react';
-import { AppWindow, Camera, CornerDownLeft, Crop, File, Folder, Gauge, HardDrive, Image, KeyRound, Lightbulb, LockKeyhole, Moon, Music2, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, StickyNote, Sun } from 'lucide-react';
+import { AppWindow, Calculator, Camera, CornerDownLeft, Crop, File, Folder, Gauge, HardDrive, Image, KeyRound, Lightbulb, LockKeyhole, Moon, Music2, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, StickyNote, Sun } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../api';
 import { cx } from '../lib/cx';
 import { navigate } from '../lib/router';
-import { MOD_LABEL } from '../lib/util';
+import { quickAnswers } from '../lib/quickTools';
+import { copyText, MOD_LABEL } from '../lib/util';
 import { usePalette } from '../state/dialogs';
 import { useLive } from '../state/live';
 import { useSettings } from '../state/settings';
@@ -22,7 +23,7 @@ interface Cmd {
   label: string;
   hint?: string;
   icon: LucideIcon;
-  group: 'Pages' | 'Actions' | 'Drives' | 'Files' | 'Notes' | 'Apps' | 'Screenshots' | 'Vault';
+  group: 'Answer' | 'Pages' | 'Actions' | 'Drives' | 'Files' | 'Notes' | 'Apps' | 'Screenshots' | 'Vault';
   keywords?: string;
   shortcut?: string;
   run: () => void | Promise<void>;
@@ -155,6 +156,38 @@ function useEverything(query: string, open: boolean): Cmd[] {
   return found;
 }
 
+/** Calculator, units, Base64, JSON, UUID, hashes and timestamps: Enter copies the answer. */
+function useAnswers(query: string, open: boolean): Cmd[] {
+  const [found, setFound] = useState<Cmd[]>([]);
+  useEffect(() => {
+    if (!open || !query.trim()) {
+      setFound([]);
+      return;
+    }
+    let alive = true;
+    void quickAnswers(query).then((list) => {
+      if (!alive) return;
+      setFound(
+        list.map((a) => ({
+          id: `answer-${a.id}`,
+          label: a.value ? a.value.split('\n')[0].slice(0, 160) + (a.value.includes('\n') ? ' …' : '') : a.hint,
+          hint: a.value ? `${a.hint} · Enter copies` : undefined,
+          icon: Calculator,
+          group: 'Answer',
+          run: async () => {
+            if (!a.value) return;
+            if (await copyText(a.value)) toast.success('Copied', a.value.length > 80 ? `${a.value.slice(0, 80)}…` : a.value);
+          },
+        })),
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, [query, open]);
+  return found;
+}
+
 export function CommandPalette() {
   const open = usePalette((s) => s.open);
   const setOpen = usePalette((s) => s.setOpen);
@@ -171,6 +204,7 @@ export function CommandPalette() {
   }, [open]);
 
   const everything = useEverything(q, open);
+  const answers = useAnswers(q, open);
   const results = useMemo(() => {
     const query = q.trim().toLowerCase();
     const cmds = commands
@@ -182,8 +216,8 @@ export function CommandPalette() {
     const top = cmds.slice(0, query ? 6 : cmds.length);
     const order = ['Pages', 'Actions', 'Drives'];
     if (query) top.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
-    return [...top, ...everything];
-  }, [commands, q, everything]);
+    return [...answers, ...top, ...everything];
+  }, [commands, q, everything, answers]);
 
   useEffect(() => setActive(0), [q]);
   useEffect(() => {
@@ -207,7 +241,7 @@ export function CommandPalette() {
             data-autofocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search files, notes, apps, screenshots, the vault… or run an action"
+            placeholder="Search files, notes, apps, the vault… run an action, or type 12*4, 5 km in miles, uuid"
             className="h-14 flex-1 bg-transparent text-[15px] text-fg outline-none placeholder:text-faint"
             aria-label="Command"
             role="combobox"

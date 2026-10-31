@@ -47,5 +47,43 @@
       "text": "share_text",
       "url": "share_url"
     }
-  }
+  },
+  "shortcuts": [
+    {
+      "name": "Lock the PC",
+      "short_name": "Lock PC",
+      "url": "/?do=lock",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Screenshot of the PC",
+      "short_name": "Screenshot",
+      "url": "/?do=screenshot",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Mute the PC",
+      "short_name": "Mute PC",
+      "url": "/?do=mute",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
 }

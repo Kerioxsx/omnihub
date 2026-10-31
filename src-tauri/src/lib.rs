@@ -48,6 +48,10 @@ fn init_logging(paths: &AppPaths) {
 fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String, String)> {
     match topic {
         "remote:paired" => Some(("Phone paired".into(), format!("{} can now connect to this PC.", payload["name"].as_str().unwrap_or("A phone")))),
+        "remote:connected" => Some((
+            format!("{} connected", payload["name"].as_str().unwrap_or("A phone")),
+            format!("From {}. Not you? Open OmniHub → Phone to remove it, or press the panic button.", payload["ip"].as_str().unwrap_or("your network")),
+        )),
         "transfer:done" if payload["direction"] == "upload" => {
             Some((format!("Received from {}", payload["device"].as_str().unwrap_or("phone")), payload["name"].as_str().unwrap_or("file").to_string()))
         }
@@ -155,14 +159,18 @@ pub fn run(args: Vec<String>) {
                             // Resting windows get theirs when they wake.
                             rest::deliver(&h, &ev.topic, &ev.payload);
                             let hidden = !rest::main_shown();
-                            // Reminders are due now: always a Windows notification.
-                            if hidden || ev.topic == "notes:reminder" {
+                            // Reminders are due now, and a phone connecting is worth
+                            // knowing about: always a Windows notification.
+                            if hidden || ev.topic == "notes:reminder" || ev.topic == "remote:connected" {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
                                     shortcuts::notify(&h, &title, &body);
                                 }
                             }
                             if matches!(ev.topic.as_str(), "vault:locked" | "vault:unlocked" | "remote:status") {
                                 tray::refresh(&h);
+                            }
+                            if ev.topic == "app:panic" {
+                                tray::hide_main(&h);
                             }
                             // The browser extension waits on the user: bring the window up.
                             if matches!(ev.topic.as_str(), "browser:pair-request" | "browser:unlock-request") {
@@ -451,6 +459,25 @@ pub fn run(args: Vec<String>) {
             commands::vault_wifi_qr,
             commands::vault_import_file,
             commands::hidden_list,
+            commands::music_search,
+            commands::music_artist,
+            commands::music_album,
+            commands::music_up_next,
+            commands::music_play,
+            commands::music_installed,
+            commands::files_hash,
+            commands::files_shred,
+            commands::files_rename_plan,
+            commands::files_rename,
+            commands::files_recent,
+            commands::ports_list,
+            commands::ports_end,
+            commands::layouts_list,
+            commands::layouts_save,
+            commands::layouts_apply,
+            commands::layouts_delete,
+            commands::privacy_list,
+            commands::panic_now,
             commands::play_status,
             commands::play_install,
             commands::play_clip,

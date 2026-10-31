@@ -672,6 +672,36 @@ crash dumps and delivery optimisation cache are the only allowed system
 locations. Names that could not be decoded exactly are never passed back to
 the OS.
 
+The **secure shredder** (Tools) overwrites a file with random bytes,
+flushes it to the disk, truncates it, renames it to a random name and then
+deletes it, after you type its name. On SSDs and USB sticks the drive's own
+firmware may keep earlier copies of the data in blocks no program can reach;
+full-disk encryption (BitLocker) is what keeps deleted files unreadable there.
+
+## Panic button, connect alerts and the privacy dashboard
+
+The **panic button** (Settings, the tray, the phone's Power screen, or
+"Capri, panic") locks the vault (closing opened hidden files), stops the
+phone server (which ends every phone session and screen share), turns phone
+access off in the settings so it stays off after a restart, hides OmniHub
+and locks Windows. From a phone it needs "Allow power actions".
+
+A **notification when a phone connects** fires when a paired phone makes its
+first request after ten minutes away (on by default; Settings → Privacy).
+
+The **privacy dashboard** reads Windows' own record of which programs used
+the microphone, camera and location (`HKCU\...\CapabilityAccessManager\ConsentStore`)
+when you open it. Nothing is watched in the background and nothing is sent.
+
+## Tools that change files
+
+**Bulk rename** shows every new name first and refuses names Windows
+can't use, two files getting the same name, or a name already taken; it
+renames in two steps (to temporary names, then the new ones) and puts
+everything back if a step fails. **Ports → End** refuses Windows' own
+processes. **Window layouts** only move windows and, when you ask, start the
+programs saved in the layout from the paths recorded when it was saved.
+
 ## Internet
 
 There is no cloud service and no account. OmniHub itself contacts the
@@ -682,6 +712,13 @@ internet only for:
   and, when LRCLIB has nothing timed for it, the title and artist go to
   NetEase Cloud Music's public search (`music.163.com`); results are cached
   on the PC (a song without lyrics is asked again after three days).
+- **Aurora's music search** (only when you use it): what you type goes to
+  Deezer's public catalogue (`api.deezer.com`); opening an artist sends their
+  name to Wikipedia's page summaries (`en.wikipedia.org`); **Up next** sends
+  the playing song's title and artist to Deezer. Playing a song in YouTube
+  Music looks it up on YouTube's public results page (title and artist), and
+  in Apple Music on Apple's iTunes Search API; the song then opens in that
+  service through its link. Answers are kept in memory for 15 minutes.
 - **Sharper covers** (Music, on by default, can be turned off): the title,
   artist and album of the playing song go to Apple's iTunes Search API and
   to Deezer's public search (`api.deezer.com`), and the matching cover is

@@ -22,6 +22,10 @@ use crate::db::{now, Db};
 pub const PAIRING_WINDOW: Duration = Duration::from_secs(5 * 60);
 const MAX_PIN_ATTEMPTS: u32 = 5;
 
+/// A phone that hasn't been heard from for this long (seconds) counts as
+/// connecting again (for the "a phone connected" alert).
+pub const CONNECT_ALERT_AFTER: i64 = 600;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Device {
@@ -90,6 +94,16 @@ impl Devices {
 
     /// The device a bearer token belongs to, if it is valid.
     pub fn authenticate(&self, token: &str, ip: &str) -> Option<Device> {
+        self.authenticate_seen(token, ip).map(|(d, _)| d)
+    }
+
+    /// Like `authenticate`, also saying whether the phone is back after
+    /// `away` seconds without a word (once, for the first request back).
+    pub fn authenticate_seen(&self, token: &str, ip: &str) -> Option<(Device, bool)> {
+        self.check(token, ip, CONNECT_ALERT_AFTER)
+    }
+
+    fn check(&self, token: &str, ip: &str, away: i64) -> Option<(Device, bool)> {
         if token.len() < 20 || token.len() > 100 {
             return None;
         }
@@ -115,7 +129,8 @@ impl Devices {
             touched.insert(dev.id.clone(), Instant::now());
             let _ = self.db.with(|c| c.execute("UPDATE devices SET last_seen=?2, last_ip=?3 WHERE id=?1", params![dev.id, now(), ip]));
         }
-        Some(dev)
+        let back = due && now() - dev.last_seen >= away;
+        Some((dev, back))
     }
 
     pub fn list(&self) -> Vec<Device> {
@@ -300,6 +315,12 @@ mod tests {
         assert_eq!(dev.name, "Pixel 9");
         assert_eq!(d.authenticate(&token, "192.168.1.5").unwrap().id, dev.id);
         assert!(d.authenticate("wrong-token-wrong-token", "x").is_none());
+        // Back after a while: reported once, not for the requests right after.
+        d.last_touch.lock().clear();
+        assert!(d.check(&token, "x", 0).unwrap().1);
+        assert!(!d.check(&token, "x", 0).unwrap().1);
+        d.last_touch.lock().clear();
+        assert!(!d.authenticate_seen(&token, "x").unwrap().1, "just seen");
         assert!(d.rename(&dev.id, "Work phone"));
         assert_eq!(d.list()[0].name, "Work phone");
         assert!(d.revoke(&dev.id));

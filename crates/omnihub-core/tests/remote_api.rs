@@ -741,3 +741,54 @@ fn chats_from_the_phone() {
     });
     f.core.remote.stop();
 }
+
+/// Print from the phone (only files it sent or may browse), the panic
+/// button, and taking settings to another PC.
+#[test]
+fn print_panic_and_settings_file() {
+    let f = setup(false);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let c = client();
+        let base = &f.base;
+        let pairing = f.core.remote.begin_pairing().unwrap();
+        let r: Value = c.post(format!("{base}/api/pair")).json(&json!({ "pin": pairing.pin, "deviceName": "iPhone" })).send().await.unwrap().json().await.unwrap();
+        let auth = format!("Bearer {}", r["token"].as_str().unwrap());
+
+        // Nothing outside what the phone may see is printed.
+        let secret = f._dir.path().join("secret.txt");
+        let r = c.post(format!("{base}/api/print")).header("authorization", &auth).json(&json!({ "path": secret.to_string_lossy() })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        let r = c.post(format!("{base}/api/print")).header("authorization", &auth).json(&json!({ "path": f.share.join("nope.pdf").to_string_lossy() })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::NOT_FOUND);
+        f.core.update_settings(&json!({ "remote": { "allowUploads": false, "allowScreen": false } })).unwrap();
+        let r = c.post(format!("{base}/api/print")).header("authorization", &auth).json(&json!({ "path": f.share.join("hello.txt").to_string_lossy() })).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::FORBIDDEN);
+        assert_eq!(c.post(format!("{base}/api/screenshot")).header("authorization", &auth).send().await.unwrap().status(), StatusCode::FORBIDDEN);
+
+        // Settings out and back in; this PC's phone connection stays.
+        let file = f._dir.path().join("omnihub-settings.json");
+        f.core.export_settings(&file).unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.contains("\"omnihubSettings\": 1") && text.contains("\"layouts\""));
+        let port = f.core.settings.get().remote.port;
+        f.core.update_settings(&json!({ "remote": { "allowUploads": true } })).unwrap();
+        let after = f.core.import_settings(&file).unwrap();
+        assert!(!after.remote.allow_uploads, "restored from the file");
+        assert_eq!(after.remote.port, port);
+        assert!(f.core.remote.is_running());
+        std::fs::write(&file, "{}").unwrap();
+        assert!(f.core.import_settings(&file).is_err());
+
+        // Panic: the phone is cut off, the vault locks, phone access stays off.
+        let r = c.post(format!("{base}/api/panic")).header("authorization", &auth).send().await.unwrap();
+        assert_eq!(r.status(), StatusCode::ACCEPTED);
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while f.core.remote.is_running() {
+            assert!(std::time::Instant::now() < deadline, "the server kept running");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        assert!(!f.core.vault.is_unlocked());
+        assert!(!f.core.settings.get().remote.enabled);
+    });
+}

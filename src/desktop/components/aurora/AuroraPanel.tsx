@@ -9,6 +9,7 @@ import { ChevronDown, FolderOpen, RotateCcw, ShieldCheck, X } from 'lucide-react
 import { type ReactNode, useEffect, useId, useState } from 'react';
 import { api, errorText } from '../../api';
 import { DEFAULT_EFFECTS } from '../../lib/aurora/defaults';
+import { SOURCES } from './AuroraHub';
 import { patchVisuals, resetVisuals, useVisuals } from '../../lib/aurora/settings';
 import { cx } from '../../lib/cx';
 import { forgetPictures, LOOK_CHANGED, useAuroraLook } from '../../lib/aurora/textures';
@@ -152,6 +153,30 @@ const times = (v: number) => `×${v.toFixed(2)}`;
 const px = (v: number) => `${Math.round(v * 10) / 10} px`;
 
 // ---------- sections ----------
+
+/** The clock, search and up next. */
+function HubSection({ v }: { v: VisualSettings }) {
+  const h = v.hub;
+  const hub = (p: Partial<VisualSettings['hub']>) => patchVisuals({ hub: p });
+  return (
+    <Section title="Music hub">
+      <Toggle label="Search" hint="Find any song, album or artist and play it in the app you pick (press / to search)" checked={h.search} onChange={(search) => hub({ search })} />
+      <Toggle label="Up next" hint="The rest of the album and more by the artist, beside the song" checked={h.upNext} onChange={(upNext) => hub({ upNext })} />
+      <Toggle label="Clock" checked={h.clock} onChange={(clock) => hub({ clock })} />
+      {h.clock && <Toggle label="24-hour clock" checked={h.clock24} onChange={(clock24) => hub({ clock24 })} />}
+      <label className="flex items-center justify-between gap-3 py-1.5">
+        <span className="text-[12px] font-medium text-white/85">Play songs in</span>
+        <select value={h.source} onChange={(e) => hub({ source: e.target.value as VisualSettings['hub']['source'] })} className="h-8 rounded-[9px] border border-white/10 bg-white/[0.08] px-2 text-[12px] text-white outline-none [&>option]:bg-[#17171f]">
+          {SOURCES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    </Section>
+  );
+}
 
 /** What is behind the lyrics now, and why, in plain words. */
 /** What the matching by ear says about the video's timing. */
@@ -966,6 +991,7 @@ export function AuroraPanel({ open, onClose, status, full, video }: { open: bool
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
             {!v.enabled && <p className="px-4 pt-3 text-[11.5px] leading-snug text-amber-200/80">Aurora is off: no sound is analysed and nothing is drawn. The lyrics still show.</p>}
             <QuickSection v={v} video={video} />
+            <HubSection v={v} />
             <YourLookSection v={v} />
             <div className="border-t border-white/[0.08] px-4 py-2.5">
               <button

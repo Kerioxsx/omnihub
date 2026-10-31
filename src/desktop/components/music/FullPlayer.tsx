@@ -27,6 +27,7 @@ import { cx } from '../../lib/cx';
 import { activeLine, fmtTime, setWindowFullscreen, useFrame, useNowPlaying } from '../../lib/nowPlaying';
 import { useSettings } from '../../state/settings';
 import type { BackdropInput, VideoNow } from '../aurora/AuroraBackdrop';
+import { HubClock, HubSearch, HubUpNext } from '../aurora/AuroraHub';
 import { AuroraLyrics, type LyricsState } from '../aurora/AuroraLyrics';
 import { AuroraPanel } from '../aurora/AuroraPanel';
 import { AuroraStage } from '../aurora/AuroraStage';
@@ -538,6 +539,8 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
   const aurora = visuals.view === 'aurora';
   const reduced = visuals.reducedMotion || appReduced;
   const [panel, setPanel] = useState(false);
+  // The search panel or source menu is open: the controls stay up.
+  const [hubBusy, setHubBusy] = useState(false);
   const [captureStatus, setCaptureStatus] = useState<VisualStatus | null>(null);
   const [blender] = useState(() => new PaletteBlender());
   const lyricBox = useRef<HTMLDivElement>(null);
@@ -706,7 +709,8 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
 
   const synced = lines.length > 0;
   const plain = lyrics?.status === 'ready' ? lyrics.lyrics.plain : null;
-  const hide = full && idle;
+  const hide = full && idle && !hubBusy;
+  const hub = visuals.hub;
   const fade = { opacity: hide ? 0 : 1, transition: 'opacity .6s ease' };
 
   return (
@@ -736,6 +740,8 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
       ) : (
         <Ambient url={art} />
       )}
+
+      {aurora && hub.clock && <HubClock h24={hub.clock24} />}
 
       {/* Top bar */}
       <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-end gap-2 p-4" style={fade}>
@@ -801,6 +807,11 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
             onShowPlain={() => setView('lyrics')}
           />
           <AnimatePresence>{pausedCard && <PausedCard key="paused" state={state} art={art} control={control} />}</AnimatePresence>
+          {hub.upNext && !hubBusy && (
+            <div style={fade}>
+              <HubUpNext state={state} source={hub.source} full={full} />
+            </div>
+          )}
           <div style={fade}>
             <AuroraDock state={state} art={art} pos={pos} control={control} volume={volume} onVolume={changeVolume} full={full} lyricsShown={lyricsShown} onLyrics={toggleLyrics} panel={panel} onPanel={() => setPanel((p) => !p)} />
           </div>
@@ -863,6 +874,12 @@ export function FullPlayer({ mode, onClose }: { mode: 'fullscreen' | 'page'; onC
               <Lyrics lines={lines} active={active} time={time} canSeek={state.canSeek} onSeek={(ms) => control('seek', Math.max(0, ms - offset))} compact={!full} />
             </div>
           )}
+        </div>
+      )}
+
+      {aurora && hub.search && (
+        <div style={fade}>
+          <HubSearch settings={hub} state={state} full={full} onBusy={setHubBusy} />
         </div>
       )}
 

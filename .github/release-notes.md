@@ -1,16 +1,21 @@
 ## New in this version
 
-**Capri plays along: instant replay, “Capri, clip that”, and reactions to your games. And autofill in any browser.**
+**Aurora becomes a music hub: search every music service from the player. Plus a Tools page, a panic button and voice commands for your PC.**
 
-- **Instant replay** (Games → **Clips & Capri**): while a game runs, OmniHub keeps the last minutes of your screen and game sound (1 to 20 minutes), encoded on your graphics card (NVIDIA, AMD or Intel) so it barely costs FPS. Save with **Clip last 30 s**, **Start recording** / **Stop recording**, or your voice. Clips go to Videos\OmniHub Clips. The recorder (FFmpeg, about 130 MB) downloads the first time you turn it on.
-- **Voice commands**, with Windows’ own speech recognition, on your PC: **“Capri, clip that”**, **“Capri, record the last ten minutes”** (1–20 minutes, or 15–90 seconds), **“Capri, start recording”**, **“Capri, stop recording”**, **“Capri, call me …”** (boss, king, daddy, legend… or names you add), **“Capri, what’s my FPS”**, **“Capri, take a screenshot”**. It only listens while a game runs, unless you change that.
-- **Capri reacts to your games**: when they start and end, when you clip something, when your FPS drops. In **Counter-Strike 2** (Valve’s official game-state link) she follows rounds, multi-kills, MVPs, the bomb and the result; in **League of Legends** (Riot’s live game data) kills, multikills, dragons, barons and the result. Triple kills and better are clipped by themselves. Other games don’t share what happens in a match, so there she reacts to starting, stopping, clips and FPS.
-- **Autofill in any browser**: Vault → Browser autofill lists your browsers (Chrome, Edge, Brave, Opera, Opera GX, Vivaldi, Chromium, Firefox); switch on the ones you want, one or several, and **Open its extensions page** takes you there.
-- Everything new is off until you switch it on, and runs only while a game does.
+- **Search in Aurora** (the bar above the controls, or press **/**): songs, albums and artists. Pick one and it plays in the service you choose: **YouTube Music** plays the song itself; **Apple Music** opens it in the Apple Music app (or the web player); **Spotify**, **Spotify Web Player**, **SoundCloud** and **Amazon Music** open on it (press play: they only let their own signed-in apps start a song). **Automatic** uses the app that is playing, else your music app.
+- **Artist cards**: picture, a short bio, **Play** and **Shuffle**, top songs, and their albums in a carousel. Albums open to their songs.
+- **Up next** beside the song: the rest of its album and more by the artist. One click plays any of them.
+- **A big clock** at the top of Aurora (12- or 24-hour). All of it can be switched off in Aurora's settings → Music hub.
+- **Tools page**: a **checksum checker** (paste the SHA-256 from a website, pick the file), a **secure shredder** (overwrite, then delete), **bulk rename** with a live preview ({name}, {n:3}, {date}, find and replace, letter case), **recent files**, **ports** (“what is using port 3000?”, with End), and **window layouts** (save where your windows are, put them back with one click, starting missing apps).
+- **Command palette answers**: type **12*4**, **15% of 80** as **15% * 80**, **5 km in miles**, **100 f to c**, **uuid**, **base64 hello**, **sha256 text**, a Unix timestamp, or paste JSON to tidy it. Enter copies.
+- **Privacy & security**: a **panic button** (Settings, the tray menu, or your phone) locks the vault, cuts every phone off, stops screen sharing and locks the PC; a **notification when a paired phone connects**; and a **privacy dashboard** showing which apps used your microphone, camera or location, from Windows' own record.
+- **Voice**: **“Capri, lock my PC”**, **“Capri, open Spotify”** (any app in your Start menu), **“Capri, pause the music”**, **“next song”**, **“mute”**, **“Capri, panic”**.
+- **Phone**: take a **screenshot of the PC** and see it on the phone, **print** a file on the PC's printer, a **panic** button, and home-screen shortcuts (long-press the app icon: Lock PC, Screenshot, Mute PC).
+- **Settings backup** now includes your window layouts.
 
-Notes: Capri needs “follow your coding assistant” on in her menu to hear OmniHub. Counter-Strike 2 picks up OmniHub’s link the next time it starts. Regular Firefox keeps an add-on Mozilla hasn’t signed only until it restarts (load it again from about:debugging, or use Firefox Developer Edition).
+Notes: the music search uses Deezer's public catalogue and Wikipedia for bios; only what you type (and the playing song's title and artist, for Up next) is sent. The shredder can't reach copies an SSD keeps internally; BitLocker is what protects deleted files there.
 
-Also in 0.18.0: hidden files (any size, under your vault password) and locked notes.
+Also in 0.19.0: instant replay, “Capri, clip that”, Capri reacting to your games, and autofill in any browser.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

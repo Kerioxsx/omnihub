@@ -116,7 +116,7 @@ pub fn reset_fake() {
 }
 
 #[cfg(windows)]
-mod win {
+pub(crate) mod win {
     use windows::core::{BOOL, PWSTR};
     use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, WPARAM};
     use windows::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
@@ -232,6 +232,18 @@ mod win {
                 let title = is_app_window(h)?;
                 let (key, exe, path) = owner(h)?;
                 Some((key, exe, title, Some(path)))
+            })
+            .collect()
+    }
+
+    /// Every app window as (handle, key, title, path), for window layouts.
+    pub fn handles() -> Vec<(isize, String, String, String)> {
+        top_windows()
+            .into_iter()
+            .filter_map(|h| {
+                let title = is_app_window(h)?;
+                let (key, _, path) = owner(h)?;
+                Some((h.0 as isize, key, title, path))
             })
             .collect()
     }

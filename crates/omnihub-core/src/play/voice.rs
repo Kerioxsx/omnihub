@@ -4,7 +4,8 @@
 //! free dictation: it runs on the PC, sends nothing anywhere, costs next to
 //! nothing while it listens, and only reacts to sentences that start with
 //! "Capri". A name for "Capri, call me …" must be in the list of names
-//! (OmniHub's own, plus the ones you add).
+//! (OmniHub's own, plus the ones you add); "Capri, open …" knows the
+//! programs in your Start menu.
 
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +22,14 @@ pub enum Command {
     Fps,
     Screenshot,
     Hello,
+    LockPc,
+    /// Lock the vault, stop phone access and lock the PC.
+    Panic,
+    /// A program from the Start menu, by its spoken name.
+    OpenApp(String),
+    /// "play", "pause", "next" or "previous".
+    Music(String),
+    Mute(bool),
 }
 
 /// Names offered for "Capri, call me …" besides the ones you add.
@@ -31,8 +40,11 @@ const NUMBERS: &[&str] = &["one", "two", "three", "four", "five", "six", "seven"
 const SECONDS: &[(&str, u32)] = &[("fifteen", 15), ("twenty", 20), ("thirty", 30), ("forty five", 45), ("sixty", 60), ("ninety", 90)];
 const SAVE_VERBS: &[&str] = &["record", "clip", "save"];
 
+/// Programs "Capri, open …" offers at most (the recognizer gets slower with very long lists).
+pub const MAX_APPS: usize = 200;
+
 /// Every sentence the recognizer listens for, with what it means.
-pub fn phrases(nicknames: &[String]) -> Vec<(String, Command)> {
+pub fn phrases(nicknames: &[String], apps: &[String]) -> Vec<(String, Command)> {
     let mut body: Vec<(String, Command)> = Vec::new();
     for p in ["clip that", "clip it", "clip this", "save that", "save it"] {
         body.push((p.into(), Command::Clip));
@@ -67,6 +79,43 @@ pub fn phrases(nicknames: &[String]) -> Vec<(String, Command)> {
     for p in ["are you there", "hello", "say hi"] {
         body.push((p.into(), Command::Hello));
     }
+    for p in ["lock my pc", "lock the pc", "lock my computer", "lock the computer"] {
+        body.push((p.into(), Command::LockPc));
+    }
+    for p in ["panic", "panic mode", "lock everything"] {
+        body.push((p.into(), Command::Panic));
+    }
+    for (words, what) in [
+        ("play the music", "play"),
+        ("play music", "play"),
+        ("resume the music", "play"),
+        ("pause the music", "pause"),
+        ("pause music", "pause"),
+        ("stop the music", "pause"),
+        ("next song", "next"),
+        ("skip this song", "next"),
+        ("skip song", "next"),
+        ("previous song", "previous"),
+        ("go back a song", "previous"),
+    ] {
+        body.push((words.into(), Command::Music(what.into())));
+    }
+    for p in ["mute", "mute the pc", "mute my pc", "mute the sound"] {
+        body.push((p.into(), Command::Mute(true)));
+    }
+    for p in ["unmute", "unmute the pc", "unmute my pc", "unmute the sound"] {
+        body.push((p.into(), Command::Mute(false)));
+    }
+    let taken: Vec<String> = body.iter().map(|(p, _)| p.clone()).collect();
+    let mut programs: Vec<String> = apps.iter().map(|a| clean(a)).filter(|a| !a.is_empty() && a.split(' ').count() <= 4 && !a.chars().any(|c| c.is_ascii_digit())).collect();
+    programs.sort();
+    programs.dedup();
+    for a in programs.into_iter().take(MAX_APPS) {
+        let p = format!("open {a}");
+        if !taken.contains(&p) {
+            body.push((p, Command::OpenApp(a)));
+        }
+    }
     WAKE.iter().flat_map(|w| body.iter().map(move |(p, c)| (format!("{w} {p}"), c.clone()))).collect()
 }
 
@@ -82,9 +131,9 @@ pub fn clean(s: &str) -> String {
 }
 
 /// What a recognized sentence asks for.
-pub fn parse(text: &str, nicknames: &[String]) -> Option<Command> {
+pub fn parse(text: &str, nicknames: &[String], apps: &[String]) -> Option<Command> {
     let t = clean(text);
-    phrases(nicknames).into_iter().find(|(p, _)| *p == t).map(|(_, c)| c)
+    phrases(nicknames, apps).into_iter().find(|(p, _)| *p == t).map(|(_, c)| c)
 }
 
 #[cfg(windows)]
@@ -196,6 +245,8 @@ mod tests {
     #[test]
     fn understands_the_commands() {
         let mine = vec!["Sir Fluffy".to_string()];
+        let apps = vec!["Spotify".to_string(), "Visual Studio Code".to_string(), "Microsoft 365 (Office)".to_string(), "spotify".to_string()];
+        let parse = |t: &str, n: &[String]| parse(t, n, &apps);
         assert_eq!(parse("Capri, clip that!", &mine), Some(Command::Clip));
         assert_eq!(parse("Hey Capri record the last ten minutes", &mine), Some(Command::SaveLast(600)));
         assert_eq!(parse("capri save last one minute", &mine), Some(Command::SaveLast(60)));
@@ -208,11 +259,22 @@ mod tests {
         assert_eq!(parse("clip that", &mine), None);
         assert_eq!(parse("capri call me bob", &mine), None);
         // No sentence twice (the recognizer would refuse the list).
-        let all = phrases(&mine);
+        assert_eq!(parse("Capri, lock my PC", &mine), Some(Command::LockPc));
+        assert_eq!(parse("capri open spotify", &mine), Some(Command::OpenApp("spotify".into())));
+        assert_eq!(parse("Capri open Visual Studio Code", &mine), Some(Command::OpenApp("visual studio code".into())));
+        assert_eq!(parse("capri pause the music", &mine), Some(Command::Music("pause".into())));
+        assert_eq!(parse("capri skip this song", &mine), Some(Command::Music("next".into())));
+        assert_eq!(parse("capri unmute", &mine), Some(Command::Mute(false)));
+        assert_eq!(parse("capri panic", &mine), Some(Command::Panic));
+        // Names with numbers are hard to say the same way twice: left out.
+        assert_eq!(parse("capri open microsoft 365 office", &mine), None);
+        let all = phrases(&mine, &apps);
         let mut seen: Vec<&String> = all.iter().map(|(p, _)| p).collect();
         seen.sort();
         seen.dedup();
         assert_eq!(seen.len(), all.len());
         assert!(all.len() < 1500, "{} phrases", all.len());
+        let many: Vec<String> = (0..500).map(|i| format!("app {} {}", NUMBERS[i % 20], "x".repeat(i / 20 + 1))).collect();
+        assert!(phrases(&mine, &many).len() < 1500 + 3 * MAX_APPS);
     }
 }

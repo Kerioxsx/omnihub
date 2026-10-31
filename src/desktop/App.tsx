@@ -36,6 +36,7 @@ const ScreenPage = lazy(() => import('./pages/screen/ScreenPage').then((m) => ({
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const ScreenshotsPage = lazy(() => import('./pages/shots/ScreenshotsPage').then((m) => ({ default: m.ScreenshotsPage })));
 const StoragePage = lazy(() => import('./pages/storage/StoragePage').then((m) => ({ default: m.StoragePage })));
+const ToolsPage = lazy(() => import('./pages/tools/ToolsPage').then((m) => ({ default: m.ToolsPage })));
 const TasksPage = lazy(() => import('./pages/tasks/TasksPage').then((m) => ({ default: m.TasksPage })));
 const VaultPage = lazy(() => import('./pages/vault/VaultPage').then((m) => ({ default: m.VaultPage })));
 const Onboarding = lazy(() => import('./pages/onboarding/Onboarding').then((m) => ({ default: m.Onboarding })));
@@ -49,6 +50,7 @@ const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen' | 'pin
   notes: NotesPage,
   music: MusicPage,
   tasks: TasksPage,
+  tools: ToolsPage,
   games: GamesPage,
   mods: ModsPage,
   servers: ServersPage,

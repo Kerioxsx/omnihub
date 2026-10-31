@@ -845,6 +845,8 @@ export interface Settings {
     allowServers: boolean;
     /** “Send to → OmniHub (phone)” in Explorer. */
     sendToMenu: boolean;
+    /** A notification when a paired phone connects after 10 minutes away. */
+    connectAlerts: boolean;
   };
   screenshots: {
     dir: string | null;
@@ -1069,6 +1071,8 @@ export interface VisualSettings {
     videoQuality: VideoQuality;
   };
   desktop: { enabled: boolean; lyrics: boolean; display: string; clearTaskbar: boolean; hideFullscreen: boolean; startWithApp: boolean };
+  /** The music hub: a big clock, search and up next. */
+  hub: { clock: boolean; clock24: boolean; search: boolean; upNext: boolean; source: MusicSource };
 }
 
 export interface VisualStatus {
@@ -2809,4 +2813,148 @@ export interface AppUpdate {
   version: string;
   available: string;
   source: string;
+}
+
+// ---------- 0.20: file tools, ports, layouts, privacy ----------
+
+export type HashKind = 'sha256' | 'sha1' | 'sha512';
+export type RenameCase = 'keep' | 'lower' | 'upper' | 'title';
+
+export interface RenameRule {
+  pattern: string;
+  find: string;
+  replace: string;
+  case: RenameCase;
+  start: number;
+}
+
+export interface RenameItem {
+  from: string;
+  to: string;
+  /** Why it can't be renamed ("" when it can). */
+  problem: string;
+}
+
+export interface RecentFile {
+  path: string;
+  name: string;
+  size: number;
+  /** Unix seconds. */
+  used: number;
+}
+
+export interface PortUse {
+  proto: 'TCP' | 'UDP';
+  local: string;
+  port: number;
+  remote: string | null;
+  remotePort: number | null;
+  state: string;
+  pid: number;
+  process: string;
+}
+
+export interface LayoutWindow {
+  key: string;
+  name: string;
+  title: string;
+  path: string;
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  state: 'normal' | 'maximized' | 'minimized';
+}
+
+export interface WindowLayout {
+  name: string;
+  windows: LayoutWindow[];
+  savedAt: number;
+}
+
+export interface LayoutApplied {
+  placed: number;
+  launched: string[];
+  missing: string[];
+}
+
+export interface PrivacyUse {
+  what: 'microphone' | 'webcam' | 'location';
+  app: string;
+  id: string;
+  started: number | null;
+  stopped: number | null;
+  inUse: boolean;
+}
+
+// ---------- Aurora's music hub ----------
+
+/** Where a song picked in Aurora plays. */
+export type MusicSource = 'auto' | 'spotify' | 'spotifyWeb' | 'appleMusic' | 'youtubeMusic' | 'soundcloud' | 'amazonMusic';
+
+export interface CatTrack {
+  id: string;
+  title: string;
+  artist: string;
+  artistId: string;
+  album: string;
+  albumId: string;
+  cover: string;
+  durationMs: number;
+  explicit: boolean;
+}
+
+export interface CatAlbum {
+  id: string;
+  title: string;
+  artist: string;
+  artistId: string;
+  cover: string;
+  year: string;
+  /** "album", "single", "ep" or "compile". */
+  kind: string;
+  tracks: number;
+}
+
+export interface CatArtist {
+  id: string;
+  name: string;
+  picture: string;
+  fans: number;
+  albums: number;
+}
+
+export type CatTop = { kind: 'artist'; item: CatArtist } | { kind: 'track'; item: CatTrack } | { kind: 'album'; item: CatAlbum };
+
+export interface CatResults {
+  top: CatTop | null;
+  tracks: CatTrack[];
+  albums: CatAlbum[];
+  artists: CatArtist[];
+}
+
+export interface CatArtistPage {
+  artist: CatArtist;
+  bio: string | null;
+  top: CatTrack[];
+  albums: CatAlbum[];
+}
+
+export interface CatAlbumPage {
+  album: CatAlbum;
+  tracks: CatTrack[];
+}
+
+export interface CatUpNext {
+  track: CatTrack | null;
+  album: CatAlbumPage | null;
+  more: CatTrack[];
+  artist: CatArtist | null;
+}
+
+export type PlayItem = { kind: 'track'; title: string; artist: string; album: string } | { kind: 'album'; title: string; artist: string } | { kind: 'artist'; name: string };
+
+export interface MusicInstalled {
+  spotify: boolean;
+  appleMusic: boolean;
 }

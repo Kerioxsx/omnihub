@@ -202,6 +202,46 @@ export const api = {
     cancel: (job: string) => call<void>('hidden_cancel', { job }),
   },
 
+  /** Aurora's music hub: search the catalogue, artists, albums, up next, and play in a music service. */
+  music: {
+    search: (query: string) => call<T.CatResults>('music_search', { query }),
+    artist: (id: string) => call<T.CatArtistPage>('music_artist', { id }),
+    album: (id: string) => call<T.CatAlbumPage>('music_album', { id }),
+    upNext: (title: string, artist: string) => call<T.CatUpNext>('music_up_next', { title, artist }),
+    /** Returns the service it went to. */
+    play: (item: T.PlayItem, source: T.MusicSource, app: string | null) => call<T.MusicSource>('music_play', { item, source, app }),
+    installed: () => call<T.MusicInstalled>('music_installed'),
+  },
+
+  /** Checksums, the shredder, bulk rename and recent files. `job` names a run for progress (`tools:progress`) and Stop (`hidden.cancel`). */
+  files: {
+    hash: (path: string, kind: T.HashKind, job: string) => call<string>('files_hash', { path, kind, job }),
+    /** Overwrite, then delete for good; returns how many files. */
+    shred: (path: string, job: string) => call<number>('files_shred', { path, job }),
+    renamePlan: (files: string[], rule: T.RenameRule) => call<T.RenameItem[]>('files_rename_plan', { files, rule }),
+    rename: (files: string[], rule: T.RenameRule) => call<number>('files_rename', { files, rule }),
+    recent: (limit?: number) => call<T.RecentFile[]>('files_recent', { limit: limit ?? null }),
+  },
+
+  ports: {
+    list: () => call<T.PortUse[]>('ports_list'),
+    end: (pid: number) => call<void>('ports_end', { pid }),
+  },
+
+  layouts: {
+    list: () => call<T.WindowLayout[]>('layouts_list'),
+    save: (name: string) => call<T.WindowLayout>('layouts_save', { name }),
+    apply: (name: string, launch: boolean) => call<T.LayoutApplied>('layouts_apply', { name, launch }),
+    remove: (name: string) => call<void>('layouts_delete', { name }),
+  },
+
+  privacy: {
+    /** Which programs used the microphone, camera or location (Windows' own record). */
+    list: () => call<T.PrivacyUse[]>('privacy_list'),
+    /** Lock the vault, cut phones off and lock the PC. */
+    panic: () => call<void>('panic_now'),
+  },
+
   update: {
     state: () => call<T.UpdateInfo>('update_state'),
     check: () => call<T.UpdateInfo>('update_check'),

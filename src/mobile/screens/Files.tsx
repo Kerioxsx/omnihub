@@ -12,6 +12,7 @@ import {
   List,
   ArrowUpDown,
   Download,
+  Printer,
   ExternalLink,
   X,
   Check,
@@ -595,8 +596,21 @@ function PreviewSheet({ entry, onClose }: { entry: FsEntry | null; onClose: () =
     if (entry) setLast(entry);
   }, [entry]);
   const e = entry ?? last;
-  const [busy, setBusy] = useState<'dl' | 'open' | null>(null);
+  const [busy, setBusy] = useState<'dl' | 'open' | 'print' | null>(null);
   const isImage = e ? kindOf(e.name, e.kind) === 'image' : false;
+  const printable = !!e && /\.(pdf|docx?|txt|rtf|xlsx?|pptx?|png|jpe?g|gif|bmp|tiff?|webp)$/i.test(e.name);
+  const print = async () => {
+    if (!e) return;
+    setBusy('print');
+    try {
+      await client.print(e.path);
+      toast.success('Printing on the PC', e.name);
+    } catch (err) {
+      toast.error("Couldn't print", errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const act = async (inline: boolean) => {
     if (!e) return;
@@ -626,6 +640,11 @@ function PreviewSheet({ entry, onClose }: { entry: FsEntry | null; onClose: () =
             <Button variant="ghost" className="flex-1" icon={<ExternalLink size={18} />} loading={busy === 'open'} onClick={() => act(true)}>
               Open
             </Button>
+            {printable && (
+              <Button variant="ghost" className="flex-1" icon={<Printer size={18} />} loading={busy === 'print'} onClick={print}>
+                Print
+              </Button>
+            )}
           </div>
         )
       }

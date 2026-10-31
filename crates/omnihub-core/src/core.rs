@@ -62,6 +62,8 @@ pub struct AppCore {
     pub games: Arc<crate::games::GameHub>,
     /// Capri and your games: reactions, voice commands, instant replay.
     pub play: Arc<crate::play::PlayHub>,
+    /// Saved window arrangements ("Work", "Gaming").
+    pub layouts: crate::system::layouts::Layouts,
     pub updater: Arc<crate::update::Updater>,
     pub media: Arc<crate::media::MediaHub>,
     /// Listens to the PC's sound for the music visuals (only while one is shown).
@@ -129,6 +131,7 @@ impl AppCore {
             rig: crate::rig::RigHub::new(&paths.data, events.clone(), visual.clone()),
             govee: crate::govee::GoveeHub::new(&paths.data, events.clone(), visual, media),
             low_space_warned: Default::default(),
+            layouts: crate::system::layouts::Layouts::new(&paths.data),
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
             paths,
             settings,
@@ -352,6 +355,60 @@ impl AppCore {
     fn apply_visuals(&self, v: &crate::settings::VisualSettings) {
         self.visual.set_enabled(v.enabled && v.audio_reactive);
         self.visual.set_tuning(crate::media::visual::analyzer::Tuning { sensitivity: v.sensitivity, bass: v.bass, smoothing: v.smoothing });
+    }
+
+    /// Settings (and window layouts) as a file to keep or take to another
+    /// PC. Keys, passwords and paired phones aren't in it: they never are in
+    /// the settings, and stay protected on this PC.
+    pub fn export_settings(&self, path: &std::path::Path) -> Result<(), String> {
+        let doc = serde_json::json!({
+            "omnihubSettings": 1,
+            "version": env!("CARGO_PKG_VERSION"),
+            "exported": chrono::Utc::now().to_rfc3339(),
+            "settings": self.settings.get(),
+            "layouts": self.layouts.list(),
+        });
+        let bytes = serde_json::to_vec_pretty(&doc).map_err(|e| e.to_string())?;
+        crate::settings::write_atomic(path, &bytes).map_err(|e| e.to_string())
+    }
+
+    /// Bring in settings saved with `export_settings`. This PC's own name
+    /// and phone connection stay as they are.
+    pub fn import_settings(self: &Arc<Self>, path: &std::path::Path) -> Result<Settings, String> {
+        let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+        let doc: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| "That file is not an OmniHub settings backup.".to_string())?;
+        if doc.get("omnihubSettings").is_none() || !doc["settings"].is_object() {
+            return Err("That file is not an OmniHub settings backup.".into());
+        }
+        // Read it as settings first, so a damaged file changes nothing.
+        let parsed: Settings = serde_json::from_value(doc["settings"].clone()).map_err(|e| format!("The backup could not be read: {e}"))?;
+        let mut patch = serde_json::to_value(parsed).map_err(|e| e.to_string())?;
+        if let Some(remote) = patch.get_mut("remote").and_then(|r| r.as_object_mut()) {
+            for k in ["deviceName", "enabled", "port", "bind", "tls"] {
+                remote.remove(k);
+            }
+        }
+        let after = self.update_settings(&patch).map_err(|e| e.to_string())?;
+        if let Ok(layouts) = serde_json::from_value::<Vec<crate::system::layouts::Layout>>(doc["layouts"].clone()) {
+            self.layouts.import(layouts);
+        }
+        Ok(after)
+    }
+
+    /// The panic button: lock the vault (closing open hidden files), cut
+    /// every phone off, stop screen sharing and lock the PC. The desktop
+    /// app also hides its window on "app:panic". Phone access stays off
+    /// until you turn it on again in Phone.
+    pub fn panic(&self, by: &str) {
+        self.vault.lock();
+        self.remote.stop();
+        // Off for good, not just until OmniHub restarts.
+        if let Ok(after) = self.settings.update(&serde_json::json!({ "remote": { "enabled": false } })) {
+            self.events.emit("settings:changed", &after);
+        }
+        self.audit.record(by, "panic", "vault locked, phone access stopped, PC locked", true);
+        self.events.emit("app:panic", serde_json::json!({ "by": by }));
+        self.power.schedule(crate::system::power::PowerAction::Lock, 0, by);
     }
 
     /// Apply a settings patch and react to what changed.

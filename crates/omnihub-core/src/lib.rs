@@ -21,6 +21,7 @@ pub mod helper;
 pub mod mcserver;
 pub mod media;
 pub mod mods;
+pub mod files;
 pub mod notes;
 pub mod play;
 pub mod paths;

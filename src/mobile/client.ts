@@ -236,6 +236,12 @@ export const client = {
   power: () => request<{ enabled: boolean; actions: { action: PowerAction; label: string; destructive: boolean }[]; pending: PendingPower | null; delaySeconds: number }>('GET', '/api/power'),
   requestPower: (action: PowerAction) => request<{ pending: PendingPower }>('POST', '/api/power', { action, confirm: true }),
   cancelPower: () => request<{ cancelled: boolean }>('POST', '/api/power/cancel'),
+  /** Lock the vault, cut phones off (this one too) and lock the PC. */
+  panic: () => request<void>('POST', '/api/panic'),
+  /** A screenshot of the PC's screen (saved on the PC too); a link to get it. */
+  screenshot: () => request<{ url: string; name: string; width: number; height: number }>('POST', '/api/screenshot'),
+  /** Print a file on the PC's default printer. */
+  print: (path: string) => request<void>('POST', '/api/print', { path }),
 
   apps: () => request<{ apps: { id: string; name: string; publisher: string; source: string }[] }>('GET', '/api/apps'),
   appIcon: (id: string) => request<{ icon: string | null }>('GET', `/api/apps/${id}/icon`),

@@ -143,12 +143,13 @@ pub struct PlayHub {
     events: EventBus,
     state: Mutex<State>,
     installing: AtomicBool,
+    apps_loading: AtomicBool,
     tx: Mutex<Option<mpsc::Sender<Msg>>>,
 }
 
 impl PlayHub {
     pub fn new(data: &std::path::Path, events: EventBus) -> Arc<Self> {
-        Arc::new(PlayHub { tools: data.join("tools"), buffer_dir: data.join("replay"), events, state: Mutex::new(State::default()), installing: AtomicBool::new(false), tx: Mutex::new(None) })
+        Arc::new(PlayHub { tools: data.join("tools"), buffer_dir: data.join("replay"), events, state: Mutex::new(State::default()), installing: AtomicBool::new(false), apps_loading: AtomicBool::new(false), tx: Mutex::new(None) })
     }
 
     fn ffmpeg(&self) -> PathBuf {
@@ -443,14 +444,15 @@ impl PlayHub {
 
     fn reconcile_voice(self: &Arc<Self>, _core: &Arc<AppCore>, s: &PlaySettings, playing: bool) {
         let want = cfg!(windows) && s.voice && (playing || !s.voice_only_in_games);
-        let phrases: Vec<String> = voice::phrases(&s.nicknames).into_iter().map(|(p, _)| p).collect();
+        let apps = self.voice_apps(_core, want);
+        let phrases: Vec<String> = voice::phrases(&s.nicknames, &apps).into_iter().map(|(p, _)| p).collect();
         let mut st = self.state.lock();
         let running = st.listener.is_some();
         if want && (!running || st.listener_phrases != phrases) && (st.voice_error.is_none() || st.listener_phrases != phrases) {
             st.listener = None;
             st.listener_phrases = phrases.clone();
             drop(st);
-            let r = self.start_listener(phrases, s.nicknames.clone());
+            let r = self.start_listener(phrases, s.nicknames.clone(), apps);
             let mut st = self.state.lock();
             match r {
                 Ok(l) => {
@@ -470,13 +472,32 @@ impl PlayHub {
         }
     }
 
+    /// Start menu programs for "Capri, open …": the cached list, read once
+    /// in the background the first time (the listener restarts with them).
+    fn voice_apps(self: &Arc<Self>, core: &Arc<AppCore>, want: bool) -> Vec<String> {
+        if let Some(names) = core.apps.cached_launchable() {
+            return names;
+        }
+        if want && !self.apps_loading.swap(true, Ordering::Relaxed) {
+            let core = core.clone();
+            let hub = Arc::downgrade(self);
+            std::thread::spawn(move || {
+                core.apps.list(&|_| None);
+                if let Some(hub) = hub.upgrade() {
+                    hub.send(Msg::Wake);
+                }
+            });
+        }
+        Vec::new()
+    }
+
     #[cfg(windows)]
-    fn start_listener(self: &Arc<Self>, phrases: Vec<String>, nicknames: Vec<String>) -> Result<Box<dyn std::any::Any + Send>, String> {
+    fn start_listener(self: &Arc<Self>, phrases: Vec<String>, nicknames: Vec<String>, apps: Vec<String>) -> Result<Box<dyn std::any::Any + Send>, String> {
         let hub = Arc::downgrade(self);
         let l = voice::Listener::start(phrases, move |text| {
             let Some(hub) = hub.upgrade() else { return };
             hub.state.lock().heard = Some(text.clone());
-            if let Some(cmd) = voice::parse(&text, &nicknames) {
+            if let Some(cmd) = voice::parse(&text, &nicknames, &apps) {
                 hub.send(Msg::Voice(cmd));
             }
             hub.events.emit("play:heard", serde_json::json!({ "text": text }));
@@ -485,7 +506,7 @@ impl PlayHub {
     }
 
     #[cfg(not(windows))]
-    fn start_listener(self: &Arc<Self>, _phrases: Vec<String>, _nicknames: Vec<String>) -> Result<Box<dyn std::any::Any + Send>, String> {
+    fn start_listener(self: &Arc<Self>, _phrases: Vec<String>, _nicknames: Vec<String>, _apps: Vec<String>) -> Result<Box<dyn std::any::Any + Send>, String> {
         Err("Voice commands use Windows speech recognition.".into())
     }
 
@@ -608,6 +629,34 @@ impl PlayHub {
                 }
             }
             Msg::Voice(Command::Hello) => self.say(&lines::pick(lines::HELLO, &f(&[]))),
+            Msg::Voice(Command::LockPc) => {
+                self.say("Locking your PC.");
+                core.power.schedule(crate::system::power::PowerAction::Lock, 0, "voice");
+            }
+            Msg::Voice(Command::Panic) => {
+                core.panic("voice");
+            }
+            Msg::Voice(Command::OpenApp(name)) => match core.apps.find_spoken(&name) {
+                Some(id) => match core.apps.launch(&id) {
+                    Ok(app) => self.say(&format!("Opening {app}.")),
+                    Err(e) => self.say(&format!("I couldn't open {name}: {e}")),
+                },
+                None => self.say(&format!("I can't find {name}.")),
+            },
+            Msg::Voice(Command::Music(what)) => {
+                let action = match what.as_str() {
+                    "play" => crate::media::Action::Play,
+                    "pause" => crate::media::Action::Pause,
+                    "next" => crate::media::Action::Next,
+                    _ => crate::media::Action::Previous,
+                };
+                if let Err(e) = core.media.control(action, 0) {
+                    self.say(&format!("The music didn't listen: {e}"));
+                }
+            }
+            Msg::Voice(Command::Mute(on)) => {
+                let _ = crate::media::mixer::set_master(core.media.is_fake(), None, Some(on));
+            }
             Msg::Cs2(e) => self.on_cs2(&s, e),
             Msg::Lol(e) => self.on_lol(&s, e),
             Msg::Wake => {}

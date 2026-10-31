@@ -32,6 +32,15 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.20.0
+
+- **Aurora music hub**: search songs, albums and artists from the player and play them in YouTube Music, Apple Music, Spotify (app or web), SoundCloud or Amazon Music (or whichever app is playing); artist cards with bio, Play/Shuffle, top songs and an album carousel; album track lists; **Up next** from the album and artist; a big clock. Catalogue: Deezer's public API; bios: Wikipedia.
+- **Tools page**: checksum checker, secure shredder, bulk rename with preview, recent files, ports viewer with End, window layouts.
+- **Command palette answers**: calculator, unit conversions, Base64, JSON, UUID, SHA hashes, Unix timestamps.
+- **Panic button** (desktop, tray, phone, voice), **phone connect alerts**, **privacy dashboard** (mic, camera, location use).
+- **Voice**: lock the PC, open apps, control music, mute, panic.
+- **Phone**: PC screenshot, print on the PC, panic, home-screen shortcuts.
+
 ## New in 0.19.0
 
 - **Clips & Capri** (Games → Clips & Capri): instant replay keeps the last minutes of your game on the graphics card; say **“Capri, clip that”**, **“Capri, record the last ten minutes”**, **“Capri, call me …”** and more. Capri reacts to your games, and follows Counter-Strike 2 and League of Legends matches (kills, rounds, wins), clipping big moments by herself.

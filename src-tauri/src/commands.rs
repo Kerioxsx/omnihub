@@ -212,28 +212,19 @@ pub async fn settings_update(app: AppHandle, core: Core<'_>, patch: serde_json::
     Ok(after)
 }
 
-/// Save all settings as JSON (no secrets are kept in settings).
+/// Save all settings (and window layouts) as JSON; no keys or passwords are kept in settings.
 #[tauri::command]
 pub async fn settings_export(core: Core<'_>, path: String) -> Res<()> {
-    let s = core.settings.get();
-    let json = serde_json::to_vec_pretty(&serde_json::json!({ "omnihubSettings": 1, "version": env!("CARGO_PKG_VERSION"), "settings": s })).map_err(err)?;
-    omnihub_core::settings::write_atomic(Path::new(&path), &json).map_err(err)
+    let core = core.inner().clone();
+    blocking(move || core.export_settings(Path::new(&path))).await
 }
 
 /// Restore settings saved with [`settings_export`]; unknown or missing
-/// values keep their current setting.
+/// values keep their current setting, and this PC's phone connection stays.
 #[tauri::command]
 pub async fn settings_import(app: AppHandle, core: Core<'_>, path: String) -> Res<Settings> {
     let core = core.inner().clone();
-    let after = blocking(move || {
-        let bytes = std::fs::read(&path).map_err(err)?;
-        let v: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| "That file is not an OmniHub settings backup.".to_string())?;
-        let s = v.get("settings").filter(|_| v.get("omnihubSettings").is_some()).ok_or("That file is not an OmniHub settings backup.")?;
-        // Validate by reading it as settings, then apply as a patch (side effects run).
-        let parsed: Settings = serde_json::from_value(s.clone()).map_err(|e| format!("The backup could not be read: {e}"))?;
-        core.update_settings(&serde_json::to_value(parsed).map_err(err)?).map_err(err)
-    })
-    .await?;
+    let after = blocking(move || core.import_settings(Path::new(&path))).await?;
     crate::shortcuts::register(&app);
     crate::tray::refresh(&app);
     Ok(after)
@@ -898,6 +889,11 @@ static HIDDEN_JOBS: std::sync::LazyLock<parking_lot::Mutex<std::collections::Has
 
 /// Run a hidden-files job with a stop flag and `hidden:progress` events (a few a second).
 async fn hidden_job<T: Send + 'static>(core: &Arc<AppCore>, job: String, name: String, f: impl FnOnce(&AppCore, &mut dyn FnMut(u64, u64), &std::sync::atomic::AtomicBool) -> Res<T> + Send + 'static) -> Res<T> {
+    progress_job(core, "hidden:progress", job, name, f).await
+}
+
+/// Long work with (done, total) progress on `topic`, stoppable by `hidden_cancel`.
+async fn progress_job<T: Send + 'static>(core: &Arc<AppCore>, topic: &'static str, job: String, name: String, f: impl FnOnce(&AppCore, &mut dyn FnMut(u64, u64), &std::sync::atomic::AtomicBool) -> Res<T> + Send + 'static) -> Res<T> {
     let core = core.clone();
     let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
     HIDDEN_JOBS.lock().insert(job.clone(), stop.clone());
@@ -909,7 +905,7 @@ async fn hidden_job<T: Send + 'static>(core: &Arc<AppCore>, job: String, name: S
             let mut progress = |done: u64, total: u64| {
                 if last.elapsed() >= Duration::from_millis(200) || done == total {
                     last = std::time::Instant::now();
-                    events.emit("hidden:progress", serde_json::json!({ "job": &job, "name": &name, "done": done, "total": total }));
+                    events.emit(topic, serde_json::json!({ "job": &job, "name": &name, "done": done, "total": total }));
                 }
             };
             f(&core, &mut progress, &stop)
@@ -969,6 +965,127 @@ pub async fn hidden_cancel(job: String) -> Res<()> {
 }
 
 // ---------- Capri and your games ----------
+
+// ---------- Aurora's music hub ----------
+
+use omnihub_core::media::catalog;
+
+#[tauri::command]
+pub async fn music_search(query: String) -> Res<catalog::Results> {
+    blocking(move || catalog::search(&query, &catalog::http_get)).await
+}
+
+#[tauri::command]
+pub async fn music_artist(id: String) -> Res<catalog::ArtistPage> {
+    blocking(move || catalog::artist(&id, &catalog::http_get)).await
+}
+
+#[tauri::command]
+pub async fn music_album(id: String) -> Res<catalog::AlbumPage> {
+    blocking(move || catalog::album(&id, &catalog::http_get)).await
+}
+
+/// The rest of the playing song's album and more by its artist.
+#[tauri::command]
+pub async fn music_up_next(title: String, artist: String) -> Res<catalog::UpNext> {
+    blocking(move || catalog::up_next(&title, &artist, &catalog::http_get)).await
+}
+
+/// Play in the chosen service; returns the one it went to.
+#[tauri::command]
+pub async fn music_play(item: catalog::Item, source: catalog::Source, app: Option<String>) -> Res<catalog::Source> {
+    blocking(move || catalog::play(&item, source, app.as_deref())).await
+}
+
+#[tauri::command]
+pub async fn music_installed() -> Res<catalog::Installed> {
+    blocking(|| Ok(catalog::installed())).await
+}
+
+// ---------- file tools, ports, layouts, privacy ----------
+
+#[tauri::command]
+pub async fn files_hash(core: Core<'_>, path: String, kind: omnihub_core::files::HashKind, job: String) -> Res<String> {
+    let name = Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    progress_job(core.inner(), "tools:progress", job, name, move |_, p, stop| omnihub_core::files::hash_file(Path::new(&path), kind, p, stop)).await
+}
+
+/// Overwrite and delete for good (the page asks you to type the name first).
+#[tauri::command]
+pub async fn files_shred(core: Core<'_>, path: String, job: String) -> Res<usize> {
+    let name = Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let shown = path.clone();
+    let n = progress_job(core.inner(), "tools:progress", job, name, move |_, _, stop| omnihub_core::files::shred(Path::new(&path), stop)).await?;
+    core.audit.record("desktop", "files.shred", &format!("{shown} ({n} files)"), true);
+    Ok(n)
+}
+
+#[tauri::command]
+pub async fn files_rename_plan(files: Vec<String>, rule: omnihub_core::files::RenameRule) -> Res<Vec<omnihub_core::files::RenameItem>> {
+    blocking(move || Ok(omnihub_core::files::rename_plan(&files, &rule))).await
+}
+
+#[tauri::command]
+pub async fn files_rename(core: Core<'_>, files: Vec<String>, rule: omnihub_core::files::RenameRule) -> Res<usize> {
+    let n = blocking(move || omnihub_core::files::rename_apply(&files, &rule)).await?;
+    core.audit.record("desktop", "files.rename", &format!("{n} files"), true);
+    Ok(n)
+}
+
+#[tauri::command]
+pub async fn files_recent(limit: Option<usize>) -> Res<Vec<omnihub_core::files::RecentFile>> {
+    blocking(move || Ok(omnihub_core::files::recent_files(limit.unwrap_or(60).clamp(1, 300)))).await
+}
+
+#[tauri::command]
+pub async fn ports_list() -> Res<Vec<omnihub_core::system::ports::PortUse>> {
+    blocking(|| Ok(omnihub_core::system::ports::list())).await
+}
+
+#[tauri::command]
+pub async fn ports_end(core: Core<'_>, pid: u32) -> Res<()> {
+    blocking(move || omnihub_core::system::ports::end_process(pid)).await?;
+    core.audit.record("desktop", "process.end", &format!("pid {pid}"), true);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn layouts_list(core: Core<'_>) -> Res<Vec<omnihub_core::system::layouts::Layout>> {
+    Ok(core.layouts.list())
+}
+
+#[tauri::command]
+pub async fn layouts_save(core: Core<'_>, name: String) -> Res<omnihub_core::system::layouts::Layout> {
+    let core = core.inner().clone();
+    blocking(move || core.layouts.save(&name)).await
+}
+
+#[tauri::command]
+pub async fn layouts_apply(core: Core<'_>, name: String, launch: bool) -> Res<omnihub_core::system::layouts::Applied> {
+    let core = core.inner().clone();
+    blocking(move || core.layouts.apply(&name, launch)).await
+}
+
+#[tauri::command]
+pub async fn layouts_delete(core: Core<'_>, name: String) -> Res<()> {
+    core.layouts.delete(&name)
+}
+
+#[tauri::command]
+pub async fn privacy_list() -> Res<Vec<omnihub_core::system::privacy::Use>> {
+    blocking(|| Ok(omnihub_core::system::privacy::list())).await
+}
+
+/// Lock the vault, cut phones off, lock the PC (the window hides itself).
+#[tauri::command]
+pub async fn panic_now(core: Core<'_>) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || {
+        core.panic("desktop");
+        Ok(())
+    })
+    .await
+}
 
 #[tauri::command]
 pub async fn play_status(core: Core<'_>) -> Res<omnihub_core::play::PlayStatus> {

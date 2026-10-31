@@ -587,6 +587,28 @@ impl Default for DesktopGlowSettings {
     }
 }
 
+/// Aurora's music hub: the clock, search and "up next".
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct HubSettings {
+    /// A big clock at the top.
+    pub clock: bool,
+    /// 24-hour clock (otherwise 12-hour, without AM/PM).
+    pub clock24: bool,
+    /// The search bar in the dock.
+    pub search: bool,
+    /// "From this album" and "More by" beside the song.
+    pub up_next: bool,
+    /// Where a song picked in Aurora plays.
+    pub source: crate::media::catalog::Source,
+}
+
+impl Default for HubSettings {
+    fn default() -> Self {
+        HubSettings { clock: true, clock24: false, search: true, up_next: true, source: crate::media::catalog::Source::Auto }
+    }
+}
+
 /// Aurora: the music-reactive light, scene and lyrics.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
@@ -618,6 +640,7 @@ pub struct VisualSettings {
     pub lyrics: AuroraLyricsSettings,
     pub scene: SceneSettings,
     pub desktop: DesktopGlowSettings,
+    pub hub: HubSettings,
 }
 
 impl Default for VisualSettings {
@@ -639,6 +662,7 @@ impl Default for VisualSettings {
             lyrics: AuroraLyricsSettings::default(),
             scene: SceneSettings::default(),
             desktop: DesktopGlowSettings::default(),
+            hub: HubSettings::default(),
         }
     }
 }
@@ -846,6 +870,8 @@ pub struct RemoteSettings {
     pub allow_servers: bool,
     /// "Send to → OmniHub (phone)" in Explorer's right-click menu.
     pub send_to_menu: bool,
+    /// A notification when a paired phone connects (after 10 minutes away).
+    pub connect_alerts: bool,
 }
 
 impl Default for RemoteSettings {
@@ -871,6 +897,7 @@ impl Default for RemoteSettings {
             allow_tasks: true,
             allow_servers: true,
             send_to_menu: true,
+            connect_alerts: true,
         }
     }
 }

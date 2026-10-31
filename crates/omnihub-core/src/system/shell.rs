@@ -4,6 +4,25 @@ use std::path::Path;
 
 #[cfg(windows)]
 pub fn shell_execute(file: &str, params: &str) -> std::io::Result<()> {
+    shell_verb("open", file, params)
+}
+
+/// Print a file on the default printer with the program Windows uses for
+/// that kind of file (like right-click → Print).
+pub fn print(path: &Path) -> std::io::Result<()> {
+    if !path.is_file() {
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("{} does not exist", path.display())));
+    }
+    #[cfg(windows)]
+    return shell_verb("print", &path.to_string_lossy(), "").map_err(|e| {
+        std::io::Error::other(if e.to_string().contains("No application is associated") || e.to_string().contains("0x80070483") { format!("Windows has no program that prints {} files.", path.extension().map(|x| x.to_string_lossy().to_uppercase()).unwrap_or_default()) } else { e.to_string() })
+    });
+    #[cfg(not(windows))]
+    std::process::Command::new("lp").arg(path).spawn().map(|_| ())
+}
+
+#[cfg(windows)]
+fn shell_verb(verb: &str, file: &str, params: &str) -> std::io::Result<()> {
     use windows::core::HSTRING;
     use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
     use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW};
@@ -13,7 +32,7 @@ pub fn shell_execute(file: &str, params: &str) -> std::io::Result<()> {
     // thread that sleeps instead of pumping messages, or the hand-off can
     // be lost and nothing opens.
     let com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) }.is_ok();
-    let (verb, f, p) = (HSTRING::from("open"), HSTRING::from(file), HSTRING::from(params));
+    let (verb, f, p) = (HSTRING::from(verb), HSTRING::from(file), HSTRING::from(params));
     let mut info = SHELLEXECUTEINFOW {
         cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
         fMask: SEE_MASK_NOASYNC,

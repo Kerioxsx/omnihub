@@ -116,6 +116,33 @@ shell adds the `casescreen` window (on the chosen monitor) and the
 with the page) builds the PC from the specs and the user's description,
 draws every LED of a part in one instanced mesh, and pauses when hidden.
 
+### Aurora's music hub
+
+`media/catalog.rs` searches Deezer's public catalogue (tracks, albums,
+artists, an artist's top songs and albums, an album's songs) and takes bios
+from Wikipedia's page summaries, with a 15-minute in-memory cache and a host
+allowlist. `up_next` finds the playing song in the catalogue and returns the
+rest of its album and more by the artist. `play` resolves `Auto` (the app
+playing, else an installed app found by its registered link scheme, else
+YouTube Music) and opens a link: a YouTube Music watch link for the song
+(found with `video::parse_results`), an Apple Music page (from the iTunes
+Search API; `musics://` when the app is installed), or a search in Spotify,
+SoundCloud or Amazon Music. The UI is `components/aurora/AuroraHub.tsx` (clock,
+search panel, artist and album views, carousel, source picker, up next);
+`visuals.hub` holds its settings.
+
+### Tools
+
+`files.rs` (checksums, shredder, bulk rename with a two-phase apply and
+rollback, recent files from the Recent folder's shortcuts), `system/ports.rs`
+(`GetExtendedTcpTable`/`GetExtendedUdpTable` with owning processes),
+`system/layouts.rs` (`GetWindowPlacement`/`SetWindowPlacement`, matched by
+program and title, saved in `layouts.json`) and `system/privacy.rs` (the
+ConsentStore's last-used times). `AppCore::panic` locks the vault, stops and
+disables the phone server, emits `app:panic` (the window hides) and locks
+Windows. `remote::auth::authenticate_seen` reports a phone back after ten
+minutes away (`remote:connected`).
+
 ### Aurora
 
 The music visuals are split so nothing time-critical waits on the network

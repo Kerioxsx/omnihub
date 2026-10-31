@@ -10,6 +10,7 @@
 pub mod align;
 pub mod artwork;
 pub mod audio;
+pub mod catalog;
 pub mod eq;
 pub mod look;
 pub mod lyrics;

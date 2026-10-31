@@ -100,6 +100,9 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/open-apps/icon", get(open_apps_icon))
         .route("/api/power", get(power_info).post(power_request))
         .route("/api/power/cancel", post(power_cancel))
+        .route("/api/panic", post(panic))
+        .route("/api/screenshot", post(screenshot))
+        .route("/api/print", post(print_file))
         .route("/api/apps", get(apps_list))
         .route("/api/apps/{id}/icon", get(app_icon))
         .route("/api/apps/{id}/launch", post(app_launch))
@@ -184,8 +187,11 @@ async fn require_device(State(core): State<Ctx>, ConnectInfo(peer): ConnectInfo<
     let Some(token) = bearer(req.headers()) else {
         return ApiError::new(StatusCode::UNAUTHORIZED, "pair this phone first").into_response();
     };
-    match core.remote.devices.authenticate(token, &peer.ip().to_string()) {
-        Some(dev) => {
+    match core.remote.devices.authenticate_seen(token, &peer.ip().to_string()) {
+        Some((dev, back)) => {
+            if back && core.settings.get().remote.connect_alerts {
+                core.events.emit("remote:connected", serde_json::json!({ "name": dev.name, "ip": peer.ip().to_string() }));
+            }
             req.extensions_mut().insert(dev);
             next.run(req).await
         }
@@ -796,6 +802,55 @@ async fn power_request(State(core): State<Ctx>, Extension(dev): Extension<Device
 
 async fn power_cancel(State(core): State<Ctx>, Extension(dev): Extension<Device>) -> Json<serde_json::Value> {
     Json(json!({ "cancelled": core.power.cancel(&actor(&dev)) }))
+}
+
+/// The panic button from the phone: everything locks and the phone is cut off too.
+async fn panic(State(core): State<Ctx>, Extension(dev): Extension<Device>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_power {
+        return Err(ApiError::forbidden("power control from the phone is turned off"));
+    }
+    let by = actor(&dev);
+    // After the reply: stopping the server ends this request too.
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let _ = tokio::task::spawn_blocking(move || core.panic(&by)).await;
+    });
+    Ok(StatusCode::ACCEPTED)
+}
+
+/// A screenshot of the PC's screen, saved on the PC like any other, and a link to get it.
+async fn screenshot(State(core): State<Ctx>, Extension(dev): Extension<Device>) -> ApiResult<Json<serde_json::Value>> {
+    if !core.settings.get().remote.allow_screen {
+        return Err(ApiError::forbidden("screen sharing is turned off on the PC"));
+    }
+    let c = core.clone();
+    let shot = tokio::task::spawn_blocking(move || c.screenshots.capture(crate::capture::screenshots::CaptureKind::Screen, &c.screenshot_dir(), c.settings.get().screenshots.format))
+        .await?
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let path = PathBuf::from(&shot.path);
+    let t = core.remote.tickets.issue(&dev.id, TicketPurpose::Download(path.clone()), Duration::from_secs(15 * 60));
+    core.audit.record(&actor(&dev), "screenshot", &display_path(&path), true);
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    Ok(Json(json!({ "url": format!("/dl/{t}"), "name": name, "width": shot.width, "height": shot.height })))
+}
+
+#[derive(Deserialize)]
+struct PrintReq {
+    path: String,
+}
+
+/// Print a file the phone sent (or one it can browse) on the PC's printer.
+async fn print_file(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<PrintReq>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_uploads {
+        return Err(ApiError::forbidden("sending files to this PC is turned off"));
+    }
+    let p = std::fs::canonicalize(&req.path).map_err(|_| ApiError::not_found("no such file"))?;
+    let incoming = std::fs::canonicalize(core.incoming_dir()).ok();
+    let path = if incoming.is_some_and(|i| p.starts_with(i)) { p } else { allowed_path(&core, &req.path)? };
+    let shown = display_path(&path);
+    tokio::task::spawn_blocking(move || crate::system::shell::print(&path)).await?.map_err(|e| ApiError::bad(e.to_string()))?;
+    core.audit.record(&actor(&dev), "print", &shown, true);
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ---------- tasks: what's using the PC ----------

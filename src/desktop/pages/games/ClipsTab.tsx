@@ -17,7 +17,7 @@ import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
 import { CapriToggle } from '../chats/CapriToggle';
 
-const EXAMPLES = ['Capri, clip that', 'Capri, record the last ten minutes', 'Capri, save the last thirty seconds', 'Capri, start recording', 'Capri, stop recording', 'Capri, call me boss', 'Capri, what’s my FPS', 'Capri, take a screenshot'];
+const EXAMPLES = ['Capri, clip that', 'Capri, record the last ten minutes', 'Capri, save the last thirty seconds', 'Capri, start recording', 'Capri, stop recording', 'Capri, call me boss', 'Capri, what’s my FPS', 'Capri, take a screenshot', 'Capri, lock my PC', 'Capri, open Spotify', 'Capri, pause the music', 'Capri, next song', 'Capri, mute', 'Capri, panic'];
 const BUILT_IN_NAMES = ['boss', 'champ', 'chief', 'captain', 'king', 'queen', 'legend', 'daddy', 'mommy', 'bro', 'dude', 'partner', 'commander', 'master chief', 'goat'];
 
 function Row({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {

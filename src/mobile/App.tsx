@@ -20,7 +20,7 @@ import { PairScreen } from './screens/Pair';
 import { HomeScreen } from './screens/Home';
 import { FilesScreen } from './screens/Files';
 import { ScreenScreen } from './screens/Screen';
-import { PowerScreen } from './screens/Power';
+import { PowerScreen, autoScreenshot } from './screens/Power';
 import { MusicScreen } from './screens/Music';
 import { MoreScreen, type MorePage } from './screens/More';
 import { ChatsScreen } from './screens/Chats';
@@ -68,6 +68,22 @@ export function App() {
   useEffect(() => {
     boot();
   }, [boot]);
+
+  // Home-screen shortcuts (long-press the app icon): ?do=lock|screenshot|mute.
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    const q = new URLSearchParams(location.search);
+    const what = q.get('do');
+    if (!what) return;
+    q.delete('do');
+    history.replaceState(history.state, '', location.pathname + (q.toString() ? `?${q}` : ''));
+    if (what === 'lock') void client.requestPower('lock').then(() => toast.success('PC locked'), (e: unknown) => toast.error("Couldn't lock the PC", errorMessage(e)));
+    else if (what === 'mute') void client.soundMaster({ muted: true }).then(() => toast.success('PC muted'), (e: unknown) => toast.error("Couldn't mute the PC", errorMessage(e)));
+    else if (what === 'screenshot') {
+      autoScreenshot.pending = true;
+      setTab('power');
+    }
+  }, [phase, setTab]);
   useInterval(boot, phase === 'unreachable' ? 5000 : null);
 
   // Token rejected anywhere → back to pairing.
