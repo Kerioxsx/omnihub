@@ -5,22 +5,6 @@
   const REPO = 'Kerioxsx/omnihub';
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-  const store = {
-    get(k) {
-      try {
-        return JSON.parse(localStorage.getItem(k) || 'null');
-      } catch {
-        return null;
-      }
-    },
-    set(k, v) {
-      try {
-        localStorage.setItem(k, JSON.stringify(v));
-      } catch {
-        /* private mode */
-      }
-    },
-  };
   const size = (b) => (b >= 1e6 ? `${Math.round(b / 1e6)} MB` : `${Math.round(b / 1e3)} KB`);
 
   /* ---------- The newest release ---------- */
@@ -37,9 +21,8 @@
     if (note) note.textContent = `Version ${r.version} is out. Free for Windows 10 and 11.`;
   }
 
+  // Asked fresh on each visit: nothing is stored in the browser (no cookies, no local storage).
   async function loadRelease() {
-    const cached = store.get('omnihub-release');
-    if (cached && Date.now() - cached.at < 10 * 60 * 1000) return applyRelease(cached);
     try {
       const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json' } });
       if (!res.ok) return;
@@ -47,9 +30,7 @@
       const assets = json.assets || [];
       const asset = assets.find((a) => /x64-setup\.exe$/i.test(a.name)) || assets.find((a) => /\.exe$/i.test(a.name)) || assets.find((a) => /\.msi$/i.test(a.name));
       if (!asset) return;
-      const r = { version: String(json.tag_name || '').replace(/^v/, ''), url: asset.browser_download_url, name: asset.name, size: asset.size, at: Date.now() };
-      store.set('omnihub-release', r);
-      applyRelease(r);
+      applyRelease({ version: String(json.tag_name || '').replace(/^v/, ''), url: asset.browser_download_url, name: asset.name, size: asset.size });
     } catch {
       /* Offline or rate-limited: the links still open the Releases page. */
     }

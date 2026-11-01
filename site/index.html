@@ -51,23 +51,23 @@
           <div class="hero-actions">
             <a class="btn btn-solid btn-large" data-download href="https://github.com/Kerioxsx/omnihub/releases/latest">
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.5 4.5v7H3v-6Zm0 13 7.5 1v-7H3v6Zm8.5 1.2L21 21v-8.5h-9.5v7.2Zm0-15.4v7.2H21V3l-9.5 1.3Z"/></svg>
-              <span>Download for Windows<small data-download-meta>Installs in about a minute</small></span>
+              <span>Download for Windows<small data-download-meta>Free, for Windows 10 and 11</small></span>
             </a>
           </div>
           <ul class="index-words" role="tablist" aria-label="Parts of OmniHub" aria-orientation="vertical">
-            <li role="presentation"><button type="button" role="tab" aria-selected="true" aria-controls="index-stage" data-shot="assets/shots/desktop-storage.webp" data-alt="OmniHub's Storage page: a map of what fills the drive, with the biggest folders and files" data-text="A million files read in about three seconds. See what takes the space, find duplicates, and clean up safely.">Storage</button></li>
+            <li role="presentation"><button type="button" role="tab" aria-selected="true" aria-controls="index-stage" data-shot="assets/shots/desktop-storage.webp" data-alt="OmniHub's Storage page: a map of what fills the drive, with the biggest folders and files" data-text="A whole drive read in seconds with the fast scan. See what takes the space, find duplicates, and clean up safely.">Storage</button></li>
             <li role="presentation"><button type="button" role="tab" aria-selected="false" aria-controls="index-stage" data-shot="assets/shots/desktop-games.webp" data-alt="OmniHub's Games page: installed games with their boost profiles" data-text="A boost for each game you have, an FPS meter, instant replay, and the Windows settings that slow games down, fixed in one click.">Games</button></li>
             <li role="presentation"><button type="button" role="tab" aria-selected="false" aria-controls="index-stage" data-shot="assets/shots/desktop-vault.webp" data-alt="OmniHub's vault: logins, Wi-Fi networks and notes" data-text="Passwords, Wi-Fi keys and hidden files, encrypted with AES-256 and opened with Windows Hello. Autofill in any browser.">Vault</button></li>
             <li role="presentation"><button type="button" role="tab" aria-selected="false" aria-controls="index-stage" data-shot="assets/shots/desktop-phone.webp" data-alt="OmniHub's Phone page: pairing a phone with a QR code, and the paired phones" data-text="Pair your phone with a QR code. Files, music, volume, power, the screen and a scanner, over your own Wi-Fi.">Phone</button></li>
             <li role="presentation"><button type="button" role="tab" aria-selected="false" aria-controls="index-stage" data-shot="assets/shots/desktop-aurora.webp" data-alt="Aurora: lyrics over a song's cover, in the cover's colours" data-text="Lyrics that follow the song word by word, over its music video or cover, in the cover's own colours.">Music</button></li>
             <li role="presentation"><button type="button" role="tab" aria-selected="false" aria-controls="index-stage" data-shot="assets/shots/desktop-lights.webp" data-alt="OmniHub's Lights page: each Govee light's live colours" data-text="Govee lights that follow your screen or your music, plus your PC's own RGB and fan speeds.">Lights</button></li>
-            <li role="presentation"><button type="button" role="tab" aria-selected="false" aria-controls="index-stage" data-shot="assets/shots/desktop-mods.webp" data-alt="OmniHub's Mods page for Balatro: Thunderstore mods with Install buttons" data-text="Mods for 300+ games in one click, Minecraft modpacks mixed together, and Claude writing new mods for you.">Mods</button></li>
+            <li role="presentation"><button type="button" role="tab" aria-selected="false" aria-controls="index-stage" data-shot="assets/shots/desktop-mods.webp" data-alt="OmniHub's Mods page for Balatro: Thunderstore mods with Install buttons" data-text="Mods from Thunderstore and Modrinth in one click, Minecraft modpacks mixed together, and Claude writing new mods for you.">Mods</button></li>
             <li role="presentation"><button type="button" role="tab" aria-selected="false" aria-controls="index-stage" data-shot="assets/shots/desktop-servers-map.webp" data-alt="The live map of a Minecraft world in OmniHub, with players' names on it" data-text="Your own Minecraft server running day and night, with players, inventories and a live map of the world.">Servers</button></li>
             <li role="presentation"><button type="button" role="tab" aria-selected="false" aria-controls="index-stage" data-shot="assets/shots/desktop-chats.webp" data-alt="OmniHub's Chats page: Claude, ChatGPT, Claude Code and Codex conversations in one list" data-text="Your Claude, ChatGPT, Claude Code and Codex conversations in one list. Keep any of them going, from the PC or your phone.">Chats</button></li>
             <li role="presentation"><button type="button" role="tab" aria-selected="false" aria-controls="index-stage" data-shot="assets/shots/desktop-video.webp" data-alt="Tools → Video: a clip being fitted into 10 MB for Discord" data-text="Fit a clip in 10 MB for Discord, take the location out of photos, download a link, and tidy folders by themselves.">Tools</button></li>
           </ul>
         </div>
-        <figure class="index-stage" id="index-stage" role="tabpanel">
+        <figure class="index-stage" id="index-stage" role="tabpanel" tabindex="0" aria-label="Screenshot of the chosen page">
           <div class="win">
             <div class="win-bar" aria-hidden="true">
               <img src="assets/logo.svg" alt="" width="14" height="14" />
@@ -78,7 +78,7 @@
               <img class="is-on" src="assets/shots/desktop-storage.webp" alt="OmniHub's Storage page: a map of what fills the drive, with the biggest folders and files" width="2880" height="1800" fetchpriority="high" />
             </div>
           </div>
-          <figcaption data-index-text aria-live="polite">A million files read in about three seconds. See what takes the space, find duplicates, and clean up safely.</figcaption>
+          <figcaption data-index-text aria-live="polite">A whole drive read in seconds with the fast scan. See what takes the space, find duplicates, and clean up safely.</figcaption>
         </figure>
       </div>
     </section>
@@ -86,7 +86,7 @@
     <section class="part" id="phone" aria-labelledby="phone-title">
       <div class="part-head">
         <h2 id="phone-title">Your phone becomes the remote.</h2>
-        <p>The PC serves the phone app itself, so there's nothing to install from a store. Scan a QR code once to pair. It works over your own Wi-Fi, encrypted, and every action goes in a log you can read.</p>
+        <p>The PC serves the phone app itself, so there's nothing to install from a store. Scan a QR code once to pair. It works over your own Wi-Fi, encrypted, and what phones do is kept in an activity log on the PC.</p>
       </div>
       <div class="phones" role="list" tabindex="0" aria-label="The phone app">
         <figure class="phone" role="listitem"><img src="assets/shots/phone-home.webp" alt="The phone's home screen: processor, memory, drives and what's playing on the PC" width="900" height="1948" loading="lazy" /></figure>
@@ -124,7 +124,7 @@
         </figure>
       </div>
       <dl class="facts">
-        <div><dt>Video</dt><dd>Compress with your graphics card, convert to MP4, WebM or GIF, cut a part out, or keep only the sound.</dd></div>
+        <div><dt>Video</dt><dd>Compress using your graphics card when it can, convert to MP4, WebM or GIF, cut a part out, or keep only the sound.</dd></div>
         <div><dt>Images</dt><dd>Remove location and camera details, resize, compress, and turn iPhone HEIC photos into JPG.</dd></div>
         <div><dt>Folder rules</dt><dd>PDFs from Downloads go to Documents, old installers go to the Recycle Bin, by themselves.</dd></div>
         <div><dt>Focus timer</dt><dd>Rounds with breaks that keep Discord closed, and a private record of where your hours go.</dd></div>
@@ -156,36 +156,32 @@
         </div>
         <div class="trio">
           <figure class="shot"><div class="win-body solo"><img src="assets/shots/aurora-search.webp" alt="Aurora's search open on an artist: picture, short bio, top songs and albums" width="2160" height="1350" loading="lazy" /></div><figcaption>Search every music service without leaving the player.</figcaption></figure>
-          <figure class="shot"><div class="win-body solo"><img src="assets/shots/aurora-effects.webp" alt="Aurora's effects: beat zoom, glow, echo and ripples over a cover" width="2880" height="1800" loading="lazy" /></div><figcaption>Fourteen effects, each on its own slider.</figcaption></figure>
+          <figure class="shot"><div class="win-body solo"><img src="assets/shots/aurora-effects.webp" alt="Aurora's effects: beat zoom, glow, echo and ripples over a cover" width="2880" height="1800" loading="lazy" /></div><figcaption>Fifteen effects, each on its own slider.</figcaption></figure>
           <figure class="shot"><div class="win-body solo"><img src="assets/shots/desktop-glow.webp" alt="A neon glow around the whole screen over other apps, with lyrics low on the screen" width="2880" height="1800" loading="lazy" /></div><figcaption>The same light around your monitor, over every app.</figcaption></figure>
         </div>
       </section>
 
       <section class="part" id="lights" aria-labelledby="lights-title">
-        <div class="split">
-          <h3 id="lights-title">Your lights follow along.</h3>
-          <div class="split-text">
+        <div class="feature">
+          <figure class="shot feature-main"><div class="win-body solo"><img src="assets/shots/desktop-lights.webp" alt="OmniHub's Lights page: each Govee light's live colours, brightness, and Music mode using the album cover's colours" width="2880" height="1800" loading="lazy" /></div><figcaption>Music, screen, a colour or an effect for every light at once.</figcaption></figure>
+          <div class="feature-side">
+            <h3 id="lights-title">Your lights follow along.</h3>
             <p>OmniHub finds every Govee light on your network and drives it live: the lights behind your screen take its colours up to 30 times a second, or pulse with the beat in the album's colours.</p>
             <p>Inside the case, your RGB lights up through OpenRGB, fans run Silent, Default or Fast with safety limits, and a screen in the case can show the song that's playing.</p>
+            <figure class="shot"><div class="win-body solo"><img src="assets/shots/desktop-rig.webp" alt="OmniHub's My PC page: a 3D model of the PC with lit fans and memory, beside lighting profiles" width="2880" height="1800" loading="lazy" /></div><figcaption>Your PC in 3D, lit the way the real one is.</figcaption></figure>
           </div>
-        </div>
-        <div class="pair">
-          <figure class="shot"><div class="win-body solo"><img src="assets/shots/desktop-lights.webp" alt="OmniHub's Lights page: each Govee light's live colours, brightness, and Music mode using the album cover's colours" width="2880" height="1800" loading="lazy" /></div><figcaption>Music, screen, a colour or an effect for every light at once.</figcaption></figure>
-          <figure class="shot"><div class="win-body solo"><img src="assets/shots/desktop-rig.webp" alt="OmniHub's My PC page: a 3D model of the PC with lit fans and memory, beside lighting profiles" width="2880" height="1800" loading="lazy" /></div><figcaption>Your PC in 3D, lit the way the real one is.</figcaption></figure>
         </div>
       </section>
 
       <section class="part" id="games" aria-labelledby="games-title">
-        <div class="split">
-          <h3 id="games-title">Press Play, and OmniHub gets out of the way.</h3>
-          <div class="split-text">
+        <div class="feature feature-flip">
+          <figure class="shot feature-main"><div class="win-body solo"><img src="assets/shots/desktop-games.webp" alt="OmniHub's Games page: installed games with their boost profiles" width="2880" height="1800" loading="lazy" /></div><figcaption>Every game you have, each with its own boost.</figcaption></figure>
+          <div class="feature-side">
+            <h3 id="games-title">Press Play, and OmniHub gets out of the way.</h3>
             <p>Fortnite, VALORANT, CS2, Apex, Overwatch 2, Roblox, Minecraft and more, found on your PC, each with its own boost. Competitive sets the game for the most frames; Quality leaves a 4K Ultra game at 4K Ultra. Either way, background scans pause and the power plan goes up until you quit.</p>
             <p>An FPS meter with 1% lows, a ping check for each region, and instant replay on your graphics card: say “Capri, clip that”.</p>
+            <figure class="shot"><div class="win-body solo"><img src="assets/shots/desktop-optimize.webp" alt="Games → Optimize PC: each Windows setting that holds games back, with one click to fix it" width="2880" height="1800" loading="lazy" /></div><figcaption>The Windows settings that slow games down, fixed in one click.</figcaption></figure>
           </div>
-        </div>
-        <div class="pair">
-          <figure class="shot"><div class="win-body solo"><img src="assets/shots/desktop-games.webp" alt="OmniHub's Games page: installed games with their boost profiles" width="2880" height="1800" loading="lazy" /></div><figcaption>Every game you have, each with its own boost.</figcaption></figure>
-          <figure class="shot"><div class="win-body solo"><img src="assets/shots/desktop-optimize.webp" alt="Games → Optimize PC: each Windows setting that holds games back, with one click to fix it" width="2880" height="1800" loading="lazy" /></div><figcaption>The Windows settings that slow games down, fixed in one click.</figcaption></figure>
         </div>
       </section>
 
@@ -193,7 +189,7 @@
         <div class="split">
           <h3 id="mods-title">Mods, and a Minecraft server of your own.</h3>
           <div class="split-text">
-            <p>Search and install mods for 300+ games in one click, each one easy to switch off again. Mix two Minecraft modpacks into one, or describe a mod and let Claude write it, using your own key.</p>
+            <p>Search Thunderstore and Modrinth and install mods in one click, each one easy to switch off again. Mix two Minecraft modpacks into one, or describe a mod and let Claude write it, using your own key.</p>
             <p>Host Minecraft on your PC, vanilla or modded, running day and night. See who's on and where, open their inventory, and let friends in, even friends without a paid account.</p>
           </div>
         </div>
@@ -207,7 +203,7 @@
     <section class="part" id="privacy" aria-labelledby="privacy-title">
       <div class="part-head">
         <h2 id="privacy-title">Everything stays on your PC.</h2>
-        <p>There's no OmniHub server and no account. The only things that go online are the ones you'd expect: lyrics and covers for the song that's playing, update checks, and the downloads you ask for.</p>
+        <p>There's no OmniHub server and no account. When a feature needs the internet, it talks straight to the service it's about, like lyrics for the song that's playing, and the <a href="privacy.html#services">privacy policy</a> lists every one.</p>
       </div>
       <div class="privacy">
         <figure class="shot">
@@ -224,6 +220,7 @@
       </div>
     </section>
 
+    <div class="band">
     <section class="part get" id="get" aria-labelledby="get-title">
       <div class="part-head">
         <h2 id="get-title">Get OmniHub.</h2>
@@ -243,30 +240,36 @@
       </div>
     </section>
 
+    </div>
+
     <section class="part" id="questions" aria-labelledby="questions-title">
       <div class="part-head">
         <h2 id="questions-title">Questions</h2>
       </div>
       <div class="faq">
-        <details><summary>Is OmniHub free?</summary><p>Yes. It's free and open source, with no ads, no account and no paid version.</p></details>
-        <details><summary>Does it send my data anywhere?</summary><p>No. There's no OmniHub server. The internet is used only for things you can turn off or ask for: lyrics from LRCLIB, sharper covers from Apple's catalogue, music videos from YouTube (only the song's title and artist are searched), the password breach check (only the first five characters of a hash are sent), update checks on GitHub, and the downloads you start.</p></details>
+        <details><summary>Is OmniHub free?</summary><p>Yes. It's free and open source under the MIT licence, with no ads, no account, no purchases and no paid version. The only thing that can cost money is optional: if you add your own Claude or OpenAI key, those companies bill you for what you use, and OmniHub shows your usage.</p></details>
+        <details><summary>Does it send my data anywhere?</summary><p>No. There's no OmniHub server, and nothing is sent to its maker. Some features talk to the service they're about, such as lyrics sites for the song that's playing or GitHub for updates. The <a href="privacy.html#services">privacy policy</a> lists every service and exactly what it receives.</p></details>
         <details><summary>Why does Windows warn me when I install it?</summary><p>The installer isn't code-signed yet, so Windows SmartScreen hasn't seen it before. Choose More info, then Run anyway. Updates after that install from inside the app.</p></details>
         <details><summary>Does the phone part work on iPhone and Android?</summary><p>Both. The phone app runs in the browser and can be added to your home screen. An iPhone can also show its screen on the PC over AirPlay.</p></details>
-        <details><summary>Is the game boost safe with anti-cheat?</summary><p>It changes Windows settings and the game's own settings files, never a game's memory or code. Roblox flags go in Roblox's own settings file.</p></details>
+        <details><summary>Is the game boost safe with anti-cheat?</summary><p>The boost changes Windows settings and the game's own settings files, never a game's memory or code, which is what anti-cheat looks for. No one outside a game's company can promise how its anti-cheat behaves, though, and mods are a different matter: check a game's rules before modding an online game.</p></details>
+        <details><summary>How do I delete everything OmniHub saved?</summary><p>Everything is on your PC. Uninstall OmniHub in Windows Settings, then delete the <code>%LOCALAPPDATA%\OmniHub</code> folder. The <a href="privacy.html#delete">privacy policy</a> lists the other folders it may have saved files in, and how to clear parts of it from inside the app.</p></details>
+        <details><summary>Who makes OmniHub?</summary><p>Kerioxsx, an independent developer, not a company. The code, releases and issue tracker are on <a href="https://github.com/Kerioxsx/omnihub">GitHub</a>; <a href="https://github.com/Kerioxsx/omnihub/issues">open an issue</a> to get in touch.</p></details>
         <details><summary>My phone says the site can't be reached.</summary><p>Make sure both are on the same Wi-Fi, then open Phone, Connection check in OmniHub. It tests the address from the PC and fixes the Windows firewall in one click.</p></details>
       </div>
     </section>
   </main>
 
   <footer class="foot">
-    <a class="brand" href="#top"><img src="assets/logo.svg" alt="" width="24" height="24" /><span>OmniHub</span></a>
-    <nav aria-label="Project links">
-      <a href="https://github.com/Kerioxsx/omnihub" target="_blank" rel="noopener">GitHub</a>
-      <a href="https://github.com/Kerioxsx/omnihub/releases" target="_blank" rel="noopener">Releases</a>
-      <a href="https://github.com/Kerioxsx/omnihub/blob/main/docs/SECURITY.md" target="_blank" rel="noopener">Security</a>
-      <a href="https://github.com/Kerioxsx/omnihub/issues" target="_blank" rel="noopener">Report a problem</a>
-    </nav>
-    <p>Made with Rust, Tauri and React. Screenshots use demo data.</p>
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a class="brand" href="#top"><img src="assets/logo.svg" alt="" width="24" height="24" /><span>OmniHub</span></a>
+        <p>A free, open-source Windows app by Kerioxsx.</p>
+      </div>
+      <nav aria-labelledby="foot-get"><h2 id="foot-get">Get it</h2><a data-download href="https://github.com/Kerioxsx/omnihub/releases/latest">Download</a><a href="https://github.com/Kerioxsx/omnihub/releases">All versions</a><a href="https://github.com/Kerioxsx/omnihub">Source code</a></nav>
+      <nav aria-labelledby="foot-policies"><h2 id="foot-policies">Policies</h2><a href="privacy.html">Privacy</a><a href="privacy.html#cookies">Cookies</a><a href="terms.html">Terms</a><a href="terms.html#refunds">Refunds</a></nav>
+      <nav aria-labelledby="foot-help"><h2 id="foot-help">Help</h2><a href="#questions">Questions</a><a href="https://github.com/Kerioxsx/omnihub/issues">Report a problem</a><a href="https://github.com/Kerioxsx/omnihub/blob/main/docs/SECURITY.md">How it's secured</a></nav>
+    </div>
+    <p class="foot-note">OmniHub isn't affiliated with Microsoft or any game, music or hardware company named on this site; their names and logos belong to them. Screenshots use made-up demo data. <a href="terms.html#credits">Credits</a></p>
   </footer>
 
   <dialog class="viewer" aria-label="Screenshot">
