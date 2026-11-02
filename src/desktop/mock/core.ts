@@ -1,6 +1,6 @@
 // Settings, audit log, app info and system stats for the mock backend.
 
-import type { AppInfoDetails, AuditEntry, DeepPartial, Priority, ProcessGroup, ProcessSort, Settings, ShareState, StartupItem, StartupLocation, SystemStats, Usage, WindowInfo } from '@shared/types';
+import type { AppInfoDetails, Look, AuditEntry, DeepPartial, Priority, ProcessGroup, ProcessSort, Settings, ShareState, StartupItem, StartupLocation, SystemStats, Usage, WindowInfo } from '@shared/types';
 import { DEFAULT_VISUALS } from '../lib/aurora/defaults';
 import { emit } from './bus';
 import { DAY, GB, MB, NOW } from './rng';
@@ -12,7 +12,7 @@ export const flags = {
 };
 
 export const settings: Settings = {
-  general: { theme: 'dark', accent: 'violet', reducedMotion: false, launchAtLogin: false, startMinimized: false, closeToTray: true, onboarded: !flags.onboarding, displayName: '', uiScale: 100 },
+  general: { theme: 'dark', accent: 'violet', reducedMotion: false, launchAtLogin: false, startMinimized: false, closeToTray: true, onboarded: !flags.onboarding, displayName: '', uiScale: 100, look: (query.get('look') as Look | null) ?? 'classic', animateBackdrop: true },
   storage: { defaultMode: 'fast', exclude: [], cleanup: { largeFileMin: 1 << 30, largeFileAgeDays: 180, installerAgeDays: 30 }, showHidden: true, sizeMetric: 'size', explorerView: query.get('view') === 'grid' ? 'grid' : query.get('view') === 'sunburst' ? 'sunburst' : query.get('view') === 'list' ? 'list' : query.get('view') === 'treemap' ? 'treemap' : 'split', gridSize: 'md', gridPreviews: true, lowSpaceAlert: true, lowSpacePercent: 10 },
   notes: { claudeFolder: 'C:\\Users\\Player\\Documents\\Claude Ideas', sidecarJson: false, autoExportIdeas: false, indexFile: true },
   vault: { autoLockMinutes: 5, clipboardClearSeconds: 20, lockOnSessionLock: true, allowPhone: false, helloEnabled: false, browserAutofill: false, browserOfferSave: true, browsers: [] },

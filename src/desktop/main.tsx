@@ -2,6 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@shared/theme.css';
 import './styles.css';
+import './themes.css';
 import { inTauri } from './api';
 import { useRoute } from './lib/router';
 

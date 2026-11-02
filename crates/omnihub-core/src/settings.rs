@@ -740,6 +740,11 @@ pub struct GeneralSettings {
     pub display_name: String,
     /// Interface size in percent (80–150).
     pub ui_scale: u16,
+    /// "classic" (the light/dark theme and accent above) or an animated
+    /// theme: "aurora", "synthwave", "ocean", "galaxy", "sakura", "ember".
+    pub look: String,
+    /// Animated themes move (off: a still picture of the same theme).
+    pub animate_backdrop: bool,
 }
 
 impl Default for GeneralSettings {
@@ -754,6 +759,8 @@ impl Default for GeneralSettings {
             onboarded: false,
             display_name: String::new(),
             ui_scale: 100,
+            look: "classic".into(),
+            animate_backdrop: true,
         }
     }
 }

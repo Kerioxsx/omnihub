@@ -8,6 +8,7 @@ import { useEvent } from '../lib/hooks';
 import { currentRoute, navigate } from '../lib/router';
 import { useLive } from '../state/live';
 import { useSend } from '../state/send';
+import { lookInfo } from '../lib/looks';
 import { useSettings } from '../state/settings';
 import { useStorage } from '../state/storage';
 import { toast } from '../state/toasts';
@@ -102,22 +103,25 @@ export function GlobalEvents() {
 
 export function ThemeController() {
   const theme = useSettings((s) => s.settings?.general.theme);
+  const look = lookInfo(useSettings((s) => s.settings?.general.look)).id;
   const accent = useSettings((s) => s.settings?.general.accent);
   const reduced = useSettings((s) => s.settings?.general.reducedMotion);
   useEffect(() => {
     if (!theme) return;
     const root = document.documentElement;
     const mq = window.matchMedia('(prefers-color-scheme: light)');
+    root.dataset.look = look;
     const apply = () => {
-      const light = theme === 'light' || (theme === 'system' && mq.matches);
+      // Animated themes bring their own light or dark palette.
+      const light = look !== 'classic' ? lookInfo(look).light : theme === 'light' || (theme === 'system' && mq.matches);
       root.classList.toggle('light', light);
       root.style.colorScheme = light ? 'light' : 'dark';
     };
     apply();
-    if (theme !== 'system') return;
+    if (theme !== 'system' || look !== 'classic') return;
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [theme]);
+  }, [theme, look]);
   useEffect(() => {
     if (accent) document.documentElement.dataset.accent = accent;
   }, [accent]);

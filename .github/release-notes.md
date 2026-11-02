@@ -1,16 +1,12 @@
 ## New in this version
 
-**Your phone becomes a scanner, a barcode reader and a whiteboard, it can ask your phone before sensitive things happen, and new tools for images, videos and downloads.**
+**Change your vault's master password, and six animated themes.**
 
-- **Scan** (phone: More → Scan): take a photo of a page, receipt or business card; the corners are found (drag them if they're off), the page is straightened and cleaned up, and several pages become one PDF in Documents\OmniHub Scans with the text read by Windows' own text recognition (nothing goes online). Receipts are read into shop, date, total and tax; business cards into name, phone, email and website, plus a contact file (.vcf). Or save it all as a note.
-- **Barcode to PC** (phone: More): scan a barcode or QR code and type it where the PC's cursor is (with Enter, for inventory sheets), copy it, or open its link. Needs “let phones use the mouse and keyboard”, and a browser that reads barcodes (Chrome on Android); you can also type or paste any text to type on the PC.
-- **Whiteboard** (phone: More; PC: Tools → Whiteboard): draw on the phone and each stroke shows up on the PC, where you can save it as a picture.
-- **Approve on your phone** (Settings → Privacy & security, off until you turn it on): before the PC shows or copies a vault password, restarts OmniHub as administrator, shreds files or changes PATH, your paired phone asks and the PC waits up to a minute for Allow. Turning it off needs the phone too. It slows down someone at your PC; it isn't a lock against someone with your Windows account and time.
-- **Download on the PC** (phone: More, or Share → OmniHub; PC: Tools → Downloads): send a link and the PC downloads it into Downloads\OmniHub: files as they are, and the video (or only the sound) from YouTube, TikTok, X or Instagram pages through yt-dlp.
-- **Images** (Tools): take location, camera and date details out of photos before sharing (they stay upright), resize, compress, and turn iPhone HEIC photos into JPG. New files go next to the originals.
-- **Video** (Tools; and on the phone for any video in Files): fit a clip in 10 MB for Discord (it works out the quality, and a smaller picture if it must), compress with your graphics card's encoder, convert to MP4 (MKV and MOV from OBS are just repackaged), WebM or GIF, cut a part out without re-encoding, or keep only the sound as MP3, M4A or WAV. Uses the FFmpeg instant replay downloads.
+- **Change master password** (Vault → the key button, or Settings → Vault → Master password): type the current one, then the new one twice. Only the key that unlocks the vault is re-wrapped, so your logins, hidden files and locked notes stay as they are and Windows Hello keeps working.
+- **Animated themes** (Settings → Appearance → Theme): Aurora (northern lights), Synthwave (a neon sun over a moving grid), Ocean (slow waves), Galaxy (twinkling stars and nebulas), Sakura (falling cherry blossom, light) and Ember (rising sparks). Each brings its own colours. Classic keeps light, dark and your accent colour.
+- The backgrounds only move while OmniHub is on screen, hold still with Reduce motion (OmniHub's or Windows'), and can be stopped with “Animate the background”. They use the graphics card for transforms only, so they stay light on games running alongside.
 
-Also in 0.21.0: guest uploads by QR code, folder rules, the focus timer and time tracker, and developer tools.
+Also in 0.22.0: scan with your phone, barcode to PC, whiteboard, approve on your phone, downloads, and image and video tools.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

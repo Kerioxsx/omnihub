@@ -376,6 +376,16 @@ command, `src/mobile/client.ts` speaks the phone API. Outside Tauri the
 desktop UI runs against an in-memory mock (`src/desktop/mock`), which is how
 it is developed and screenshotted on any OS.
 
+**Themes.** `general.look` picks Classic or an animated theme;
+`ThemeController` sets `<html data-look>` (and `.light` for Sakura), and
+`themes.css` gives each look its colours. `components/Backdrop.tsx` draws the
+moving layer behind the shell: only `transform` and `opacity` animate, every
+duration comes from a `--dur` variable, particle layouts come from a seeded
+generator (stable between renders), and the layer pauses while the window is
+hidden and holds one frame with Reduce motion, the Windows setting or
+`general.animateBackdrop` off. Settings shows the same component, contained,
+as each theme's preview.
+
 ## Mods
 
 `mods/` is the mod manager. `detect.rs` reads a game folder's names (never

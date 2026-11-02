@@ -56,6 +56,12 @@ and lets a phone do some of that. This is what protects each part.
   (`vault.hello`, also DPAPI-wrapped). Unwrapping needs a visible Hello
   prompt, unlike a plain DPAPI copy of the key, which any program running as
   you could decrypt silently. The master password always works.
+- **Changing the master password** needs the current one (checked, and
+  throttled like unlocking) and a new one of at least 10 characters. Only
+  the vault key's wrapping changes: a new Argon2id salt and a new wrap, then
+  the file is rewritten. Entries, hidden files, locked notes and the Hello
+  wrap keep working because the vault key itself is unchanged; an older
+  encrypted backup still opens with the password it was made with.
 - **Primary accounts:** the UI warns when an entry looks like a Google,
   Microsoft, Apple, Yahoo or Proton account and recommends passkeys, app
   passwords and 2-step verification instead of storing that password.

@@ -776,6 +776,9 @@ export interface SunshineStatus {
 
 export type Theme = 'system' | 'dark' | 'light';
 
+/** The app's look: classic, or one of the animated themes. */
+export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember';
+
 export interface Settings {
   general: {
     theme: Theme;
@@ -789,6 +792,10 @@ export interface Settings {
     displayName: string;
     /** interface size in percent (80–150) */
     uiScale: number;
+    /** 'classic' (theme + accent) or an animated theme */
+    look: Look;
+    /** animated themes move; off = a still picture */
+    animateBackdrop: boolean;
   };
   storage: {
     defaultMode: ScanMode;

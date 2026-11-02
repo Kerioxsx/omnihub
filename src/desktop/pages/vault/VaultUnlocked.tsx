@@ -23,6 +23,7 @@ import { BrowserAutofill } from './BrowserAutofill';
 import { HiddenFiles } from './HiddenFiles';
 import { VaultHealth } from './VaultHealth';
 import { VaultSettings } from './VaultSettings';
+import { ChangePasswordDialog } from './ChangePassword';
 
 type Field = 'password' | 'username' | 'email' | 'url' | 'notes' | 'totp';
 
@@ -303,9 +304,14 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [form, setForm] = useState<{ open: boolean; entry: Entry | null }>({ open: false, entry: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
   const params = useRoute().params;
+  // Settings → Vault → Change… opens the vault with the dialog up.
+  useEffect(() => {
+    if (params.get('password') === '1') setPasswordOpen(true);
+  }, [params]);
   const [view, setView] = useState<'entries' | 'files'>(params.get('tab') === 'files' ? 'files' : 'entries');
   const [locksAt, setLocksAt] = useState(() => (status.locksIn != null ? Date.now() + status.locksIn * 1000 : null));
   const now = useNow(1000);
@@ -399,6 +405,7 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
         ) : (
           <IconButton icon={Globe} label="Browser autofill" variant="secondary" onClick={() => setBrowserOpen(true)} />
         )}
+        <IconButton icon={KeyRound} label="Change master password" variant="secondary" onClick={() => setPasswordOpen(true)} />
         <IconButton icon={Settings2} label="Vault settings" variant="secondary" onClick={() => setSettingsOpen(true)} />
         {wide ? (
           <Button icon={LockKeyhole} onClick={() => void lock()}>
@@ -487,7 +494,8 @@ export function VaultUnlocked({ status }: { status: VaultStatus }) {
           setTimeout(() => setSelected(id), 0);
         }}
       />
-      <VaultSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} status={status} />
+      <VaultSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} status={status} onChangePassword={() => (setSettingsOpen(false), setPasswordOpen(true))} />
+      <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
       <BrowserAutofill open={browserOpen} onClose={() => setBrowserOpen(false)} />
       <VaultHealth open={healthOpen} onClose={() => setHealthOpen(false)} onOpenEntry={(id) => setSelected(id)} />
     </div>

@@ -1,0 +1,413 @@
+/* Animated themes. Each sets its colours on <html data-look="…"> and draws
+   its background inside .app-backdrop (components/Backdrop.tsx). Only
+   transform and opacity are animated, every duration comes from --dur so a
+   still picture can be shown, and nothing moves while the window is hidden. */
+
+/* ---------- Colours ---------- */
+
+:root[data-look='aurora'] {
+  --bg: #050b12;
+  --bg-elev: #0a141d;
+  --accent: #34d399;
+  --accent-2: #8b5cf6;
+}
+:root[data-look='synthwave'] {
+  --bg: #0f0618;
+  --bg-elev: #180a26;
+  --accent: #ff3e9a;
+  --accent-2: #ffb347;
+}
+:root[data-look='ocean'] {
+  --bg: #03111d;
+  --bg-elev: #071a2a;
+  --accent: #38bdf8;
+  --accent-2: #2dd4bf;
+}
+:root[data-look='galaxy'] {
+  --bg: #05040d;
+  --bg-elev: #0c0a1a;
+  --accent: #a78bfa;
+  --accent-2: #60a5fa;
+}
+:root.light[data-look='sakura'] {
+  --bg: #fdf2f6;
+  --bg-elev: #ffffff;
+  --accent: #db2777;
+  --accent-2: #f59e0b;
+  --border: rgba(120, 20, 60, 0.1);
+  --border-strong: rgba(120, 20, 60, 0.2);
+}
+:root[data-look='ember'] {
+  --bg: #0e0705;
+  --bg-elev: #170c08;
+  --accent: #f97316;
+  --accent-2: #facc15;
+}
+:root[data-look]:not([data-look='classic']) {
+  --accent-soft: color-mix(in oklab, var(--accent) 16%, transparent);
+  --accent-glow: color-mix(in oklab, var(--accent) 45%, transparent);
+}
+
+/* Cards sit a little more solid over moving backgrounds, so text stays easy to read. */
+:root[data-look]:not([data-look='classic']):not(.light) .card {
+  background: color-mix(in oklab, var(--bg-elev) 88%, transparent);
+}
+:root.light[data-look='sakura'] .card {
+  background: color-mix(in oklab, var(--bg-elev) 92%, transparent);
+}
+
+/* ---------- The layer ---------- */
+
+.app-backdrop {
+  overflow: hidden;
+}
+.app-backdrop.is-contained {
+  position: absolute;
+  z-index: 0;
+  border-radius: inherit;
+}
+.app-backdrop:not(.bd-classic) {
+  background: var(--bg);
+}
+.app-backdrop > i,
+.app-backdrop > i > i {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* Hidden window: everything stops. Still: each layer holds one frame. */
+.app-backdrop.is-paused *,
+:root .app-backdrop.is-still * {
+  animation-duration: var(--dur) !important;
+  animation-play-state: paused !important;
+}
+
+/* ---------- Aurora ---------- */
+
+.bd-ribbon {
+  inset: -30% -20%;
+  animation: bd-drift var(--dur) ease-in-out var(--delay, 0s) infinite alternate;
+}
+.bd-ribbon.r1 {
+  --dur: 34s;
+  background: radial-gradient(40% 18% at 35% 30%, rgba(52, 211, 153, 0.42), transparent 70%);
+}
+.bd-ribbon.r2 {
+  --dur: 46s;
+  --delay: -12s;
+  background: radial-gradient(45% 16% at 60% 38%, rgba(34, 211, 238, 0.32), transparent 70%);
+}
+.bd-ribbon.r3 {
+  --dur: 58s;
+  --delay: -30s;
+  background: radial-gradient(38% 22% at 50% 22%, rgba(139, 92, 246, 0.34), transparent 70%);
+}
+.bd-veil {
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 30%, var(--bg) 92%);
+}
+@keyframes bd-drift {
+  from {
+    transform: translate3d(-8%, -3%, 0) rotate(-7deg) scale(1.05);
+  }
+  to {
+    transform: translate3d(9%, 4%, 0) rotate(6deg) scale(1.25);
+  }
+}
+
+/* ---------- Synthwave ---------- */
+
+.bd-sky {
+  inset: 0;
+  background: linear-gradient(to bottom, #12051f 0%, #2a0b3d 55%, #45114f 62%, #0f0618 63%);
+}
+.bd-sun {
+  --dur: 7s;
+  left: 50%;
+  top: 30%;
+  width: min(34vmin, 300px);
+  aspect-ratio: 1;
+  margin-left: calc(min(34vmin, 300px) / -2);
+  border-radius: 50%;
+  background: linear-gradient(to bottom, #ffd36e 10%, #ff6f61 55%, #ff3e9a 90%);
+  -webkit-mask: linear-gradient(to bottom, #000 52%, transparent 52% 56%, #000 56% 64%, transparent 64% 68%, #000 68% 76%, transparent 76% 80%, #000 80%);
+  mask: linear-gradient(to bottom, #000 52%, transparent 52% 56%, #000 56% 64%, transparent 64% 68%, #000 68% 76%, transparent 76% 80%, #000 80%);
+  box-shadow: 0 0 80px 10px rgba(255, 62, 154, 0.3);
+  opacity: 0.75;
+  animation: bd-pulse var(--dur) ease-in-out infinite alternate;
+}
+.bd-floor {
+  left: -50%;
+  right: -50%;
+  bottom: 0;
+  height: 37%;
+  overflow: hidden;
+  perspective: 280px;
+  perspective-origin: 50% 0;
+}
+.bd-grid {
+  --dur: 6s;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 200%;
+  transform-origin: 50% 0;
+  background:
+    repeating-linear-gradient(to right, rgba(255, 62, 154, 0.55) 0 2px, transparent 2px 70px),
+    repeating-linear-gradient(to bottom, rgba(255, 62, 154, 0.55) 0 2px, transparent 2px 70px);
+  opacity: 0.5;
+  animation: bd-roll var(--dur) linear infinite;
+}
+@keyframes bd-roll {
+  from {
+    transform: rotateX(72deg) translateY(0);
+  }
+  to {
+    transform: rotateX(72deg) translateY(70px);
+  }
+}
+@keyframes bd-pulse {
+  from {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0.8;
+    transform: scale(1.03);
+  }
+}
+
+/* ---------- Ocean ---------- */
+
+.bd-deep {
+  --dur: 40s;
+  inset: -20%;
+  background:
+    radial-gradient(50% 35% at 30% 20%, rgba(56, 189, 248, 0.18), transparent 70%),
+    radial-gradient(40% 30% at 75% 35%, rgba(45, 212, 191, 0.12), transparent 70%);
+  animation: bd-drift var(--dur) ease-in-out infinite alternate;
+}
+.bd-wave {
+  left: 0;
+  bottom: 0;
+  width: 200%;
+  height: 32%;
+  background-repeat: repeat-x;
+  background-size: 50% 100%;
+  animation: bd-slide var(--dur) linear infinite;
+}
+.bd-wave.w1 {
+  --dur: 38s;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 200' preserveAspectRatio='none'%3E%3Cpath d='M0 90 C 200 30 200 150 400 90 S 600 30 800 90 V200 H0Z' fill='%230ea5e9'/%3E%3C/svg%3E");
+}
+.bd-wave.w2 {
+  --dur: 27s;
+  height: 26%;
+  opacity: 0.45;
+  animation-direction: reverse;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 200' preserveAspectRatio='none'%3E%3Cpath d='M0 110 C 200 60 200 160 400 110 S 600 60 800 110 V200 H0Z' fill='%230369a1'/%3E%3C/svg%3E");
+}
+.bd-wave.w3 {
+  --dur: 19s;
+  height: 18%;
+  opacity: 0.7;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 200' preserveAspectRatio='none'%3E%3Cpath d='M0 120 C 200 80 200 160 400 120 S 600 80 800 120 V200 H0Z' fill='%23072a44'/%3E%3C/svg%3E");
+}
+@keyframes bd-slide {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* ---------- Galaxy ---------- */
+
+.bd-nebula {
+  inset: -25%;
+  animation: bd-drift var(--dur) ease-in-out var(--delay, 0s) infinite alternate;
+}
+.bd-nebula.n1 {
+  --dur: 70s;
+  background: radial-gradient(35% 25% at 30% 35%, rgba(139, 92, 246, 0.3), transparent 70%);
+}
+.bd-nebula.n2 {
+  --dur: 90s;
+  --delay: -40s;
+  background: radial-gradient(30% 22% at 70% 60%, rgba(59, 130, 246, 0.24), transparent 70%);
+}
+.bd-stars {
+  inset: 0;
+}
+.bd-stars.twinkle {
+  --dur: 5s;
+  animation: bd-twinkle var(--dur) ease-in-out infinite alternate;
+}
+.bd-shoot {
+  --dur: 16s;
+  top: 12%;
+  left: 60%;
+  width: 140px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.9));
+  opacity: 0;
+  animation: bd-shoot var(--dur) ease-out 4s infinite;
+}
+@keyframes bd-twinkle {
+  from {
+    opacity: 0.2;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes bd-shoot {
+  0%,
+  88% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) rotate(-25deg);
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-380px, 180px, 0) rotate(-25deg);
+  }
+}
+
+/* ---------- Sakura ---------- */
+
+.bd-blush {
+  --dur: 50s;
+  inset: -20%;
+  background:
+    radial-gradient(40% 30% at 20% 15%, rgba(244, 114, 182, 0.22), transparent 70%),
+    radial-gradient(35% 28% at 85% 25%, rgba(251, 191, 36, 0.14), transparent 70%);
+  animation: bd-drift var(--dur) ease-in-out infinite alternate;
+}
+.bd-petal {
+  left: var(--x);
+  top: -6%;
+  width: 18px;
+  height: 14px;
+  border-radius: 80% 0 80% 0;
+  background: linear-gradient(135deg, #f9a8d4, #ec4899);
+  box-shadow: 0 1px 3px rgba(190, 24, 93, 0.25);
+  opacity: 0.9;
+  animation: bd-fall var(--dur) linear var(--delay) infinite;
+}
+@keyframes bd-fall {
+  from {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(var(--s));
+  }
+  50% {
+    transform: translate3d(var(--sway), 55vh, 0) rotate(200deg) scale(var(--s));
+  }
+  to {
+    transform: translate3d(calc(var(--sway) * -0.5), 112vh, 0) rotate(400deg) scale(var(--s));
+  }
+}
+
+/* ---------- Ember ---------- */
+
+.bd-heat {
+  --dur: 6s;
+  left: -10%;
+  right: -10%;
+  bottom: -15%;
+  height: 60%;
+  background: radial-gradient(60% 60% at 50% 100%, rgba(249, 115, 22, 0.4), transparent 72%);
+  animation: bd-pulse var(--dur) ease-in-out infinite alternate;
+}
+.bd-spark {
+  left: var(--x);
+  bottom: -3%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fed7aa;
+  box-shadow: 0 0 10px 3px rgba(249, 115, 22, 0.85);
+  animation: bd-rise var(--dur) ease-out var(--delay) infinite;
+}
+@keyframes bd-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(var(--s));
+  }
+  12% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(var(--sway), -85vh, 0) scale(calc(var(--s) * 0.4));
+  }
+}
+
+/* Previews in Settings: the same themes, smaller. */
+.app-backdrop.is-contained .bd-sun {
+  top: 12%;
+  width: 40px;
+  margin-left: -20px;
+  box-shadow: 0 0 18px 2px rgba(255, 62, 154, 0.35);
+}
+.app-backdrop.is-contained .bd-spark {
+  width: 4px;
+  height: 4px;
+  box-shadow: 0 0 6px 2px rgba(249, 115, 22, 0.9);
+}
+.app-backdrop.is-contained .bd-heat {
+  bottom: -10%;
+  height: 100%;
+  background: radial-gradient(70% 70% at 50% 100%, rgba(249, 115, 22, 0.6), transparent 75%);
+}
+.app-backdrop.is-contained .bd-petal {
+  width: 12px;
+  height: 9px;
+}
+.app-backdrop.is-contained .bd-petal,
+.app-backdrop.is-contained .bd-spark {
+  animation-name: bd-fall-mini;
+}
+.app-backdrop.is-contained .bd-spark {
+  animation-name: bd-rise-mini;
+}
+@keyframes bd-fall-mini {
+  from {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(calc(var(--s) * 0.6));
+  }
+  to {
+    transform: translate3d(calc(var(--sway) * 0.3), 90px, 0) rotate(360deg) scale(calc(var(--s) * 0.6));
+  }
+}
+@keyframes bd-rise-mini {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(calc(var(--s) * 0.6));
+  }
+  15% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(calc(var(--sway) * 0.3), -80px, 0) scale(calc(var(--s) * 0.3));
+  }
+}
+.app-backdrop.is-contained .bd-grid {
+  animation-name: bd-roll-mini;
+  background:
+    repeating-linear-gradient(to right, rgba(255, 62, 154, 0.6) 0 1px, transparent 1px 18px),
+    repeating-linear-gradient(to bottom, rgba(255, 62, 154, 0.6) 0 1px, transparent 1px 18px);
+}
+@keyframes bd-roll-mini {
+  from {
+    transform: rotateX(72deg) translateY(0);
+  }
+  to {
+    transform: rotateX(72deg) translateY(18px);
+  }
+}

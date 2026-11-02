@@ -19,6 +19,7 @@ import { useMediaQuery, useStoredState } from './lib/hooks';
 import { PAGE_IDS, type RouteId, navigate, useRoute } from './lib/router';
 import { usePalette } from './state/dialogs';
 import { useSettings } from './state/settings';
+import { Backdrop } from './components/Backdrop';
 
 // Pages load the first time they are opened.
 const AppsPage = lazy(() => import('./pages/apps/AppsPage').then((m) => ({ default: m.AppsPage })));
@@ -152,7 +153,7 @@ export function App() {
     <MotionConfig reducedMotion={settings.general.reducedMotion ? 'always' : 'user'}>
       <ThemeController />
       <GlobalEvents />
-      <div className="app-backdrop" />
+      <Backdrop />
       <div className="relative z-10 flex h-full">
         <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
         <main className="relative min-w-0 flex-1">

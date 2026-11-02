@@ -9,7 +9,6 @@ import { confirm } from '../../state/dialogs';
 import { useLive } from '../../state/live';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
-import { StrengthMeter, useStrength } from './shared';
 
 function Row({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -23,15 +22,12 @@ function Row({ title, hint, children }: { title: string; hint?: string; children
   );
 }
 
-export function VaultSettings({ open, onClose, status }: { open: boolean; onClose: () => void; status: VaultStatus }) {
+export function VaultSettings({ open, onClose, status, onChangePassword }: { open: boolean; onClose: () => void; status: VaultStatus; onChangePassword: () => void }) {
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
-  const [oldPw, setOldPw] = useState('');
-  const [newPw, setNewPw] = useState('');
   const [importPw, setImportPw] = useState('');
   const [importPath, setImportPath] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const strength = useStrength(newPw);
   if (!settings) return null;
 
   const run = async (key: string, fn: () => Promise<void>) => {
@@ -84,40 +80,11 @@ export function VaultSettings({ open, onClose, status }: { open: boolean; onClos
             label="Windows Hello"
           />
         </Row>
-        <div className="py-4">
-          <div className="mb-3 flex items-center gap-2 text-[13.5px] font-medium text-fg">
-            <KeyRound size={15} className="text-accent" /> Change master password
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Current" htmlFor="vs-old">
-              <TextInput id="vs-old" type="password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} autoComplete="current-password" />
-            </Field>
-            <Field label="New" htmlFor="vs-new">
-              <TextInput id="vs-new" type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} autoComplete="new-password" />
-            </Field>
-          </div>
-          {newPw && (
-            <div className="mt-2">
-              <StrengthMeter strength={strength} compact />
-            </div>
-          )}
-          <Button
-            className="mt-3"
-            size="sm"
-            loading={busy === 'pw'}
-            disabled={!oldPw || (strength?.score ?? 0) < 2}
-            onClick={() =>
-              void run('pw', async () => {
-                await api.vault.changePassword(oldPw, newPw);
-                setOldPw('');
-                setNewPw('');
-                toast.success('Master password changed');
-              })
-            }
-          >
-            Change password
+        <Row title="Master password" hint="Change the password that unlocks the vault.">
+          <Button size="sm" icon={KeyRound} onClick={onChangePassword}>
+            Change…
           </Button>
-        </div>
+        </Row>
         <div className="py-4">
           <div className="mb-1 text-[13.5px] font-medium text-fg">Encrypted backup</div>
           <div className="mb-3 text-[12px] text-faint">The backup stays encrypted with your master password — keep it somewhere safe, like a USB stick.</div>

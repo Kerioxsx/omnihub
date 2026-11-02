@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { Camera, Check, Download, ExternalLink, FolderOpen, HardDrive, Info, KeyRound, Laptop, Moon, Music2, NotebookPen, Palette, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Siren, Smartphone, Sun, Trash, Upload, X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
+import { Backdrop } from '../../components/Backdrop';
 import { Logo } from '../../components/Logo';
 import { updateText, useUpdate } from '../../components/UpdateCard';
 import { Page } from '../../components/Page';
@@ -13,8 +14,10 @@ import { Badge, Kbd } from '../../components/ui/Card';
 import { Segmented, Select, Switch, TextInput } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
+import { LOOKS } from '../../lib/looks';
 import { navigate, useRoute } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
+import { useLive } from '../../state/live';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
 
@@ -113,7 +116,7 @@ function ThemePreview({ theme }: { theme: Theme }) {
       </div>
     </div>
   );
-  return <div className="flex h-16 overflow-hidden rounded-lg border border-line">{theme === 'system' ? <>{half(false)}{half(true)}</> : half(theme === 'light')}</div>;
+  return <div className="flex h-full min-h-16 overflow-hidden rounded-lg">{theme === 'system' ? <>{half(false)}{half(true)}</> : half(theme === 'light')}</div>;
 }
 
 export function SettingsPage() {
@@ -123,6 +126,7 @@ export function SettingsPage() {
   const update = useSettings((st) => st.update);
   const [active, setActive] = useState('appearance');
   const [exclude, setExclude] = useState('');
+  const vaultUnlocked = useLive((l) => l.vault?.unlocked ?? false);
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -171,33 +175,55 @@ export function SettingsPage() {
         <div ref={scroller} className="min-h-0 space-y-8 overflow-y-auto pb-[50vh] pr-2">
           <Section id="appearance" title="Appearance">
             <Row title="Theme" stack>
-              <div className="grid grid-cols-3 gap-3">
-                {(
-                  [
-                    ['system', 'System', Laptop],
-                    ['dark', 'Dark', Moon],
-                    ['light', 'Light', Sun],
-                  ] as [Theme, string, LucideIcon][]
-                ).map(([t, label, I]) => (
-                  <button key={t} type="button" onClick={() => void update({ general: { theme: t } })} aria-pressed={s.general.theme === t} className={cx('rounded-xl border p-2 text-left transition-colors', s.general.theme === t ? 'accent-ring border-transparent bg-surface-2' : 'border-line bg-surface hover:border-line-strong')}>
-                    <ThemePreview theme={t} />
+              <div className="grid grid-cols-4 gap-3" role="radiogroup" aria-label="Theme">
+                {LOOKS.map((l) => (
+                  <button key={l.id} type="button" role="radio" aria-checked={s.general.look === l.id} onClick={() => void update({ general: { look: l.id } })} className={cx('rounded-xl border p-2 text-left transition-colors', s.general.look === l.id ? 'accent-ring border-transparent bg-surface-2' : 'border-line bg-surface hover:border-line-strong')}>
+                    <div className="relative h-20 overflow-hidden rounded-lg border border-line">{l.id === 'classic' ? <ThemePreview theme={s.general.theme} /> : <Backdrop look={l.id} contained />}</div>
                     <div className="mt-2 flex items-center gap-1.5 px-0.5 text-[13px] font-medium text-fg">
-                      <I size={14} className="text-dim" /> {label}
-                      {s.general.theme === t && <Check size={14} className="ml-auto text-accent" />}
+                      {l.name}
+                      {s.general.look === l.id && <Check size={14} className="ml-auto text-accent" />}
                     </div>
+                    <div className="px-0.5 text-[11.5px] leading-snug text-faint">{l.blurb}</div>
                   </button>
                 ))}
               </div>
             </Row>
-            <Row title="Accent colour">
-              <div className="flex gap-2.5" role="radiogroup" aria-label="Accent colour">
-                {ACCENTS.map((a) => (
-                  <button key={a.id} type="button" role="radio" aria-checked={s.general.accent === a.id} aria-label={a.label} title={a.label} onClick={() => void update({ general: { accent: a.id } })} className={cx('flex h-8 w-8 items-center justify-center rounded-full transition-transform hover:scale-110', s.general.accent === a.id && 'ring-2 ring-fg/80 ring-offset-2 ring-offset-[var(--bg)]')} style={{ background: a.color }}>
-                    {s.general.accent === a.id && <Check size={15} className="text-white" />}
-                  </button>
-                ))}
-              </div>
-            </Row>
+            {s.general.look === 'classic' ? (
+              <>
+                <Row title="Light or dark" stack>
+                  <div className="grid grid-cols-3 gap-3">
+                    {(
+                      [
+                        ['system', 'System', Laptop],
+                        ['dark', 'Dark', Moon],
+                        ['light', 'Light', Sun],
+                      ] as [Theme, string, LucideIcon][]
+                    ).map(([t, label, I]) => (
+                      <button key={t} type="button" onClick={() => void update({ general: { theme: t } })} aria-pressed={s.general.theme === t} className={cx('rounded-xl border p-2 text-left transition-colors', s.general.theme === t ? 'accent-ring border-transparent bg-surface-2' : 'border-line bg-surface hover:border-line-strong')}>
+                        <ThemePreview theme={t} />
+                        <div className="mt-2 flex items-center gap-1.5 px-0.5 text-[13px] font-medium text-fg">
+                          <I size={14} className="text-dim" /> {label}
+                          {s.general.theme === t && <Check size={14} className="ml-auto text-accent" />}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </Row>
+                <Row title="Accent colour">
+                  <div className="flex gap-2.5" role="radiogroup" aria-label="Accent colour">
+                    {ACCENTS.map((a) => (
+                      <button key={a.id} type="button" role="radio" aria-checked={s.general.accent === a.id} aria-label={a.label} title={a.label} onClick={() => void update({ general: { accent: a.id } })} className={cx('flex h-8 w-8 items-center justify-center rounded-full transition-transform hover:scale-110', s.general.accent === a.id && 'ring-2 ring-fg/80 ring-offset-2 ring-offset-[var(--bg)]')} style={{ background: a.color }}>
+                        {s.general.accent === a.id && <Check size={15} className="text-white" />}
+                      </button>
+                    ))}
+                  </div>
+                </Row>
+              </>
+            ) : (
+              <Row title="Animate the background" hint="Moves only while OmniHub is on screen, and holds still when Reduce motion is on. Off shows a still picture of the theme.">
+                <Switch checked={s.general.animateBackdrop} onChange={(v) => void update({ general: { animateBackdrop: v } })} label="Animate the background" />
+              </Row>
+            )}
             <Row title="Reduce motion" hint="Turns off page transitions, zoom animations and springy effects.">
               <Switch checked={s.general.reducedMotion} onChange={(v) => void update({ general: { reducedMotion: v } })} label="Reduce motion" />
             </Row>
@@ -363,6 +389,11 @@ export function SettingsPage() {
           </Section>
 
           <Section id="vault" title="Vault">
+            <Row title="Master password" hint={vaultUnlocked ? 'The password that unlocks the vault.' : 'Unlock the vault first, then change it here or in the vault.'}>
+              <Button size="sm" icon={KeyRound} onClick={() => navigate('vault', { password: '1' })}>
+                {vaultUnlocked ? 'Change…' : 'Open the vault'}
+              </Button>
+            </Row>
             <Row title="Lock after inactivity">
               <Select value={String(s.vault.autoLockMinutes)} onChange={(e) => void update({ vault: { autoLockMinutes: Number(e.target.value) } })} className="w-[140px]" aria-label="Auto-lock">
                 {[1, 2, 5, 10, 15, 30, 60].map((m) => (
