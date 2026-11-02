@@ -62,6 +62,21 @@ and lets a phone do some of that. This is what protects each part.
   the file is rewritten. Entries, hidden files, locked notes and the Hello
   wrap keep working because the vault key itself is unchanged; an older
   encrypted backup still opens with the password it was made with.
+- **Forgot the master password.** No one can recover it. Two ways back:
+  - *Windows Hello*, when it is on for the vault: a **fresh** Hello prompt
+    (even if the vault is open) unwraps the vault key, which is checked by
+    opening the file with it, then re-wrapped under the new password (new
+    salt). Nothing else changes. With approve-on-phone on, a paired phone
+    must allow it first ("Set a new vault master password"). It is audited.
+    Turning Hello on needs an open vault, so this gives nobody more than
+    an open vault already gives. Without Hello and with the vault open, a
+    new password still needs the current one.
+  - *Set aside*: the vault file (and its Hello file) are moved into
+    `vault-set-aside/<time>/` next to it and a new, empty vault can be made.
+    Nothing is deleted or decrypted. Hidden files stay where they are (the
+    new vault's key doesn't open them, so they don't show) and locked notes
+    stay sealed; **Put back** moves the old vault back, setting the current
+    one aside in exchange, and everything opens again with its password.
 - **Primary accounts:** the UI warns when an entry looks like a Google,
   Microsoft, Apple, Yahoo or Proton account and recommends passkeys, app
   passwords and 2-step verification instead of storing that password.

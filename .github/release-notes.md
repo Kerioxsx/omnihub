@@ -1,12 +1,15 @@
 ## New in this version
 
-**Change your vault's master password, and six animated themes.**
+**Forgot your vault password? Now there's a way back in. Plus a Minecraft theme and six more animated themes.**
 
-- **Change master password** (Vault → the key button, or Settings → Vault → Master password): type the current one, then the new one twice. Only the key that unlocks the vault is re-wrapped, so your logins, hidden files and locked notes stay as they are and Windows Hello keeps working.
-- **Animated themes** (Settings → Appearance → Theme): Aurora (northern lights), Synthwave (a neon sun over a moving grid), Ocean (slow waves), Galaxy (twinkling stars and nebulas), Sakura (falling cherry blossom, light) and Ember (rising sparks). Each brings its own colours. Classic keeps light, dark and your accent colour.
-- The backgrounds only move while OmniHub is on screen, hold still with Reduce motion (OmniHub's or Windows'), and can be stopped with “Animate the background”. They use the graphics card for transforms only, so they stay light on games running alongside.
+- **Forgot your master password?** (on the vault's lock screen, and “Forgot it?” in Change master password)
+  - **With Windows Hello turned on for the vault:** confirm with your face, fingerprint or PIN and choose a new password. Everything stays: logins, hidden files, locked notes. If the vault is open but Hello isn't on yet, it can be turned on right there first.
+  - **Without Windows Hello:** nothing can open the vault without its password (that's what keeps it safe). You can **set it aside and start a new vault**: the old one is kept on your PC, not deleted, and **Put back** (on the Vault page or in Vault settings) returns it with everything in it if you remember the password later.
+  - If you approve on your phone, setting a new password asks your phone too.
+- **Minecraft theme**: blocky hills and clouds, a sky that follows your PC's clock (day, sunset, night with stars and a square moon), the Minecraft font on headings, and **your own item pack** floating and spinning like dropped items (Settings → Appearance → Item pack: a zip of item pictures, kept on your PC). Without a pack, XP orbs float up instead.
+- **Six more animated themes**: Matrix (code rain), Rain (with far-off lightning), Snowfall, Fireflies, Lava lamp, and Clouds (a light theme).
 
-Also in 0.22.0: scan with your phone, barcode to PC, whiteboard, approve on your phone, downloads, and image and video tools.
+Also in 0.22.1: change your master password, and the Aurora, Synthwave, Ocean, Galaxy, Sakura and Ember themes.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

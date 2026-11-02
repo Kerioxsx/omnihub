@@ -385,6 +385,16 @@ generator (stable between renders), and the layer pauses while the window is
 hidden and holds one frame with Reduce motion, the Windows setting or
 `general.animateBackdrop` off. Settings shows the same component, contained,
 as each theme's preview.
+The themes: Aurora, Synthwave, Ocean, Galaxy, Sakura (light), Ember,
+Minecraft, Matrix, Rain, Snowfall, Fireflies, Lava lamp and Clouds (light).
+The backdrop's own class is `look-<id>`, so a look's id can never collide
+with a layer's class. **Minecraft** draws its hills, clouds and sky in code
+(seeded 16-px pixel art on a canvas, scaled up pixelated; no game textures
+are shipped), picks day, dusk or night from the local clock every few
+minutes, and floats items from the user's own picture pack: the same pack
+Aurora's lyrics use (`media/look.rs`, chosen on the PC, read with
+`aurora_texture`). Its heading font is "Minecraft" by Craftron Gaming (a free
+font, `src/desktop/fonts/`).
 
 ## Mods
 

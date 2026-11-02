@@ -430,7 +430,7 @@ impl AppCore {
         let a = &s.approvals;
         let wanted = a.enabled
             && match kind {
-                Kind::VaultReveal => a.vault,
+                Kind::VaultReveal | Kind::VaultReset => a.vault,
                 Kind::Admin => a.admin,
                 Kind::Shred => a.shred,
                 Kind::Environment => a.environment,

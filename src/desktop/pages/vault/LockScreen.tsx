@@ -8,6 +8,7 @@ import { Card } from '../../components/ui/Card';
 import { TextInput } from '../../components/ui/Form';
 import { useNow } from '../../lib/hooks';
 import { useLive } from '../../state/live';
+import { ForgotPasswordDialog } from './ForgotPassword';
 
 /** The vault's unlock form; Notes shows it too, for locked notes (`title`, `subtitle`, `compact`). */
 export function LockScreen({ status, title, subtitle, compact }: { status: VaultStatus; title?: string; subtitle?: string; compact?: boolean }) {
@@ -15,6 +16,7 @@ export function LockScreen({ status, title, subtitle, compact }: { status: Vault
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
   const [retryUntil, setRetryUntil] = useState(() => (status.retryAfter ? Date.now() + status.retryAfter * 1000 : 0));
   const now = useNow(250);
   const shake = useAnimationControls();
@@ -89,7 +91,13 @@ export function LockScreen({ status, title, subtitle, compact }: { status: Vault
                 Unlock with Windows Hello
               </Button>
             )}
+            <div className="pt-1 text-center">
+              <button type="button" onClick={() => setForgot(true)} className="rounded text-[12.5px] font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent">
+                Forgot your master password?
+              </button>
+            </div>
           </form>
+          <ForgotPasswordDialog open={forgot} onClose={() => setForgot(false)} status={status} />
           <p className="relative mt-5 text-[12px] text-faint">Encrypted with Argon2id + AES-256-GCM, bound to your Windows account.</p>
         </Card>
       </motion.div>

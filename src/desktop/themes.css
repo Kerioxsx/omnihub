@@ -43,6 +43,62 @@
   --accent: #f97316;
   --accent-2: #facc15;
 }
+@font-face {
+  font-family: 'OmniHub Minecraft';
+  /* "Minecraft" by Craftron Gaming (free font, DaFont). */
+  src: url('./fonts/minecraft.ttf') format('truetype');
+  font-display: swap;
+}
+:root[data-look='minecraft'] {
+  --bg: #10141b;
+  --bg-elev: #1b2028;
+  --accent: #6cc644;
+  --accent-2: #f2c94c;
+  --radius: 4px;
+  --card-hi: rgba(255, 255, 255, 0.09);
+  --font-display: 'OmniHub Minecraft', 'Inter Display', 'Segoe UI', system-ui, sans-serif;
+  /* Brighter secondary text: some of it sits right on the sky. */
+  --text-dim: #c9d0dc;
+  --text-faint: #9aa3b4;
+}
+:root[data-look='matrix'] {
+  --bg: #010805;
+  --bg-elev: #04110a;
+  --accent: #22e06b;
+  --accent-2: #a3e635;
+}
+:root[data-look='rain'] {
+  --bg: #0a0f17;
+  --bg-elev: #111824;
+  --accent: #7aa2f7;
+  --accent-2: #94e2d5;
+}
+:root[data-look='snowfall'] {
+  --bg: #070d1c;
+  --bg-elev: #0e1629;
+  --accent: #93c5fd;
+  --accent-2: #e0e7ff;
+}
+:root[data-look='fireflies'] {
+  --bg: #040c08;
+  --bg-elev: #0a1610;
+  --accent: #bef264;
+  --accent-2: #facc15;
+}
+:root[data-look='lava'] {
+  --bg: #12040c;
+  --bg-elev: #1c0812;
+  --accent: #ff6b5b;
+  --accent-2: #ffb44c;
+}
+:root.light[data-look='clouds'] {
+  --bg: #eef5ff;
+  --bg-elev: #ffffff;
+  --accent: #2563eb;
+  --accent-2: #f59e0b;
+  --border: rgba(20, 60, 120, 0.1);
+  --border-strong: rgba(20, 60, 120, 0.2);
+}
 :root[data-look]:not([data-look='classic']) {
   --accent-soft: color-mix(in oklab, var(--accent) 16%, transparent);
   --accent-glow: color-mix(in oklab, var(--accent) 45%, transparent);
@@ -52,7 +108,7 @@
 :root[data-look]:not([data-look='classic']):not(.light) .card {
   background: color-mix(in oklab, var(--bg-elev) 88%, transparent);
 }
-:root.light[data-look='sakura'] .card {
+:root.light[data-look]:not([data-look='classic']) .card {
   background: color-mix(in oklab, var(--bg-elev) 92%, transparent);
 }
 
@@ -66,7 +122,7 @@
   z-index: 0;
   border-radius: inherit;
 }
-.app-backdrop:not(.bd-classic) {
+.app-backdrop:not(.look-classic) {
   background: var(--bg);
 }
 .app-backdrop > i,
@@ -409,5 +465,523 @@
   }
   to {
     transform: rotateX(72deg) translateY(18px);
+  }
+}
+
+/* ---------- Minecraft ----------
+   Original pixel art drawn in Backdrop.tsx (no game textures are shipped);
+   the floating items come from the item pack the user picks on their PC. */
+
+:root[data-look='minecraft'] .font-display,
+:root[data-look='minecraft'] h1,
+:root[data-look='minecraft'] h2 {
+  font-synthesis: none;
+  letter-spacing: 0.02em;
+}
+:root[data-look='minecraft'] header h1 {
+  /* Like the game's text: a hard shadow (a filter, so gradient text keeps its colours). */
+  filter: drop-shadow(2px 2px 0 rgba(0, 0, 0, 0.45));
+}
+:root[data-look='minecraft'] header h1 + div {
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.55);
+}
+.bd-mc-veil {
+  inset: 0;
+}
+.bd-mc-veil.day {
+  background: linear-gradient(to bottom, rgba(6, 10, 22, 0.55), rgba(6, 10, 22, 0.32) 45%, rgba(6, 10, 22, 0.1) 85%);
+}
+.bd-mc-veil.dusk {
+  background: linear-gradient(to bottom, rgba(6, 8, 20, 0.45), rgba(6, 8, 20, 0.25) 45%, rgba(6, 8, 20, 0.08) 85%);
+}
+.app-backdrop.is-contained .bd-mc-veil {
+  display: none;
+}
+:root[data-look='minecraft'] .card {
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.07),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.35);
+}
+.bd-mc-sky {
+  inset: 0;
+  transition: opacity 2s;
+}
+.bd-mc-sky.day {
+  background: linear-gradient(to bottom, #6e9cf5 0%, #94bbff 55%, #b9d3ff 100%);
+}
+.bd-mc-sky.dusk {
+  background: linear-gradient(to bottom, #2b3a78 0%, #a35a7c 50%, #f39a5b 85%, #ffc078 100%);
+}
+.bd-mc-sky.night {
+  background: linear-gradient(to bottom, #04060f 0%, #0b1230 60%, #131c45 100%);
+}
+.bd-mc-sun {
+  --dur: 240s;
+  top: 10%;
+  left: 68%;
+  width: 72px;
+  height: 72px;
+  image-rendering: pixelated;
+  animation: bd-mc-arc var(--dur) ease-in-out infinite alternate;
+}
+.bd-mc-sun.sun {
+  background: #fff7b0;
+  box-shadow:
+    0 0 0 10px rgba(255, 240, 150, 0.35),
+    0 0 60px 20px rgba(255, 230, 120, 0.35);
+}
+.bd-mc-sun.moon {
+  background:
+    linear-gradient(#c9ced9, #c9ced9) 14px 14px / 14px 14px no-repeat,
+    linear-gradient(#c9ced9, #c9ced9) 42px 36px / 10px 10px no-repeat,
+    linear-gradient(#d4d8e2, #d4d8e2) 22px 46px / 8px 8px no-repeat,
+    #eef1f7;
+  box-shadow: 0 0 50px 12px rgba(200, 215, 255, 0.18);
+}
+.bd-mc-clouds {
+  --dur: 160s;
+  top: 6%;
+  left: 0;
+  width: 200%;
+  height: 26%;
+  background-repeat: repeat-x;
+  background-size: 50% 100%;
+  image-rendering: pixelated;
+  opacity: 0.92;
+  animation: bd-slide var(--dur) linear infinite;
+}
+.bd-mc-sky.night ~ .bd-mc-clouds {
+  opacity: 0.18;
+}
+.bd-mc-sky.dusk ~ .bd-mc-clouds {
+  opacity: 0.7;
+}
+.bd-mc-ground {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24%;
+  background-repeat: repeat-x;
+  background-size: auto 100%;
+  background-position: left bottom;
+  image-rendering: pixelated;
+}
+.bd-mc-sky.night ~ .bd-mc-ground {
+  filter: brightness(0.45) saturate(0.8);
+}
+.bd-mc-sky.dusk ~ .bd-mc-ground {
+  filter: brightness(0.8);
+}
+.bd-mc-drop {
+  --dur: 2.6s;
+  left: var(--x);
+  top: var(--y);
+  width: 46px;
+  height: 46px;
+  opacity: 0.9;
+  animation: bd-mc-bob var(--dur) ease-in-out var(--delay) infinite alternate;
+  filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.35));
+}
+.bd-mc-drop > img {
+  --dur: 7s;
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  animation: bd-mc-spin var(--dur) linear infinite;
+}
+.bd-mc-orb {
+  left: var(--x);
+  bottom: 22%;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: radial-gradient(circle at 40% 40%, #f4ff8a, #8ee03a 60%, #4a9d1c);
+  box-shadow: 0 0 10px 3px rgba(170, 255, 80, 0.55);
+  animation: bd-rise var(--dur) ease-out var(--delay) infinite;
+}
+@keyframes bd-mc-bob {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, -14px, 0);
+  }
+}
+@keyframes bd-mc-spin {
+  from {
+    transform: perspective(300px) rotateY(0deg);
+  }
+  to {
+    transform: perspective(300px) rotateY(360deg);
+  }
+}
+@keyframes bd-mc-arc {
+  from {
+    transform: translate3d(-6vw, 2vh, 0);
+  }
+  to {
+    transform: translate3d(6vw, -2vh, 0);
+  }
+}
+
+/* ---------- Matrix ---------- */
+
+.bd-code {
+  left: var(--x);
+  top: 0;
+  font: 500 calc(15px * var(--s)) / 1.05 ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  width: 1.1em;
+  word-break: break-all;
+  text-align: center;
+  color: #39ff88;
+  text-shadow: 0 0 8px rgba(57, 255, 136, 0.6);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 75%, #000);
+  mask-image: linear-gradient(to bottom, transparent, #000 75%, #000);
+  opacity: calc(0.35 + var(--s) * 0.35);
+  animation: bd-code var(--dur) linear var(--delay) infinite;
+}
+.bd-code-glow {
+  --dur: 30s;
+  inset: -20%;
+  background: radial-gradient(50% 40% at 50% 30%, rgba(34, 224, 107, 0.12), transparent 70%);
+  animation: bd-drift var(--dur) ease-in-out infinite alternate;
+}
+@keyframes bd-code {
+  from {
+    transform: translate3d(0, -100%, 0);
+  }
+  to {
+    transform: translate3d(0, 100vh, 0);
+  }
+}
+
+/* ---------- Rain ---------- */
+
+.bd-storm {
+  --dur: 50s;
+  inset: -20%;
+  background:
+    radial-gradient(60% 35% at 30% 10%, rgba(80, 100, 140, 0.35), transparent 70%),
+    radial-gradient(50% 30% at 75% 5%, rgba(60, 80, 120, 0.3), transparent 70%);
+  animation: bd-drift var(--dur) ease-in-out infinite alternate;
+}
+.bd-rain {
+  left: var(--x);
+  top: -15%;
+  width: 1.5px;
+  height: calc(70px * var(--s));
+  background: linear-gradient(to bottom, transparent, rgba(174, 200, 240, 0.55));
+  rotate: 12deg;
+  animation: bd-rain var(--dur) linear var(--delay) infinite;
+}
+.bd-flash {
+  --dur: 23s;
+  inset: 0;
+  background: #d6e6ff;
+  opacity: 0;
+  animation: bd-flash var(--dur) linear infinite;
+}
+@keyframes bd-rain {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 125vh, 0);
+  }
+}
+@keyframes bd-flash {
+  0%,
+  92% {
+    opacity: 0;
+  }
+  92.6% {
+    opacity: 0.08;
+  }
+  93.2% {
+    opacity: 0.02;
+  }
+  93.8% {
+    opacity: 0.06;
+  }
+  96%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------- Snowfall ---------- */
+
+.bd-night {
+  --dur: 60s;
+  inset: -20%;
+  background:
+    radial-gradient(30% 25% at 78% 18%, rgba(190, 210, 255, 0.16), transparent 70%),
+    radial-gradient(60% 40% at 30% 0%, rgba(60, 90, 160, 0.25), transparent 70%);
+  animation: bd-drift var(--dur) ease-in-out infinite alternate;
+}
+.bd-flake {
+  left: var(--x);
+  top: -4%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 35%, rgba(255, 255, 255, 0.4) 60%, transparent 72%);
+  opacity: 0.9;
+  animation: bd-fall var(--dur) linear var(--delay) infinite;
+}
+.bd-drift {
+  left: -10%;
+  right: -10%;
+  bottom: -6%;
+  height: 16%;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background: linear-gradient(to bottom, rgba(226, 236, 255, 0.22), rgba(226, 236, 255, 0.08));
+}
+
+/* ---------- Fireflies ---------- */
+
+.bd-woods {
+  inset: 0;
+  background: radial-gradient(70% 50% at 50% 100%, rgba(40, 90, 50, 0.35), transparent 70%);
+}
+.bd-trees {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 30%;
+  background-repeat: repeat-x;
+  background-size: auto 100%;
+  background-position: left bottom;
+}
+.bd-fly {
+  left: var(--x);
+  top: var(--y);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ecfccb;
+  box-shadow: 0 0 10px 4px rgba(190, 242, 100, 0.7);
+  animation:
+    bd-wander var(--dur) ease-in-out var(--delay) infinite alternate,
+    bd-blink calc(var(--dur) / 4) ease-in-out var(--delay) infinite alternate;
+}
+@keyframes bd-wander {
+  0% {
+    transform: translate3d(0, 0, 0) scale(var(--s));
+  }
+  33% {
+    transform: translate3d(var(--sway), -28px, 0) scale(var(--s));
+  }
+  66% {
+    transform: translate3d(calc(var(--sway) * -0.6), -60px, 0) scale(var(--s));
+  }
+  100% {
+    transform: translate3d(calc(var(--sway) * 0.4), -18px, 0) scale(var(--s));
+  }
+}
+@keyframes bd-blink {
+  0%,
+  30% {
+    opacity: 0.1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* ---------- Lava lamp ---------- */
+
+.bd-lavaglow {
+  inset: 0;
+  background: linear-gradient(to bottom, #12040c, #2a0718 70%, #3d0a1c);
+}
+.bd-blob {
+  left: var(--x);
+  bottom: -20%;
+  width: 44vmin;
+  height: 44vmin;
+  margin-left: -22vmin;
+  border-radius: 50%;
+  animation: bd-lava var(--dur) ease-in-out var(--delay) infinite alternate;
+}
+.bd-blob.b1 {
+  --x: 22%;
+  --dur: 26s;
+  --delay: -4s;
+  background: radial-gradient(circle, rgba(255, 95, 109, 0.75) 0 38%, transparent 70%);
+}
+.bd-blob.b2 {
+  --x: 62%;
+  --dur: 34s;
+  --delay: -17s;
+  background: radial-gradient(circle, rgba(255, 180, 76, 0.65) 0 36%, transparent 70%);
+}
+.bd-blob.b3 {
+  --x: 84%;
+  --dur: 22s;
+  --delay: -9s;
+  width: 30vmin;
+  height: 30vmin;
+  margin-left: -15vmin;
+  background: radial-gradient(circle, rgba(248, 87, 166, 0.7) 0 36%, transparent 70%);
+}
+.bd-blob.b4 {
+  --x: 42%;
+  --dur: 40s;
+  --delay: -25s;
+  width: 34vmin;
+  height: 34vmin;
+  margin-left: -17vmin;
+  background: radial-gradient(circle, rgba(255, 140, 70, 0.6) 0 36%, transparent 70%);
+}
+@keyframes bd-lava {
+  from {
+    transform: translate3d(0, 0, 0) scale(1, 1);
+  }
+  50% {
+    transform: translate3d(2vw, -45vh, 0) scale(0.85, 1.15);
+  }
+  to {
+    transform: translate3d(-2vw, -90vh, 0) scale(1.15, 0.9);
+  }
+}
+
+/* ---------- Clouds ---------- */
+
+.bd-daysky {
+  inset: 0;
+  background: linear-gradient(to bottom, #bfdcff 0%, #dcecff 55%, #f2f8ff 100%);
+}
+.bd-sunglow {
+  --dur: 9s;
+  top: -18%;
+  right: -10%;
+  width: 60vmin;
+  height: 60vmin;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 236, 160, 0.85), rgba(255, 220, 120, 0.25) 40%, transparent 70%);
+  animation: bd-pulse var(--dur) ease-in-out infinite alternate;
+}
+.bd-cloud {
+  left: 0;
+  top: var(--y);
+  width: 260px;
+  height: 90px;
+  background:
+    radial-gradient(circle at 30% 65%, #fff 0 26px, transparent 27px),
+    radial-gradient(circle at 50% 45%, #fff 0 38px, transparent 39px),
+    radial-gradient(circle at 70% 62%, #fff 0 30px, transparent 31px),
+    radial-gradient(ellipse 46% 26% at 50% 78%, #fff 0 99%, transparent 100%);
+  filter: drop-shadow(0 8px 10px rgba(80, 120, 180, 0.12));
+  opacity: 0.95;
+  animation: bd-sail var(--dur) linear var(--delay) infinite;
+}
+@keyframes bd-sail {
+  from {
+    transform: translate3d(-300px, 0, 0) scale(var(--s));
+  }
+  to {
+    transform: translate3d(calc(100vw + 40px), 0, 0) scale(var(--s));
+  }
+}
+
+/* ---------- Previews of the new looks ---------- */
+
+.app-backdrop.is-contained .bd-mc-sun {
+  top: 8%;
+  width: 16px;
+  height: 16px;
+  box-shadow: 0 0 10px 3px rgba(255, 230, 120, 0.35);
+}
+.app-backdrop.is-contained .bd-mc-sun.moon {
+  background: #eef1f7;
+}
+.app-backdrop.is-contained .bd-mc-drop {
+  width: 22px;
+  height: 22px;
+}
+.app-backdrop.is-contained .bd-mc-orb,
+.app-backdrop.is-contained .bd-orbmini {
+  width: 5px;
+  height: 5px;
+  animation-name: bd-rise-mini;
+}
+.app-backdrop.is-contained .bd-code {
+  font-size: calc(8px * var(--s));
+  animation-name: bd-code-mini;
+}
+.app-backdrop.is-contained .bd-rain {
+  height: calc(22px * var(--s));
+  animation-name: bd-rain-mini;
+}
+.app-backdrop.is-contained .bd-flake {
+  width: 4px;
+  height: 4px;
+  animation-name: bd-fall-mini;
+}
+.app-backdrop.is-contained .bd-fly {
+  width: 3px;
+  height: 3px;
+  box-shadow: 0 0 6px 2px rgba(190, 242, 100, 0.7);
+  animation-name: bd-wander-mini, bd-blink;
+}
+.app-backdrop.is-contained .bd-blob {
+  width: 60px;
+  height: 60px;
+  margin-left: -30px;
+  animation-name: bd-lava-mini;
+}
+.app-backdrop.is-contained .bd-cloud {
+  width: 90px;
+  height: 32px;
+  background:
+    radial-gradient(circle at 30% 65%, #fff 0 9px, transparent 10px),
+    radial-gradient(circle at 50% 45%, #fff 0 13px, transparent 14px),
+    radial-gradient(circle at 70% 62%, #fff 0 10px, transparent 11px),
+    radial-gradient(ellipse 46% 26% at 50% 78%, #fff 0 99%, transparent 100%);
+  animation-name: bd-sail-mini;
+}
+@keyframes bd-code-mini {
+  from {
+    transform: translate3d(0, -100%, 0);
+  }
+  to {
+    transform: translate3d(0, 90px, 0);
+  }
+}
+@keyframes bd-rain-mini {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 110px, 0);
+  }
+}
+@keyframes bd-wander-mini {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(calc(var(--sway) * 0.25), -14px, 0);
+  }
+  100% {
+    transform: translate3d(calc(var(--sway) * -0.2), -6px, 0);
+  }
+}
+@keyframes bd-lava-mini {
+  from {
+    transform: translate3d(0, 0, 0) scale(1, 1);
+  }
+  to {
+    transform: translate3d(0, -80px, 0) scale(1.15, 0.9);
+  }
+}
+@keyframes bd-sail-mini {
+  from {
+    transform: translate3d(-100px, 0, 0);
+  }
+  to {
+    transform: translate3d(220px, 0, 0);
   }
 }

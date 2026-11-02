@@ -357,6 +357,15 @@ export interface FolderFile {
 
 export type EntryKind = 'login' | 'email' | 'note' | 'card' | 'wifi' | 'other';
 
+/** A vault moved out of the way after its password was forgotten (kept as is). */
+export interface SetAside {
+  id: string;
+  /** Unix seconds. */
+  setAsideAt: number;
+  /** Its Windows Hello file came along. */
+  hello: boolean;
+}
+
 export interface VaultStatus {
   exists: boolean;
   unlocked: boolean;
@@ -777,7 +786,7 @@ export interface SunshineStatus {
 export type Theme = 'system' | 'dark' | 'light';
 
 /** The app's look: classic, or one of the animated themes. */
-export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember';
+export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember' | 'minecraft' | 'matrix' | 'rain' | 'snowfall' | 'fireflies' | 'lava' | 'clouds';
 
 export interface Settings {
   general: {
@@ -3080,7 +3089,7 @@ export interface ApprovalSettings {
   environment: boolean;
 }
 
-export type ApprovalKind = 'vaultReveal' | 'admin' | 'shred' | 'environment' | 'settings';
+export type ApprovalKind = 'vaultReveal' | 'vaultReset' | 'admin' | 'shred' | 'environment' | 'settings';
 
 export interface ApprovalRequest {
   id: string;

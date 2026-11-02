@@ -887,6 +887,52 @@ pub async fn vault_hello_unlock(core: Core<'_>) -> Res<()> {
     .await
 }
 
+/// Forgot the master password: Windows Hello opens the vault and the new
+/// password wraps its key (a paired phone approves first, when chosen).
+#[tauri::command]
+pub async fn vault_reset_password_hello(core: Core<'_>, new_password: String) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || {
+        core.approve(omnihub_core::remote::approvals::Kind::VaultReset, "Windows Hello")?;
+        let r = core.vault.reset_password_with_hello(&new_password);
+        core.audit.record("desktop", "vault.reset-password-hello", "", r.is_ok());
+        r.map_err(err)
+    })
+    .await
+}
+
+/// Move a vault whose password is forgotten out of the way (kept, not deleted).
+#[tauri::command]
+pub async fn vault_set_aside(core: Core<'_>) -> Res<omnihub_core::vault::SetAside> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let a = core.vault.set_aside().map_err(err)?;
+        core.audit.record("desktop", "vault.set-aside", &a.id, true);
+        core.update_settings(&serde_json::json!({ "vault": { "helloEnabled": false } })).map_err(err)?;
+        Ok(a)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn vault_set_aside_list(core: Core<'_>) -> Res<Vec<omnihub_core::vault::SetAside>> {
+    Ok(core.vault.set_aside_list())
+}
+
+/// Bring a set-aside vault back (the one in its place, if any, is set aside).
+#[tauri::command]
+pub async fn vault_put_back(core: Core<'_>, id: String) -> Res<Option<omnihub_core::vault::SetAside>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.vault.put_back(&id).map_err(err)?;
+        core.audit.record("desktop", "vault.put-back", &id, true);
+        let hello = core.vault.status().hello_enabled;
+        core.update_settings(&serde_json::json!({ "vault": { "helloEnabled": hello } })).map_err(err)?;
+        Ok(r)
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn vault_export(core: Core<'_>, path: String) -> Res<()> {
     core.vault.export_backup(Path::new(&path)).map_err(err)?;

@@ -20,6 +20,8 @@ pub const GRACE: Duration = Duration::from_secs(120);
 #[serde(rename_all = "camelCase")]
 pub enum Kind {
     VaultReveal,
+    /// Setting a new master password with Windows Hello (forgot it).
+    VaultReset,
     Admin,
     Shred,
     Environment,
@@ -31,6 +33,7 @@ impl Kind {
     pub fn label(self) -> &'static str {
         match self {
             Kind::VaultReveal => "Show a vault password on the PC",
+            Kind::VaultReset => "Set a new vault master password",
             Kind::Admin => "Restart OmniHub as administrator",
             Kind::Shred => "Shred files for good",
             Kind::Environment => "Change environment variables",

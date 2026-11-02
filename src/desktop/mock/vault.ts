@@ -2,7 +2,7 @@ import { primaryProvider } from '@shared/accounts';
 // Password vault for the mock backend. No real crypto — the point is the
 // state machine (none → unlocked ⇄ locked), throttling and auto-lock.
 
-import type { BrowserClient, BrowserPairRequest, BrowserStatus, Entry, HealthItem, HealthReport, EntryInput, EntrySummary, GeneratorOptions, HiddenFile, HiddenResult, Strength, VaultStatus } from '@shared/types';
+import type { BrowserClient, BrowserPairRequest, BrowserStatus, Entry, HealthItem, HealthReport, EntryInput, EntrySummary, GeneratorOptions, HiddenFile, HiddenResult, SetAside, Strength, VaultStatus } from '@shared/types';
 import { emit } from './bus';
 import { audit, onSettingsChange, settings } from './core';
 import { DAY, NOW } from './rng';
@@ -272,6 +272,61 @@ export function changePassword(oldPassword: string, newPassword: string): void {
   if (strength(newPassword).score < 2) throw new Error('Choose a stronger new master password.');
   master = newPassword;
   audit('desktop', 'vault.change-password', 'Master password changed');
+}
+
+export function resetPasswordWithHello(newPassword: string): void {
+  if (!exists) throw new Error('No vault yet. Create one first.');
+  if (!settings.vault.helloEnabled) throw new Error('Windows Hello is not enabled for the vault');
+  if (newPassword.length < 10) throw new Error('the master password must be at least 10 characters');
+  master = newPassword;
+  unlocked = true;
+  failures = 0;
+  throttleUntil = 0;
+  lastTouch = Date.now();
+  audit('desktop', 'vault.reset-password-hello', 'New master password set with Windows Hello');
+  emit('vault:unlocked', { via: 'hello' });
+}
+
+/** Set-aside vaults: their state, kept so Put back really restores it. */
+const asides: { info: SetAside; master: string; entries: Entry[]; hello: boolean }[] = [];
+
+export function setAside(): SetAside {
+  if (!exists) throw new Error('No vault yet. Create one first.');
+  const now = Math.floor(Date.now() / 1000);
+  let id = String(now);
+  for (let n = 2; asides.some((a) => a.info.id === id); n++) id = `${now}-${n}`;
+  const info: SetAside = { id, setAsideAt: now, hello: settings.vault.helloEnabled };
+  asides.unshift({ info, master, entries, hello: settings.vault.helloEnabled });
+  if (unlocked) lock('set-aside');
+  exists = false;
+  unlocked = false;
+  master = '';
+  entries = [];
+  settings.vault.helloEnabled = false;
+  emit('settings:changed', structuredClone(settings));
+  audit('desktop', 'vault.set-aside', id);
+  emit('vault:locked', { reason: 'set-aside' });
+  return info;
+}
+
+export function setAsideList(): SetAside[] {
+  return asides.map((a) => a.info);
+}
+
+export function putBack(id: string): SetAside | null {
+  const i = asides.findIndex((a) => a.info.id === id);
+  if (i < 0) throw new Error('entry not found');
+  const [back] = asides.splice(i, 1);
+  const current = exists ? setAside() : null;
+  exists = true;
+  unlocked = false;
+  master = back.master;
+  entries = back.entries;
+  settings.vault.helloEnabled = back.hello;
+  emit('settings:changed', structuredClone(settings));
+  audit('desktop', 'vault.put-back', id);
+  emit('vault:locked', { reason: 'put-back' });
+  return current;
 }
 
 export function helloEnable(): void {

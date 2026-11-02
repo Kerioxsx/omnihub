@@ -72,7 +72,7 @@ export function GlobalEvents() {
   // vault
   useEvent<{ reason: string }>('vault:locked', (p) => {
     void useLive.getState().refreshVault();
-    if (p.reason !== 'manual') toast.info('Vault locked', p.reason === 'idle' ? 'Locked automatically after inactivity.' : p.reason === 'session' ? 'Windows was locked.' : undefined);
+    if (!['manual', 'set-aside', 'put-back'].includes(String(p.reason))) toast.info('Vault locked', p.reason === 'idle' ? 'Locked automatically after inactivity.' : p.reason === 'session' ? 'Windows was locked.' : undefined);
   });
   useEvent('vault:unlocked', () => void useLive.getState().refreshVault());
   // A Minecraft server kept an operator's name out (it joined from a new place).

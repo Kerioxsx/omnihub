@@ -9,6 +9,7 @@ import { confirm } from '../../state/dialogs';
 import { useLive } from '../../state/live';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
+import { SetAsideList } from './ForgotPassword';
 
 function Row({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
@@ -163,6 +164,7 @@ export function VaultSettings({ open, onClose, status, onChangePassword }: { ope
             </div>
           )}
         </div>
+        <SetAsideList current className="mb-4" />
       </div>
     </Modal>
   );

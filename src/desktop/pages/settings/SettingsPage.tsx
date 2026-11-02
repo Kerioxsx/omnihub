@@ -14,6 +14,7 @@ import { Badge, Kbd } from '../../components/ui/Card';
 import { Segmented, Select, Switch, TextInput } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
+import { forgetPictures, LOOK_CHANGED, useAuroraLook } from '../../lib/aurora/textures';
 import { LOOKS } from '../../lib/looks';
 import { navigate, useRoute } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
@@ -220,9 +221,12 @@ export function SettingsPage() {
                 </Row>
               </>
             ) : (
-              <Row title="Animate the background" hint="Moves only while OmniHub is on screen, and holds still when Reduce motion is on. Off shows a still picture of the theme.">
-                <Switch checked={s.general.animateBackdrop} onChange={(v) => void update({ general: { animateBackdrop: v } })} label="Animate the background" />
-              </Row>
+              <>
+                <Row title="Animate the background" hint="Moves only while OmniHub is on screen, and holds still when Reduce motion is on. Off shows a still picture of the theme.">
+                  <Switch checked={s.general.animateBackdrop} onChange={(v) => void update({ general: { animateBackdrop: v } })} label="Animate the background" />
+                </Row>
+                {s.general.look === 'minecraft' && <ItemPackRow />}
+              </>
             )}
             <Row title="Reduce motion" hint="Turns off page transitions, zoom animations and springy effects.">
               <Switch checked={s.general.reducedMotion} onChange={(v) => void update({ general: { reducedMotion: v } })} label="Reduce motion" />
@@ -786,6 +790,45 @@ function PrivacyDashboard() {
           ))}
         </div>
       )}
+    </Row>
+  );
+}
+
+/** Minecraft theme: the items that float by come from a pack of pictures on this PC (shared with Aurora's lyrics). */
+function ItemPackRow() {
+  const { look, textures } = useAuroraLook();
+  const [busy, setBusy] = useState(false);
+  const count = look?.textures.length ?? 0;
+  const choose = async () => {
+    setBusy(true);
+    try {
+      const pack = await api.media.chooseEmojiPack();
+      if (pack) {
+        forgetPictures();
+        window.dispatchEvent(new Event(LOOK_CHANGED));
+        toast.success('Item pack ready', pack.kind === 'font' ? 'That’s an emoji font: the theme needs a zip of pictures.' : `${pack.count.toLocaleString()} pictures`);
+      }
+    } catch (e) {
+      toast.error('Could not use that pack', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const has = textures ? ['diamond', 'emerald', 'golden_apple', 'apple', 'diamond_sword'].some((n) => textures.names.has(n)) : false;
+  return (
+    <Row
+      title="Item pack"
+      hint={
+        count
+          ? has
+            ? `${count.toLocaleString()} pictures. Its items float by like dropped items (the same pack Aurora's lyrics use).`
+            : `${count.toLocaleString()} pictures, but none named like Minecraft items (diamond.png, apple.png…), so XP orbs float instead.`
+          : 'Pick a zip of Minecraft item pictures (diamond.png, apple.png…) and they float by like dropped items. It stays on this PC; without one, XP orbs float instead.'
+      }
+    >
+      <Button size="sm" icon={FolderOpen} loading={busy} onClick={() => void choose()}>
+        {count ? 'Change…' : 'Choose a zip…'}
+      </Button>
     </Row>
   );
 }

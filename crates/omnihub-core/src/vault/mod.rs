@@ -233,6 +233,23 @@ pub fn is_primary_account(url: &str, username: &str, email: &str) -> bool {
 }
 
 const HELLO_AAD: &[u8] = b"omnihub-hello-v1";
+const SET_ASIDE_FILE: &str = "vault.ohv";
+const SET_ASIDE_HELLO: &str = "vault.hello";
+
+fn valid_set_aside_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 32 && id.chars().all(|c| c.is_ascii_digit() || c == '-') && id.as_bytes()[0].is_ascii_digit()
+}
+
+/// A vault moved out of the way (its password was forgotten), kept as is.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SetAside {
+    pub id: String,
+    /// Unix seconds.
+    pub set_aside_at: i64,
+    /// Its Windows Hello file came along (it may still open it).
+    pub hello: bool,
+}
 const NOTE_AAD: &str = "omnihub-note-v1:";
 /// How a locked note's body is stored.
 pub const SEALED_NOTE: &str = "ohnote1:";
@@ -721,7 +738,8 @@ impl Vault {
         hello::delete();
     }
 
-    pub fn unlock_with_hello(&self) -> Result<(), VaultError> {
+    /// The vault key from Windows Hello (shows the Hello prompt).
+    fn hello_key(&self) -> Result<Zeroizing<[u8; 32]>, VaultError> {
         let raw = std::fs::read(&self.hello_path).map_err(|_| VaultError::Hello("Windows Hello is not enabled for the vault".into()))?;
         let raw = if self.use_dpapi { crate::system::dpapi::unprotect(&raw, b"omnihub-hello").map_err(|_| CryptoError::Dpapi)? } else { Zeroizing::new(raw) };
         if raw.len() < 32 {
@@ -730,7 +748,16 @@ impl Vault {
         let (challenge, sealed) = raw.split_at(32);
         let secret = hello::secret(challenge).map_err(VaultError::Hello)?;
         let key = crypto::open_with(&secret, sealed, HELLO_AAD).ok_or_else(|| VaultError::Hello("Windows Hello key changed; unlock with your master password and enable it again".into()))?;
-        let key: [u8; 32] = key.as_slice().try_into().map_err(|_| CryptoError::Corrupt)?;
+        let mut out = Zeroizing::new([0u8; 32]);
+        if key.len() != 32 {
+            return Err(CryptoError::Corrupt.into());
+        }
+        out.copy_from_slice(&key);
+        Ok(out)
+    }
+
+    pub fn unlock_with_hello(&self) -> Result<(), VaultError> {
+        let key = self.hello_key()?;
         let (_, body) = self.read_file()?;
         let (keys, data) = crypto::decode_body_with_key(&body, &key)?;
         let payload: Payload = serde_json::from_slice(&data).map_err(|_| CryptoError::Corrupt)?;
@@ -738,6 +765,103 @@ impl Vault {
         self.touch();
         self.events.emit("vault:unlocked", serde_json::json!({ "via": "hello" }));
         Ok(())
+    }
+
+    /// Forgot the master password: Windows Hello (asked again now, even
+    /// while unlocked) opens the vault key and the new password wraps it.
+    /// Entries, hidden files, locked notes and Hello keep working, and the
+    /// vault is unlocked afterwards.
+    pub fn reset_password_with_hello(&self, new: &str) -> Result<(), VaultError> {
+        if new.chars().count() < MIN_MASTER_LEN {
+            return Err(VaultError::WeakPassword);
+        }
+        let key = self.hello_key()?;
+        self.reset_with_key(&key, new)
+    }
+
+    /// Re-wrap the vault key (proven by `key` opening the file) under `new`.
+    fn reset_with_key(&self, key: &[u8; 32], new: &str) -> Result<(), VaultError> {
+        if new.chars().count() < MIN_MASTER_LEN {
+            return Err(VaultError::WeakPassword);
+        }
+        let (_, body) = self.read_file()?;
+        let (keys, data) = crypto::decode_body_with_key(&body, key)?;
+        let payload: Payload = serde_json::from_slice(&data).map_err(|_| CryptoError::Corrupt)?;
+        let open = Open { keys: keys.rewrap(new)?, entries: payload.entries };
+        self.write_file(&open)?;
+        *self.open.lock() = Some(open);
+        *self.throttle.lock() = Throttle { failures: 0, until: None };
+        self.touch();
+        self.events.emit("vault:unlocked", serde_json::json!({ "via": "hello" }));
+        Ok(())
+    }
+
+    fn set_aside_dir(&self) -> PathBuf {
+        self.path.parent().unwrap_or(Path::new(".")).join("vault-set-aside")
+    }
+
+    /// Forgot the master password with no other way in: move the vault (and
+    /// its Windows Hello file) into a folder of its own so a new one can be
+    /// made. Nothing is deleted: `put_back` returns it, and its hidden files
+    /// and locked notes open again with it.
+    pub fn set_aside(&self) -> Result<SetAside, VaultError> {
+        if !self.exists() {
+            return Err(VaultError::Missing);
+        }
+        self.lock_with_reason("set-aside");
+        let now = crate::db::now();
+        let root = self.set_aside_dir();
+        let mut id = now.to_string();
+        let mut n = 2;
+        while root.join(&id).exists() {
+            id = format!("{now}-{n}");
+            n += 1;
+        }
+        let dir = root.join(&id);
+        std::fs::create_dir_all(&dir)?;
+        std::fs::rename(&self.path, dir.join(SET_ASIDE_FILE))?;
+        let hello = self.hello_path.exists() && std::fs::rename(&self.hello_path, dir.join(SET_ASIDE_HELLO)).is_ok();
+        self.events.emit("vault:locked", serde_json::json!({ "reason": "set-aside" }));
+        Ok(SetAside { id, set_aside_at: now, hello })
+    }
+
+    /// Vaults set aside earlier, newest first.
+    pub fn set_aside_list(&self) -> Vec<SetAside> {
+        let mut v: Vec<SetAside> = std::fs::read_dir(self.set_aside_dir())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|e| {
+                let id = e.file_name().to_string_lossy().into_owned();
+                let dir = e.path();
+                if !valid_set_aside_id(&id) || !dir.join(SET_ASIDE_FILE).is_file() {
+                    return None;
+                }
+                let at = id.split('-').next()?.parse().ok()?;
+                Some(SetAside { hello: dir.join(SET_ASIDE_HELLO).is_file(), id, set_aside_at: at })
+            })
+            .collect();
+        v.sort_by_key(|s| std::cmp::Reverse(s.set_aside_at));
+        v
+    }
+
+    /// Bring back a vault set aside earlier. A vault in its place now is set
+    /// aside first (so nothing is lost either way); returns that one, if any.
+    pub fn put_back(&self, id: &str) -> Result<Option<SetAside>, VaultError> {
+        let dir = self.set_aside_dir().join(id);
+        if !valid_set_aside_id(id) || !dir.join(SET_ASIDE_FILE).is_file() {
+            return Err(VaultError::NotFound);
+        }
+        let current = if self.exists() { Some(self.set_aside()?) } else { None };
+        // A Hello file without its vault would only confuse the next unlock.
+        let _ = std::fs::remove_file(&self.hello_path);
+        std::fs::rename(dir.join(SET_ASIDE_FILE), &self.path)?;
+        if dir.join(SET_ASIDE_HELLO).is_file() {
+            let _ = std::fs::rename(dir.join(SET_ASIDE_HELLO), &self.hello_path);
+        }
+        let _ = std::fs::remove_dir(&dir);
+        self.events.emit("vault:locked", serde_json::json!({ "reason": "put-back" }));
+        Ok(current)
     }
 
     /// Delete the vault file (after the user confirmed; requires unlock).
@@ -825,6 +949,46 @@ mod tests {
 
     fn vault(dir: &Path) -> Vault {
         Vault::with_options(&dir.join("v.ohv"), EventBus::new(), KdfParams { m_cost: 256, t_cost: 1, p_cost: 1 }, false)
+    }
+
+    #[test]
+    fn forgotten_password_reset_and_set_aside() {
+        let dir = tempfile::tempdir().unwrap();
+        let v = vault(dir.path());
+        v.create("first long password").unwrap();
+        let s = v.save(EntryInput { title: "Bank".into(), password: Some("pw".into()), ..Default::default() }).unwrap();
+        // Reset with the vault key (what Windows Hello hands back).
+        let key = v.key().unwrap();
+        v.lock();
+        assert!(matches!(v.reset_with_key(&key, "short"), Err(VaultError::WeakPassword)));
+        assert!(v.reset_with_key(&[7u8; 32], "a brand new password").is_err(), "a wrong key opens nothing");
+        assert!(!v.is_unlocked());
+        v.reset_with_key(&key, "a brand new password").unwrap();
+        assert!(v.is_unlocked());
+        assert_eq!(v.get(&s.id).unwrap().password, "pw");
+        assert_eq!(v.key().unwrap().as_ref(), key.as_ref(), "same vault key: hidden files and notes keep working");
+        v.lock();
+        assert!(v.unlock("first long password").is_err());
+        v.unlock("a brand new password").unwrap();
+
+        // Set aside: nothing deleted, a new vault can be made, put back swaps.
+        std::fs::write(dir.path().join("v.hello"), b"x").unwrap();
+        let a = v.set_aside().unwrap();
+        assert!(a.hello && !v.exists() && !v.is_unlocked());
+        assert!(!dir.path().join("v.hello").exists());
+        assert_eq!(v.set_aside_list(), vec![a.clone()]);
+        v.create("second long password").unwrap();
+        let swapped = v.put_back(&a.id).unwrap().expect("the new vault is set aside, not lost");
+        assert!(!swapped.hello);
+        assert!(!v.is_unlocked());
+        v.unlock("a brand new password").unwrap();
+        assert_eq!(v.list().unwrap().len(), 1);
+        assert!(dir.path().join("v.hello").exists());
+        assert_eq!(v.set_aside_list(), vec![swapped.clone()]);
+        assert!(matches!(v.put_back("../x"), Err(VaultError::NotFound)));
+        assert!(matches!(v.put_back(&a.id), Err(VaultError::NotFound)));
+        v.put_back(&swapped.id).unwrap();
+        v.unlock("second long password").unwrap();
     }
 
     #[test]

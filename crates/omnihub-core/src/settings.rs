@@ -741,7 +741,9 @@ pub struct GeneralSettings {
     /// Interface size in percent (80–150).
     pub ui_scale: u16,
     /// "classic" (the light/dark theme and accent above) or an animated
-    /// theme: "aurora", "synthwave", "ocean", "galaxy", "sakura", "ember".
+    /// theme: "aurora", "synthwave", "ocean", "galaxy", "sakura", "ember",
+    /// "minecraft", "matrix", "rain", "snowfall", "fireflies", "lava",
+    /// "clouds".
     pub look: String,
     /// Animated themes move (off: a still picture of the same theme).
     pub animate_backdrop: bool,

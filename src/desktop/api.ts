@@ -171,6 +171,13 @@ export const api = {
     helloEnable: () => call<void>('vault_hello_enable'),
     helloDisable: () => call<void>('vault_hello_disable'),
     helloUnlock: () => call<void>('vault_hello_unlock'),
+    /** Forgot the master password: Windows Hello opens the vault, the new password wraps its key. */
+    resetPasswordWithHello: (newPassword: string) => call<void>('vault_reset_password_hello', { newPassword }),
+    /** Move a vault whose password is forgotten out of the way (kept, not deleted). */
+    setAside: () => call<T.SetAside>('vault_set_aside'),
+    setAsideList: () => call<T.SetAside[]>('vault_set_aside_list'),
+    /** Bring a set-aside vault back; the one in its place (if any) is set aside and returned. */
+    putBack: (id: string) => call<T.SetAside | null>('vault_put_back', { id }),
     exportBackup: (path: string) => call<void>('vault_export', { path }),
     importBackup: (path: string, password: string) => call<number>('vault_import', { path, password }),
   },

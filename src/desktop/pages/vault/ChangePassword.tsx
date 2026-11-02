@@ -10,6 +10,8 @@ import { Field, TextInput } from '../../components/ui/Form';
 import { Modal } from '../../components/ui/Overlay';
 import { Callout } from '../../components/ui/States';
 import { toast } from '../../state/toasts';
+import { useLive } from '../../state/live';
+import { ForgotPasswordDialog } from './ForgotPassword';
 import { StrengthMeter, useStrength } from './shared';
 
 /** The vault's own minimum (MIN_MASTER_LEN in the core). */
@@ -21,6 +23,8 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
   const [repeat, setRepeat] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [forgot, setForgot] = useState(false);
+  const status = useLive((l) => l.vault);
   const strength = useStrength(next);
 
   useEffect(() => {
@@ -78,7 +82,15 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
           void submit();
         }}
       >
-        <Field label="Current master password" htmlFor="cp-current">
+        <Field
+          label="Current master password"
+          htmlFor="cp-current"
+          hint={
+            <button type="button" onClick={() => setForgot(true)} className="rounded font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent">
+              Forgot it?
+            </button>
+          }
+        >
           <TextInput id="cp-current" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" autoFocus />
         </Field>
         <Field label="New master password" htmlFor="cp-new" hint={tooShort ? `At least ${MIN_LENGTH} characters.` : same ? "That's the same as the current one." : undefined}>
@@ -92,6 +104,15 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
         <p className="text-[12px] text-faint">No one can recover a forgotten master password, including OmniHub. Write the new one down somewhere safe until you know it by heart.</p>
         <button type="submit" hidden />
       </form>
+      {status && (
+        <ForgotPasswordDialog
+          open={forgot}
+          onClose={() => setForgot(false)}
+          // A new password was set with Windows Hello: this dialog's job is done too.
+          onDone={onClose}
+          status={status}
+        />
+      )}
     </Modal>
   );
 }

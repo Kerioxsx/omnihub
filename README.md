@@ -32,6 +32,12 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.23.0
+
+- **Forgot the vault password?** Windows Hello can set a new one with nothing lost; without Hello, set the vault aside (kept, not deleted) and start a new one, then put it back if the password comes back to you.
+- **Minecraft theme**: blocky hills, clouds, a sky that follows your clock, the Minecraft font on headings, and your own item pack floating by like dropped items.
+- **More animated themes**: Matrix, Rain, Snowfall, Fireflies, Lava lamp and Clouds (light).
+
 ## New in 0.22.1
 
 - **Change master password**: from the vault's header or Settings → Vault; logins, hidden files, locked notes and Windows Hello keep working.
