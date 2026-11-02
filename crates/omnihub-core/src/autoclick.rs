@@ -351,8 +351,20 @@ mod tests {
         a.arm();
         assert_eq!(a.watched_keys(), vec![0x75]);
         assert!(!a.on_key(0x41));
-        // Off Windows it starts and stops at once (no clicks to send).
-        a.on_key(0x75);
+        assert!(!a.on_key(ESC), "Esc does nothing while it isn't running");
+        assert!(a.set_config(ClickConfig { interval_ms: 0.0, ..Default::default() }).is_err());
+        assert!(a.set_config(ClickConfig { toggle_key: 0x76, ..Default::default() }).is_ok());
+        assert_eq!(a.watched_keys(), vec![0x76]);
+    }
+
+    /// Off Windows there are no clicks to send: it starts and stops at once.
+    /// (On Windows this would click the real mouse, so it isn't run there.)
+    #[cfg(not(windows))]
+    #[test]
+    fn its_key_starts_it() {
+        let a = AutoClicker::new(EventBus::new());
+        a.arm();
+        assert!(a.on_key(0x75));
         for _ in 0..100 {
             if !a.running() {
                 break;
@@ -361,6 +373,5 @@ mod tests {
         }
         assert!(!a.running());
         assert!(a.status().stopped.is_some());
-        assert!(a.set_config(ClickConfig { interval_ms: 0.0, ..Default::default() }).is_err());
     }
 }
