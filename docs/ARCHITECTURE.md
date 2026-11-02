@@ -569,3 +569,29 @@ game-state receiver (`cs2.rs`) and League's live-data poller (`lol.rs`).
 Everything that happens goes through one worker thread, which saves clips and
 has Capri speak through her local bridge (`companion::say`).
 
+## Counters, auto clicker and the Pokémon save editor
+
+- `counters.rs`: counters, hunts and finds in `counters.json` (pictures in
+  `counters/`), every change written at once and sent as `counters:changed`
+  to all windows. Hunt odds: 1/8192 (generations 2–5) or 1/4096 (6+), with
+  4 extra rolls for Masuda in generation 4 and 5 after, 2 for the Shiny
+  Charm, or the method's own odds.
+- `system/keys.rs`: the low-level keyboard hook (its own thread and message
+  loop, started and stopped with what's watched); watched keys go down a
+  channel to `AppCore::start_background`'s handler, which tells the auto
+  clicker and the counters. `AppCore::refresh_keys` sets what's watched.
+- `autoclick.rs`: a high-priority thread sending clicks with `SendInput`,
+  batching several per call below 50 µs, sleeping then spinning to each
+  deadline, checking the top-left corner every 20 ms, reporting
+  `autoclick:status` four times a second.
+- Pop-out: a borderless always-on-top window labelled `counter-<id>` at
+  `#/counter?id=…`.
+- `pkm/`: `gen3.rs` reads the save's two slots of 14 sections, picks the
+  newest, finds the game (and Emerald/FireRed's money key), and edits the
+  trainer (section 0), party and money (1) and PC (5–13 joined). Pokémon
+  are decrypted (PID ^ OT ID) and unshuffled (PID % 24) to edit and
+  shuffled, encrypted and checksummed back; stats come from the base
+  stats, IVs, EVs, nature and level. A new PID keeps the lowest byte
+  (gender) while giving the asked nature and shininess. `gen3.json` is
+  built by `scripts/gen3_data.py`.
+

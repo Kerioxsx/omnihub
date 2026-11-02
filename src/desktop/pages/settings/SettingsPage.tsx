@@ -228,6 +228,9 @@ export function SettingsPage() {
                 {s.general.look === 'minecraft' && <ItemPackRow />}
               </>
             )}
+            <Row title="Glass" hint="Frosted, see-through cards and sidebar over the background. Over a moving theme it uses a little more graphics power.">
+              <Switch checked={s.general.glass} onChange={(v) => void update({ general: { glass: v } })} label="Glass" />
+            </Row>
             <Row title="Reduce motion" hint="Turns off page transitions, zoom animations and springy effects.">
               <Switch checked={s.general.reducedMotion} onChange={(v) => void update({ general: { reducedMotion: v } })} label="Reduce motion" />
             </Row>

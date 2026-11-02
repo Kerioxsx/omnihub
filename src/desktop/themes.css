@@ -985,3 +985,45 @@
     transform: translate3d(220px, 0, 0);
   }
 }
+
+/* ---------- Glass layout (Settings → Appearance → Glass) ---------- */
+
+:root[data-glass] {
+  --glass: color-mix(in oklab, var(--bg-elev) 42%, transparent);
+}
+:root[data-glass] .card {
+  background: color-mix(in oklab, var(--bg-elev) 48%, transparent) !important;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 12px 32px -16px rgba(0, 0, 0, 0.55);
+}
+/* Cards inside cards: a light tint, not a second blur. */
+:root[data-glass] .card .card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+:root.light[data-glass] .card {
+  background: rgba(255, 255, 255, 0.55) !important;
+  border-color: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 12px 32px -18px rgba(30, 40, 80, 0.28);
+}
+/* Classic's background is plain: give the glass some colour to show. */
+:root[data-glass] .app-backdrop.look-classic {
+  background:
+    radial-gradient(40% 50% at 12% 18%, color-mix(in oklab, var(--accent) 42%, transparent), transparent 70%),
+    radial-gradient(34% 44% at 88% 26%, color-mix(in oklab, var(--accent-2) 34%, transparent), transparent 70%),
+    radial-gradient(46% 50% at 58% 92%, color-mix(in oklab, var(--accent) 28%, transparent), transparent 70%),
+    var(--bg);
+}
+
+/* ---------- Counter pop-out ---------- */
+
+:root.popout-route body {
+  background: var(--bg);
+}

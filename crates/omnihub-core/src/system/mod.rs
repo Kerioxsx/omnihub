@@ -7,6 +7,7 @@ pub mod dpapi;
 pub mod elevation;
 pub mod firewall;
 pub mod gpu;
+pub mod keys;
 pub mod layouts;
 pub mod open_apps;
 pub mod ports;

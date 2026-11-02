@@ -32,6 +32,14 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.24.0
+
+- **Counters**: count with keys that work from anywhere (even in a game), with pictures, timers, a pop-out window that stays on top, and history.
+- **Shiny hunting** for all 1025 Pokémon with real odds (Masuda, Shiny Charm, any method's odds) and your finds kept.
+- **Auto clicker**: any button, single or double, down to 0.01 ms (it shows the real speed), at a point or the mouse, with limits; F6 starts and stops, Esc always stops.
+- **Pokémon save editor** for Ruby, Sapphire, Emerald, FireRed and LeafGreen: trainer, party and PC boxes, .pk3 in and out, checksums fixed, a copy kept on every save.
+- **Glass** look: frosted cards and sidebar over any theme.
+
 ## New in 0.23.0
 
 - **Forgot the vault password?** Windows Hello can set a new one with nothing lost; without Hello, set the vault aside (kept, not deleted) and start a new one, then put it back if the password comes back to you.

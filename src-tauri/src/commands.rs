@@ -2711,3 +2711,214 @@ pub async fn board_save(png: String) -> Res<String> {
 pub async fn scans_folder(core: Core<'_>) -> Res<String> {
     Ok(core.scans_dir().display().to_string())
 }
+
+// ---------- counters, shiny hunts and the auto clicker ----------
+
+use omnihub_core::autoclick::{ClickConfig, ClickStatus};
+use omnihub_core::counters::{Counter, CounterInput, CountersState, Found};
+
+#[tauri::command]
+pub async fn counters_state(core: Core<'_>) -> Res<CountersState> {
+    Ok(core.counters.state())
+}
+
+#[tauri::command]
+pub async fn counters_save(core: Core<'_>, input: CounterInput) -> Res<Counter> {
+    let c = core.counters.save(input)?;
+    core.refresh_keys();
+    Ok(c)
+}
+
+#[tauri::command]
+pub async fn counters_delete(app: AppHandle, core: Core<'_>, id: String) -> Res<()> {
+    core.counters.delete(&id)?;
+    core.refresh_keys();
+    if let Some(w) = app.get_webview_window(&popout_label(&id)) {
+        let _ = w.close();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn counters_bump(core: Core<'_>, id: String, times: i64) -> Res<Counter> {
+    core.counters.bump(&id, times)
+}
+
+#[tauri::command]
+pub async fn counters_set(core: Core<'_>, id: String, count: i64) -> Res<Counter> {
+    core.counters.set_count(&id, count)
+}
+
+#[tauri::command]
+pub async fn counters_timer(core: Core<'_>, id: String, run: bool, reset: bool) -> Res<Counter> {
+    core.counters.timer(&id, run, reset)
+}
+
+#[tauri::command]
+pub async fn counters_keys_on(core: Core<'_>, on: bool) -> Res<()> {
+    core.counters.set_keys_on(on)?;
+    core.refresh_keys();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn counters_found(core: Core<'_>, id: String, reset: bool) -> Res<Found> {
+    core.counters.found(&id, reset)
+}
+
+#[tauri::command]
+pub async fn counters_forget_found(core: Core<'_>, id: String) -> Res<()> {
+    core.counters.forget_found(&id)
+}
+
+#[tauri::command]
+pub async fn counters_set_image(core: Core<'_>, id: String, path: Option<String>) -> Res<Counter> {
+    core.counters.set_image(&id, path.as_deref().map(Path::new))
+}
+
+#[tauri::command]
+pub async fn counters_image(core: Core<'_>, id: String) -> Res<Option<String>> {
+    Ok(core.counters.image(&id))
+}
+
+/// The name for a key the user just pressed (for the key picker).
+#[tauri::command]
+pub async fn key_name(vk: u32) -> Res<String> {
+    Ok(omnihub_core::system::keys::key_name(vk))
+}
+
+fn popout_label(id: &str) -> String {
+    format!("counter-{}", id.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>())
+}
+
+/// A counter in its own small window above everything (drag it anywhere).
+#[tauri::command]
+pub async fn counters_popout(app: AppHandle, core: Core<'_>, id: String) -> Res<()> {
+    if !core.counters.state().counters.iter().any(|c| c.id == id) {
+        return Err("No such counter".into());
+    }
+    let label = popout_label(&id);
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.show();
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    let url = format!("index.html#/counter?id={}", id.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>());
+    tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::App(url.into()))
+        .title("Counter")
+        .decorations(false)
+        .always_on_top(true)
+        .resizable(true)
+        .skip_taskbar(true)
+        .inner_size(260.0, 300.0)
+        .min_inner_size(170.0, 150.0)
+        .focused(true)
+        .build()
+        .map(|_| ())
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn autoclick_config(core: Core<'_>) -> Res<ClickConfig> {
+    core.autoclick.arm();
+    core.refresh_keys();
+    Ok(core.autoclick.config())
+}
+
+#[tauri::command]
+pub async fn autoclick_set_config(core: Core<'_>, config: ClickConfig) -> Res<()> {
+    core.autoclick.set_config(config)?;
+    core.autoclick.arm();
+    core.refresh_keys();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn autoclick_status(core: Core<'_>) -> Res<ClickStatus> {
+    Ok(core.autoclick.status())
+}
+
+#[tauri::command]
+pub async fn autoclick_start(core: Core<'_>) -> Res<()> {
+    core.autoclick.arm();
+    core.autoclick.start()?;
+    core.refresh_keys();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn autoclick_stop(core: Core<'_>) -> Res<()> {
+    core.autoclick.stop("the Stop button");
+    core.refresh_keys();
+    Ok(())
+}
+
+/// Where the mouse is (for "click here").
+#[tauri::command]
+pub async fn autoclick_cursor() -> Res<Option<(i32, i32)>> {
+    Ok(omnihub_core::autoclick::cursor())
+}
+
+// ---------- Pokémon save editor (Game Boy Advance games) ----------
+
+use omnihub_core::pkm::{MonEdit, PkmTables, SaveView, Slot, Trainer};
+
+#[tauri::command]
+pub async fn pkm_tables() -> Res<PkmTables> {
+    blocking(|| Ok(omnihub_core::pkm::pkm_tables())).await
+}
+
+#[tauri::command]
+pub async fn pkm_open(core: Core<'_>, path: String) -> Res<SaveView> {
+    let core = core.inner().clone();
+    blocking(move || core.pkm.open(Path::new(&path))).await
+}
+
+#[tauri::command]
+pub async fn pkm_view(core: Core<'_>) -> Res<Option<SaveView>> {
+    Ok(core.pkm.view().ok())
+}
+
+#[tauri::command]
+pub async fn pkm_close(core: Core<'_>) -> Res<()> {
+    core.pkm.close();
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn pkm_edit(core: Core<'_>, slot: Slot, edit: MonEdit) -> Res<SaveView> {
+    let core = core.inner().clone();
+    blocking(move || core.pkm.edit(slot, &edit)).await
+}
+
+#[tauri::command]
+pub async fn pkm_delete(core: Core<'_>, slot: Slot) -> Res<SaveView> {
+    core.pkm.delete(slot)
+}
+
+#[tauri::command]
+pub async fn pkm_trainer(core: Core<'_>, trainer: Trainer) -> Res<SaveView> {
+    core.pkm.set_trainer(&trainer)
+}
+
+#[tauri::command]
+pub async fn pkm_import(core: Core<'_>, slot: Slot, path: String) -> Res<SaveView> {
+    core.pkm.import(slot, Path::new(&path))
+}
+
+#[tauri::command]
+pub async fn pkm_export(core: Core<'_>, slot: Slot, path: String) -> Res<()> {
+    core.pkm.export(slot, Path::new(&path))
+}
+
+/// Write the save (a copy of the old file is kept next to it first).
+#[tauri::command]
+pub async fn pkm_write(core: Core<'_>) -> Res<String> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.pkm.write();
+        core.audit.record("desktop", "pokemon.save", r.as_deref().unwrap_or(""), r.is_ok());
+        r
+    })
+    .await
+}

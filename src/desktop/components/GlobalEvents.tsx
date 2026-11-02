@@ -106,6 +106,10 @@ export function ThemeController() {
   const look = lookInfo(useSettings((s) => s.settings?.general.look)).id;
   const accent = useSettings((s) => s.settings?.general.accent);
   const reduced = useSettings((s) => s.settings?.general.reducedMotion);
+  const glass = useSettings((s) => s.settings?.general.glass ?? false);
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-glass', glass);
+  }, [glass]);
   useEffect(() => {
     if (!theme) return;
     const root = document.documentElement;

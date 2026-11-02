@@ -182,6 +182,48 @@ export const api = {
     importBackup: (path: string, password: string) => call<number>('vault_import', { path, password }),
   },
 
+  /** Counters (keys count from anywhere), shiny hunts and the pop-out windows. */
+  counters: {
+    state: () => call<T.CountersState>('counters_state'),
+    save: (input: T.CounterInput) => call<T.Counter>('counters_save', { input }),
+    remove: (id: string) => call<void>('counters_delete', { id }),
+    bump: (id: string, times: number) => call<T.Counter>('counters_bump', { id, times }),
+    set: (id: string, count: number) => call<T.Counter>('counters_set', { id, count }),
+    timer: (id: string, run: boolean, reset = false) => call<T.Counter>('counters_timer', { id, run, reset }),
+    keysOn: (on: boolean) => call<void>('counters_keys_on', { on }),
+    found: (id: string, reset: boolean) => call<T.Found>('counters_found', { id, reset }),
+    forgetFound: (id: string) => call<void>('counters_forget_found', { id }),
+    setImage: (id: string, path: string | null) => call<T.Counter>('counters_set_image', { id, path }),
+    image: (id: string) => call<string | null>('counters_image', { id }),
+    keyName: (vk: number) => call<string>('key_name', { vk }),
+    popout: (id: string) => call<void>('counters_popout', { id }),
+  },
+
+  /** The auto clicker (its start/stop key works from anywhere once it was opened). */
+  autoclick: {
+    config: () => call<T.ClickConfig>('autoclick_config'),
+    setConfig: (config: T.ClickConfig) => call<void>('autoclick_set_config', { config }),
+    status: () => call<T.ClickStatus>('autoclick_status'),
+    start: () => call<void>('autoclick_start'),
+    stop: () => call<void>('autoclick_stop'),
+    cursor: () => call<[number, number] | null>('autoclick_cursor'),
+  },
+
+  /** Pokémon save editor for Ruby, Sapphire, Emerald, FireRed and LeafGreen. */
+  pkm: {
+    tables: () => call<T.PkmTables>('pkm_tables'),
+    open: (path: string) => call<T.PkmSave>('pkm_open', { path }),
+    view: () => call<T.PkmSave | null>('pkm_view'),
+    close: () => call<void>('pkm_close'),
+    edit: (slot: T.PkmSlot, edit: T.MonEdit) => call<T.PkmSave>('pkm_edit', { slot, edit }),
+    remove: (slot: T.PkmSlot) => call<T.PkmSave>('pkm_delete', { slot }),
+    trainer: (trainer: T.PkmTrainer) => call<T.PkmSave>('pkm_trainer', { trainer }),
+    importPk3: (slot: T.PkmSlot, path: string) => call<T.PkmSave>('pkm_import', { slot, path }),
+    exportPk3: (slot: T.PkmSlot, path: string) => call<void>('pkm_export', { slot, path }),
+    /** Write the file; returns the path of the copy kept of the old one. */
+    write: () => call<string>('pkm_write'),
+  },
+
   /** Capri and your games: instant replay, clips, voice. */
   play: {
     status: () => call<T.PlayStatus>('play_status'),

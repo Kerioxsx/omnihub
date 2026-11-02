@@ -747,6 +747,8 @@ pub struct GeneralSettings {
     pub look: String,
     /// Animated themes move (off: a still picture of the same theme).
     pub animate_backdrop: bool,
+    /// Frosted-glass cards and sidebar over the background.
+    pub glass: bool,
 }
 
 impl Default for GeneralSettings {
@@ -763,6 +765,7 @@ impl Default for GeneralSettings {
             ui_scale: 100,
             look: "classic".into(),
             animate_backdrop: true,
+            glass: false,
         }
     }
 }

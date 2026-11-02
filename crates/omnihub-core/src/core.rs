@@ -68,6 +68,10 @@ pub struct AppCore {
     pub rules: crate::rules::Rules,
     /// The focus timer and the time tracker.
     pub focus: crate::focus::Focus,
+    /// The Pokémon save being edited.
+    pub pkm: crate::pkm::Editor,
+    pub counters: crate::counters::Counters,
+    pub autoclick: crate::autoclick::AutoClicker,
     /// Compress, convert, cut and take the sound out of videos (FFmpeg).
     pub video: crate::videotools::VideoTools,
     /// Links downloaded for a phone (or the PC).
@@ -144,6 +148,9 @@ impl AppCore {
             layouts: crate::system::layouts::Layouts::new(&paths.data),
             rules: crate::rules::Rules::new(&paths.data),
             focus: crate::focus::Focus::new(db.clone()),
+            pkm: crate::pkm::Editor::default(),
+            counters: crate::counters::Counters::new(&paths.data, events.clone()),
+            autoclick: crate::autoclick::AutoClicker::new(events.clone()),
             video,
             downloads,
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
@@ -161,9 +168,28 @@ impl AppCore {
         Ok(core)
     }
 
+    /// Watch the keys counters and the auto clicker need (and no others).
+    pub fn refresh_keys(&self) {
+        let mut keys = self.counters.watched_keys();
+        keys.extend(self.autoclick.watched_keys());
+        keys.sort_unstable();
+        keys.dedup();
+        crate::system::keys::watch(&keys);
+    }
+
     /// Start timers, watchers and (if enabled) the companion server.
     pub fn start_background(self: &Arc<Self>) {
         self.play.start(self);
+        let weak = Arc::downgrade(self);
+        crate::system::keys::on_key(move |vk| {
+            let Some(core) = weak.upgrade() else { return };
+            let clicker = core.autoclick.on_key(vk);
+            core.counters.on_key(vk);
+            if clicker {
+                core.refresh_keys();
+            }
+        });
+        self.refresh_keys();
         let weak = Arc::downgrade(self);
         std::thread::Builder::new()
             .name("vault-timer".into())

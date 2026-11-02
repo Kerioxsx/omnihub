@@ -39,6 +39,17 @@ import * as remote from './mock/remote';
 import { latency } from './mock/rng';
 import * as storage from './mock/storage';
 import * as vault from './mock/vault';
+import { autoclick, counters as ctr, pkm } from './mock/counters';
+
+/** What a key is called (the same names the app uses). */
+function keyLabel(vk: number): string {
+  const named: Record<number, string> = { 8: 'Backspace', 9: 'Tab', 13: 'Enter', 27: 'Esc', 32: 'Space', 33: 'Page Up', 34: 'Page Down', 35: 'End', 36: 'Home', 37: 'Left', 38: 'Up', 39: 'Right', 40: 'Down', 45: 'Insert', 46: 'Delete' };
+  if (named[vk]) return named[vk];
+  if ((vk >= 48 && vk <= 57) || (vk >= 65 && vk <= 90)) return String.fromCharCode(vk);
+  if (vk >= 96 && vk <= 105) return `Num ${vk - 96}`;
+  if (vk >= 112 && vk <= 135) return `F${vk - 111}`;
+  return `Key ${vk}`;
+}
 
 type Handler = (args: Args) => unknown;
 
@@ -436,6 +447,35 @@ const handlers: Record<string, Handler> = {
   vault_hello_disable: () => vault.helloDisable(),
   vault_hello_unlock: () => vault.helloUnlock(),
   vault_reset_password_hello: (a) => vault.resetPasswordWithHello(str(a, 'newPassword')),
+  counters_state: () => ctr.state(),
+  counters_save: (a) => ctr.save(obj(a, 'input')),
+  counters_delete: (a) => ctr.remove(str(a, 'id')),
+  counters_bump: (a) => ctr.bump(str(a, 'id'), num(a, 'times')),
+  counters_set: (a) => ctr.set(str(a, 'id'), num(a, 'count')),
+  counters_timer: (a) => ctr.timer(str(a, 'id'), bool(a, 'run'), bool(a, 'reset')),
+  counters_keys_on: (a) => ctr.keysOn(bool(a, 'on')),
+  counters_found: (a) => ctr.found(str(a, 'id'), bool(a, 'reset')),
+  counters_forget_found: (a) => ctr.forgetFound(str(a, 'id')),
+  counters_set_image: (a) => ctr.setImage(str(a, 'id'), optStr(a, 'path')),
+  counters_image: () => ctr.image(),
+  key_name: (a) => keyLabel(num(a, 'vk')),
+  counters_popout: (a) => void window.open(`#/counter?id=${encodeURIComponent(str(a, 'id'))}`, '_blank', 'width=260,height=300'),
+  autoclick_config: () => autoclick.config(),
+  autoclick_set_config: (a) => autoclick.setConfig(obj(a, 'config')),
+  autoclick_status: () => autoclick.status(),
+  autoclick_start: () => autoclick.start(),
+  autoclick_stop: () => autoclick.stop(),
+  autoclick_cursor: () => autoclick.cursor(),
+  pkm_tables: () => pkm.tables(),
+  pkm_open: (a) => pkm.open(str(a, 'path')),
+  pkm_view: () => pkm.view(),
+  pkm_close: () => pkm.close(),
+  pkm_edit: (a) => pkm.edit(obj(a, 'slot'), obj(a, 'edit')),
+  pkm_delete: (a) => pkm.remove(obj(a, 'slot')),
+  pkm_trainer: (a) => pkm.trainer(obj(a, 'trainer')),
+  pkm_import: (a) => pkm.importPk3(obj(a, 'slot')),
+  pkm_export: () => pkm.exportPk3(),
+  pkm_write: () => pkm.write(),
   vault_set_aside: () => vault.setAside(),
   vault_set_aside_list: () => vault.setAsideList(),
   vault_put_back: (a) => vault.putBack(str(a, 'id')),

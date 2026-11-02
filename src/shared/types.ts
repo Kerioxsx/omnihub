@@ -803,6 +803,8 @@ export interface Settings {
     uiScale: number;
     /** 'classic' (theme + accent) or an animated theme */
     look: Look;
+    /** Frosted-glass cards and sidebar over the background. */
+    glass: boolean;
     /** animated themes move; off = a still picture */
     animateBackdrop: boolean;
   };
@@ -3189,4 +3191,162 @@ export interface Scanned {
   text: string;
   fields: [string, string][];
   noteId: string | null;
+}
+
+// ---------- Counters, shiny hunts, auto clicker ----------
+
+/** A key that changes a counter: its Windows virtual-key code and its name. */
+export interface KeyBind {
+  vk: number;
+  label: string;
+}
+
+export interface Hunt {
+  /** National Pokédex number. */
+  species: number;
+  name: string;
+  /** 2–9: generations 2–5 roll 1/8192, 6 and later 1/4096. */
+  generation: number;
+  masuda: boolean;
+  charm: boolean;
+  /** 1 in this many instead (another method). */
+  customOdds: number | null;
+  method: string;
+}
+
+export interface Counter {
+  id: string;
+  name: string;
+  count: number;
+  step: number;
+  image: string | null;
+  key: KeyBind | null;
+  minusKey: KeyBind | null;
+  timerMs: number;
+  /** Unix ms when the timer started, while it runs. */
+  timerSince: number | null;
+  hunt: Hunt | null;
+  created: number;
+  updated: number;
+}
+
+export interface Found {
+  id: string;
+  counter: string;
+  name: string;
+  species: number | null;
+  count: number;
+  timerMs: number;
+  at: number;
+  odds: string | null;
+}
+
+export interface CountersState {
+  counters: Counter[];
+  found: Found[];
+  keysOn: boolean;
+}
+
+export interface CounterInput {
+  id?: string | null;
+  name: string;
+  step: number;
+  key: KeyBind | null;
+  minusKey: KeyBind | null;
+  hunt: Hunt | null;
+}
+
+export interface ClickConfig {
+  button: 'left' | 'right' | 'middle';
+  double: boolean;
+  intervalMs: number;
+  jitterMs: number;
+  maxClicks: number;
+  maxSeconds: number;
+  at: [number, number] | null;
+  toggleKey: number;
+}
+
+export interface ClickStatus {
+  running: boolean;
+  clicks: number;
+  rate: number;
+  seconds: number;
+  stopped: string | null;
+}
+
+// ---------- Pokémon save editor (Game Boy Advance games) ----------
+
+export interface PkmTrainer {
+  name: string;
+  gender: number;
+  tid: number;
+  sid: number;
+  money: number;
+  hours: number;
+  minutes: number;
+}
+
+export interface MonView {
+  species: number;
+  dex: number;
+  speciesName: string;
+  nickname: string;
+  level: number;
+  exp: number;
+  nature: number;
+  shiny: boolean;
+  gender: 'male' | 'female' | 'none';
+  abilitySlot: number;
+  ability: string;
+  item: number;
+  friendship: number;
+  moves: number[];
+  pp: number[];
+  ppUps: number[];
+  ivs: number[];
+  evs: number[];
+  stats: number[];
+  otName: string;
+  tid: number;
+  sid: number;
+  ball: number;
+  metLevel: number;
+  egg: boolean;
+  pid: number;
+  valid: boolean;
+}
+
+export type MonEdit = Partial<Pick<MonView, 'species' | 'nickname' | 'level' | 'nature' | 'shiny' | 'abilitySlot' | 'item' | 'friendship' | 'moves' | 'ppUps' | 'ivs' | 'evs' | 'otName' | 'tid' | 'sid' | 'ball'>>;
+
+/** The party (`box` null, index 0–5) or a PC box (0–13, index 0–29). */
+export interface PkmSlot {
+  box: number | null;
+  index: number;
+}
+
+export interface PkmSave {
+  path: string;
+  game: string;
+  trainer: PkmTrainer;
+  party: MonView[];
+  boxes: { name: string; mons: (MonView | null)[] }[];
+  changed: boolean;
+  checksumsOk: boolean;
+}
+
+export interface PkmNamed {
+  id: number;
+  name: string;
+  /** Species: National Dex number; moves: base PP. */
+  dex: number;
+}
+
+export interface PkmTables {
+  species: PkmNamed[];
+  moves: PkmNamed[];
+  items: PkmNamed[];
+  natures: string[];
+  balls: string[];
+  abilities: [string, string][];
 }

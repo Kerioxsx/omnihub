@@ -6,12 +6,14 @@
 
 pub mod apps;
 pub mod audit;
+pub mod autoclick;
 pub mod browser;
 pub mod capture;
 pub mod chats;
 pub mod claude;
 pub mod companion;
 pub mod core;
+pub mod counters;
 pub mod crashlog;
 pub mod db;
 pub mod devtools;
@@ -29,6 +31,7 @@ pub mod focus;
 pub mod notes;
 pub mod play;
 pub mod paths;
+pub mod pkm;
 pub mod remote;
 pub mod rig;
 pub mod rules;

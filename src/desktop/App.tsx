@@ -38,13 +38,14 @@ const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((m)
 const ScreenshotsPage = lazy(() => import('./pages/shots/ScreenshotsPage').then((m) => ({ default: m.ScreenshotsPage })));
 const StoragePage = lazy(() => import('./pages/storage/StoragePage').then((m) => ({ default: m.StoragePage })));
 const FocusPage = lazy(() => import('./pages/focus/FocusPage').then((m) => ({ default: m.FocusPage })));
+const CountersPage = lazy(() => import('./pages/counters/CountersPage').then((m) => ({ default: m.CountersPage })));
 const ToolsPage = lazy(() => import('./pages/tools/ToolsPage').then((m) => ({ default: m.ToolsPage })));
 const TasksPage = lazy(() => import('./pages/tasks/TasksPage').then((m) => ({ default: m.TasksPage })));
 const VaultPage = lazy(() => import('./pages/vault/VaultPage').then((m) => ({ default: m.VaultPage })));
 const Onboarding = lazy(() => import('./pages/onboarding/Onboarding').then((m) => ({ default: m.Onboarding })));
 const PlayerHost = lazy(() => import('./components/music/PlayerHost').then((m) => ({ default: m.PlayerHost })));
 
-const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen' | 'pin'>, ComponentType> = {
+const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen' | 'pin' | 'counter'>, ComponentType> = {
   home: HomePage,
   storage: StoragePage,
   apps: AppsPage,
@@ -54,6 +55,7 @@ const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen' | 'pin
   tasks: TasksPage,
   tools: ToolsPage,
   focus: FocusPage,
+  counters: CountersPage,
   games: GamesPage,
   mods: ModsPage,
   servers: ServersPage,
@@ -145,7 +147,7 @@ export function App() {
 
   if (!settings) return <Splash error={error} onRetry={() => void load()} />;
 
-  const pageId = route.id === 'overlay' || route.id === 'ambient' || route.id === 'casescreen' || route.id === 'pin' ? 'home' : route.id;
+  const pageId = route.id === 'overlay' || route.id === 'ambient' || route.id === 'casescreen' || route.id === 'pin' || route.id === 'counter' ? 'home' : route.id;
   const PageComp = PAGES[pageId];
   const showOnboarding = onboardingForced || !settings.general.onboarded;
 

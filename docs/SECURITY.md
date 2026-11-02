@@ -849,3 +849,26 @@ internet only for:
 No cloud relay. No Windows service (a service would run
 the phone server as SYSTEM; instead the app starts at login, minimised to
 the tray). The installer is not code-signed yet, so SmartScreen will warn.
+
+## Keys from anywhere (counters and the auto clicker)
+
+- Counters' keys and the auto clicker's start/stop key work while other
+  apps are in front, through a low-level keyboard hook. The hook runs only
+  while some counter has a key (and keys are on) or after the auto clicker
+  was opened in this session. It compares each key with the few chosen
+  ones (a 256-bit set) and passes everything on unchanged; it never
+  stores, logs or sends keys, and nothing reaches the phone server.
+- The auto clicker sends clicks with `SendInput`, which Windows refuses to
+  windows running as administrator unless OmniHub is too. It always stops
+  with Esc and by pushing the mouse into the top-left corner, as well as
+  with its key and its limits.
+
+## Pokémon save editor
+
+- It only reads and writes the save file you open (and .pk3 files you pick).
+  Before every write the old file is copied next to it
+  (`name.sav.bak-YYYYMMDD-HHMMSS`); if the copy fails, nothing is written.
+- The game tables come from `scripts/gen3_data.py` (facts read from the
+  pret decompilation); no game code or pictures ship with OmniHub. Pokémon
+  pictures load from PokeAPI's sprite collection on GitHub when shown.
+
