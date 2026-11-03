@@ -40,6 +40,7 @@ import { latency } from './mock/rng';
 import * as storage from './mock/storage';
 import * as vault from './mock/vault';
 import { autoclick, counters as ctr, pkm } from './mock/counters';
+import { emulators as emus, library as lib } from './mock/library';
 
 /** What a key is called (the same names the app uses). */
 function keyLabel(vk: number): string {
@@ -448,6 +449,32 @@ const handlers: Record<string, Handler> = {
   vault_hello_unlock: () => vault.helloUnlock(),
   vault_reset_password_hello: (a) => vault.resetPasswordWithHello(str(a, 'newPassword')),
   counters_state: () => ctr.state(),
+  counters_event: (a) => ctr.event(str(a, 'id'), str(a, 'event')),
+  counters_undo: (a) => ctr.undo(str(a, 'id')),
+  counters_clear_log: (a) => ctr.clearLog(str(a, 'id')),
+  counters_overlay: (a) => ctr.overlay(bool(a, 'on'), num(a, 'port')),
+  library_games: () => lib.games(),
+  library_detail: (a) => lib.detail(str(a, 'key')),
+  library_achievements: () => lib.achievements(),
+  library_friends: () => lib.friends(),
+  library_wishlist: () => lib.wishlist(),
+  library_account: () => lib.account(),
+  library_set_key: () => lib.setKey(),
+  library_patch: (a) => lib.patch(str(a, 'key'), obj(a, 'patch')),
+  library_set_art: (a) => lib.setArt(str(a, 'key')),
+  library_find_art: (a) => lib.findArt(str(a, 'key')),
+  library_play: (a) => lib.play(str(a, 'key')),
+  library_backup: () => lib.backup(),
+  library_restore: () => lib.restore(),
+  library_delete_backup: () => lib.deleteBackup(),
+  library_sessions: () => lib.sessions(),
+  emulators_state: () => emus.state(),
+  emulators_refresh: () => emus.refresh(),
+  emulators_add: () => emus.add(),
+  emulators_remove: (a) => emus.remove(str(a, 'id')),
+  emulators_set_dirs: (a) => emus.setDirs(obj(a, 'dirs')),
+  emulators_choose: (a) => emus.choose(str(a, 'platform'), str(a, 'emulator')),
+  emulators_launch: () => emus.launch(),
   counters_save: (a) => ctr.save(obj(a, 'input')),
   counters_delete: (a) => ctr.remove(str(a, 'id')),
   counters_bump: (a) => ctr.bump(str(a, 'id'), num(a, 'times')),

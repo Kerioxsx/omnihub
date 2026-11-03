@@ -61,6 +61,31 @@ impl Hunt {
     }
 }
 
+/// Something that happens during a count ("Phase", "Wrong shiny",
+/// "Fainted"), with its own key. A phase starts a new phase count while
+/// the total keeps going (like other shiny counters).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct EventKind {
+    pub id: String,
+    pub name: String,
+    pub key: Option<KeyBind>,
+    pub phase: bool,
+}
+
+/// One logged event.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LogEntry {
+    pub at: i64,
+    /// The count when it happened.
+    pub count: i64,
+    pub name: String,
+    pub phase: bool,
+}
+
+pub const MAX_LOG: usize = 500;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Counter {
@@ -81,11 +106,104 @@ pub struct Counter {
     pub hunt: Option<Hunt>,
     pub created: i64,
     pub updated: i64,
+    /// Events with their own keys.
+    pub events: Vec<EventKind>,
+    /// What happened, newest first.
+    pub log: Vec<LogEntry>,
+    /// The count when the current phase began, and how many phases so far.
+    pub phase_base: i64,
+    pub phases: u32,
+    /// Counts to be told about.
+    pub goals: Vec<i64>,
+    /// For hunts: be told at 1×, 2×, 3×… the odds.
+    pub odds_alerts: bool,
+    /// Goals already told about (until the next find).
+    pub alerted: Vec<String>,
+    /// Earlier counts, for Undo (not kept on disk).
+    #[serde(skip)]
+    pub undo: Vec<i64>,
 }
 
 impl Default for Counter {
     fn default() -> Self {
-        Counter { id: String::new(), name: String::new(), count: 0, step: 1, image: None, key: None, minus_key: None, timer_ms: 0, timer_since: None, hunt: None, created: 0, updated: 0 }
+        Counter {
+            id: String::new(),
+            name: String::new(),
+            count: 0,
+            step: 1,
+            image: None,
+            key: None,
+            minus_key: None,
+            timer_ms: 0,
+            timer_since: None,
+            hunt: None,
+            created: 0,
+            updated: 0,
+            events: Vec::new(),
+            log: Vec::new(),
+            phase_base: 0,
+            phases: 0,
+            goals: Vec::new(),
+            odds_alerts: true,
+            alerted: Vec::new(),
+            undo: Vec::new(),
+        }
+    }
+}
+
+/// A goal reached (sent as `counters:goal`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalHit {
+    pub counter: String,
+    pub name: String,
+    pub count: i64,
+    pub message: String,
+}
+
+impl Counter {
+    /// Change the count, remembering the old one for Undo.
+    fn set(&mut self, count: i64) {
+        let count = count.max(0);
+        if count != self.count {
+            self.undo.push(self.count);
+            if self.undo.len() > 50 {
+                self.undo.remove(0);
+            }
+            self.count = count;
+        }
+        self.updated = now_ms();
+    }
+
+    fn log(&mut self, name: &str, phase: bool) {
+        self.log.insert(0, LogEntry { at: now_ms(), count: self.count, name: name.into(), phase });
+        self.log.truncate(MAX_LOG);
+        if phase {
+            self.phases += 1;
+            self.phase_base = self.count;
+        }
+        self.updated = now_ms();
+    }
+
+    /// Goals this count reaches that weren't told about yet (and marks them).
+    fn new_goals(&mut self) -> Vec<GoalHit> {
+        let mut hits = Vec::new();
+        let mut reached: Vec<(String, String)> = self.goals.iter().filter(|&&g| g > 0 && self.count >= g).map(|g| (format!("g{g}"), format!("{} reached {}", self.name, g))).collect();
+        if let (true, Some(h)) = (self.odds_alerts, &self.hunt) {
+            let odds = 1.0 / h.chance();
+            for k in 1..=10u32 {
+                if self.count as f64 >= odds * k as f64 {
+                    reached.push((format!("o{k}"), if k == 1 { format!("{}: past the odds ({} encounters)", self.name, self.count) } else { format!("{}: {k}× the odds ({} encounters)", self.name, self.count) }));
+                }
+            }
+        }
+        for (tag, message) in reached {
+            if !self.alerted.contains(&tag) {
+                self.alerted.push(tag);
+                hits.push(GoalHit { counter: self.id.clone(), name: self.name.clone(), count: self.count, message });
+            }
+        }
+        hits
     }
 }
 
@@ -118,6 +236,9 @@ pub struct CountersState {
     pub found: Vec<Found>,
     /// Keys count while on (they can be paused all at once).
     pub keys_on: bool,
+    /// The OBS page is served (on this PC only).
+    pub overlay_on: bool,
+    pub overlay_port: u16,
 }
 
 /// What the page sends to make or change a counter.
@@ -130,6 +251,9 @@ pub struct CounterInput {
     pub key: Option<KeyBind>,
     pub minus_key: Option<KeyBind>,
     pub hunt: Option<Hunt>,
+    pub events: Vec<EventKind>,
+    pub goals: Vec<i64>,
+    pub odds_alerts: bool,
 }
 
 pub struct Counters {
@@ -149,7 +273,10 @@ const MAX_IMAGE: u64 = 10 << 20;
 impl Counters {
     pub fn new(data: &Path, events: EventBus) -> Counters {
         let file = data.join("counters.json");
-        let state = std::fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(CountersState { keys_on: true, ..Default::default() });
+        let mut state: CountersState = std::fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(CountersState { keys_on: true, ..Default::default() });
+        if state.overlay_port == 0 {
+            state.overlay_port = crate::counters_overlay::DEFAULT_PORT;
+        }
         Counters { file, images: data.join("counters"), state: Mutex::new(state), events }
     }
 
@@ -176,7 +303,7 @@ impl Counters {
         if !s.keys_on {
             return Vec::new();
         }
-        s.counters.iter().flat_map(|c| [c.key.as_ref(), c.minus_key.as_ref()]).flatten().map(|k| k.vk).collect()
+        s.counters.iter().flat_map(|c| [c.key.as_ref(), c.minus_key.as_ref()].into_iter().chain(c.events.iter().map(|e| e.key.as_ref()))).flatten().map(|k| k.vk).collect()
     }
 
     pub fn save(&self, input: CounterInput) -> Result<Counter, String> {
@@ -185,11 +312,25 @@ impl Counters {
             return Err("Give the counter a name".into());
         }
         let step = input.step.clamp(1, 1_000_000);
-        if let (Some(a), Some(b)) = (&input.key, &input.minus_key) {
-            if a.vk == b.vk {
-                return Err("Use different keys to add and to take away".into());
-            }
+        let mut keys: Vec<u32> = [&input.key, &input.minus_key].into_iter().flatten().map(|k| k.vk).collect();
+        keys.extend(input.events.iter().filter_map(|e| e.key.as_ref().map(|k| k.vk)));
+        let n = keys.len();
+        keys.sort_unstable();
+        keys.dedup();
+        if keys.len() != n {
+            return Err("Each key can only do one thing on a counter".into());
         }
+        let mut events = Vec::new();
+        for e in input.events.iter().take(12) {
+            let name: String = e.name.trim().chars().take(40).collect();
+            if name.is_empty() {
+                return Err("Give each event a name".into());
+            }
+            events.push(EventKind { id: if e.id.is_empty() { crate::remote::auth::random_token(8) } else { e.id.clone() }, name, key: e.key.clone(), phase: e.phase });
+        }
+        let mut goals: Vec<i64> = input.goals.iter().copied().filter(|&g| g > 0).take(20).collect();
+        goals.sort_unstable();
+        goals.dedup();
         self.change(|s| {
             let now = now_ms();
             let c = match input.id.as_deref().and_then(|id| s.counters.iter_mut().find(|c| c.id == id)) {
@@ -204,6 +345,13 @@ impl Counters {
             c.key = input.key;
             c.minus_key = input.minus_key;
             c.hunt = input.hunt;
+            c.events = events;
+            c.goals = goals;
+            c.odds_alerts = input.odds_alerts;
+            // Goals moved: only ones already passed stay quiet.
+            let count = c.count;
+            let keep: Vec<String> = c.alerted.iter().filter(|t| t.strip_prefix('g').and_then(|g| g.parse::<i64>().ok()).is_none_or(|g| count >= g)).cloned().collect();
+            c.alerted = keep;
             c.updated = now;
             Ok(c.clone())
         })
@@ -222,21 +370,26 @@ impl Counters {
 
     /// Add `times` steps (negative takes away). The count never goes below 0.
     pub fn bump(&self, id: &str, times: i64) -> Result<Counter, String> {
-        self.change(|s| {
+        let (c, hits) = self.change(|s| {
             let c = s.counters.iter_mut().find(|c| c.id == id).ok_or("No such counter")?;
-            c.count = c.count.saturating_add(times.saturating_mul(c.step)).max(0);
-            c.updated = now_ms();
-            Ok(c.clone())
-        })
+            let next = c.count.saturating_add(times.saturating_mul(c.step));
+            c.set(next);
+            let hits = c.new_goals();
+            Ok((c.clone(), hits))
+        })?;
+        self.tell(hits);
+        Ok(c)
     }
 
     pub fn set_count(&self, id: &str, count: i64) -> Result<Counter, String> {
-        self.change(|s| {
+        let (c, hits) = self.change(|s| {
             let c = s.counters.iter_mut().find(|c| c.id == id).ok_or("No such counter")?;
-            c.count = count.max(0);
-            c.updated = now_ms();
-            Ok(c.clone())
-        })
+            c.set(count);
+            let hits = c.new_goals();
+            Ok((c.clone(), hits))
+        })?;
+        self.tell(hits);
+        Ok(c)
     }
 
     /// Start or stop a counter's timer; `reset` puts it back to zero.
@@ -252,27 +405,49 @@ impl Counters {
 
     /// A key went down: every counter on it changes. True if any did.
     pub fn on_key(&self, vk: u32) -> bool {
+        let on = |k: &Option<KeyBind>| k.as_ref().is_some_and(|k| k.vk == vk);
         let hit = {
             let s = self.state.lock();
-            s.keys_on && s.counters.iter().any(|c| c.key.as_ref().is_some_and(|k| k.vk == vk) || c.minus_key.as_ref().is_some_and(|k| k.vk == vk))
+            s.keys_on && s.counters.iter().any(|c| on(&c.key) || on(&c.minus_key) || c.events.iter().any(|e| on(&e.key)))
         };
         if !hit {
             return false;
         }
-        self.change(|s| {
-            let now = now_ms();
+        let hits = self.change(|s| {
+            let mut hits = Vec::new();
             for c in &mut s.counters {
-                if c.key.as_ref().is_some_and(|k| k.vk == vk) {
-                    c.count = c.count.saturating_add(c.step);
-                    c.updated = now;
-                } else if c.minus_key.as_ref().is_some_and(|k| k.vk == vk) {
-                    c.count = (c.count - c.step).max(0);
-                    c.updated = now;
+                if on(&c.key) {
+                    let next = c.count.saturating_add(c.step);
+                    c.set(next);
+                } else if on(&c.minus_key) {
+                    let next = c.count - c.step;
+                    c.set(next);
                 }
+                if let Some(e) = c.events.iter().find(|e| on(&e.key)).cloned() {
+                    c.log(&e.name, e.phase);
+                }
+                hits.extend(c.new_goals());
             }
+            Ok(hits)
+        });
+        match hits {
+            Ok(h) => {
+                self.tell(h);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
+    pub fn set_overlay(&self, on: bool, port: u16) -> Result<(), String> {
+        if port < 1024 {
+            return Err("Use a port from 1024 up".into());
+        }
+        self.change(|s| {
+            s.overlay_on = on;
+            s.overlay_port = port;
             Ok(())
         })
-        .is_ok()
     }
 
     pub fn set_keys_on(&self, on: bool) -> Result<(), String> {
@@ -298,16 +473,62 @@ impl Counters {
                 at: now,
                 odds,
             };
+            c.log("Found", false);
             if reset {
-                c.count = 0;
+                c.set(0);
                 c.timer_ms = 0;
                 c.timer_since = c.timer_since.map(|_| now);
+                c.phase_base = 0;
+                c.phases = 0;
+                c.alerted.clear();
             }
             c.updated = now;
             s.found.insert(0, f.clone());
             s.found.truncate(500);
             Ok(f)
         })
+    }
+
+    fn tell(&self, hits: Vec<GoalHit>) {
+        for h in hits {
+            self.events.emit("counters:goal", &h);
+        }
+    }
+
+    /// Log one of a counter's events (its button or key).
+    pub fn event(&self, id: &str, event: &str) -> Result<Counter, String> {
+        self.change(|s| {
+            let c = s.counters.iter_mut().find(|c| c.id == id).ok_or("No such counter")?;
+            let e = c.events.iter().find(|e| e.id == event).cloned().ok_or("No such event")?;
+            c.log(&e.name, e.phase);
+            Ok(c.clone())
+        })
+    }
+
+    /// Put back the count before the last change.
+    pub fn undo(&self, id: &str) -> Result<Counter, String> {
+        self.change(|s| {
+            let c = s.counters.iter_mut().find(|c| c.id == id).ok_or("No such counter")?;
+            let prev = c.undo.pop().ok_or("Nothing to undo")?;
+            c.count = prev;
+            c.updated = now_ms();
+            Ok(c.clone())
+        })
+    }
+
+    /// Clear a counter's event log.
+    pub fn clear_log(&self, id: &str) -> Result<Counter, String> {
+        self.change(|s| {
+            let c = s.counters.iter_mut().find(|c| c.id == id).ok_or("No such counter")?;
+            c.log.clear();
+            c.phases = 0;
+            c.phase_base = 0;
+            Ok(c.clone())
+        })
+    }
+
+    pub fn counter(&self, id: &str) -> Option<Counter> {
+        self.state.lock().counters.iter().find(|c| c.id == id).cloned()
     }
 
     pub fn forget_found(&self, id: &str) -> Result<(), String> {
@@ -401,6 +622,50 @@ mod tests {
         assert!(!again.state().keys_on);
         again.delete(&a.id).unwrap();
         assert!(again.state().counters.is_empty());
+    }
+
+    #[test]
+    fn events_phases_goals_and_undo() {
+        let dir = tempfile::tempdir().unwrap();
+        let bus = EventBus::new();
+        let mut rx = bus.subscribe();
+        let c = Counters::new(dir.path(), bus);
+        let phase = EventKind { name: "Wrong shiny".into(), key: Some(KeyBind { vk: 0x50, label: "P".into() }), phase: true, ..Default::default() };
+        let faint = EventKind { name: "Fainted".into(), ..Default::default() };
+        assert!(c.save(CounterInput { key: Some(KeyBind { vk: 0x50, label: "P".into() }), events: vec![phase.clone()], ..input("x") }).is_err(), "one key, one job");
+        let a = c
+            .save(CounterInput { key: Some(KeyBind { vk: 0x20, label: "Space".into() }), events: vec![phase, faint], goals: vec![5, 0, 5], hunt: Some(Hunt { custom_odds: Some(4), ..Default::default() }), odds_alerts: true, ..input("Hunt") })
+            .unwrap();
+        assert_eq!(a.goals, vec![5]);
+        assert!(a.events.iter().all(|e| !e.id.is_empty()));
+        assert!(c.watched_keys().contains(&0x50));
+        for _ in 0..3 {
+            c.on_key(0x20);
+        }
+        c.on_key(0x50); // phase at 3
+        let s = c.state().counters[0].clone();
+        assert_eq!((s.count, s.phases, s.phase_base, s.log[0].name.as_str(), s.log[0].count), (3, 1, 3, "Wrong shiny", 3));
+        c.event(&a.id, &s.events[1].id).unwrap();
+        assert_eq!(c.state().counters[0].log[0].name, "Fainted");
+        // Goals and odds alerts: 1/4 odds, goal 5.
+        c.bump(&a.id, 2).unwrap();
+        let mut told = Vec::new();
+        while let Ok(ev) = rx.try_recv() {
+            if ev.topic == "counters:goal" {
+                told.push(ev.payload["message"].as_str().unwrap().to_string());
+            }
+        }
+        assert!(told.iter().any(|m| m.contains("past the odds")), "{told:?}");
+        assert!(told.iter().any(|m| m.contains("reached 5")), "{told:?}");
+        c.bump(&a.id, 0).unwrap();
+        assert!(!std::iter::from_fn(|| rx.try_recv().ok()).any(|e| e.topic == "counters:goal" && e.payload["message"].as_str().unwrap().contains("reached 5")), "told once");
+        // Undo goes back one change at a time.
+        assert_eq!(c.undo(&a.id).unwrap().count, 3);
+        assert_eq!(c.undo(&a.id).unwrap().count, 2);
+        // A find starts the phases again.
+        c.found(&a.id, true).unwrap();
+        let s = c.state().counters[0].clone();
+        assert_eq!((s.count, s.phases, s.log[0].name.as_str()), (0, 0, "Found"));
     }
 
     #[test]

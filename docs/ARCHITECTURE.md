@@ -595,3 +595,32 @@ has Capri speak through her local bridge (`companion::say`).
   (gender) while giving the asked nature and shininess. `gen3.json` is
   built by `scripts/gen3_data.py`.
 
+## Game library and emulators (`games/`)
+
+- `steam.rs`: Steam's VDF files (users, play time, library folders), the
+  art (local `librarycache` and `grid` first, else Steam's CDN), local
+  screenshots and soundtracks, and the Web API (players online without a
+  key; achievements, friends, wishlist and prices with the user's key).
+- `shelf.rs`: what the user adds to a game (status, favourite, notes, art,
+  save folders, daily limit), sessions, save backups and the encrypted
+  keys, in `library.json`; file tokens for the `gamemedia://` scheme
+  (`src-tauri/src/gamemedia.rs`, with range requests for audio).
+- `deck.rs`: the library the pages show (Steam + the app's own games), the
+  game page, and the tracking thread: it sees library games start and
+  stop, records sessions, sends `games:recap`, backs up saves, enforces
+  daily limits (`games:limit`) and checks wishlist sales every six hours
+  (`games:sale`).
+- `emulators.rs`: known emulators in common folders, ROMs by extension,
+  libretro-thumbnails box art, and the launch command (RetroArch with the
+  right core).
+
+## Counter events, goals and the overlay
+
+- Counters keep events (each with a key and an optional phase), a log of
+  the last 500, goals and odds alerts (`counters:goal`), and one step of
+  undo.
+- `counters_overlay.rs`: the OBS page server on 127.0.0.1, started and
+  stopped by `AppCore::apply_counters_overlay`.
+- `system/keys.rs` re-installs the hook every 15 seconds (Windows drops
+  slow hooks silently), forgets a held key after 600 ms without repeats,
+  and polls XInput pads for buttons (codes `0x1000 + n`).

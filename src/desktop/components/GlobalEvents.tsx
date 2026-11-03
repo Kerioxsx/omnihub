@@ -30,6 +30,9 @@ export function GlobalEvents() {
     }, () => undefined);
   }, []);
   useEvent<string[]>('send:files', () => void api.app.takePendingSend().then((paths) => paths.length && useSend.getState().openFiles(paths), () => undefined));
+  useEvent<{ message: string }>('counters:goal', (p) => toast.success('Counter goal', p.message));
+  useEvent<{ name: string; discount: number; price: string | null }>('games:sale', (p) => toast.info(`${p.name} is ${p.discount}% off`, p.price ? `Now ${p.price} on Steam` : 'On your Steam wishlist'));
+  useEvent<{ name: string; left: number; closing: boolean }>('games:limit', (p) => (p.closing ? toast.info(`Time's up for ${p.name}`, 'Today’s game time is used, so it was closed.') : toast.info(`${p.left} min left`, `${p.name} closes when today’s time is up.`)));
   useEvent<{ device: string; chars: number }>('clipboard:from-phone', (p) => toast.success(`Text from ${p.device} copied`, `${p.chars} characters are on the clipboard — paste with Ctrl+V.`));
 
   // storage

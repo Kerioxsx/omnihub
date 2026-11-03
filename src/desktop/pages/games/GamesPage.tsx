@@ -4,7 +4,7 @@
 import { formatRelative } from '@shared/format';
 import type { GameKind, GameProfile, GameSession, GameStep, InstalledGame } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, CircleSlash, Clapperboard, Gamepad2, Gauge, HardDriveDownload, LoaderCircle, Plus, Rocket, Square, XCircle, Zap } from 'lucide-react';
+import { CheckCircle2, CircleSlash, Clapperboard, Cpu, Gamepad2, Library, Gauge, HardDriveDownload, LoaderCircle, Plus, Rocket, Square, XCircle, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -18,6 +18,8 @@ import { useEvent } from '../../lib/hooks';
 import { navigate, useRoute } from '../../lib/router';
 import { toast } from '../../state/toasts';
 import { ClipsTab } from './ClipsTab';
+import { EmulatorsTab } from './library/EmulatorsTab';
+import { LibraryTab } from './library/LibraryTab';
 import { LiveFps, MODE_LABEL, useFpsLive } from './FpsCard';
 import { PcOptimize } from './PcOptimize';
 import { ProfileEditor } from './ProfileEditor';
@@ -42,7 +44,7 @@ export function GamesPage() {
   const [session, setSession] = useState<GameSession | null>(null);
   const [installed, setInstalled] = useState<InstalledGame[] | null>(null);
   const wantTab = route.params.get('tab');
-  const tab = wantTab === 'pc' ? 'pc' : wantTab === 'clips' ? 'clips' : 'games';
+  const tab = wantTab === 'pc' ? 'pc' : wantTab === 'clips' ? 'clips' : wantTab === 'games' ? 'games' : wantTab === 'emulators' ? 'emulators' : 'library';
   const selected = route.params.get('id') ?? profiles?.[0]?.id ?? null;
 
   const loadInstalled = () => void api.games.library().then(setInstalled, () => setInstalled([]));
@@ -104,7 +106,7 @@ export function GamesPage() {
   return (
     <Page
       title="Games"
-      subtitle="Boost the PC for a game, start it, and get everything back when you're done."
+      subtitle="Your library, boosts, emulators, clips and PC tuning."
       actions={
         <Button icon={Plus} onClick={addMenu}>
           Add game
@@ -114,16 +116,22 @@ export function GamesPage() {
       <Tabs
         className="-mt-1 mb-5"
         value={tab}
-        onChange={(t) => navigate('games', t === 'games' ? {} : { tab: t })}
+        onChange={(t) => navigate('games', t === 'library' ? {} : { tab: t })}
         items={[
-          { value: 'games', label: 'Games', icon: Gamepad2 },
+          { value: 'library', label: 'Library', icon: Library },
+          { value: 'games', label: 'Boost profiles', icon: Gamepad2 },
+          { value: 'emulators', label: 'Emulators', icon: Cpu },
           { value: 'clips', label: 'Clips & Capri', icon: Clapperboard },
           { value: 'pc', label: 'Optimize PC', icon: Gauge },
         ]}
       />
       <AnimatePresence>{session && <SessionCard key="session" session={session} onDismiss={() => setSession(null)} />}</AnimatePresence>
 
-      {tab === 'pc' ? (
+      {tab === 'library' ? (
+        <LibraryTab />
+      ) : tab === 'emulators' ? (
+        <EmulatorsTab />
+      ) : tab === 'pc' ? (
         <PcOptimize />
       ) : tab === 'clips' ? (
         <ClipsTab />

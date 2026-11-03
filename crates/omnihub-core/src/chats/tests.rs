@@ -361,7 +361,8 @@ fn codex_sessions_list_read_continue_and_rate_limits() {
 
     let u = hub.usage_report(usage::Tokens::default()).codex;
     assert!(u.found && u.plan.as_deref() == Some("plus"));
-    assert_eq!((u.period.today.input, u.period.today.cache_read, u.period.today.output), (600, 900, 260), "each report counted once");
+    // The week (last 7 days) holds the reports even just after midnight.
+    assert_eq!((u.period.week.input, u.period.week.cache_read, u.period.week.output), (600, 900, 260), "each report counted once");
     let names: Vec<(String, Option<f64>)> = u.limits.iter().map(|l| (l.name.clone(), l.used_percent)).collect();
     assert_eq!(names, vec![("5-hour limit".into(), Some(42.0)), ("Weekly limit".into(), Some(12.5))]);
 

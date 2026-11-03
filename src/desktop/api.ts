@@ -197,6 +197,40 @@ export const api = {
     image: (id: string) => call<string | null>('counters_image', { id }),
     keyName: (vk: number) => call<string>('key_name', { vk }),
     popout: (id: string) => call<void>('counters_popout', { id }),
+    event: (id: string, event: string) => call<T.Counter>('counters_event', { id, event }),
+    undo: (id: string) => call<T.Counter>('counters_undo', { id }),
+    clearLog: (id: string) => call<T.Counter>('counters_clear_log', { id }),
+    /** The OBS page at http://127.0.0.1:<port>/counter/<id> (this PC only). */
+    overlay: (on: boolean, port: number) => call<void>('counters_overlay', { on, port }),
+  },
+
+  /** The game library (Steam Deck style) and the emulator hub. */
+  library: {
+    games: () => call<T.LibraryGame[]>('library_games'),
+    detail: (key: string) => call<T.GameDetail>('library_detail', { key }),
+    achievements: (key: string) => call<T.SteamAchievement[]>('library_achievements', { key }),
+    friends: () => call<T.SteamFriend[]>('library_friends'),
+    wishlist: () => call<T.WishItem[]>('library_wishlist'),
+    account: () => call<T.SteamAccount>('library_account'),
+    /** Your own Steam Web API / SteamGridDB key, kept encrypted on this PC ("" removes it). */
+    setKey: (which: 'steam' | 'sgdb', key: string) => call<void>('library_set_key', { which, key }),
+    patch: (key: string, patch: T.ShelfPatch) => call<T.ShelfEntry>('library_patch', { key, patch }),
+    setArt: (key: string, kind: 'cover' | 'hero' | 'logo', path: string | null) => call<T.ShelfEntry>('library_set_art', { key, kind, path }),
+    findArt: (key: string) => call<T.ShelfEntry>('library_find_art', { key }),
+    play: (key: string) => call<void>('library_play', { key }),
+    backup: (key: string) => call<T.SaveBackup>('library_backup', { key }),
+    restore: (key: string, id: string) => call<void>('library_restore', { key, id }),
+    deleteBackup: (key: string, id: string) => call<void>('library_delete_backup', { key, id }),
+    sessions: (limit = 500) => call<T.SessionRec[]>('library_sessions', { limit }),
+  },
+  emulators: {
+    state: () => call<T.EmuState>('emulators_state'),
+    refresh: () => call<T.EmuState>('emulators_refresh'),
+    add: (exe: string, platforms: string[] = []) => call<T.EmuState>('emulators_add', { exe, platforms }),
+    remove: (id: string) => call<T.EmuState>('emulators_remove', { id }),
+    setDirs: (dirs: string[]) => call<T.EmuState>('emulators_set_dirs', { dirs }),
+    choose: (platform: string, emulator: string) => call<T.EmuState>('emulators_choose', { platform, emulator }),
+    launch: (rom: string) => call<void>('emulators_launch', { rom }),
   },
 
   /** The auto clicker (its start/stop key works from anywhere once it was opened). */

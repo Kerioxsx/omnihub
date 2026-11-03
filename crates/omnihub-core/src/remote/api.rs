@@ -88,6 +88,10 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/sound/mic", post(sound_mic))
         .route("/api/displays", get(displays_get))
         .route("/api/displays/set", post(displays_set))
+        .route("/api/counters", get(counters_list))
+        .route("/api/counters/{id}/bump", post(counters_bump))
+        .route("/api/counters/{id}/event", post(counters_event))
+        .route("/api/counters/{id}/timer", post(counters_timer))
         .route("/api/games", get(games_list))
         .route("/api/games/stop", post(games_stop))
         .route("/api/games/ping", post(games_ping))
@@ -234,6 +238,7 @@ struct Features {
     chats: bool,
     chat_agents: bool,
     servers: bool,
+    counters: bool,
 }
 
 fn features(core: &AppCore, tls: bool) -> Features {
@@ -253,6 +258,7 @@ fn features(core: &AppCore, tls: bool) -> Features {
         chats: s.chats.allow_phone,
         chat_agents: s.chats.allow_phone && s.chats.phone_agents,
         servers: s.remote.allow_servers,
+        counters: true,
     }
 }
 
@@ -1231,6 +1237,48 @@ fn games_allowed(core: &AppCore) -> ApiResult<()> {
     } else {
         Err(ApiError::forbidden("launching apps from the phone is turned off"))
     }
+}
+
+// ---------- counters (tap the phone to count) ----------
+
+async fn counters_list(State(core): State<Ctx>) -> Json<serde_json::Value> {
+    let now = chrono::Utc::now().timestamp_millis();
+    let list: Vec<_> = core
+        .counters
+        .state()
+        .counters
+        .iter()
+        .map(|c| {
+            let mut j = crate::counters_overlay::counter_json(c, now);
+            j["id"] = json!(c.id);
+            j["events"] = json!(c.events.iter().map(|e| json!({ "id": e.id, "name": e.name, "phase": e.phase })).collect::<Vec<_>>());
+            j
+        })
+        .collect();
+    Json(json!({ "counters": list }))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct BumpBody {
+    times: i64,
+    event: String,
+    run: bool,
+}
+
+async fn counters_bump(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Json(b): Json<BumpBody>) -> ApiResult<Json<serde_json::Value>> {
+    let c = core.counters.bump(&id, b.times.clamp(-100, 100)).map_err(ApiError::bad)?;
+    Ok(Json(json!({ "count": c.count })))
+}
+
+async fn counters_event(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Json(b): Json<BumpBody>) -> ApiResult<Json<serde_json::Value>> {
+    let c = core.counters.event(&id, &b.event).map_err(ApiError::bad)?;
+    Ok(Json(json!({ "count": c.count, "phases": c.phases })))
+}
+
+async fn counters_timer(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Json(b): Json<BumpBody>) -> ApiResult<Json<serde_json::Value>> {
+    let c = core.counters.timer(&id, b.run, false).map_err(ApiError::bad)?;
+    Ok(Json(json!({ "running": c.timer_since.is_some() })))
 }
 
 async fn games_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {

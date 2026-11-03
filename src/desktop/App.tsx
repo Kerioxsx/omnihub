@@ -6,6 +6,7 @@ import { BrowserPairDialog } from './components/BrowserPairDialog';
 import { DropOverlay } from './components/DropOverlay';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalEvents, ThemeController } from './components/GlobalEvents';
+import { RecapModal } from './pages/games/library/RecapModal';
 import { Logo } from './components/Logo';
 import { PowerBanner } from './components/PowerBanner';
 import { isWindowFullscreen, setWindowFullscreen, usePlayer } from './lib/nowPlaying';
@@ -155,6 +156,7 @@ export function App() {
     <MotionConfig reducedMotion={settings.general.reducedMotion ? 'always' : 'user'}>
       <ThemeController />
       <GlobalEvents />
+      <RecapModal />
       <Backdrop />
       <div className="relative z-10 flex h-full">
         <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />

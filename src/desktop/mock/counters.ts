@@ -5,11 +5,15 @@ import type { ClickConfig, ClickStatus, Counter, CounterInput, CountersState, Fo
 import { emit } from './bus';
 
 const now = () => Date.now();
+const extra = (): Pick<Counter, 'events' | 'log' | 'phaseBase' | 'phases' | 'goals' | 'oddsAlerts' | 'alerted'> => ({ events: [], log: [], phaseBase: 0, phases: 0, goals: [], oddsAlerts: true, alerted: [] });
+const undo: Record<string, number[]> = {};
 let seq = 1;
 const id = () => `m${(seq++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 const state: CountersState = {
   keysOn: true,
+  overlayOn: false,
+  overlayPort: 47823,
   counters: [
     {
       id: 'demo-hunt',
@@ -24,8 +28,17 @@ const state: CountersState = {
       hunt: { species: 6, name: 'Charizard', generation: 9, masuda: false, charm: true, customOdds: null, method: 'Soft resets' },
       created: now() - 86400_000,
       updated: now(),
+      ...extra(),
+      events: [
+        { id: 'ev-phase', name: 'Wrong shiny', key: { vk: 0x50, label: 'P' }, phase: true },
+        { id: 'ev-faint', name: 'Fainted', key: null, phase: false },
+      ],
+      log: [{ at: now() - 3600_000, count: 2210, name: 'Wrong shiny', phase: true }],
+      phaseBase: 2210,
+      phases: 1,
+      goals: [5000],
     },
-    { id: 'demo-deaths', name: 'Elden Ring deaths', count: 214, step: 1, image: null, key: { vk: 0x75, label: 'F6' }, minusKey: { vk: 0x74, label: 'F5' }, timerMs: 0, timerSince: null, hunt: null, created: now() - 3 * 86400_000, updated: now() },
+    { id: 'demo-deaths', name: 'Elden Ring deaths', count: 214, step: 1, image: null, key: { vk: 0x75, label: 'F6' }, minusKey: { vk: 0x74, label: 'F5' }, timerMs: 0, timerSince: null, hunt: null, created: now() - 3 * 86400_000, updated: now(), ...extra() },
   ],
   found: [{ id: 'f1', counter: 'demo-hunt', name: 'Ralts', species: 280, count: 1840, timerMs: 2 * 3600_000, at: now() - 5 * 86400_000, odds: '1/1365 · Masuda method' }],
 };
@@ -45,10 +58,10 @@ export const counters = {
     if (!name) throw new Error('Give the counter a name');
     let c = input.id ? state.counters.find((x) => x.id === input.id) : undefined;
     if (!c) {
-      c = { id: id(), name, count: 0, step: 1, image: null, key: null, minusKey: null, timerMs: 0, timerSince: null, hunt: null, created: now(), updated: now() };
+      c = { id: id(), name, count: 0, step: 1, image: null, key: null, minusKey: null, timerMs: 0, timerSince: null, hunt: null, created: now(), updated: now(), ...extra() };
       state.counters.push(c);
     }
-    Object.assign(c, { name, step: Math.max(1, input.step || 1), key: input.key, minusKey: input.minusKey, hunt: input.hunt, updated: now() });
+    Object.assign(c, { name, step: Math.max(1, input.step || 1), key: input.key, minusKey: input.minusKey, hunt: input.hunt, events: (input.events ?? []).map((e) => ({ ...e, id: e.id || id() })), goals: input.goals ?? [], oddsAlerts: input.oddsAlerts ?? true, updated: now() });
     changed();
     return structuredClone(c);
   },
@@ -58,7 +71,12 @@ export const counters = {
   },
   bump(cid: string, times: number): Counter {
     const c = find(cid);
+    (undo[cid] ??= []).push(c.count);
     c.count = Math.max(0, c.count + times * c.step);
+    for (const g of c.goals) if (c.count >= g && !c.alerted.includes(`g${g}`)) {
+      c.alerted.push(`g${g}`);
+      emit('counters:goal', { counter: c.id, name: c.name, count: c.count, message: `${c.name} reached ${g}` });
+    }
     changed();
     return structuredClone(c);
   },
@@ -91,6 +109,36 @@ export const counters = {
     changed();
     return f;
   },
+  event(cid: string, eid: string): Counter {
+    const c = find(cid);
+    const e = c.events.find((x) => x.id === eid);
+    if (!e) throw new Error('No such event');
+    c.log.unshift({ at: now(), count: c.count, name: e.name, phase: e.phase });
+    if (e.phase) {
+      c.phases += 1;
+      c.phaseBase = c.count;
+    }
+    changed();
+    return structuredClone(c);
+  },
+  undo(cid: string): Counter {
+    const c = find(cid);
+    const prev = undo[cid]?.pop();
+    if (prev === undefined) throw new Error('Nothing to undo');
+    c.count = prev;
+    changed();
+    return structuredClone(c);
+  },
+  clearLog(cid: string): Counter {
+    const c = find(cid);
+    Object.assign(c, { log: [], phases: 0, phaseBase: 0 });
+    changed();
+    return structuredClone(c);
+  },
+  overlay(on: boolean, port: number) {
+    Object.assign(state, { overlayOn: on, overlayPort: port });
+    changed();
+  },
   forgetFound(fid: string) {
     state.found = state.found.filter((f) => f.id !== fid);
     changed();
@@ -107,9 +155,13 @@ export const counters = {
     if (!state.keysOn) return;
     let hit = false;
     for (const c of state.counters) {
+      const ev = c.events.find((e) => e.key?.vk === vk);
       if (c.key?.vk === vk) c.count += c.step;
       else if (c.minusKey?.vk === vk) c.count = Math.max(0, c.count - c.step);
-      else continue;
+      else if (ev) {
+        c.log.unshift({ at: now(), count: c.count, name: ev.name, phase: ev.phase });
+        if (ev.phase) Object.assign(c, { phases: c.phases + 1, phaseBase: c.count });
+      } else continue;
       hit = true;
     }
     if (hit) changed();

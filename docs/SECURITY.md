@@ -872,3 +872,31 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   pret decompilation); no game code or pictures ship with OmniHub. Pokémon
   pictures load from PokeAPI's sprite collection on GitHub when shown.
 
+## Game library and emulators
+
+- Steam data is read from Steam's own files on this PC (`loginusers.vdf`,
+  `localconfig.vdf`, library folders, the art cache and screenshots); it is
+  only read. Art and soundtrack files on disk are shown through the
+  `gamemedia://` scheme by a random-looking token per file that OmniHub
+  handed out itself; any other path is refused.
+- Players online comes from Steam's public API with no key. Achievements,
+  friends and the wishlist need the user's own Steam Web API key, and art
+  search their own SteamGridDB key; both are stored encrypted with DPAPI
+  (bound to this Windows user) and only ever sent to those services. They
+  never reach the phone or the logs.
+- Session tracking looks at process paths only (no window contents, no
+  input) to know when a library game runs. A daily limit closes the game's
+  process when time is up, after a warning.
+- Save backups zip the folders the user picked into the app's data folder
+  (the newest 10 per game); restoring first backs up what is there now.
+- Emulators are started with the ROM path as an argument (no shell).
+
+## Counter overlay and controller keys
+
+- The OBS overlay is a small HTTP server bound to 127.0.0.1 only (port
+  47823 unless changed), off until turned on. It serves read-only counter
+  pages; it can't change anything.
+- Controller buttons are read with XInput (button state only) while some
+  counter uses one; like the keyboard hook, nothing is stored or sent.
+- The phone's counter routes need the paired phone's token like every
+  other phone route.

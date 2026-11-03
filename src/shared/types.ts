@@ -3228,6 +3228,35 @@ export interface Counter {
   hunt: Hunt | null;
   created: number;
   updated: number;
+  events: EventKind[];
+  log: LogEntry[];
+  phaseBase: number;
+  phases: number;
+  goals: number[];
+  oddsAlerts: boolean;
+  alerted: string[];
+}
+
+/** Something that happens during a count, with its own key; a phase starts a new phase count. */
+export interface EventKind {
+  id: string;
+  name: string;
+  key: KeyBind | null;
+  phase: boolean;
+}
+
+export interface LogEntry {
+  at: number;
+  count: number;
+  name: string;
+  phase: boolean;
+}
+
+export interface GoalHit {
+  counter: string;
+  name: string;
+  count: number;
+  message: string;
 }
 
 export interface Found {
@@ -3245,6 +3274,8 @@ export interface CountersState {
   counters: Counter[];
   found: Found[];
   keysOn: boolean;
+  overlayOn: boolean;
+  overlayPort: number;
 }
 
 export interface CounterInput {
@@ -3254,6 +3285,9 @@ export interface CounterInput {
   key: KeyBind | null;
   minusKey: KeyBind | null;
   hunt: Hunt | null;
+  events: EventKind[];
+  goals: number[];
+  oddsAlerts: boolean;
 }
 
 export interface ClickConfig {
@@ -3349,4 +3383,151 @@ export interface PkmTables {
   natures: string[];
   balls: string[];
   abilities: [string, string][];
+}
+
+// ---------- Game library ----------
+
+export interface GameArt {
+  cover: string | null;
+  hero: string | null;
+  logo: string | null;
+  header: string | null;
+}
+
+export type ShelfStatus = '' | 'playing' | 'backlog' | 'finished' | 'dropped';
+
+export interface LibraryGame {
+  key: string;
+  name: string;
+  source: string;
+  app: number | null;
+  process: string;
+  art: GameArt;
+  status: ShelfStatus;
+  favorite: boolean;
+  minutes: number;
+  lastPlayed: number;
+  profileId: string | null;
+  canLaunch: boolean;
+}
+
+export interface ShelfEntry {
+  status: ShelfStatus;
+  favorite: boolean;
+  notes: string;
+  cover: string | null;
+  hero: string | null;
+  logo: string | null;
+  saveDirs: string[];
+  autoBackup: boolean;
+  dailyLimit: number;
+}
+
+export type ShelfPatch = Partial<Pick<ShelfEntry, 'status' | 'favorite' | 'notes' | 'autoBackup' | 'saveDirs' | 'dailyLimit'>>;
+
+export interface GameMedia {
+  src: string;
+  name: string;
+  at: number;
+}
+
+export interface SessionRec {
+  key: string;
+  name: string;
+  start: number;
+  end: number;
+}
+
+export interface SaveBackup {
+  id: string;
+  at: number;
+  bytes: number;
+  files: number;
+}
+
+export interface GameDetail {
+  key: string;
+  players: number | null;
+  screenshots: GameMedia[];
+  soundtrack: GameMedia[];
+  sessions: SessionRec[];
+  entry: ShelfEntry;
+  suggestedDirs: string[];
+  backups: SaveBackup[];
+  minutesToday: number;
+  installDir: string | null;
+}
+
+export interface GameRecap {
+  key: string;
+  name: string;
+  start: number;
+  end: number;
+  minutes: number;
+  avgFps: number | null;
+  lowFps: number | null;
+  clips: GameMedia[];
+  screenshots: GameMedia[];
+  backup: string | null;
+  art: GameArt;
+}
+
+export interface SteamAchievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  iconGray: string;
+  unlocked: boolean;
+  unlockedAt: number;
+  percent: number;
+  hidden: boolean;
+}
+
+export interface SteamFriend {
+  steamid: string;
+  name: string;
+  avatar: string;
+  state: number;
+  game: string | null;
+  gameId: number | null;
+}
+
+export interface WishItem {
+  app: number;
+  name: string;
+  discount: number;
+  price: string | null;
+  original: string | null;
+}
+
+export interface SteamAccount {
+  user: { steamid: string; accountId: number; name: string } | null;
+  hasKey: boolean;
+  hasSgdb: boolean;
+}
+
+export interface Emulator {
+  id: string;
+  name: string;
+  exe: string;
+  platforms: string[];
+  args: string;
+  found: boolean;
+}
+
+export interface Rom {
+  id: string;
+  path: string;
+  name: string;
+  platform: string;
+  cover: string | null;
+  save: string | null;
+}
+
+export interface EmuState {
+  emulators: Emulator[];
+  romDirs: string[];
+  chosen: Record<string, string>;
+  roms: Rom[];
 }

@@ -71,6 +71,11 @@ pub struct AppCore {
     /// The Pokémon save being edited.
     pub pkm: crate::pkm::Editor,
     pub counters: crate::counters::Counters,
+    /// The game library's notes, sessions and save backups.
+    pub shelf: crate::games::shelf::Shelf,
+    pub emulators: crate::games::emulators::Emulators,
+    /// The OBS page for counters, while on.
+    pub counters_overlay: parking_lot::Mutex<Option<crate::counters_overlay::OverlayServer>>,
     pub autoclick: crate::autoclick::AutoClicker,
     /// Compress, convert, cut and take the sound out of videos (FFmpeg).
     pub video: crate::videotools::VideoTools,
@@ -150,6 +155,9 @@ impl AppCore {
             focus: crate::focus::Focus::new(db.clone()),
             pkm: crate::pkm::Editor::default(),
             counters: crate::counters::Counters::new(&paths.data, events.clone()),
+            shelf: crate::games::shelf::Shelf::new(&paths.data, events.clone()),
+            emulators: crate::games::emulators::Emulators::new(&paths.data),
+            counters_overlay: parking_lot::Mutex::new(None),
             autoclick: crate::autoclick::AutoClicker::new(events.clone()),
             video,
             downloads,
@@ -166,6 +174,22 @@ impl AppCore {
         core.media.set_lrc_folder(s.media.lrc_folder.as_ref().map(std::path::PathBuf::from));
         core.media.set_hires_art(s.media.hires_art);
         Ok(core)
+    }
+
+    /// Serve (or stop) the counters' OBS page as the counters' settings say.
+    pub fn apply_counters_overlay(self: &Arc<Self>) -> Result<(), String> {
+        let s = self.counters.state();
+        let mut cur = self.counters_overlay.lock();
+        if !s.overlay_on {
+            *cur = None;
+            return Ok(());
+        }
+        if cur.as_ref().is_some_and(|o| o.port == s.overlay_port) {
+            return Ok(());
+        }
+        *cur = None;
+        *cur = Some(crate::counters_overlay::start(s.overlay_port, Arc::downgrade(self))?);
+        Ok(())
     }
 
     /// Watch the keys counters and the auto clicker need (and no others).
@@ -190,6 +214,10 @@ impl AppCore {
             }
         });
         self.refresh_keys();
+        self.start_game_tracking();
+        if let Err(e) = self.apply_counters_overlay() {
+            tracing::warn!("counters overlay: {e}");
+        }
         let weak = Arc::downgrade(self);
         std::thread::Builder::new()
             .name("vault-timer".into())

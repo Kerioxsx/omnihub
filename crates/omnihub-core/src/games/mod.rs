@@ -7,6 +7,8 @@
 //! connection and removes the things on this PC that add lag and spikes.
 
 pub mod configs;
+pub mod deck;
+pub mod emulators;
 pub mod fps;
 pub mod ini;
 pub mod junk;
@@ -15,7 +17,9 @@ pub mod nvidia;
 pub mod pc;
 pub mod ping;
 pub mod reshade;
+pub mod steam;
 pub mod roblox;
+pub mod shelf;
 pub mod tweaks;
 
 use std::path::{Path, PathBuf};
@@ -356,7 +360,7 @@ fn link_app(target: &str) -> Option<(&str, &'static str)> {
     Some((scheme, app))
 }
 
-fn start(target: &str, args: &str) -> std::io::Result<()> {
+pub(crate) fn start(target: &str, args: &str) -> std::io::Result<()> {
     if let Some((scheme, app)) = link_app(target) {
         if !tweaks::link_handler_installed(scheme) {
             return Err(std::io::Error::other(format!("Nothing on this PC opens {scheme}: links. Install {app} (or open it once), then press Play again.")));

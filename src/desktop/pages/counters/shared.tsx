@@ -61,11 +61,31 @@ export function CounterPicture({ counter, className }: { counter: Counter; class
   return <img src={src} alt="" draggable={false} onError={() => setFailed(true)} className={cx('object-contain', !own && '[image-rendering:pixelated]', className)} />;
 }
 
-/** Pick a key: click, then press it. */
+/** Controller buttons are PAD + n (the order browsers and XInput share). */
+export const PAD = 0x1000;
+export const PAD_NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Back', 'Start', 'Left stick', 'Right stick', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right'];
+
+/** Pick a key or controller button: click, then press it. */
 export function KeyPicker({ value, onChange, label }: { value: KeyBind | null; onChange: (k: KeyBind | null) => void; label: string }) {
   const [listening, setListening] = useState(false);
   useEffect(() => {
     if (!listening) return;
+    // Controller buttons too (standard gamepad order, as the PC reads them).
+    let frame = 0;
+    const before = new Set<string>();
+    for (const pad of navigator.getGamepads?.() ?? []) pad?.buttons.forEach((b, i) => b.pressed && before.add(`${pad.index}:${i}`));
+    const poll = () => {
+      for (const pad of navigator.getGamepads?.() ?? []) {
+        const i = pad?.buttons.findIndex((b, n) => n < 16 && b.pressed && !before.has(`${pad.index}:${n}`)) ?? -1;
+        if (pad && i >= 0) {
+          setListening(false);
+          onChange({ vk: PAD + i, label: `Pad ${PAD_NAMES[i]}` });
+          return;
+        }
+      }
+      frame = requestAnimationFrame(poll);
+    };
+    frame = requestAnimationFrame(poll);
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -75,7 +95,10 @@ export function KeyPicker({ value, onChange, label }: { value: KeyBind | null; o
       void api.counters.keyName(vk).then((name) => onChange({ vk, label: name }));
     };
     window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('keydown', onKey, true);
+    };
   }, [listening, onChange]);
   return (
     <div className="flex items-center gap-1.5">
@@ -86,7 +109,7 @@ export function KeyPicker({ value, onChange, label }: { value: KeyBind | null; o
         className={cx('inline-flex h-9 min-w-[120px] items-center gap-2 rounded-lg border px-3 text-[13px] transition-colors', listening ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-surface hover:border-line-strong')}
       >
         <Keyboard size={14} aria-hidden />
-        {listening ? 'Press a key…' : (value?.label ?? 'No key')}
+        {listening ? 'Press a key or button…' : (value?.label ?? 'No key')}
       </button>
       {value && !listening && (
         <button type="button" onClick={() => onChange(null)} aria-label={`Remove the ${label.toLowerCase()}`} className="grid h-8 w-8 place-items-center rounded-lg text-faint hover:bg-surface-2 hover:text-fg">

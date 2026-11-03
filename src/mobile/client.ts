@@ -85,6 +85,21 @@ export function isDeviceAuthFailure(path: string, _message: string): boolean {
   return path !== '/api/pair';
 }
 
+/** A PC counter, as the phone sees it. */
+export interface PhoneCounter {
+  id: string;
+  name: string;
+  count: number;
+  phaseCount: number;
+  phases: number;
+  timerMs: number;
+  running: boolean;
+  odds: string | null;
+  chance: number | null;
+  sprite: string | null;
+  events: { id: string; name: string; phase: boolean }[];
+}
+
 export interface ServerInfo {
   name: string;
   app: string;
@@ -263,6 +278,10 @@ export const client = {
 
   apps: () => request<{ apps: { id: string; name: string; publisher: string; source: string }[] }>('GET', '/api/apps'),
   appIcon: (id: string) => request<{ icon: string | null }>('GET', `/api/apps/${id}/icon`),
+  counters: () => request<{ counters: PhoneCounter[] }>('GET', '/api/counters'),
+  bumpCounter: (id: string, times: number) => request<{ count: number }>('POST', `/api/counters/${encodeURIComponent(id)}/bump`, { times }),
+  counterEvent: (id: string, event: string) => request<{ count: number }>('POST', `/api/counters/${encodeURIComponent(id)}/event`, { event }),
+  counterTimer: (id: string, run: boolean) => request<{ running: boolean }>('POST', `/api/counters/${encodeURIComponent(id)}/timer`, { run }),
   games: () => request<{ profiles: PhoneGame[]; session: GameSession | null; fps?: FpsLive | null }>('GET', '/api/games'),
   playGame: (id: string, launch: boolean) => request<{ session: GameSession }>('POST', `/api/games/${encodeURIComponent(id)}/play`, { launch }),
   stopGame: () => request<{ stopped: boolean }>('POST', '/api/games/stop'),

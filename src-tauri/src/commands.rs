@@ -2922,3 +2922,173 @@ pub async fn pkm_write(core: Core<'_>) -> Res<String> {
     })
     .await
 }
+
+// ---------- counters: events, undo, OBS page ----------
+
+#[tauri::command]
+pub async fn counters_event(core: Core<'_>, id: String, event: String) -> Res<Counter> {
+    core.counters.event(&id, &event)
+}
+
+#[tauri::command]
+pub async fn counters_undo(core: Core<'_>, id: String) -> Res<Counter> {
+    core.counters.undo(&id)
+}
+
+#[tauri::command]
+pub async fn counters_clear_log(core: Core<'_>, id: String) -> Res<Counter> {
+    core.counters.clear_log(&id)
+}
+
+/// Serve the counters' OBS page on this PC (or stop it).
+#[tauri::command]
+pub async fn counters_overlay(core: Core<'_>, on: bool, port: u16) -> Res<()> {
+    core.counters.set_overlay(on, port)?;
+    let r = core.inner().apply_counters_overlay();
+    if r.is_err() {
+        let _ = core.counters.set_overlay(false, port);
+    }
+    r
+}
+
+// ---------- game library ----------
+
+use omnihub_core::games::deck::{GameDetail, LibraryGame, SteamAccount};
+use omnihub_core::games::emulators::EmuState;
+use omnihub_core::games::shelf::{Backup, SessionRec, ShelfEntry, ShelfPatch};
+use omnihub_core::games::steam::{Achievement, Friend, WishItem};
+
+#[tauri::command]
+pub async fn library_games(core: Core<'_>) -> Res<Vec<LibraryGame>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.library_games())).await
+}
+
+#[tauri::command]
+pub async fn library_detail(core: Core<'_>, key: String) -> Res<GameDetail> {
+    let core = core.inner().clone();
+    blocking(move || core.library_detail(&key)).await
+}
+
+#[tauri::command]
+pub async fn library_achievements(core: Core<'_>, key: String) -> Res<Vec<Achievement>> {
+    let core = core.inner().clone();
+    blocking(move || core.library_achievements(&key)).await
+}
+
+#[tauri::command]
+pub async fn library_friends(core: Core<'_>) -> Res<Vec<Friend>> {
+    let core = core.inner().clone();
+    blocking(move || core.library_friends()).await
+}
+
+#[tauri::command]
+pub async fn library_wishlist(core: Core<'_>) -> Res<Vec<WishItem>> {
+    let core = core.inner().clone();
+    blocking(move || core.library_wishlist()).await
+}
+
+#[tauri::command]
+pub async fn library_account(core: Core<'_>) -> Res<SteamAccount> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.library_account())).await
+}
+
+/// Your Steam Web API key or SteamGridDB key ("" removes it): kept encrypted on this PC.
+#[tauri::command]
+pub async fn library_set_key(core: Core<'_>, which: String, key: String) -> Res<()> {
+    core.shelf.set_key(&which, &key)
+}
+
+#[tauri::command]
+pub async fn library_patch(core: Core<'_>, key: String, patch: ShelfPatch) -> Res<ShelfEntry> {
+    core.shelf.patch(&key, patch)
+}
+
+#[tauri::command]
+pub async fn library_set_art(core: Core<'_>, key: String, kind: String, path: Option<String>) -> Res<ShelfEntry> {
+    core.shelf.set_art(&key, &kind, path.as_deref())
+}
+
+#[tauri::command]
+pub async fn library_find_art(core: Core<'_>, key: String) -> Res<ShelfEntry> {
+    let core = core.inner().clone();
+    blocking(move || core.library_find_art(&key)).await
+}
+
+#[tauri::command]
+pub async fn library_play(core: Core<'_>, key: String) -> Res<()> {
+    let r = core.library_play(&key);
+    core.audit.record("desktop", "library.play", &key, r.is_ok());
+    r
+}
+
+#[tauri::command]
+pub async fn library_backup(core: Core<'_>, key: String) -> Res<Backup> {
+    let core = core.inner().clone();
+    blocking(move || core.shelf.backup(&key, "manual")).await
+}
+
+#[tauri::command]
+pub async fn library_restore(core: Core<'_>, key: String, id: String) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.shelf.restore(&key, &id);
+        core.audit.record("desktop", "library.restore-saves", &format!("{key} {id}"), r.is_ok());
+        r
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn library_delete_backup(core: Core<'_>, key: String, id: String) -> Res<()> {
+    core.shelf.delete_backup(&key, &id)
+}
+
+#[tauri::command]
+pub async fn library_sessions(core: Core<'_>, limit: usize) -> Res<Vec<SessionRec>> {
+    Ok(core.shelf.sessions(None, limit.min(2000)))
+}
+
+#[tauri::command]
+pub async fn emulators_state(core: Core<'_>) -> Res<EmuState> {
+    Ok(core.emulators.state())
+}
+
+#[tauri::command]
+pub async fn emulators_refresh(core: Core<'_>) -> Res<EmuState> {
+    let core = core.inner().clone();
+    blocking(move || core.emulators.refresh(&omnihub_core::games::emulators::default_roots())).await
+}
+
+#[tauri::command]
+pub async fn emulators_add(core: Core<'_>, exe: String, platforms: Vec<String>) -> Res<EmuState> {
+    core.emulators.add(&exe, platforms)
+}
+
+#[tauri::command]
+pub async fn emulators_remove(core: Core<'_>, id: String) -> Res<EmuState> {
+    core.emulators.remove(&id)
+}
+
+#[tauri::command]
+pub async fn emulators_set_dirs(core: Core<'_>, dirs: Vec<String>) -> Res<EmuState> {
+    let core = core.inner().clone();
+    blocking(move || core.emulators.set_dirs(dirs)).await
+}
+
+#[tauri::command]
+pub async fn emulators_choose(core: Core<'_>, platform: String, emulator: String) -> Res<EmuState> {
+    core.emulators.choose(&platform, &emulator)
+}
+
+#[tauri::command]
+pub async fn emulators_launch(core: Core<'_>, rom: String) -> Res<()> {
+    let (exe, args) = core.emulators.command(&rom)?;
+    let mut c = std::process::Command::new(&exe);
+    c.args(&args);
+    if let Some(dir) = Path::new(&exe).parent() {
+        c.current_dir(dir);
+    }
+    c.spawn().map(|_| ()).map_err(|e| format!("Couldn't start the emulator: {e}"))
+}

@@ -1,15 +1,23 @@
 ## New in this version
 
-**Counters with keys that work from anywhere, shiny hunting, an auto clicker, a Pokémon save editor, and a glass look.**
+**A Steam Deck–style game library, emulators, and counters with events, goals and a stream overlay.**
 
-- **Counters** (new page): count anything (deaths, resets, push-ups) with a click or a **key that works from anywhere**, even with a game or emulator in front (the game still gets the key; holding it counts once). Add your own picture, a step, a key to take away, and a **timer**. Keep as many counters as you like; everything stays on your PC.
-- **Pop-out**: any counter in its own small window that stays on top of your game, with the count, the picture and the timer. It updates as you press your key.
-- **Shiny hunting for any Pokémon** (all 1025): pick the Pokémon, the game and the method; the odds are worked out for you (Masuda method, Shiny Charm, or your method's own odds), with the chance you'd have found it by now, how far past the odds you are, and encounters per hour. **Found it!** keeps the find in your history (count, time, odds) and starts again.
-- **Auto clicker** (Tools → Auto clicker): any button, single or double clicks, every 0.01 ms up to an hour, a random part so it looks less robotic, at the mouse or at a point you pick, stop after a number of clicks or seconds. F6 (or your key) starts and stops it from anywhere; **Esc** or pushing the mouse into the top-left corner always stops it. Windows can't really click every 0.01 ms: it goes as fast as your PC allows and shows the real speed. Some online games ban auto clickers.
-- **Pokémon save editor** (Tools → Pokémon saves) for the Game Boy Advance games: Ruby, Sapphire, Emerald, FireRed and LeafGreen. Change the trainer (name, IDs, money, play time) and any Pokémon in the party or the 14 PC boxes: species, nickname, level, nature, shiny, ability, item, ball, friendship, moves and PP Ups, IVs and EVs, and its original trainer. Add Pokémon to empty places, delete them, and bring in or save single Pokémon as .pk3 files. Checksums are fixed on save, and a copy of the old save is kept next to it each time. Close the game in your emulator first.
-- **Glass** (Settings → Appearance): frosted, see-through cards and sidebar over any theme.
+- **Game library** (Games → Library): every game as its real cover art, like the Steam Deck. Steam games get their covers, background and logo from Steam (or the art you set in Steam); other games get a coloured card until you pick art. Filter by favourites, playing, backlog and finished, search, and move around with a **controller** (D-pad, A to open, B to go back).
+- **Full-screen game page**: the background art and logo, Play, playing now on Steam, your hours and last played, then **achievements**, **screenshots** you took (Steam's and the app's own), the **soundtrack** (plays a Steam soundtrack you own, with links to find it on YouTube and Spotify), **mods**, **save backups** and **art & limits**.
+- **Session recap**: after you close a game, how long you played, its achievements and screenshots from that session.
+- **Save backups**: OmniHub suggests where a game keeps its saves; back them up with one click or after every session (the newest 10 kept), and put one back.
+- **Daily time limits** per game: a warning near the end, then the game is closed.
+- **Steam extras** with your own Steam Web API key (kept encrypted on this PC): achievements, friends online and what they play, and your **wishlist with sale alerts**. SteamGridDB art with your own key.
+- **Emulators** (Games → Emulators): finds RetroArch, mGBA, melonDS, Dolphin, Cemu, Ryujinx, DuckStation, PCSX2, PPSSPP, RPCS3 and more, scans your ROM folders with box art, and starts any game in the right emulator.
+- **Counter events**: give a counter events with their own keys (Wrong shiny, Fainted, Phase…). Each one is logged with the count, and **phases** start the "this phase" count again. **Undo** takes back the last change.
+- **Goals**: get told when a counter reaches a number, plus odds alerts (1×, 2×, 3× past the odds) for shiny hunts. A **celebration** when you find a shiny.
+- **Hunt stats**: shinies found, average encounters, hunting time, luckiest and longest hunts, finds by month.
+- **Stream overlay**: show counters in OBS as a Browser source (`http://127.0.0.1:47823/counter/<id>`), see-through, with size, colour, picture, timer and odds options. Only this PC can open it.
+- **Controller buttons as counter keys**: press a button on an Xbox (or XInput) controller to count.
+- **Counters on your phone** (More → Counters): count, log events and start the timer.
+- Fixed: a counter key could get stuck and stop counting after a game grabbed the keyboard; the key watcher now repairs itself.
 
-Also in 0.23.0: getting back into a vault whose password you forgot, the Minecraft theme and six more animated themes.
+Also in 0.24.0: counters with keys from anywhere, shiny hunting, the auto clicker, the Pokémon save editor and the glass look.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

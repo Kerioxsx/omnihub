@@ -11,6 +11,7 @@ import { Badge, Card } from '../../components/ui/Card';
 import { Field, Select, Switch, TextInput } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
+import { useRoute } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
 import { gbaSpriteUrl } from '../counters/pokemon';
@@ -311,10 +312,22 @@ export function PokemonSaveTab() {
   const [box, setBox] = useState(0);
   const [slot, setSlot] = useState<PkmSlot>({ box: null, index: 0 });
   const [busy, setBusy] = useState(false);
+  const want = useRoute().params.get('open');
   useEffect(() => {
     void api.pkm.tables().then(setTables);
     void api.pkm.view().then(setSave);
   }, []);
+  // Opened from the emulator hub with a save to edit.
+  useEffect(() => {
+    if (!want) return;
+    void api.pkm.open(want).then(
+      (s) => {
+        setSave(s);
+        setSlot({ box: null, index: 0 });
+      },
+      (e) => toast.error('Couldn’t open that save', errorText(e)),
+    );
+  }, [want]);
 
   const open = async () => {
     const [path] = await api.app.pickFiles('Open a Pokémon save (.sav)');

@@ -3,6 +3,7 @@
 
 mod commands;
 mod ambient;
+mod gamemedia;
 mod govee;
 mod chats;
 mod mcserver;
@@ -65,6 +66,14 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
             let by = payload["requestedBy"].as_str().unwrap_or("");
             by.starts_with("phone:").then(|| (format!("{} requested by {}", payload["label"].as_str().unwrap_or("Power action"), by.trim_start_matches("phone:")), "Open OmniHub to cancel.".into()))
         }
+        "counters:goal" => Some(("Counter goal".into(), payload["message"].as_str().unwrap_or("A goal was reached").to_string())),
+        "games:recap" => Some((format!("{} · {} min", payload["name"].as_str().unwrap_or("Game"), payload["minutes"].as_u64().unwrap_or(0)), "Open OmniHub for your session recap.".into())),
+        "games:sale" => Some((format!("{} is {}% off", payload["name"].as_str().unwrap_or("A game on your wishlist"), payload["discount"].as_u64().unwrap_or(0)), payload["price"].as_str().map(|p| format!("Now {p} on Steam")).unwrap_or_else(|| "On your Steam wishlist".into()))),
+        "games:limit" => Some(if payload["closing"].as_bool() == Some(true) {
+            (format!("Time's up for {}", payload["name"].as_str().unwrap_or("the game")), format!("Today's {} minutes are used, so it was closed.", payload["minutes"].as_u64().unwrap_or(0)))
+        } else {
+            (format!("{} min left", payload["left"].as_u64().unwrap_or(5)), format!("{} closes when today's time is up.", payload["name"].as_str().unwrap_or("The game")))
+        }),
         "notes:reminder" => Some((
             format!("Reminder: {}", payload["title"].as_str().filter(|t| !t.is_empty()).unwrap_or("Untitled note")),
             payload["snippet"].as_str().filter(|s| !s.is_empty()).unwrap_or("Open OmniHub to see the note.").to_string(),
@@ -142,6 +151,13 @@ pub fn run(args: Vec<String>) {
                 .build(),
         )
         .manage(core.clone())
+        .register_asynchronous_uri_scheme_protocol("gamemedia", {
+            let core = core.clone();
+            move |_ctx, request, responder| {
+                let core = core.clone();
+                std::thread::spawn(move || responder.respond(gamemedia::serve(&core, &request)));
+            }
+        })
         .register_asynchronous_uri_scheme_protocol("rigmedia", {
             let core = core.clone();
             move |_ctx, request, responder| {
@@ -169,7 +185,7 @@ pub fn run(args: Vec<String>) {
                             // knowing about: always a Windows notification.
                             // During a focus round only what matters gets through.
                             let focusing = h.state::<std::sync::Arc<omnihub_core::core::AppCore>>().focus.state().is_some_and(|f| f.phase == omnihub_core::focus::Phase::Focus);
-                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request");
+                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request" | "counters:goal" | "games:limit" | "games:sale");
                             if (hidden || important) && (!focusing || important) {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
                                     shortcuts::notify(&h, &title, &body);
@@ -348,6 +364,32 @@ pub fn run(args: Vec<String>) {
             commands::vault_generate,
             commands::vault_strength,
             commands::vault_change_password,
+            commands::counters_event,
+            commands::counters_undo,
+            commands::counters_clear_log,
+            commands::counters_overlay,
+            commands::library_games,
+            commands::library_detail,
+            commands::library_achievements,
+            commands::library_friends,
+            commands::library_wishlist,
+            commands::library_account,
+            commands::library_set_key,
+            commands::library_patch,
+            commands::library_set_art,
+            commands::library_find_art,
+            commands::library_play,
+            commands::library_backup,
+            commands::library_restore,
+            commands::library_delete_backup,
+            commands::library_sessions,
+            commands::emulators_state,
+            commands::emulators_refresh,
+            commands::emulators_add,
+            commands::emulators_remove,
+            commands::emulators_set_dirs,
+            commands::emulators_choose,
+            commands::emulators_launch,
             commands::counters_state,
             commands::counters_save,
             commands::counters_delete,
