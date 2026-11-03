@@ -1,25 +1,14 @@
 ## New in this version
 
-**Fortnite presets and checks, OBS on the deck, a Discord status, a network monitor, backups, controller mode, and screenshots you can search by their text.**
+**Quiet mode: the screens off and the fans at their lowest, from your phone, with the PC still on.**
 
-Fortnite (Games → Boost profiles → Fortnite):
-- **Presets**: Competitive (the most frames), Balanced (DirectX 12, medium quality) and Pretty (DirectX 12, epic quality). There are now quality levels besides "lowest", and your own settings stay backed up.
-- **FPS by settings**: each FPS-meter session remembers the video settings it was played with, and the FPS card compares average FPS and 1% lows for each set, so you can see what's really faster on your PC.
-- **Replays**: see how much space they take, and send old ones to the Recycle Bin (the 5 newest and the last week are kept).
-- **Wi-Fi power saving off** (it causes ping spikes), with a note when you're on Wi-Fi instead of a cable.
-- **Graphics driver**: its version and age, with a link to update it. After a driver update it suggests cleaning the shader caches.
-- The ping test's best region now skips regions that drop packets, and says where to pick it in Fortnite.
+- **Quiet mode** (phone: Power; PC: My PC → Fans; or a deck or wheel button): turns every screen off and drops the fans to their lowest safe speed. Downloads, Minecraft servers and your phone keep working.
+- **Fans never stop completely**: a running processor would overheat within minutes. They sit at their minimum (30%, pumps 50%) and still speed up if the PC gets warm. The graphics card goes back to its own control, which on most cards stops its fans entirely while it's cool.
+- **Ends by itself** when someone touches the PC's mouse or keyboard, or with one tap on the phone. The fans go back to the profile they had.
+- **Lowest** is also a fan profile of its own (My PC → Fans), for whenever you want the PC as quiet as is safe.
+- Fan control needs LibreHardwareMonitor (or a supported cooler), set up under My PC → Fans. Without it, quiet mode just turns the screens off.
 
-Everything else:
-- **OBS buttons** for the deck and the wheel: switch scenes, start or stop streaming or recording, save the replay buffer, mute a source. Uses OBS's own WebSocket server; the password is kept encrypted.
-- **Discord status** (Settings → General): the game you're playing and your shiny hunt, under your name in Discord. Discord needs an app for this, so you make a free one in its Developer Portal and paste its ID.
-- **Network monitor** (Tasks): download and upload speed now, data used per day for the last 30 days, and which programs have connections open and to where. Windows only tells administrators how much data each program uses, so that isn't shown.
-- **Backups** (Tools → Backups): your folders copied to another drive daily, weekly, or whenever it's plugged in. Only new and changed files are copied, and nothing in the backup is ever deleted.
-- **Controller mode** (Settings → General): use the whole app with a controller. D-pad or stick to move, A to press, B to go back, LB/RB to switch pages, Start to search.
-- **Search screenshots by their text**: OmniHub reads the text in your screenshots in the background (with Windows' own text recognition, on this PC, never while you play), so searching finds them by what they show.
-- **Wake and play from bed**: starting a game from your phone turns the screen on, and the Phone page shows what a Wake-on-LAN app needs to wake the PC from sleep, with how to allow it.
-
-Also in 0.27.0: updates that always finish, and the Bleach themes.
+Also in 0.28.0: Fortnite presets and checks, OBS on the deck, a Discord status, a network monitor, backups, controller mode, and screenshots searchable by their text.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

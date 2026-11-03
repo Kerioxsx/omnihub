@@ -20,7 +20,7 @@ import { activeProfile, averageRpm, useRig } from './useRig';
 
 type Tab = 'lighting' | 'fans' | 'monitors' | 'screens' | 'build' | 'batteries' | 'health';
 const TABS: Tab[] = ['lighting', 'fans', 'monitors', 'screens', 'build', 'batteries', 'health'];
-const FAN_LABEL = { silent: 'Silent', auto: 'Default (Auto)', fast: 'Fast' } as const;
+const FAN_LABEL = { lowest: 'Lowest (quiet mode)', silent: 'Silent', auto: 'Default (Auto)', fast: 'Fast' } as const;
 
 export function RigPage() {
   const route = useRoute();

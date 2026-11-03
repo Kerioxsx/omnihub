@@ -327,3 +327,15 @@ pub async fn wake_targets() -> Res<Vec<omnihub_core::system::wol::WakeTarget>> {
 pub async fn open_device_manager() -> Res<()> {
     omnihub_core::system::shell::shell_execute("devmgmt.msc", "").map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn quiet_status(core: Core<'_>) -> Res<omnihub_core::quiet::QuietStatus> {
+    Ok(core.quiet_status())
+}
+
+/// Quiet mode on (screens off, fans at their lowest) or off.
+#[tauri::command]
+pub async fn quiet_set(core: Core<'_>, on: bool) -> Res<omnihub_core::quiet::QuietStatus> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || if on { core.quiet_on() } else { core.quiet_off() }).await.map_err(|e| e.to_string())?
+}

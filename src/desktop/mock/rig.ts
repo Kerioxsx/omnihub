@@ -63,7 +63,7 @@ function status(): RigStatus {
   const t = Date.now() / 1000;
   const cpu = 52 + Math.sin(t / 7) * 6;
   const gpu = 47 + Math.sin(t / 9) * 5;
-  const fast = settings.fans.profile === 'fast' ? 1.35 : settings.fans.profile === 'silent' ? 0.72 : 1;
+  const fast = settings.fans.profile === 'fast' ? 1.35 : settings.fans.profile === 'silent' ? 0.72 : settings.fans.profile === 'lowest' ? 0.55 : 1;
   // OmniHub never sets a fan under 30% (the hardware's own Auto may).
   const duty = (base: number) => (settings.fans.profile === 'auto' ? base : Math.max(30, Math.round(base * fast)));
   return {

@@ -1779,7 +1779,7 @@ export interface LightProfile {
   brightness: number;
 }
 
-export type FanProfile = 'silent' | 'auto' | 'fast';
+export type FanProfile = 'lowest' | 'silent' | 'auto' | 'fast';
 export type FanRole = 'case' | 'gpu' | 'pump';
 export type CoolerKind = 'unknown' | 'air' | 'aio';
 export type BoardSize = 'eAtx' | 'atx' | 'microAtx' | 'miniItx';
@@ -3551,7 +3551,8 @@ export type QuickAction =
   | { kind: 'screenshot' }
   | { kind: 'lock' }
   | { kind: 'clipboard' }
-  | { kind: 'obs'; what: 'scene' | 'stream' | 'record' | 'replay' | 'mute'; target?: string | null };
+  | { kind: 'obs'; what: 'scene' | 'stream' | 'record' | 'replay' | 'mute'; target?: string | null }
+  | { kind: 'quiet' };
 
 export interface QuickButton {
   id: string;
@@ -3713,4 +3714,11 @@ export interface WakeTarget {
   ip: string;
   broadcast: string;
   wifi: boolean;
+}
+
+export interface QuietStatus {
+  on: boolean;
+  since: number | null;
+  /** OmniHub can set this PC's fans; otherwise quiet mode only turns the screens off. */
+  fans: boolean;
 }

@@ -41,6 +41,7 @@ import * as storage from './mock/storage';
 import * as vault from './mock/vault';
 import { autoclick, counters as ctr, pkm } from './mock/counters';
 import { emulators as emus, library as lib } from './mock/library';
+import { quiet as quietMock } from './mock/quiet';
 import { backups as bk, batteries as bats, clipboard as clip, discord, health as pcHealth, network, obs, quick as qk } from './mock/quick';
 
 /** What a key is called (the same names the app uses). */
@@ -493,6 +494,8 @@ const handlers: Record<string, Handler> = {
   network_status: () => network(),
   wake_targets: () => [{ name: 'Ethernet', mac: '0C-9D-92-AA-BB-CC', ip: '192.168.1.24', broadcast: '192.168.1.255', wifi: false }],
   open_device_manager: () => undefined,
+  quiet_status: () => quietMock.status(),
+  quiet_set: (a) => quietMock.set(Boolean(a?.on)),
   backups_list: () => bk.list(),
   backups_save: (a) => bk.save(obj(a, 'job')),
   backups_delete: (a) => bk.remove(str(a, 'id')),

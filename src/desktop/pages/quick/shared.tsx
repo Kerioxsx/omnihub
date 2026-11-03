@@ -17,6 +17,7 @@ export const ACTION_KINDS: { value: QuickAction['kind']; label: string }[] = [
   { value: 'counter', label: 'Count (a counter or one of its events)' },
   { value: 'screenshot', label: 'Screenshot' },
   { value: 'lock', label: 'Lock the PC' },
+  { value: 'quiet', label: 'Quiet mode (screens off, fans lowest)' },
   { value: 'obs', label: 'OBS: scene, stream, recording, replay, mute' },
   { value: 'clipboard', label: 'Clipboard history (PC only)' },
 ];
@@ -70,6 +71,8 @@ export function describe(a: QuickAction | null): string {
       return 'Locks the PC';
     case 'clipboard':
       return 'Clipboard history';
+    case 'quiet':
+      return 'Screens off, fans lowest';
     case 'obs':
       return a.what === 'scene' ? `OBS scene: ${a.target ?? ''}` : a.what === 'mute' ? `OBS: mute ${a.target ?? ''}` : `OBS: ${OBS_LABEL[a.what]?.toLowerCase() ?? a.what}`;
   }

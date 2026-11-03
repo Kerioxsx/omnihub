@@ -151,6 +151,7 @@ export function PowerScreen({ active }: { active: boolean }) {
       <PageHeader title="Power" subtitle={info?.name} />
       <div className="px-safe pb-tabbar">
         <PendingPowerCard className="mb-4" />
+        {enabled && <QuietCard active={active} />}
         {!enabled && (
           <div className="mb-4 flex items-start gap-3 rounded-2xl border border-warn/30 bg-warn/10 p-4 text-sm">
             <ShieldAlert size={20} className="mt-0.5 shrink-0 text-warn" />
@@ -413,4 +414,43 @@ function HoldCard({ action, label, disabled, wide, onConfirm }: { action: PowerA
 export function PowerIcon({ action, size = 20 }: { action: PowerAction; size?: number }): ReactNode {
   const Icon = META[action]?.icon ?? Power;
   return <Icon size={size} />;
+}
+
+/** Quiet mode: the screens off and the fans at their lowest, the PC still on. */
+function QuietCard({ active }: { active: boolean }) {
+  const [q, setQ] = useState<{ on: boolean; since: number | null; fans: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (active) client.quiet().then(setQ, () => setQ(null));
+  }, [active]);
+  if (!q) return null;
+  const go = async () => {
+    setBusy(true);
+    vibrate(15);
+    try {
+      setQ(await client.setQuiet(!q.on));
+    } catch (e) {
+      toast.error("Couldn't do that", errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => void go()}
+      disabled={busy}
+      className={cx('mb-4 flex w-full items-center gap-4 rounded-[22px] border p-4 text-left transition-colors active:scale-[0.99]', q.on ? 'border-indigo-400/50 bg-indigo-500/15' : 'border-white/10 bg-white/[0.04]')}
+    >
+      <span className={cx('grid h-12 w-12 shrink-0 place-items-center rounded-2xl', q.on ? 'bg-indigo-400 text-black' : 'bg-indigo-500/15 text-indigo-300')}>
+        {busy ? <LoaderCircle size={22} className="animate-spin" /> : <Moon size={22} />}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[16px] font-semibold">{q.on ? 'Quiet mode is on' : 'Quiet mode'}</span>
+        <span className="block text-[13px] text-dim">
+          {q.on ? 'Tap to turn the screens back on and the fans back to normal.' : 'Screens off and fans at their lowest. The PC stays on; fans never fully stop, so it can’t overheat.'}
+        </span>
+      </span>
+    </button>
+  );
 }

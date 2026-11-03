@@ -685,3 +685,14 @@ has Capri speak through her local bridge (`companion::say`).
 - Controller mode: `lib/padNav.ts` and `components/PadNavigator.tsx`
   (spatial focus by direction); pages with their own gamepad handling call
   `claimGamepad()`.
+
+## Quiet mode
+
+- `quiet.rs`: `AppCore::quiet_on` remembers the fan profile, sets
+  `FanProfile::Lowest` through `RigHub::update`, and turns the displays off;
+  `quiet_off` restores it and wakes the screen. A thread calls
+  `quiet_check` every 2 s, which ends quiet mode on new local input.
+- `rig/fans.rs`: Lowest's curves (case and pump at their floor until warm;
+  the GPU curve is None, so the card goes back to its own control).
+- Reached from `/api/quiet` (phone), `quiet_set` (desktop) and
+  `QuickAction::Quiet` (deck and wheel).

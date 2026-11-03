@@ -429,6 +429,8 @@ pub fn run(args: Vec<String>) {
             quick::backups_cancel,
             quick::wake_targets,
             quick::open_device_manager,
+            quick::quiet_status,
+            quick::quiet_set,
             quick::clipboard_list,
             quick::clipboard_copy,
             quick::clipboard_paste,

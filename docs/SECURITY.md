@@ -977,3 +977,14 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
 - Fortnite: replays go to the Recycle Bin (never deleted outright); Wi-Fi
   power saving is changed with `powercfg` on the active plan, plugged-in
   only, and can be turned back.
+
+## Quiet mode
+
+- From the phone it needs "Allow power actions" (like the other power
+  controls) and is recorded in the audit log (`quiet.on`, `quiet.off`).
+- The Lowest fan profile keeps the same safety rules as the others: no fan
+  under 30% (pumps 50%), full speed from 90 °C, and the graphics card is
+  handed back to its own control rather than forced. Fans are never set to
+  0%.
+- It ends on the next local keyboard or mouse input (Windows'
+  GetLastInputInfo) and restores the fan profile from before.

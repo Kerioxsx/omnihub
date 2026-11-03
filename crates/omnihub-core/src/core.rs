@@ -89,6 +89,8 @@ pub struct AppCore {
     pub netmon: crate::system::netmon::NetMonitor,
     /// Folder backups to another drive.
     pub backups: Arc<crate::backup::Backups>,
+    /// Screens off and fans at their lowest (from the phone, the deck…).
+    pub quiet: crate::quiet::Quiet,
     /// Compress, convert, cut and take the sound out of videos (FFmpeg).
     pub video: crate::videotools::VideoTools,
     /// Links downloaded for a phone (or the PC).
@@ -177,6 +179,7 @@ impl AppCore {
             presence: crate::presence::Presence::new(&paths.data),
             netmon: crate::system::netmon::NetMonitor::new(&paths.data),
             backups: Arc::new(crate::backup::Backups::new(&paths.data, events.clone())),
+            quiet: crate::quiet::Quiet::default(),
             video,
             downloads,
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
@@ -256,6 +259,16 @@ impl AppCore {
                     drop(core);
                     std::thread::sleep(Duration::from_secs(2));
                 }
+            })
+            .ok();
+        // Quiet mode ends when someone uses the PC's mouse or keyboard.
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("quiet-mode".into())
+            .spawn(move || loop {
+                std::thread::sleep(Duration::from_secs(2));
+                let Some(core) = weak.upgrade() else { return };
+                core.quiet_check();
             })
             .ok();
         // Backups that are due (daily, weekly, or a drive just plugged in).

@@ -264,6 +264,11 @@ export const api = {
   batteries: (fresh = false) => call<T.Battery[]>('batteries', { fresh }),
   network: () => call<T.NetStatus>('network_status'),
   wakeTargets: () => call<T.WakeTarget[]>('wake_targets'),
+  /** Quiet mode: screens off and fans at their lowest, the PC still on. */
+  quiet: {
+    status: () => call<T.QuietStatus>('quiet_status'),
+    set: (on: boolean) => call<T.QuietStatus>('quiet_set', { on }),
+  },
   openDeviceManager: () => call<void>('open_device_manager'),
 
   /** Folder backups to another drive (new and changed files; never deletes). */

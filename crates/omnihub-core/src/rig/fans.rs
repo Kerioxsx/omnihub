@@ -1,4 +1,4 @@
-//! Fan profiles: Silent, Default (Auto) and Fast. Auto hands every fan
+//! Fan profiles: Lowest, Silent, Default (Auto) and Fast. Auto hands every fan
 //! back to the motherboard's, graphics card's or cooler's own control;
 //! Silent and Fast follow a temperature curve. Fans on the motherboard and
 //! graphics card are driven through LibreHardwareMonitor (OmniHub sets
@@ -15,6 +15,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum FanProfile {
+    /// As quiet as is safe: the floor until it gets warm (quiet mode). The
+    /// graphics card goes back to its own control, which stops its fans
+    /// when it's cool on most cards.
+    Lowest,
     Silent,
     #[default]
     Auto,
@@ -40,7 +44,9 @@ pub fn curve(profile: FanProfile, role: FanRole) -> Option<Curve> {
     use FanProfile::*;
     use FanRole::*;
     Some(match (profile, role) {
-        (Auto, _) => return None,
+        (Auto, _) | (Lowest, Gpu) => return None,
+        (Lowest, Case) => &[(30.0, 30.0), (60.0, 30.0), (70.0, 45.0), (78.0, 70.0), (85.0, 100.0)],
+        (Lowest, Pump) => &[(30.0, 50.0), (65.0, 50.0), (75.0, 75.0), (85.0, 100.0)],
         (Silent, Case) => &[(30.0, 30.0), (50.0, 32.0), (65.0, 45.0), (75.0, 70.0), (85.0, 100.0)],
         (Silent, Gpu) => &[(40.0, 30.0), (60.0, 35.0), (70.0, 50.0), (78.0, 75.0), (85.0, 100.0)],
         (Silent, Pump) => &[(30.0, 50.0), (60.0, 60.0), (75.0, 80.0), (85.0, 100.0)],
@@ -55,9 +61,11 @@ pub fn liquid_curve(profile: FanProfile, role: FanRole) -> Curve {
     use FanProfile::*;
     use FanRole::*;
     match (profile, role) {
+        (Lowest, Pump) => &[(20.0, 50.0), (32.0, 50.0), (36.0, 70.0), (40.0, 85.0), (45.0, 100.0)],
         (Silent, Pump) => &[(20.0, 50.0), (30.0, 55.0), (35.0, 70.0), (40.0, 85.0), (45.0, 100.0)],
         (Auto, Pump) => &[(20.0, 60.0), (30.0, 70.0), (35.0, 80.0), (40.0, 90.0), (45.0, 100.0)],
         (Fast, Pump) => &[(20.0, 80.0), (30.0, 90.0), (35.0, 100.0)],
+        (Lowest, _) => &[(20.0, 25.0), (32.0, 25.0), (36.0, 45.0), (40.0, 70.0), (45.0, 100.0)],
         (Silent, _) => &[(20.0, 25.0), (30.0, 30.0), (35.0, 45.0), (40.0, 70.0), (45.0, 100.0)],
         (Auto, _) => &[(20.0, 30.0), (30.0, 40.0), (35.0, 55.0), (40.0, 80.0), (45.0, 100.0)],
         (Fast, _) => &[(20.0, 50.0), (30.0, 65.0), (35.0, 80.0), (40.0, 100.0)],
@@ -124,9 +132,11 @@ mod tests {
         assert_eq!(duty(&[(30.0, 10.0)], 20.0, FanRole::Pump), 50.0, "pumps keep half speed");
         assert_eq!(duty(&[(30.0, 30.0)], 95.0, FanRole::Gpu), 100.0);
         assert!(curve(FanProfile::Auto, FanRole::Gpu).is_none());
-        for p in [FanProfile::Silent, FanProfile::Fast] {
+        assert!(curve(FanProfile::Lowest, FanRole::Gpu).is_none(), "the card's own control in quiet mode");
+        assert_eq!(duty(curve(FanProfile::Lowest, FanRole::Case).unwrap(), 55.0, FanRole::Case), 30.0, "the floor while it's cool");
+        for p in [FanProfile::Lowest, FanProfile::Silent, FanProfile::Fast] {
             for r in [FanRole::Case, FanRole::Gpu, FanRole::Pump] {
-                let c = curve(p, r).unwrap();
+                let Some(c) = curve(p, r) else { continue };
                 assert!(c.windows(2).all(|w| w[0].0 < w[1].0 && w[0].1 <= w[1].1), "{p:?} {r:?} rises");
                 assert_eq!(duty(c, 89.0, r), 100.0, "{p:?} {r:?} is at 100% before 90 °C");
             }

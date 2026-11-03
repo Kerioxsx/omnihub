@@ -259,6 +259,8 @@ export const client = {
   power: () => request<{ enabled: boolean; actions: { action: PowerAction; label: string; destructive: boolean }[]; pending: PendingPower | null; delaySeconds: number }>('GET', '/api/power'),
   requestPower: (action: PowerAction) => request<{ pending: PendingPower }>('POST', '/api/power', { action, confirm: true }),
   cancelPower: () => request<{ cancelled: boolean }>('POST', '/api/power/cancel'),
+  quiet: () => request<{ on: boolean; since: number | null; fans: boolean }>('GET', '/api/quiet'),
+  setQuiet: (on: boolean) => request<{ on: boolean; since: number | null; fans: boolean }>('POST', '/api/quiet', { on }),
   /** Lock the vault, cut phones off (this one too) and lock the PC. */
   panic: () => request<void>('POST', '/api/panic'),
   /** A screenshot of the PC's screen (saved on the PC too); a link to get it. */

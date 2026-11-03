@@ -36,6 +36,7 @@ let state: QuickState = {
     b('d10', 'GG', 'message-square', '#34d399', { kind: 'text', text: 'gg wp' }),
     b('d11', 'Task Manager', 'activity', '#34d399', { kind: 'keys', keys: 'Ctrl+Shift+Esc' }),
     b('d12', 'Lock', 'lock', '#fbbf24', { kind: 'lock' }),
+    b('d15', 'Quiet mode', 'moon', '#818cf8', { kind: 'quiet' }),
     b('d13', 'Go live', 'radio', '#f87171', { kind: 'obs', what: 'stream' }),
     b('d14', 'Gameplay scene', 'video', '#38bdf8', { kind: 'obs', what: 'scene', target: 'Gameplay' }),
   ],
@@ -84,6 +85,8 @@ export const quick = {
         return 'Saved Screenshot 2026-11-03.png';
       case 'lock':
         return 'Locked';
+      case 'quiet':
+        return 'Screens off, fans at their lowest';
       case 'obs':
         if (!obsPassword) throw "OBS isn't answering: open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server";
         return a.what === 'scene' ? `Scene: ${a.target}` : a.what === 'stream' ? 'Streaming' : 'Done';

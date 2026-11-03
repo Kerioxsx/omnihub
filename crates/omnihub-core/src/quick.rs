@@ -44,6 +44,8 @@ pub enum QuickAction {
     Lock,
     /// Opens the clipboard history (on the PC only).
     Clipboard,
+    /// Quiet mode on or off: screens off and fans at their lowest.
+    Quiet,
     /// OBS Studio: "scene", "stream", "record", "replay" or "mute" (with
     /// the scene or source name as `target`).
     Obs {
@@ -629,6 +631,15 @@ impl crate::core::AppCore {
             }
             QuickAction::Clipboard => Err("The clipboard history opens on the PC".into()),
             QuickAction::Obs { what, target } => crate::obs::run(&self.quick.state().obs_url, &self.quick.obs_password(), what, target.as_deref()),
+            QuickAction::Quiet => {
+                if self.quiet_status().on {
+                    self.quiet_off()?;
+                    Ok("Quiet mode off".into())
+                } else {
+                    self.quiet_on()?;
+                    Ok("Screens off, fans at their lowest".into())
+                }
+            }
         }
     }
 }

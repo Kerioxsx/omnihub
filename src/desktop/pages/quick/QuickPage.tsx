@@ -240,7 +240,7 @@ function ButtonEditor({ open, initial, onClose, onSave, forDeck }: { open: boole
             value={action.kind}
             onChange={(e) => {
               const kind = e.target.value as QuickAction['kind'];
-              const icon = { media: 'play', open: 'app-window', game: 'gamepad-2', keys: 'keyboard', text: 'message-square', mic: 'mic-off', counter: 'sparkles', screenshot: 'camera', lock: 'lock', clipboard: 'clipboard-list', obs: 'radio' }[kind];
+              const icon = { media: 'play', open: 'app-window', game: 'gamepad-2', keys: 'keyboard', text: 'message-square', mic: 'mic-off', counter: 'sparkles', screenshot: 'camera', lock: 'lock', clipboard: 'clipboard-list', obs: 'radio', quiet: 'moon' }[kind];
               setB({ ...b, action: blankAction(kind), icon: b.icon === 'zap' || !initial ? icon : b.icon });
             }}
           >

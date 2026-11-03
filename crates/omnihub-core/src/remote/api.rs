@@ -106,6 +106,7 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/open-apps/icon", get(open_apps_icon))
         .route("/api/power", get(power_info).post(power_request))
         .route("/api/power/cancel", post(power_cancel))
+        .route("/api/quiet", get(quiet_get).post(quiet_set))
         .route("/api/panic", post(panic))
         .route("/api/screenshot", post(screenshot))
         .route("/api/print", post(print_file))
@@ -899,6 +900,30 @@ async fn power_info(State(core): State<Ctx>) -> Json<serde_json::Value> {
     let s = core.settings.get().remote;
     let actions: Vec<_> = PowerAction::all().iter().map(|a| json!({ "action": a, "label": a.label(), "destructive": a.destructive() })).collect();
     Json(json!({ "enabled": s.allow_power, "actions": actions, "pending": core.power.pending(), "delaySeconds": s.power_delay_seconds }))
+}
+
+// ---------- quiet mode: screens off, fans lowest, PC still on ----------
+
+async fn quiet_get(State(core): State<Ctx>) -> ApiResult<Json<crate::quiet::QuietStatus>> {
+    if !core.settings.get().remote.allow_power {
+        return Err(ApiError::forbidden("Power actions are off on the PC (OmniHub → Phone → Permissions)"));
+    }
+    Ok(Json(core.quiet_status()))
+}
+
+#[derive(Deserialize)]
+struct QuietReq {
+    on: bool,
+}
+
+async fn quiet_set(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<QuietReq>) -> ApiResult<Json<crate::quiet::QuietStatus>> {
+    if !core.settings.get().remote.allow_power {
+        return Err(ApiError::forbidden("Power actions are off on the PC (OmniHub → Phone → Permissions)"));
+    }
+    let c = core.clone();
+    let r = tokio::task::spawn_blocking(move || if req.on { c.quiet_on() } else { c.quiet_off() }).await?;
+    core.audit.record(&actor(&dev), if req.on { "quiet.on" } else { "quiet.off" }, "screens and fans", r.is_ok());
+    Ok(Json(r.map_err(ApiError::bad)?))
 }
 
 #[derive(Deserialize)]

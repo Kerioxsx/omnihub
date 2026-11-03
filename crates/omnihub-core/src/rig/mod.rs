@@ -767,6 +767,7 @@ impl RigHub {
                 if pump.is_err() && fan.is_err() {
                     // A hub without a temperature probe: one duty per profile.
                     let duty = match s.fans.profile {
+                        FanProfile::Lowest => 30.0,
                         FanProfile::Silent => 35.0,
                         FanProfile::Auto => 55.0,
                         FanProfile::Fast => 85.0,

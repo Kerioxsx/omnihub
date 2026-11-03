@@ -36,6 +36,7 @@ pub mod obs;
 pub mod play;
 pub mod presence;
 pub mod quick;
+pub mod quiet;
 pub mod paths;
 pub mod pkm;
 pub mod remote;

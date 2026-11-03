@@ -2,9 +2,9 @@
 // (motherboard and graphics-card fans) and liquidctl (liquid coolers and
 // fan hubs), with what each fan does now.
 
-import type { FanProfile } from '@shared/types';
-import { ExternalLink, Fan, Gauge, ShieldCheck, Snowflake, Wind } from 'lucide-react';
-import { useState } from 'react';
+import type { FanProfile, QuietStatus } from '@shared/types';
+import { ExternalLink, Fan, Gauge, Moon, ShieldCheck, Snowflake, Sun, Wind } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
@@ -12,11 +12,13 @@ import { Badge, Card, CardHeader } from '../../components/ui/Card';
 import { Switch, TextInput } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
+import { useEvent } from '../../lib/hooks';
 import { toast } from '../../state/toasts';
 import { Row } from '../games/shared';
 import type { Rig } from './useRig';
 
 const PROFILES: { value: FanProfile; title: string; icon: LucideIcon; blurb: string }[] = [
+  { value: 'lowest', title: 'Lowest', icon: Moon, blurb: 'The quietest safe speed. The graphics card runs its own (it often stops its fans when cool).' },
   { value: 'silent', title: 'Silent', icon: Snowflake, blurb: 'As quiet as the temperatures allow; full speed when it gets hot.' },
   { value: 'auto', title: 'Default (Auto)', icon: Gauge, blurb: 'Your motherboard, graphics card and cooler decide, as without OmniHub.' },
   { value: 'fast', title: 'Fast', icon: Wind, blurb: 'Cooler and louder: more air early, for gaming and heavy work.' },
@@ -36,7 +38,7 @@ export function FansTab({ rig }: { rig: Rig }) {
     <div className="space-y-4">
       <Card>
         <CardHeader title="Fan profile" subtitle="Every fan OmniHub can reach follows it, and gets handed back to the hardware when OmniHub closes." className="px-5 pt-4" />
-        <div role="radiogroup" aria-label="Fan profile" className="grid gap-2 px-5 pb-4 pt-3 sm:grid-cols-3">
+        <div role="radiogroup" aria-label="Fan profile" className="grid grid-cols-2 gap-2 px-5 pb-4 pt-3">
           {PROFILES.map((p) => {
             const on = s.fans.profile === p.value;
             const Icon = p.icon;
@@ -55,6 +57,8 @@ export function FansTab({ rig }: { rig: Rig }) {
           No fan goes under 30% (pumps 50%), everything runs flat out from 90 °C, and a fan with no temperature to follow goes back to Auto.
         </div>
       </Card>
+
+      <QuietCard />
 
       <Card>
         <CardHeader icon={Fan} title="Motherboard and graphics card" subtitle={st?.fans === 'on' ? `Processor ${temp(st.cpuTemp)} · graphics card ${temp(st.gpuTemp)}` : 'Through LibreHardwareMonitor'} className="px-5 pt-4" />
@@ -136,5 +140,41 @@ export function FansTab({ rig }: { rig: Rig }) {
         )}
       </Card>
     </div>
+  );
+}
+
+/** Quiet mode: screens off and fans at their lowest, the PC still on. */
+function QuietCard() {
+  const [q, setQ] = useState<QuietStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void api.quiet.status().then(setQ, () => undefined);
+  }, []);
+  useEvent<QuietStatus>('quiet:changed', setQ);
+  const go = async (on: boolean) => {
+    setBusy(true);
+    try {
+      setQ(await api.quiet.set(on));
+    } catch (e) {
+      toast.error('Couldn’t do that', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card className="flex flex-wrap items-center gap-4 p-5">
+      <span className="grid h-11 w-11 place-items-center rounded-xl bg-indigo-500/15 text-indigo-300">
+        <Moon size={20} />
+      </span>
+      <div className="min-w-[220px] flex-1">
+        <div className="font-medium">Quiet mode</div>
+        <div className="text-[12.5px] text-dim">
+          Screens off and fans at their lowest safe speed; the PC stays on. Fans never stop completely (the processor would overheat) and speed up if it gets warm. Ends when you touch the mouse or keyboard, or from your phone’s Power page.
+        </div>
+      </div>
+      <Button loading={busy} variant={q?.on ? 'secondary' : 'primary'} icon={q?.on ? Sun : Moon} onClick={() => void go(!q?.on)}>
+        {q?.on ? 'Turn off' : 'Quiet now'}
+      </Button>
+    </Card>
   );
 }
