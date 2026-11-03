@@ -786,7 +786,7 @@ export interface SunshineStatus {
 export type Theme = 'system' | 'dark' | 'light';
 
 /** The app's look: classic, or one of the animated themes. */
-export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember' | 'minecraft' | 'matrix' | 'rain' | 'snowfall' | 'fireflies' | 'lava' | 'clouds';
+export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember' | 'minecraft' | 'matrix' | 'rain' | 'snowfall' | 'fireflies' | 'lava' | 'clouds' | 'bankai' | 'hollow' | 'mugetsu';
 
 export interface Settings {
   general: {

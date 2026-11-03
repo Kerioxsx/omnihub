@@ -938,3 +938,15 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
 - Tidy Downloads makes ordinary folder rules (move by type inside
   Downloads; optionally installers older than 30 days to the Recycle Bin),
   which can be edited or deleted like any other.
+
+## Updates closing the app
+
+- The installer closes running copies of `omnihub.exe` by image name only,
+  never with their process tree (`/T`): an update's installer is started by
+  OmniHub and would be in that tree. In an update it first waits up to 45
+  seconds (the MSI about a minute) for OmniHub to close by itself, so
+  Minecraft servers can save their worlds.
+- `pending-update.txt` in the data folder holds the version an installer
+  was started for; the next start compares it with its own version, reports
+  an update that didn't finish once, and doesn't install that version again
+  without a click.

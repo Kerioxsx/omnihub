@@ -28,6 +28,16 @@ export const LOOKS: LookInfo[] = [
   { id: 'fireflies', name: 'Fireflies', blurb: 'Glowing fireflies over a dark forest.', light: false },
   { id: 'lava', name: 'Lava lamp', blurb: 'Warm blobs rising and sinking.', light: false },
   { id: 'clouds', name: 'Clouds', blurb: 'A bright sky with clouds sailing by.', light: true },
+  { id: 'bankai', name: 'Bleach: Bankai', blurb: 'Black and orange, a Getsuga crescent and rising reiatsu.', light: false },
+  { id: 'hollow', name: 'Bleach: Hollow', blurb: 'Bone white, manga ink and crimson mask stripes.', light: true },
+  { id: 'mugetsu', name: 'Bleach: Mugetsu', blurb: 'Ink black with a purple spiritual glow.', light: false },
+];
+
+/** The three Bleach modes, switched from the sidebar while one is on. */
+export const BLEACH: { id: Look; kanji: string; name: string }[] = [
+  { id: 'bankai', kanji: '卍解', name: 'Bankai' },
+  { id: 'hollow', kanji: '虚', name: 'Hollow' },
+  { id: 'mugetsu', kanji: '無月', name: 'Mugetsu' },
 ];
 
 export const lookInfo = (id: string | undefined): LookInfo => LOOKS.find((l) => l.id === id) ?? LOOKS[0];

@@ -10,6 +10,7 @@ import { useSettings } from '../state/settings';
 import { jobFraction, useStorage } from '../state/storage';
 import { Logo } from './Logo';
 import { NAV, type NavItem } from './nav';
+import { BleachSwitcher } from './BleachSwitcher';
 import { UpdateCard } from './UpdateCard';
 import { Dot, Kbd } from './ui/Card';
 import { ProgressRing } from './ui/Progress';
@@ -77,8 +78,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         title={collapsed ? (index < 9 ? `${n.label} (${MOD_LABEL}+${index + 1})` : n.label) : undefined}
         className={cx('group relative flex h-9 w-full items-center gap-3 rounded-[10px] px-2.5 text-[13.5px] font-medium transition-colors', active ? 'text-fg' : 'text-dim hover:bg-surface hover:text-fg', collapsed && 'justify-center px-0')}
       >
-        {active && <motion.span layoutId="nav-active" transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="absolute inset-0 rounded-[10px] border border-line bg-surface-2 shadow-[inset_0_1px_0_var(--card-hi)]" />}
-        {active && <motion.span layoutId="nav-bar" transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="accent-gradient absolute -left-3 top-2 h-5 w-[3px] rounded-r-full" />}
+        {active && <motion.span layoutId="nav-active" transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="nav-active absolute inset-0 rounded-[10px] border border-line bg-surface-2 shadow-[inset_0_1px_0_var(--card-hi)]" />}
+        {active && <motion.span layoutId="nav-bar" transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="nav-bar accent-gradient absolute -left-3 top-2 h-5 w-[3px] rounded-r-full" />}
         <Icon size={17} aria-hidden className={cx('relative z-10 shrink-0 transition-colors', active ? 'text-accent' : 'text-faint group-hover:text-dim')} />
         {!collapsed && <span className="relative z-10 flex-1 truncate text-left">{n.label}</span>}
         {!collapsed && badges[n.id] && <span className="relative z-10">{badges[n.id]}</span>}
@@ -136,6 +137,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       </div>
 
       <div className="border-t border-line p-3">
+        <BleachSwitcher collapsed={collapsed} />
         <UpdateCard collapsed={collapsed} />
         {!collapsed && (
           <button type="button" onClick={() => navigate('phone')} className="mb-2 flex w-full items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-line-strong">

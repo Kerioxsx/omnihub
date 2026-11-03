@@ -743,7 +743,7 @@ pub struct GeneralSettings {
     /// "classic" (the light/dark theme and accent above) or an animated
     /// theme: "aurora", "synthwave", "ocean", "galaxy", "sakura", "ember",
     /// "minecraft", "matrix", "rain", "snowfall", "fireflies", "lava",
-    /// "clouds".
+    /// "clouds", and the Bleach modes "bankai", "hollow", "mugetsu".
     pub look: String,
     /// Animated themes move (off: a still picture of the same theme).
     pub animate_backdrop: bool,

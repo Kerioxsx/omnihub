@@ -1,16 +1,17 @@
 ## New in this version
 
-**Quick actions (a macro deck for your PC and phone, a quick-launch wheel, clipboard history), focus sounds, batteries, a PC health score and Tidy Downloads.**
+**Updates that always finish, and three Bleach themes.**
 
-- **Macro deck** (Quick actions → Deck): big buttons for media keys, the microphone, apps, files, websites, games, key presses (a Discord mute key, OBS scenes, F13–F24), typed text, counters, screenshots and locking the PC. Use them on the PC or on your **phone** (More → Deck), like a stream deck. The phone only sees each button's name, icon and colour.
-- **Quick-launch wheel**: press **Alt+Shift+Q** anywhere and a wheel of up to 8 actions opens at your mouse. Point, click or press 1–8; Esc closes it.
-- **Clipboard history**: press **Alt+Shift+V** anywhere to see what you copied (text and pictures), search it, and paste any of it. Pin items to keep them after a restart (encrypted). Passwords from the vault and from password managers are never kept, and you can add apps to skip or pause it.
-- **Focus sounds** (Focus → Sounds): rain, waves, wind, a fireplace, and brown, pink and white noise, made on the fly and mixed at their own volumes. They keep playing while you use the rest of the app.
-- **Batteries** (My PC → Batteries): the PC's, Xbox controllers' and Bluetooth headsets', mice' and controllers' batteries, with today's history, time left, and a notification at 20% and 10%.
-- **PC health score** (My PC → Health): drive space, memory, restarts and pending updates, startup apps, temporary files, the Recycle Bin and Downloads, each with a button to fix it.
-- **Tidy Downloads** (Tools → Folder rules): one click sorts pictures, videos, music, documents, archives and installers into their own folders inside Downloads, and can send installers older than 30 days to the Recycle Bin.
+- **Fixed: an update could close OmniHub without installing the new version**, so you had to download it again from the website. When OmniHub took a few seconds to close (saving Minecraft worlds, resetting fans), the installer closed itself along with it. Now the installer waits for OmniHub to close by itself, and only then closes anything still left. If an update ever doesn't finish, OmniHub says so on its next start and offers to try again, and it won't keep retrying that version on its own.
+- **Bleach themes** (Settings → Appearance), in three modes you can switch from the sidebar while one is on:
+  - **Bankai**: black and orange, a Getsuga crescent of energy and rising reiatsu.
+  - **Hollow**: bone white with manga ink and crimson mask stripes.
+  - **Mugetsu**: ink black with a sparse purple glow.
+  Condensed headings, angular accents, and a quick slash across the buttons on hover and when you switch modes (none if you turn on reduced motion). Everything is drawn by OmniHub; no artwork from the series is included.
 
-Also in 0.25.0: the Steam Deck–style game library, emulators, and counter events, goals and the stream overlay.
+The fix is in the installer, so it already applies to this update.
+
+Also in 0.26.0: quick actions (a macro deck for the PC and phone, a quick-launch wheel, clipboard history), focus sounds, batteries, the PC health score and Tidy Downloads.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

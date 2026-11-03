@@ -1027,3 +1027,356 @@
 :root.popout-route body {
   background: var(--bg);
 }
+
+/* ---------- Bleach: Bankai, Hollow, Mugetsu ----------
+   Fan-made looks from the user's ZANGETSU brief: a premium app first, the
+   theme second. The crescent, ink, stripes and flames are drawn here and in
+   Backdrop.tsx; no artwork from the series is shipped. Slashes only play on
+   deliberate actions (a button's hover sheen, switching modes), never in a
+   loop, and not at all with reduced motion. */
+
+@font-face {
+  font-family: 'OmniHub Barlow Condensed';
+  src: url('./fonts/BarlowCondensed-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'OmniHub Barlow Condensed';
+  src: url('./fonts/BarlowCondensed-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root[data-look='bankai'] {
+  --bg: #09090b;
+  --bg-elev: #17171c;
+  --surface: rgba(255, 255, 255, 0.035);
+  --surface-2: rgba(255, 255, 255, 0.065);
+  --surface-3: rgba(255, 255, 255, 0.1);
+  --border: #2a2a32;
+  --border-strong: #3d3d47;
+  --text: #f4f4f5;
+  --text-dim: #a1a1aa;
+  --text-faint: #75757e;
+  --accent: #ff6500;
+  --accent-2: #ff9a3c;
+}
+:root.light[data-look='hollow'] {
+  --bg: #f1f0eb;
+  --bg-elev: #ffffff;
+  --surface: rgba(23, 23, 28, 0.035);
+  --surface-2: rgba(23, 23, 28, 0.06);
+  --surface-3: rgba(23, 23, 28, 0.1);
+  --border: #dcd9d3;
+  --border-strong: #c4c0b8;
+  --text: #17171c;
+  --text-dim: #5b5b62;
+  --text-faint: #85858b;
+  --accent: #b51f2c;
+  --accent-2: #e0453a;
+}
+:root[data-look='mugetsu'] {
+  --bg: #050507;
+  --bg-elev: #121017;
+  --surface: rgba(232, 226, 241, 0.035);
+  --surface-2: rgba(232, 226, 241, 0.065);
+  --surface-3: rgba(232, 226, 241, 0.1);
+  --border: #2b2233;
+  --border-strong: #43364f;
+  --text: #e8e2f1;
+  --text-dim: #9f96aa;
+  --text-faint: #746b80;
+  --accent: #8e4ac9;
+  --accent-2: #b27ae6;
+}
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) {
+  --radius: 12px;
+  --font-display: 'OmniHub Barlow Condensed', 'Inter Display', 'Segoe UI', system-ui, sans-serif;
+  --card-hi: rgba(255, 255, 255, 0.05);
+}
+
+/* Sharp condensed titles. */
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) header h1 {
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) .font-display {
+  letter-spacing: 0.02em;
+}
+
+/* Solid cards with hairline borders; a little brighter on hover. */
+:root:is([data-look='bankai'], [data-look='mugetsu']) .card {
+  background: color-mix(in oklab, var(--bg-elev) 94%, transparent);
+  box-shadow: none;
+  transition: border-color 150ms ease;
+}
+:root.light[data-look='hollow'] .card {
+  background: #ffffff;
+  box-shadow: none;
+  transition: border-color 150ms ease;
+}
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) .card:hover {
+  border-color: var(--border-strong);
+}
+
+/* The sidebar's selection: an angular blade instead of a rounded bar. */
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) .nav-bar {
+  width: 4px;
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 20%, 100% 80%, 0 100%);
+}
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) .nav-active {
+  background: linear-gradient(100deg, var(--accent-soft), transparent 75%);
+  border-color: color-mix(in oklab, var(--accent) 28%, transparent);
+}
+
+/* Main buttons: medium-weight capitals, a soft glow and a quick diagonal sheen on hover. */
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) button.accent-gradient {
+  position: relative;
+  overflow: hidden;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  transition: box-shadow 150ms ease, filter 150ms ease;
+}
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) button.accent-gradient::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.5) 50%, transparent 62%);
+  transform: translateX(-130%);
+  pointer-events: none;
+}
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) button.accent-gradient:hover:not(:disabled)::after {
+  transform: translateX(130%);
+  transition: transform 420ms cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) button.accent-gradient:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 55%, transparent), 0 10px 26px -12px var(--accent-glow);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) button.accent-gradient::after {
+    display: none;
+  }
+}
+:root.reduce-motion button.accent-gradient::after {
+  display: none;
+}
+
+/* The kanji in a corner: decoration only, very faint. */
+.bd-kanji {
+  right: 3%;
+  bottom: 4%;
+  writing-mode: vertical-rl;
+  font-family: 'Yu Mincho', 'MS Mincho', 'Hiragino Mincho ProN', serif;
+  font-size: clamp(64px, 11vh, 132px);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  opacity: 0.07;
+  letter-spacing: 0.08em;
+}
+.look-hollow .bd-kanji {
+  color: #17171c;
+  opacity: 0.06;
+}
+
+/* Bankai: black, an orange crescent of energy, faint slashes, rising reiatsu. */
+.bd-bk-glow {
+  inset: 0;
+  background:
+    radial-gradient(60% 55% at 92% 105%, rgba(255, 101, 0, 0.26), transparent 70%),
+    radial-gradient(40% 35% at 0% 0%, rgba(255, 101, 0, 0.07), transparent 70%),
+    linear-gradient(180deg, #0b0b0e, #09090b);
+}
+.bd-bk-slash {
+  height: 2px;
+  width: 150%;
+  left: -25%;
+  background: linear-gradient(90deg, transparent, rgba(255, 120, 30, 0.32) 45%, rgba(255, 220, 190, 0.5) 50%, rgba(255, 120, 30, 0.32) 55%, transparent);
+  transform: rotate(-24deg);
+  opacity: 0.4;
+}
+.bd-bk-slash.s1 {
+  top: 62%;
+}
+.bd-bk-slash.s2 {
+  top: 74%;
+  height: 1px;
+  opacity: 0.35;
+}
+.bd-bk-slash.s3 {
+  top: 30%;
+  height: 1px;
+  opacity: 0.18;
+}
+.bd-bk-crescent {
+  --dur: 9s;
+  right: -6%;
+  bottom: -18%;
+  width: min(62vh, 560px);
+  height: min(62vh, 560px);
+  border-radius: 50%;
+  transform: rotate(-32deg);
+  box-shadow:
+    inset -34px 22px 0 -6px rgba(255, 101, 0, 0.55),
+    inset -46px 30px 30px -10px rgba(255, 101, 0, 0.25);
+  filter: blur(1.5px) drop-shadow(0 0 22px rgba(255, 101, 0, 0.35));
+  animation: bd-bk-breathe var(--dur) ease-in-out infinite;
+}
+@keyframes bd-bk-breathe {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.bd-reiatsu {
+  left: var(--x);
+  bottom: -3%;
+  width: 4px;
+  height: 10px;
+  border-radius: 2px;
+  background: linear-gradient(to top, rgba(255, 101, 0, 0), #ff8a3a);
+  box-shadow: 0 0 8px 1px rgba(255, 101, 0, 0.55);
+  opacity: 0.7;
+  animation: bd-rise var(--dur) ease-out var(--delay) infinite;
+}
+.app-backdrop.is-contained .bd-reiatsu {
+  width: 2px;
+  height: 6px;
+  animation-name: bd-rise-mini;
+}
+.app-backdrop.is-contained .bd-bk-crescent {
+  width: 70%;
+  height: 120%;
+  bottom: -40%;
+}
+
+/* Hollow: bone-white paper, halftone, ink strokes and crimson mask stripes. */
+.bd-ho-paper {
+  inset: 0;
+  background:
+    radial-gradient(70% 60% at 100% 0%, rgba(181, 31, 44, 0.05), transparent 70%),
+    linear-gradient(180deg, #f4f3ee, #ecebe5);
+}
+.bd-ho-dots {
+  right: 0;
+  top: 0;
+  width: 46%;
+  height: 52%;
+  background-image: radial-gradient(rgba(23, 23, 28, 0.16) 1.2px, transparent 1.6px);
+  background-size: 9px 9px;
+  mask-image: radial-gradient(90% 90% at 100% 0%, #000 20%, transparent 70%);
+}
+.bd-ho-ink {
+  inset: 0;
+  background-repeat: no-repeat;
+  background-position: right bottom;
+  background-size: cover;
+}
+.bd-ho-stripes {
+  /* Kept to the top corner, above the page's content. */
+  right: 5%;
+  top: -8%;
+  width: 130px;
+  height: 26vh;
+  transform: rotate(14deg);
+  background: linear-gradient(90deg, transparent 0 14%, rgba(181, 31, 44, 0.55) 14% 24%, transparent 24% 42%, rgba(181, 31, 44, 0.4) 42% 50%, transparent 50% 66%, rgba(181, 31, 44, 0.28) 66% 72%, transparent 72%);
+  mask-image: linear-gradient(to bottom, #000 35%, transparent 100%);
+  opacity: 0.5;
+}
+.app-backdrop.is-contained .bd-ho-stripes {
+  width: 40%;
+}
+
+/* Mugetsu: near-black ink, a dark eclipse, sparse purple-rimmed flames. */
+.bd-mg-void {
+  inset: 0;
+  background:
+    radial-gradient(70% 45% at 50% 110%, rgba(115, 20, 184, 0.22), transparent 70%),
+    radial-gradient(30% 30% at 85% 15%, rgba(142, 74, 201, 0.06), transparent 70%),
+    linear-gradient(180deg, #060609, #050507);
+}
+.bd-mg-eclipse {
+  --dur: 14s;
+  right: 8%;
+  top: 9%;
+  width: min(34vh, 300px);
+  height: min(34vh, 300px);
+  border-radius: 50%;
+  background: #050507;
+  box-shadow:
+    0 0 0 1px rgba(142, 74, 201, 0.35),
+    0 0 40px 6px rgba(115, 20, 184, 0.28),
+    inset 0 0 30px rgba(142, 74, 201, 0.12);
+  animation: bd-bk-breathe var(--dur) ease-in-out infinite;
+}
+.bd-mg-flame {
+  left: var(--x);
+  bottom: -4%;
+  width: 14px;
+  height: 34px;
+  border-radius: 50% 50% 50% 50% / 70% 70% 30% 30%;
+  background: radial-gradient(60% 70% at 50% 70%, #050507 40%, rgba(142, 74, 201, 0.7) 75%, transparent 78%);
+  filter: blur(1px) drop-shadow(0 0 6px rgba(142, 74, 201, 0.45));
+  opacity: 0.6;
+  animation: bd-rise var(--dur) ease-out var(--delay) infinite;
+}
+.app-backdrop.is-contained .bd-mg-flame {
+  width: 7px;
+  height: 16px;
+  animation-name: bd-rise-mini;
+}
+
+/* Switching modes: one diagonal slash sweeps across (under 600 ms). */
+.bleach-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  overflow: hidden;
+  animation: bleach-tint 560ms ease-out forwards;
+}
+.bleach-flash::before {
+  content: '';
+  position: absolute;
+  left: -60%;
+  top: 45%;
+  width: 220%;
+  height: 22vh;
+  transform: rotate(-24deg) translateX(-60%);
+  background: linear-gradient(90deg, transparent, var(--flash) 40%, #fff 50%, var(--flash) 60%, transparent);
+  filter: blur(6px);
+  opacity: 0.85;
+  animation: bleach-slash 460ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.bleach-flash[data-mode='bankai'] {
+  --flash: #ff6500;
+}
+.bleach-flash[data-mode='hollow'] {
+  --flash: #b51f2c;
+}
+.bleach-flash[data-mode='mugetsu'] {
+  --flash: #8e4ac9;
+}
+@keyframes bleach-slash {
+  to {
+    transform: rotate(-24deg) translateX(60%);
+  }
+}
+@keyframes bleach-tint {
+  0% {
+    background: transparent;
+  }
+  30% {
+    background: color-mix(in oklab, var(--flash) 18%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}

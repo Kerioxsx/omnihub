@@ -217,6 +217,61 @@ function codeColumns(count: number, seed: number) {
   }));
 }
 
+// ---------- Bleach: original shapes, drawn here (no artwork from the series) ----------
+
+/** Rough manga-ink brush strokes for Hollow, as an SVG picture. */
+const INK = (() => {
+  const strokes = [
+    'M-40 620 C 160 560, 300 470, 520 300 S 860 40, 1040 -20',
+    'M180 760 C 360 660, 520 600, 700 470 S 940 280, 1080 230',
+    'M-60 420 C 80 380, 160 330, 260 250',
+  ];
+  const widths = [26, 14, 9];
+  const paths = strokes.map((d, i) => `<path d='${d}' fill='none' stroke='%2317171c' stroke-width='${widths[i]}' stroke-linecap='round' opacity='${[0.09, 0.07, 0.06][i]}'/>`).join('');
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 700' preserveAspectRatio='xMaxYMax slice'><filter id='r'><feTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='2' seed='7'/><feDisplacementMap in='SourceGraphic' scale='14'/></filter><g filter='url(%23r)'>${paths}</g></svg>`;
+  return `url("data:image/svg+xml;utf8,${svg}")`;
+})();
+
+function BleachLayers({ look, mini }: { look: 'bankai' | 'hollow' | 'mugetsu'; mini: boolean }) {
+  const motes = useMemo(() => particles(mini ? 5 : look === 'mugetsu' ? 12 : 16, look === 'mugetsu' ? 53 : 47, 9, 18), [look, mini]);
+  if (look === 'bankai') {
+    return (
+      <>
+        <i className="bd-bk-glow" />
+        <i className="bd-bk-slash s1" />
+        <i className="bd-bk-slash s2" />
+        <i className="bd-bk-slash s3" />
+        <i className="bd-bk-crescent" />
+        {motes.map((p) => (
+          <i key={p.key} className="bd-reiatsu" style={p.style} />
+        ))}
+        {!mini && <i className="bd-kanji">斬月</i>}
+      </>
+    );
+  }
+  if (look === 'hollow') {
+    return (
+      <>
+        <i className="bd-ho-paper" />
+        <i className="bd-ho-dots" />
+        <i className="bd-ho-ink" style={{ backgroundImage: INK }} />
+        <i className="bd-ho-stripes" />
+        {!mini && <i className="bd-kanji">虚</i>}
+      </>
+    );
+  }
+  return (
+    <>
+      <i className="bd-mg-void" />
+      <i className="bd-mg-eclipse" />
+      {motes.map((p) => (
+        <i key={p.key} className="bd-mg-flame" style={p.style} />
+      ))}
+      {!mini && <i className="bd-kanji">無月</i>}
+    </>
+  );
+}
+
 function useStill(): boolean {
   const animate = useSettings((s) => s.settings?.general.animateBackdrop ?? true);
   const reduced = useSettings((s) => s.settings?.general.reducedMotion ?? false);
@@ -314,6 +369,10 @@ function Layers({ look, mini }: { look: Look; mini: boolean }) {
       );
     case 'minecraft':
       return <MinecraftLayers mini={mini} />;
+    case 'bankai':
+    case 'hollow':
+    case 'mugetsu':
+      return <BleachLayers look={look} mini={mini} />;
     case 'matrix':
       return (
         <>

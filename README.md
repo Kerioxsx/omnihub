@@ -32,6 +32,11 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.27.0
+
+- **Updates always finish**: the installer no longer closes itself together with the app; if an update ever doesn't finish, OmniHub says so and offers to try again.
+- **Bleach themes**: Bankai, Hollow and Mugetsu, switched from the sidebar, with condensed headings, angular accents and a slash on switching (drawn by OmniHub, no artwork from the series).
+
 ## New in 0.26.0
 
 - **Quick actions**: a macro deck on the PC and the phone (media, mic, apps, games, keys, text, counters), a quick-launch wheel at the mouse (Alt+Shift+Q), and clipboard history with pictures and pins (Alt+Shift+V).

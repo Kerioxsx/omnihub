@@ -647,3 +647,14 @@ has Capri speak through her local bridge (`companion::say`).
 - Focus sounds are made in the page with Web Audio (`lib/sounds.ts`):
   looped noise buffers through filters and slow oscillators, plus random
   short bursts for raindrops and crackles.
+
+## Bleach themes
+
+- `bankai`, `hollow` (light) and `mugetsu` are looks like the others
+  (`lib/looks.ts`, `themes.css`, `Backdrop.tsx`): tokens from the user's
+  ZANGETSU brief, Barlow Condensed headings (OFL, in `src/desktop/fonts`),
+  an angular sidebar selection (`.nav-bar`, `.nav-active`), a hover sheen on
+  main buttons, and backgrounds drawn in CSS and an inline SVG.
+- `components/BleachSwitcher.tsx` shows in the sidebar while one of them is
+  on and switches between them with one slash overlay (skipped with reduced
+  motion).
