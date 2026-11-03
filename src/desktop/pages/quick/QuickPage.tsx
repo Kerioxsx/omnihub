@@ -1,9 +1,9 @@
 // Quick actions: the macro deck (here and on the phone), the quick-launch
 // wheel (a hotkey shows it at the mouse) and the clipboard history.
 
-import type { ClipItem, ClipList, Counter, LibraryGame, QuickAction, QuickButton, QuickState } from '@shared/types';
+import type { ClipItem, ClipList, Counter, LibraryGame, ObsInfo, QuickAction, QuickButton, QuickState } from '@shared/types';
 import { QUICK_COLORS, QUICK_ICONS } from '@shared/quickIcons';
-import { ArrowDown, ArrowUp, ClipboardList, Copy, FolderOpen, Grid3x3, Image as ImageIcon, Pause, Pencil, Pin, PinOff, Play, Plus, Smartphone, Trash2, Disc3 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ClipboardList, Copy, FolderOpen, Grid3x3, Image as ImageIcon, Pause, Pencil, Pin, PinOff, Play, Plus, Radio, Smartphone, Trash2, Disc3 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -17,7 +17,7 @@ import { useEvent } from '../../lib/hooks';
 import { navigate, useRoute } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
-import { ACTION_KINDS, ButtonFace, ChordInput, MEDIA_LABEL, ago, blankAction, describe } from './shared';
+import { ACTION_KINDS, ButtonFace, ChordInput, MEDIA_LABEL, OBS_LABEL, ago, blankAction, describe } from './shared';
 
 type Tab = 'deck' | 'wheel' | 'clipboard';
 
@@ -100,9 +100,105 @@ function ActionFields({ action, onChange, games, counters }: { action: QuickActi
         </div>
       );
     }
+    case 'obs':
+      return <ObsFields action={action} onChange={onChange} />;
     default:
       return null;
   }
+}
+
+function ObsFields({ action, onChange }: { action: Extract<QuickAction, { kind: 'obs' }>; onChange: (a: QuickAction) => void }) {
+  const [lists, setLists] = useState<ObsInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const needs = action.what === 'scene' || action.what === 'mute';
+  const load = async () => {
+    setBusy(true);
+    try {
+      setLists(await api.quick.obsInfo(true));
+    } catch (e) {
+      toast.error('Couldn’t reach OBS', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const options = action.what === 'scene' ? lists?.scenes : lists?.inputs;
+  return (
+    <div className="space-y-3">
+      <Field label="OBS does">
+        <Select value={action.what} onChange={(e) => onChange({ ...action, what: e.target.value as typeof action.what, target: null })}>
+          {Object.entries(OBS_LABEL).map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {needs && (
+        <Field label={action.what === 'scene' ? 'Scene' : 'Source'} hint="Type its name as OBS shows it, or load the list from OBS (it must be open).">
+          <div className="flex gap-2">
+            {options?.length ? (
+              <Select value={action.target ?? ''} onChange={(e) => onChange({ ...action, target: e.target.value })} className="flex-1">
+                <option value="">Pick…</option>
+                {options.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
+              </Select>
+            ) : (
+              <TextInput value={action.target ?? ''} onChange={(e) => onChange({ ...action, target: e.target.value })} placeholder={action.what === 'scene' ? 'Gameplay' : 'Mic/Aux'} className="flex-1" />
+            )}
+            <Button variant="secondary" loading={busy} onClick={() => void load()}>
+              Load from OBS
+            </Button>
+          </div>
+        </Field>
+      )}
+    </div>
+  );
+}
+
+/** OBS's WebSocket server: its address and password (kept encrypted). */
+function ObsCard({ state, save }: { state: QuickState; save: (s: QuickState) => Promise<boolean> }) {
+  const [url, setUrl] = useState(state.obsUrl);
+  const [password, setPassword] = useState('');
+  const [has, setHas] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void api.quick.obsInfo(false).then((i) => setHas(i.hasPassword), () => undefined);
+  }, []);
+  const test = async () => {
+    setBusy(true);
+    try {
+      if (url !== state.obsUrl && !(await save({ ...state, obsUrl: url }))) return;
+      if (password) {
+        await api.quick.obsPassword(password);
+        setPassword('');
+        setHas(true);
+      }
+      const i = await api.quick.obsInfo(true);
+      toast.success('Connected to OBS', `${i.scenes.length} scene${i.scenes.length === 1 ? '' : 's'}, ${i.inputs.length} source${i.inputs.length === 1 ? '' : 's'}.`);
+    } catch (e) {
+      toast.error('Couldn’t reach OBS', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card className="space-y-3 p-4">
+      <div className="flex items-center gap-2">
+        <Radio size={16} className="text-accent" />
+        <div className="font-medium">OBS Studio</div>
+        {has && <Badge tone="good">Password saved</Badge>}
+      </div>
+      <p className="text-[12.5px] text-dim">For OBS buttons: in OBS open Tools → WebSocket Server Settings, enable it, and copy the password from Show Connect Info.</p>
+      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+        <TextInput value={url} onChange={(e) => setUrl(e.target.value)} placeholder="ws://127.0.0.1:4455" aria-label="OBS address" />
+        <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={has ? 'Saved (type to change)' : 'Password'} aria-label="OBS password" />
+        <Button variant="secondary" loading={busy} onClick={() => void test()}>
+          {password || url !== state.obsUrl ? 'Save & test' : 'Test'}
+        </Button>
+      </div>
+    </Card>
+  );
 }
 
 function ButtonEditor({ open, initial, onClose, onSave, forDeck }: { open: boolean; initial: QuickButton | null; onClose: () => void; onSave: (b: QuickButton) => void; forDeck: boolean }) {
@@ -144,7 +240,7 @@ function ButtonEditor({ open, initial, onClose, onSave, forDeck }: { open: boole
             value={action.kind}
             onChange={(e) => {
               const kind = e.target.value as QuickAction['kind'];
-              const icon = { media: 'play', open: 'app-window', game: 'gamepad-2', keys: 'keyboard', text: 'message-square', mic: 'mic-off', counter: 'sparkles', screenshot: 'camera', lock: 'lock', clipboard: 'clipboard-list' }[kind];
+              const icon = { media: 'play', open: 'app-window', game: 'gamepad-2', keys: 'keyboard', text: 'message-square', mic: 'mic-off', counter: 'sparkles', screenshot: 'camera', lock: 'lock', clipboard: 'clipboard-list', obs: 'radio' }[kind];
               setB({ ...b, action: blankAction(kind), icon: b.icon === 'zap' || !initial ? icon : b.icon });
             }}
           >
@@ -278,6 +374,7 @@ function DeckTab({ state, save }: { state: QuickState; save: (s: QuickState) => 
             <EmptyState compact icon={Grid3x3} title="No buttons yet" description="Add media keys, apps, games, key presses, text or counters." />
           )}
         </Card>
+        <ObsCard state={state} save={save} />
         <Callout icon={Smartphone} title="On your phone">
           Pair your phone (Phone page), then open More → Deck. The phone only sees each button's name, icon and colour, and can only run the buttons you made here.
         </Callout>

@@ -19,6 +19,7 @@ import { useAsync, useInterval } from '../../lib/hooks';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
 import { Sparkline } from '../home/Sparkline';
+import { NetworkPanel } from './NetworkPanel';
 
 const HISTORY = 60;
 const POLL_MS = 1500;
@@ -265,6 +266,7 @@ export function TasksPage() {
           {paused && <span className="ml-auto text-warn">Paused</span>}
         </div>
       </Card>
+      <NetworkPanel paused={paused} />
     </Page>
   );
 }

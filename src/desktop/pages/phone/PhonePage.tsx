@@ -1,7 +1,7 @@
 import { formatBytes, formatDateTime, formatRelative } from '@shared/format';
-import type { AuditEntry, Device, InboxItem } from '@shared/types';
+import type { AuditEntry, Device, InboxItem, WakeTarget } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowDownToLine, ArrowUpFromLine, Check, CircleCheck, CircleX, Copy, Eye, FolderSearch, Globe, History, Lock, MonitorUp, Pencil, QrCode, Send, ShieldCheck, Smartphone, Tablet, Trash, Type, Unlock, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Check, CircleCheck, CircleX, Copy, ExternalLink, Eye, FolderSearch, Globe, History, Lock, MonitorUp, Pencil, Power, QrCode, Send, ShieldCheck, Smartphone, Tablet, Trash, Type, Unlock, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -361,11 +361,54 @@ export function PhonePage() {
               </div>
             )}
             <Permissions />
+            <WakeCard />
           </div>
         </div>
         {!remote && <Skeleton className="h-20" />}
       </div>
       <PairDialog open={pairOpen} onClose={() => setPairOpen(false)} />
     </Page>
+  );
+}
+
+/** Waking the PC from the phone: what a Wake-on-LAN app needs, and how to allow it. */
+function WakeCard() {
+  const [t, setT] = useState<WakeTarget[] | null>(null);
+  useEffect(() => {
+    void api.wakeTargets().then(setT, () => setT([]));
+  }, []);
+  const main = t?.[0];
+  return (
+    <Card>
+      <CardHeader icon={Power} title="Wake this PC from bed" subtitle="Start games from the Games page on your phone; the screen turns on for them. To wake the PC from sleep, use any free Wake-on-LAN app on the phone." className="px-5 pt-4" />
+      <div className="space-y-3 px-5 pb-4 pt-3 text-[13px]">
+        {main ? (
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1.5 rounded-xl border border-line bg-surface px-4 py-3">
+            <span className="text-faint">MAC address</span>
+            <span className="font-mono">{main.mac}</span>
+            <IconButton icon={Copy} size="sm" label="Copy the MAC address" onClick={() => void copyText(main.mac).then(() => toast.success('Copied'))} />
+            <span className="text-faint">Broadcast</span>
+            <span className="font-mono">{main.broadcast}</span>
+            <IconButton icon={Copy} size="sm" label="Copy the broadcast address" onClick={() => void copyText(main.broadcast).then(() => toast.success('Copied'))} />
+            <span className="text-faint">Adapter</span>
+            <span className="col-span-2">
+              {main.name} · {main.ip}
+            </span>
+          </div>
+        ) : (
+          t && <div className="text-faint">No network card with an address was found.</div>
+        )}
+        {main?.wifi && <div className="text-warn">Waking over Wi-Fi works on few PCs; a network cable is reliable.</div>}
+        <ol className="list-decimal space-y-1 pl-5 text-dim">
+          <li>In Device Manager, open your network card → Power Management: tick “Allow this device to wake the computer” and “Only allow a magic packet”.</li>
+          <li>On its Advanced tab, set “Wake on Magic Packet” to Enabled.</li>
+          <li>Some PCs also need “Wake on LAN” turned on in the BIOS.</li>
+          <li>In the phone app, add this PC with the MAC and broadcast addresses above.</li>
+        </ol>
+        <Button size="sm" variant="secondary" icon={ExternalLink} onClick={() => void api.openDeviceManager()}>
+          Open Device Manager
+        </Button>
+      </div>
+    </Card>
   );
 }

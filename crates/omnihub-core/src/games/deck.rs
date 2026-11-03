@@ -296,6 +296,8 @@ impl AppCore {
                             e.2 = 0;
                         }
                     }
+                    // What's playing now (the longest-running), for the Discord status.
+                    *core.now_playing.lock() = active.values().filter(|a| a.2 == 0).min_by_key(|a| a.1).map(|a| (a.0.clone(), a.1));
                     let mut ended = Vec::new();
                     for (key, (name, start, misses)) in active.iter_mut() {
                         let exe = games.iter().find(|g| &g.0 == key).map(|g| g.2.as_str()).unwrap_or("");

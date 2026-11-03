@@ -1,4 +1,4 @@
-import type { Bind, EqStatus, PrivacyUse, ScanMode, Theme } from '@shared/types';
+import type { Bind, EqStatus, PresenceSettings, PresenceStatus, PrivacyUse, ScanMode, Theme } from '@shared/types';
 import { formatRelative } from '@shared/format';
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
@@ -16,6 +16,7 @@ import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { forgetPictures, LOOK_CHANGED, useAuroraLook } from '../../lib/aurora/textures';
 import { LOOKS } from '../../lib/looks';
+import { controllerModeOn, setControllerMode } from '../../lib/padNav';
 import { navigate, useRoute } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
 import { useLive } from '../../state/live';
@@ -261,6 +262,8 @@ export function SettingsPage() {
             <Row title="“Send to → OmniHub (phone)” in Explorer" hint="Right-click files or folders in Explorer, choose Send to, and they open here ready to send to your phone.">
               <Switch checked={s.remote.sendToMenu} onChange={(v) => void update({ remote: { sendToMenu: v } })} label="Explorer Send to menu" />
             </Row>
+            <ControllerRow />
+            <DiscordRows />
           </Section>
 
           <Section id="storage" title="Storage" description="How drives are scanned and what counts as worth cleaning.">
@@ -832,6 +835,80 @@ function ItemPackRow() {
       <Button size="sm" icon={FolderOpen} loading={busy} onClick={() => void choose()}>
         {count ? 'Change…' : 'Choose a zip…'}
       </Button>
+    </Row>
+  );
+}
+
+/** The Discord status: the game you play and your shiny hunt, under your name in Discord. */
+function DiscordRows() {
+  const [st, setSt] = useState<PresenceStatus | null>(null);
+  const [id, setId] = useState('');
+  useEffect(() => {
+    void api.presence.status().then((x) => {
+      setSt(x);
+      setId(x.settings.clientId);
+    }, () => undefined);
+  }, []);
+  if (!st) return null;
+  const save = async (p: Partial<PresenceSettings>) => {
+    try {
+      const next = await api.presence.save({ ...st.settings, clientId: id, ...p });
+      setSt(next);
+      toast.saved();
+    } catch (e) {
+      toast.error('Not saved', errorText(e));
+    }
+  };
+  const s = st.settings;
+  return (
+    <>
+      <Row title="Discord status" hint={st.showing ? `Showing: ${st.showing.details}${st.showing.state ? ` — ${st.showing.state}` : ''}` : st.error && s.enabled ? st.error : 'Show the game you’re playing and your shiny hunt under your name in Discord (the desktop app).'}>
+        <Switch checked={s.enabled} onChange={(v) => void save({ enabled: v })} label="Discord status" />
+      </Row>
+      <Row
+        title="Discord Application ID"
+        stack
+        hint={
+          <>
+            Discord only shows statuses for an app, so make your own (free): open discord.com/developers/applications, click New Application, name it what Discord should show after “Playing” (like “OmniHub”), and copy its Application ID here.
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <TextInput value={id} onChange={(e) => setId(e.target.value.replace(/[^0-9]/g, ''))} placeholder="1234567890123456789" className="w-[260px]" inputMode="numeric" aria-label="Discord Application ID" />
+          <Button size="sm" variant="secondary" onClick={() => void save({})} disabled={id === s.clientId}>
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" icon={ExternalLink} onClick={() => void api.app.openUrl('https://discord.com/developers/applications')}>
+            Developer Portal
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-4 pt-1 text-[13px]">
+          <label className="flex items-center gap-2">
+            <Switch checked={s.showGame} onChange={(v) => void save({ showGame: v })} label="Show the game" /> The game
+          </label>
+          <label className="flex items-center gap-2">
+            <Switch checked={s.showHunt} onChange={(v) => void save({ showHunt: v })} label="Show the shiny hunt" /> The shiny hunt
+          </label>
+        </div>
+      </Row>
+    </>
+  );
+}
+
+/** Controller mode: the whole app with a gamepad. */
+function ControllerRow() {
+  const [on, setOn] = useState(controllerModeOn);
+  return (
+    <Row title="Controller mode" hint="Move around OmniHub with an Xbox or other controller: D-pad or stick to move, A to press, B to go back, LB / RB to switch pages, Start to search. Only while OmniHub is in front.">
+      <Switch
+        checked={on}
+        onChange={(v) => {
+          setControllerMode(v);
+          setOn(v);
+        }}
+        label="Controller mode"
+      />
     </Row>
   );
 }

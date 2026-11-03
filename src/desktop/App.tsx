@@ -7,6 +7,7 @@ import { DropOverlay } from './components/DropOverlay';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GlobalEvents, ThemeController } from './components/GlobalEvents';
 import { RecapModal } from './pages/games/library/RecapModal';
+import { PadNavigator } from './components/PadNavigator';
 import { Logo } from './components/Logo';
 import { PowerBanner } from './components/PowerBanner';
 import { isWindowFullscreen, setWindowFullscreen, usePlayer } from './lib/nowPlaying';
@@ -159,6 +160,7 @@ export function App() {
       <ThemeController />
       <GlobalEvents />
       <RecapModal />
+      <PadNavigator />
       <Backdrop />
       <div className="relative z-10 flex h-full">
         <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />

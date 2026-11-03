@@ -10,6 +10,7 @@ pub mod firewall;
 pub mod gpu;
 pub mod keys;
 pub mod layouts;
+pub mod netmon;
 pub mod open_apps;
 pub mod ports;
 pub mod power;
@@ -18,6 +19,7 @@ pub mod procs;
 pub mod schedtask;
 pub mod session_end;
 pub mod shell;
+pub mod wol;
 
 /// The signed-in user's first name for greetings ("Sam" from "Sam Rivera"),
 /// falling back to the account name.

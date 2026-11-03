@@ -128,6 +128,36 @@ pub async fn quick_open(app: AppHandle, which: String) -> Res<()> {
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ObsInfo {
+    has_password: bool,
+    scenes: Vec<String>,
+    inputs: Vec<String>,
+}
+
+/// Save (or forget, with "") OBS's WebSocket password.
+#[tauri::command]
+pub async fn quick_obs_password(core: Core<'_>, password: String) -> Res<()> {
+    core.quick.set_obs_password(password.trim())
+}
+
+/// Whether a password is saved, and (when `connect`) OBS's scenes and sources.
+#[tauri::command]
+pub async fn quick_obs_info(core: Core<'_>, connect: bool) -> Res<ObsInfo> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let has_password = core.quick.has_obs_password();
+        if !connect {
+            return Ok(ObsInfo { has_password, scenes: Vec::new(), inputs: Vec::new() });
+        }
+        let (scenes, inputs) = omnihub_core::obs::lists(&core.quick.state().obs_url, &core.quick.obs_password())?;
+        Ok(ObsInfo { has_password, scenes, inputs })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ClipList {
     items: Vec<ClipItem>,
     paused: bool,
@@ -212,4 +242,88 @@ pub async fn pc_health() -> Res<omnihub_core::health::Health> {
 pub async fn rules_tidy_downloads(core: Core<'_>, old_installers: Option<u32>) -> Res<Vec<omnihub_core::rules::Rule>> {
     let dl = omnihub_core::system::shell::user_folders().into_iter().find(|f| f.0 == "Downloads").map(|f| f.1).ok_or("Couldn't find your Downloads folder.")?;
     core.rules.tidy(&dl, old_installers)
+}
+
+#[tauri::command]
+pub async fn presence_status(core: Core<'_>) -> Res<omnihub_core::presence::PresenceStatus> {
+    Ok(core.presence.status())
+}
+
+#[tauri::command]
+pub async fn presence_save(core: Core<'_>, settings: omnihub_core::presence::PresenceSettings) -> Res<omnihub_core::presence::PresenceStatus> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let st = core.presence.save(settings)?;
+        if !st.settings.enabled {
+            core.presence.update(None);
+        }
+        Ok(st)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Network speed, data used per day, and programs with connections open.
+#[tauri::command]
+pub async fn network_status(core: Core<'_>) -> Res<omnihub_core::system::netmon::NetStatus> {
+    let core = core.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let apps = omnihub_core::system::netmon::group_connections(&omnihub_core::system::ports::list());
+        core.netmon.status(apps)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupList {
+    jobs: Vec<omnihub_core::backup::BackupJob>,
+    running: Option<String>,
+}
+
+#[tauri::command]
+pub async fn backups_list(core: Core<'_>) -> Res<BackupList> {
+    Ok(BackupList { jobs: core.backups.list(), running: core.backups.running() })
+}
+
+#[tauri::command]
+pub async fn backups_save(core: Core<'_>, job: omnihub_core::backup::BackupJob) -> Res<omnihub_core::backup::BackupJob> {
+    core.backups.save(job)
+}
+
+#[tauri::command]
+pub async fn backups_delete(core: Core<'_>, id: String) -> Res<()> {
+    core.backups.delete(&id)
+}
+
+/// Run a backup now (in the background; `backup:done` says how it went).
+#[tauri::command]
+pub async fn backups_run(core: Core<'_>, id: String) -> Res<()> {
+    if core.backups.running().is_some() {
+        return Err("A backup is already running".into());
+    }
+    let backups = core.backups.clone();
+    std::thread::spawn(move || {
+        let _ = backups.run(&id, omnihub_core::db::now());
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn backups_cancel(core: Core<'_>) -> Res<()> {
+    core.backups.cancel();
+    Ok(())
+}
+
+/// The MAC and broadcast addresses a phone's Wake-on-LAN app needs.
+#[tauri::command]
+pub async fn wake_targets() -> Res<Vec<omnihub_core::system::wol::WakeTarget>> {
+    tauri::async_runtime::spawn_blocking(omnihub_core::system::wol::targets).await.map_err(|e| e.to_string())
+}
+
+/// Device Manager, where a network card's "wake this computer" settings are.
+#[tauri::command]
+pub async fn open_device_manager() -> Res<()> {
+    omnihub_core::system::shell::shell_execute("devmgmt.msc", "").map_err(|e| e.to_string())
 }

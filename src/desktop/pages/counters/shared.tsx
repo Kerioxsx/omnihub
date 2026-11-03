@@ -6,6 +6,7 @@ import { Keyboard, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { cx } from '../../lib/cx';
+import { claimGamepad } from '../../lib/padNav';
 import { spriteUrl } from './pokemon';
 
 /** The chance of a shiny per encounter (as the app's core works it out). */
@@ -70,7 +71,9 @@ export function KeyPicker({ value, onChange, label }: { value: KeyBind | null; o
   const [listening, setListening] = useState(false);
   useEffect(() => {
     if (!listening) return;
-    // Controller buttons too (standard gamepad order, as the PC reads them).
+    // Controller buttons too (standard gamepad order, as the PC reads them);
+    // controller mode leaves the gamepad to this picker meanwhile.
+    const release = claimGamepad();
     let frame = 0;
     const before = new Set<string>();
     for (const pad of navigator.getGamepads?.() ?? []) pad?.buttons.forEach((b, i) => b.pressed && before.add(`${pad.index}:${i}`));
@@ -98,6 +101,7 @@ export function KeyPicker({ value, onChange, label }: { value: KeyBind | null; o
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('keydown', onKey, true);
+      release();
     };
   }, [listening, onChange]);
   return (

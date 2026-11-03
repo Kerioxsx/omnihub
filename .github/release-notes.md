@@ -1,17 +1,25 @@
 ## New in this version
 
-**Updates that always finish, and three Bleach themes.**
+**Fortnite presets and checks, OBS on the deck, a Discord status, a network monitor, backups, controller mode, and screenshots you can search by their text.**
 
-- **Fixed: an update could close OmniHub without installing the new version**, so you had to download it again from the website. When OmniHub took a few seconds to close (saving Minecraft worlds, resetting fans), the installer closed itself along with it. Now the installer waits for OmniHub to close by itself, and only then closes anything still left. If an update ever doesn't finish, OmniHub says so on its next start and offers to try again, and it won't keep retrying that version on its own.
-- **Bleach themes** (Settings → Appearance), in three modes you can switch from the sidebar while one is on:
-  - **Bankai**: black and orange, a Getsuga crescent of energy and rising reiatsu.
-  - **Hollow**: bone white with manga ink and crimson mask stripes.
-  - **Mugetsu**: ink black with a sparse purple glow.
-  Condensed headings, angular accents, and a quick slash across the buttons on hover and when you switch modes (none if you turn on reduced motion). Everything is drawn by OmniHub; no artwork from the series is included.
+Fortnite (Games → Boost profiles → Fortnite):
+- **Presets**: Competitive (the most frames), Balanced (DirectX 12, medium quality) and Pretty (DirectX 12, epic quality). There are now quality levels besides "lowest", and your own settings stay backed up.
+- **FPS by settings**: each FPS-meter session remembers the video settings it was played with, and the FPS card compares average FPS and 1% lows for each set, so you can see what's really faster on your PC.
+- **Replays**: see how much space they take, and send old ones to the Recycle Bin (the 5 newest and the last week are kept).
+- **Wi-Fi power saving off** (it causes ping spikes), with a note when you're on Wi-Fi instead of a cable.
+- **Graphics driver**: its version and age, with a link to update it. After a driver update it suggests cleaning the shader caches.
+- The ping test's best region now skips regions that drop packets, and says where to pick it in Fortnite.
 
-The fix is in the installer, so it already applies to this update.
+Everything else:
+- **OBS buttons** for the deck and the wheel: switch scenes, start or stop streaming or recording, save the replay buffer, mute a source. Uses OBS's own WebSocket server; the password is kept encrypted.
+- **Discord status** (Settings → General): the game you're playing and your shiny hunt, under your name in Discord. Discord needs an app for this, so you make a free one in its Developer Portal and paste its ID.
+- **Network monitor** (Tasks): download and upload speed now, data used per day for the last 30 days, and which programs have connections open and to where. Windows only tells administrators how much data each program uses, so that isn't shown.
+- **Backups** (Tools → Backups): your folders copied to another drive daily, weekly, or whenever it's plugged in. Only new and changed files are copied, and nothing in the backup is ever deleted.
+- **Controller mode** (Settings → General): use the whole app with a controller. D-pad or stick to move, A to press, B to go back, LB/RB to switch pages, Start to search.
+- **Search screenshots by their text**: OmniHub reads the text in your screenshots in the background (with Windows' own text recognition, on this PC, never while you play), so searching finds them by what they show.
+- **Wake and play from bed**: starting a game from your phone turns the screen on, and the Phone page shows what a Wake-on-LAN app needs to wake the PC from sleep, with how to allow it.
 
-Also in 0.26.0: quick actions (a macro deck for the PC and phone, a quick-launch wheel, clipboard history), focus sounds, batteries, the PC health score and Tidy Downloads.
+Also in 0.27.0: updates that always finish, and the Bleach themes.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

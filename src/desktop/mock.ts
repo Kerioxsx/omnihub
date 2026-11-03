@@ -41,7 +41,7 @@ import * as storage from './mock/storage';
 import * as vault from './mock/vault';
 import { autoclick, counters as ctr, pkm } from './mock/counters';
 import { emulators as emus, library as lib } from './mock/library';
-import { batteries as bats, clipboard as clip, health as pcHealth, quick as qk } from './mock/quick';
+import { backups as bk, batteries as bats, clipboard as clip, discord, health as pcHealth, network, obs, quick as qk } from './mock/quick';
 
 /** What a key is called (the same names the app uses). */
 function keyLabel(vk: number): string {
@@ -486,6 +486,18 @@ const handlers: Record<string, Handler> = {
   quick_run: (a) => qk.run(obj(a, 'action')),
   quick_hide: () => undefined,
   quick_open: () => undefined,
+  quick_obs_password: (a) => obs.password(str(a, 'password')),
+  quick_obs_info: (a) => obs.info(Boolean(a?.connect)),
+  presence_status: () => discord.status(),
+  presence_save: (a) => discord.save(obj(a, 'settings')),
+  network_status: () => network(),
+  wake_targets: () => [{ name: 'Ethernet', mac: '0C-9D-92-AA-BB-CC', ip: '192.168.1.24', broadcast: '192.168.1.255', wifi: false }],
+  open_device_manager: () => undefined,
+  backups_list: () => bk.list(),
+  backups_save: (a) => bk.save(obj(a, 'job')),
+  backups_delete: (a) => bk.remove(str(a, 'id')),
+  backups_run: (a) => bk.run(str(a, 'id')),
+  backups_cancel: () => undefined,
   clipboard_list: () => clip.list(),
   clipboard_copy: (a) => clip.copy(str(a, 'id')),
   clipboard_paste: (a) => clip.copy(str(a, 'id')),

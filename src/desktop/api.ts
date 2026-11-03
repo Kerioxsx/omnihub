@@ -240,6 +240,8 @@ export const api = {
     run: (action: T.QuickAction, notify = false) => call<string>('quick_run', { action, notify }),
     hide: (which: 'wheel' | 'clipboard') => call<void>('quick_hide', { which }),
     open: (which: 'wheel' | 'clipboard') => call<void>('quick_open', { which }),
+    obsPassword: (password: string) => call<void>('quick_obs_password', { password }),
+    obsInfo: (connect: boolean) => call<T.ObsInfo>('quick_obs_info', { connect }),
   },
 
   /** Clipboard history (in memory; pinned items are kept, encrypted). */
@@ -253,7 +255,25 @@ export const api = {
     pause: (on: boolean) => call<void>('clipboard_pause', { on }),
   },
 
+  /** The Discord status ("Playing …"). */
+  presence: {
+    status: () => call<T.PresenceStatus>('presence_status'),
+    save: (settings: T.PresenceSettings) => call<T.PresenceStatus>('presence_save', { settings }),
+  },
+
   batteries: (fresh = false) => call<T.Battery[]>('batteries', { fresh }),
+  network: () => call<T.NetStatus>('network_status'),
+  wakeTargets: () => call<T.WakeTarget[]>('wake_targets'),
+  openDeviceManager: () => call<void>('open_device_manager'),
+
+  /** Folder backups to another drive (new and changed files; never deletes). */
+  backups: {
+    list: () => call<{ jobs: T.BackupJob[]; running: string | null }>('backups_list'),
+    save: (job: T.BackupJob) => call<T.BackupJob>('backups_save', { job }),
+    remove: (id: string) => call<void>('backups_delete', { id }),
+    run: (id: string) => call<void>('backups_run', { id }),
+    cancel: () => call<void>('backups_cancel'),
+  },
   pcHealth: () => call<T.PcHealth>('pc_health'),
 
   /** The auto clicker (its start/stop key works from anywhere once it was opened). */

@@ -1,7 +1,7 @@
 // Clipboard history, the wheel, the macro deck, batteries and PC health for
 // the mock backend.
 
-import type { Battery, ClipItem, ClipList, PcHealth, QuickAction, QuickButton, QuickState } from '@shared/types';
+import type { BackupJob, Battery, ClipItem, ClipList, NetStatus, PcHealth, PresenceSettings, PresenceStatus, QuickAction, QuickButton, QuickState } from '@shared/types';
 import { emit } from './bus';
 
 const now = () => Date.now();
@@ -36,8 +36,22 @@ let state: QuickState = {
     b('d10', 'GG', 'message-square', '#34d399', { kind: 'text', text: 'gg wp' }),
     b('d11', 'Task Manager', 'activity', '#34d399', { kind: 'keys', keys: 'Ctrl+Shift+Esc' }),
     b('d12', 'Lock', 'lock', '#fbbf24', { kind: 'lock' }),
+    b('d13', 'Go live', 'radio', '#f87171', { kind: 'obs', what: 'stream' }),
+    b('d14', 'Gameplay scene', 'video', '#38bdf8', { kind: 'obs', what: 'scene', target: 'Gameplay' }),
   ],
   deckColumns: 4,
+  obsUrl: 'ws://127.0.0.1:4455',
+};
+let obsPassword = '';
+
+export const obs = {
+  password: (p: string) => {
+    obsPassword = p;
+  },
+  info: (connect: boolean) => {
+    if (connect && !obsPassword) throw "OBS isn't answering: open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server";
+    return { hasPassword: !!obsPassword, scenes: connect ? ['Starting soon', 'Gameplay', 'Just chatting', 'BRB'] : [], inputs: connect ? ['Mic/Aux', 'Desktop Audio', 'Discord'] : [] };
+  },
 };
 
 export const quick = {
@@ -70,6 +84,9 @@ export const quick = {
         return 'Saved Screenshot 2026-11-03.png';
       case 'lock':
         return 'Locked';
+      case 'obs':
+        if (!obsPassword) throw "OBS isn't answering: open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server";
+        return a.what === 'scene' ? `Scene: ${a.target}` : a.what === 'stream' ? 'Streaming' : 'Done';
       default:
         return 'Done';
     }
@@ -141,3 +158,69 @@ export const health = (): PcHealth => ({
     { id: 'downloads', title: 'Downloads folder', status: 'ok', detail: '8.2 GB in 312 files', fix: null, route: null },
   ],
 });
+
+let presence: PresenceSettings = { enabled: false, clientId: '', showGame: true, showHunt: true };
+export const discord = {
+  status: (): PresenceStatus => ({ settings: { ...presence }, connected: presence.enabled, showing: presence.enabled ? { details: 'Fortnite', state: 'Shiny hunting Charizard: 3127 encounters (1/1366)', start: Date.now() - 1_800_000 } : null, error: null }),
+  save: (s: PresenceSettings) => {
+    if (s.enabled && !/^\d{15,22}$/.test(s.clientId.trim())) throw 'Paste your Discord Application ID (a long number from the Developer Portal)';
+    presence = { ...s, clientId: s.clientId.trim() };
+    return discord.status();
+  },
+};
+
+export const network = (): NetStatus => {
+  const now = Date.now();
+  const history = Array.from({ length: 60 }, (_, i) => [now - (59 - i) * 2000, Math.round(2_400_000 + Math.sin(i / 4) * 1_600_000 + Math.random() * 900_000), Math.round(180_000 + Math.random() * 120_000)] as [number, number, number]);
+  const days = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(now - (29 - i) * 86400_000);
+    return { date: d.toISOString().slice(0, 10), down: Math.round((4 + Math.random() * 18) * 1e9), up: Math.round((0.3 + Math.random() * 1.5) * 1e9) };
+  });
+  return {
+    down: history[59][1],
+    up: history[59][2],
+    history,
+    days,
+    supported: true,
+    apps: [
+      { process: 'chrome.exe', pid: 4120, connections: 38, remotes: ['142.250.180.14:443', '151.101.1.69:443', '104.18.32.47:443'] },
+      { process: 'Discord.exe', pid: 8812, connections: 9, remotes: ['162.159.135.234:443', '162.159.130.232:443'] },
+      { process: 'steam.exe', pid: 6604, connections: 6, remotes: ['23.62.236.33:443', '155.133.248.37:27030'] },
+      { process: 'FortniteClient-Win64-Shipping.exe', pid: 10232, connections: 4, remotes: ['3.120.4.200:7777', '18.185.10.1:443'] },
+      { process: 'OneDrive.exe', pid: 2208, connections: 2, remotes: ['13.107.42.12:443'] },
+    ],
+  };
+};
+
+let jobs: BackupJob[] = [
+  { id: 'b1', name: 'Documents & photos', sources: ['C:\\Users\\Player\\Documents', 'C:\\Users\\Player\\Pictures'], dest: 'E:\\', schedule: 'whenConnected', enabled: true, lastRun: Math.floor(Date.now() / 1000) - 26 * 3600, lastResult: '214 copied, 18,302 up to date', lastOk: true },
+  { id: 'b2', name: 'Minecraft worlds', sources: ['C:\\Users\\Player\\AppData\\Roaming\\.minecraft\\saves'], dest: 'D:\\Backups', schedule: 'daily', enabled: true, lastRun: Math.floor(Date.now() / 1000) - 3 * 3600, lastResult: '12 copied, 3,410 up to date, 2 couldn’t be read', lastOk: false },
+];
+let runningJob: string | null = null;
+export const backups = {
+  list: () => ({ jobs: structuredClone(jobs), running: runningJob }),
+  save: (j: BackupJob) => {
+    if (!j.name.trim()) throw 'Give the backup a name';
+    if (!j.sources.length) throw 'Pick at least one folder to back up';
+    if (!j.dest) throw 'Pick where the backup goes (a drive or folder)';
+    const saved = { ...j, id: j.id || Math.random().toString(36).slice(2, 10) };
+    jobs = jobs.some((x) => x.id === saved.id) ? jobs.map((x) => (x.id === saved.id ? { ...x, ...saved, lastRun: x.lastRun, lastResult: x.lastResult, lastOk: x.lastOk } : x)) : [...jobs, saved];
+    emit('backup:changed', null);
+    return saved;
+  },
+  remove: (id: string) => {
+    jobs = jobs.filter((j) => j.id !== id);
+    emit('backup:changed', null);
+  },
+  run: (id: string) => {
+    runningJob = id;
+    emit('backup:changed', null);
+    setTimeout(() => {
+      runningJob = null;
+      jobs = jobs.map((j) => (j.id === id ? { ...j, lastRun: Math.floor(Date.now() / 1000), lastResult: '37 copied, 18,479 up to date', lastOk: true } : j));
+      const j = jobs.find((x) => x.id === id);
+      emit('backup:done', { job: id, name: j?.name ?? '', copied: 37, bytes: 412_000_000, same: 18479, failed: 0, missingDest: false });
+      emit('backup:changed', null);
+    }, 1800);
+  },
+};

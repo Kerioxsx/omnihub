@@ -658,3 +658,30 @@ has Capri speak through her local bridge (`companion::say`).
 - `components/BleachSwitcher.tsx` shows in the sidebar while one of them is
   on and switches between them with one slash overlay (skipped with reduced
   motion).
+
+## 0.28: Fortnite helpers and the general pack
+
+- `games/fortnite.rs`: replays (list, clean to the Recycle Bin), the
+  settings label stored with each `FpsRecord`, Wi-Fi power-saving parsing,
+  and graphics drivers (SetupAPI display class: name, version, date), with
+  `gpu-drivers.txt` remembering the drivers the shader caches were last
+  cleaned for. Presets fill `FortniteOptions` (now with `quality`).
+- `obs.rs`: a small blocking obs-websocket v5 client (hello → identify with
+  the SHA-256 challenge → request), used by `QuickAction::Obs`.
+- `presence.rs`: Discord IPC frames over `\\.\pipe\discord-ipc-N`; a thread in
+  `start_background` sends SET_ACTIVITY every 15 s when what to show
+  changes (game from the library tracker's `now_playing`, hunt from the
+  counters).
+- `system/netmon.rs`: GetIfTable2 totals (hardware, non-filter adapters)
+  every 2 s, per-day totals, and connections grouped by program from
+  `system/ports.rs`.
+- `backup.rs`: jobs in `backups.json`, an additive mirror (size and time
+  compare), and a scheduler thread every 5 minutes.
+- `ScreenshotLibrary::index_text`: a background thread reads up to 12
+  unread screenshots at a time.
+- `system/wol.rs`: MAC and broadcast addresses from `ipconfig /all`
+  (values, not the translated labels); `awake::wake_screen` for games
+  started from the phone.
+- Controller mode: `lib/padNav.ts` and `components/PadNavigator.tsx`
+  (spatial focus by direction); pages with their own gamepad handling call
+  `claimGamepad()`.

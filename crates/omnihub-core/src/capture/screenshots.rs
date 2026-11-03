@@ -275,6 +275,36 @@ impl ScreenshotLibrary {
         Ok(text)
     }
 
+    /// Read the text in up to `max` screenshots that haven't been read yet,
+    /// newest first, so search finds them by what they show. Returns how
+    /// many were read; stops at the first failure that isn't about one file
+    /// (no recognition language installed, not Windows).
+    pub fn index_text(&self, max: usize, read: impl Fn(&Path) -> Result<String, String>) -> usize {
+        let pending: Vec<(String, String)> = self
+            .db
+            .with(|c| {
+                let mut st = c.prepare("SELECT id, path FROM screenshots WHERE ocr_text IS NULL ORDER BY created DESC LIMIT ?1")?;
+                let rows = st.query_map(params![max as i64 * 3], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()
+            })
+            .unwrap_or_default();
+        let mut done = 0;
+        for (id, path) in pending.into_iter().filter(|(_, p)| Path::new(p).is_file()).take(max) {
+            match read(Path::new(&path)) {
+                Ok(text) => {
+                    let _ = self.db.with(|c| c.execute("UPDATE screenshots SET ocr_text=?2 WHERE id=?1", params![id, text]));
+                    done += 1;
+                }
+                Err(e) if e.starts_with("cannot read the image") => {
+                    // A broken file: remember "no text" so it isn't tried again.
+                    let _ = self.db.with(|c| c.execute("UPDATE screenshots SET ocr_text='' WHERE id=?1", params![id]));
+                }
+                Err(_) => break,
+            }
+        }
+        done
+    }
+
     /// Save an edited copy (PNG bytes from the markup editor) next to the
     /// other screenshots, keeping the original's app and tags.
     pub fn store_edited(&self, source_id: &str, png: &[u8], dir: &Path) -> Result<Screenshot, ShotError> {
@@ -622,6 +652,25 @@ mod tests {
         let found = l.list(&ShotFilter { query: "invoice 4471".into(), ..Default::default() }).unwrap();
         assert_eq!(found.iter().map(|x| x.id.as_str()).collect::<Vec<_>>(), [s.id.as_str()]);
         assert!(found[0].has_text);
+    }
+
+    #[test]
+    fn reads_text_in_the_background() {
+        let tmp = tempfile::tempdir().unwrap();
+        let l = lib(tmp.path());
+        let img = image::RgbaImage::from_pixel(40, 30, image::Rgba([255, 255, 255, 255]));
+        let shots = tmp.path().join("shots");
+        let a = l.store(&img, &ForegroundApp::default(), &shots, ImageFormat::Png).unwrap();
+        let b = l.store(&img, &ForegroundApp::default(), &shots, ImageFormat::Png).unwrap();
+        assert_eq!(l.index_text(1, |_| Ok("Victory Royale".into())), 1, "at most one at a time");
+        assert_eq!(l.index_text(5, |_| Ok("Eliminated".into())), 1, "only the unread one is left");
+        assert_eq!(l.index_text(5, |_| Ok("again".into())), 0);
+        let found = l.list(&ShotFilter { query: "victory".into(), ..Default::default() }).unwrap();
+        assert_eq!(found.len(), 1);
+        assert!([a.id.clone(), b.id.clone()].contains(&found[0].id));
+        let c = l.store(&img, &ForegroundApp::default(), &shots, ImageFormat::Png).unwrap();
+        assert_eq!(l.index_text(5, |_| Err("Windows has no text-recognition language".into())), 0, "stops when OCR isn't available");
+        assert!(!l.get(&c.id).unwrap().has_text, "and tries again later");
     }
 
     #[test]

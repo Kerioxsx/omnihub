@@ -46,6 +46,18 @@ pub fn keep_system_on(on: bool) {
     send(Ask::System(on));
 }
 
+/// Turn the screen back on now (once; it can turn off again as usual).
+pub fn wake_screen() {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Power::{SetThreadExecutionState, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED};
+        // SAFETY: without ES_CONTINUOUS this only resets the idle timers once.
+        unsafe {
+            SetThreadExecutionState(ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);
+        }
+    }
+}
+
 #[cfg(windows)]
 fn apply(display: bool, system: bool) {
     use windows::Win32::System::Power::{SetThreadExecutionState, ES_CONTINUOUS, ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED};

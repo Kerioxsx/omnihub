@@ -17,8 +17,11 @@ export const ACTION_KINDS: { value: QuickAction['kind']; label: string }[] = [
   { value: 'counter', label: 'Count (a counter or one of its events)' },
   { value: 'screenshot', label: 'Screenshot' },
   { value: 'lock', label: 'Lock the PC' },
+  { value: 'obs', label: 'OBS: scene, stream, recording, replay, mute' },
   { value: 'clipboard', label: 'Clipboard history (PC only)' },
 ];
+
+export const OBS_LABEL: Record<string, string> = { scene: 'Switch to a scene', stream: 'Start / stop streaming', record: 'Start / stop recording', replay: 'Save the replay buffer', mute: 'Mute / unmute a source' };
 
 export const MEDIA_LABEL: Record<string, string> = { playPause: 'Play / pause', next: 'Next', previous: 'Previous', volumeUp: 'Volume up', volumeDown: 'Volume down', mute: 'Mute sound' };
 
@@ -36,6 +39,8 @@ export function blankAction(kind: QuickAction['kind']): QuickAction {
       return { kind, what: 'playPause' };
     case 'counter':
       return { kind, id: '', event: null };
+    case 'obs':
+      return { kind, what: 'stream', target: null };
     default:
       return { kind } as QuickAction;
   }
@@ -65,6 +70,8 @@ export function describe(a: QuickAction | null): string {
       return 'Locks the PC';
     case 'clipboard':
       return 'Clipboard history';
+    case 'obs':
+      return a.what === 'scene' ? `OBS scene: ${a.target ?? ''}` : a.what === 'mute' ? `OBS: mute ${a.target ?? ''}` : `OBS: ${OBS_LABEL[a.what]?.toLowerCase() ?? a.what}`;
   }
 }
 

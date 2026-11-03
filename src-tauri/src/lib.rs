@@ -67,6 +67,13 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
             let by = payload["requestedBy"].as_str().unwrap_or("");
             by.starts_with("phone:").then(|| (format!("{} requested by {}", payload["label"].as_str().unwrap_or("Power action"), by.trim_start_matches("phone:")), "Open OmniHub to cancel.".into()))
         }
+        "backup:done" => Some(if payload["missingDest"].as_bool() == Some(true) {
+            (format!("{} didn't run", payload["name"].as_str().unwrap_or("A backup")), "Its drive or folder isn't there. Plug it in and it runs by itself.".into())
+        } else if payload["failed"].as_u64().unwrap_or(0) > 0 {
+            (format!("{}: {} files couldn't be copied", payload["name"].as_str().unwrap_or("Backup"), payload["failed"].as_u64().unwrap_or(0)), "Usually files that were open. They're tried again next time.".into())
+        } else {
+            (format!("{} is backed up", payload["name"].as_str().unwrap_or("Backup")), format!("{} new or changed files copied.", payload["copied"].as_u64().unwrap_or(0)))
+        }),
         "battery:low" => Some((format!("{} battery at {}%", payload["name"].as_str().unwrap_or("A"), payload["percent"].as_u64().unwrap_or(0)), "Charge it soon.".into())),
         "counters:goal" => Some(("Counter goal".into(), payload["message"].as_str().unwrap_or("A goal was reached").to_string())),
         "games:recap" => Some((format!("{} · {} min", payload["name"].as_str().unwrap_or("Game"), payload["minutes"].as_u64().unwrap_or(0)), "Open OmniHub for your session recap.".into())),
@@ -410,6 +417,18 @@ pub fn run(args: Vec<String>) {
             quick::quick_run,
             quick::quick_hide,
             quick::quick_open,
+            quick::quick_obs_password,
+            quick::quick_obs_info,
+            quick::presence_status,
+            quick::presence_save,
+            quick::network_status,
+            quick::backups_list,
+            quick::backups_save,
+            quick::backups_delete,
+            quick::backups_run,
+            quick::backups_cancel,
+            quick::wake_targets,
+            quick::open_device_manager,
             quick::clipboard_list,
             quick::clipboard_copy,
             quick::clipboard_paste,

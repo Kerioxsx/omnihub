@@ -950,3 +950,30 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   was started for; the next start compares it with its own version, reports
   an update that didn't finish once, and doesn't install that version again
   without a click.
+
+## OBS, Discord, network, backups and waking
+
+- OBS: deck and wheel buttons talk to OBS's WebSocket server (localhost by
+  default) with the user's password, which is stored encrypted with DPAPI
+  (`obs-password.bin`) and never shown again or sent to the phone. The
+  phone can run an OBS button the user made, like any other deck button.
+- Discord status: sent only to the Discord desktop app on this PC through
+  its local `discord-ipc` pipe, with the Application ID the user created.
+  It shows the running library game and, if on, the hunt's Pokémon, count
+  and odds; nothing else.
+- Network monitor: reads the adapters' byte counters and the connection
+  table (both available without administrator rights). Daily totals are
+  kept in `network-usage.json` (60 days); nothing is sent anywhere.
+- Backups: copy files the user chose to a destination they chose, through
+  a temporary name so a cut-off copy never replaces a good one. Nothing is
+  deleted in the destination, and a backup can't be set to go inside a
+  folder it backs up.
+- Screenshot text: read in the background with Windows.Media.Ocr on this
+  PC (never while a boosted game runs) and kept in the local database, as
+  "Copy text" already did.
+- Wake from the phone: OmniHub only shows the network card's MAC and
+  broadcast addresses and opens Device Manager; it changes no adapter or
+  BIOS setting. A game started from the phone turns the display on once.
+- Fortnite: replays go to the Recycle Bin (never deleted outright); Wi-Fi
+  power saving is changed with `powercfg` on the active plan, plugged-in
+  only, and can be turned back.

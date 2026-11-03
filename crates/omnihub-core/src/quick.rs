@@ -44,6 +44,13 @@ pub enum QuickAction {
     Lock,
     /// Opens the clipboard history (on the PC only).
     Clipboard,
+    /// OBS Studio: "scene", "stream", "record", "replay" or "mute" (with
+    /// the scene or source name as `target`).
+    Obs {
+        what: String,
+        #[serde(default)]
+        target: Option<String>,
+    },
 }
 
 impl QuickAction {
@@ -55,6 +62,8 @@ impl QuickAction {
             QuickAction::Text { text } if text.is_empty() || text.chars().count() > 2000 => Err("Type up to 2000 characters".into()),
             QuickAction::Media { what } if !MEDIA.iter().any(|m| m.0 == what) => Err("Pick a media key".into()),
             QuickAction::Counter { id, .. } if id.is_empty() => Err("Pick a counter".into()),
+            QuickAction::Obs { what, .. } if !crate::obs::WHATS.iter().any(|w| w.0 == what) => Err("Pick what OBS should do".into()),
+            QuickAction::Obs { what, target } if (what == "scene" || what == "mute") && target.as_deref().is_none_or(|t| t.trim().is_empty()) => Err(if what == "scene" { "Pick the scene".into() } else { "Pick the source".into() }),
             _ => Ok(()),
         }
     }
@@ -93,6 +102,8 @@ pub struct QuickState {
     pub wheel: Vec<QuickButton>,
     pub deck: Vec<QuickButton>,
     pub deck_columns: u8,
+    /// OBS's WebSocket server (its password is kept apart, encrypted).
+    pub obs_url: String,
 }
 
 pub const MAX_WHEEL: usize = 8;
@@ -126,6 +137,7 @@ impl Default for QuickState {
                 button("d9", "Lock", "lock", "#fbbf24", QuickAction::Lock),
             ],
             deck_columns: 3,
+            obs_url: crate::obs::DEFAULT_URL.into(),
         }
     }
 }
@@ -210,6 +222,12 @@ impl Quick {
         if next.deck.iter().any(|b| b.action == Some(QuickAction::Clipboard)) {
             return Err("The clipboard history opens on the PC only, so it can't go on the deck".into());
         }
+        if next.obs_url.trim().is_empty() {
+            next.obs_url = crate::obs::DEFAULT_URL.into();
+        }
+        if !next.obs_url.trim().starts_with("ws://") {
+            return Err("OBS's address starts with ws:// (like ws://127.0.0.1:4455)".into());
+        }
         next.clip_max = next.clip_max.clamp(10, 1000);
         next.deck_columns = next.deck_columns.clamp(2, 6);
         next.clip_ignore = next.clip_ignore.iter().map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect();
@@ -218,6 +236,29 @@ impl Quick {
         *self.state.lock() = next.clone();
         self.events.emit("quick:changed", &next);
         Ok(next)
+    }
+
+    fn obs_password_file(&self) -> PathBuf {
+        self.file.with_file_name("obs-password.bin")
+    }
+
+    /// OBS's WebSocket password, if one was saved.
+    pub fn obs_password(&self) -> String {
+        std::fs::read(self.obs_password_file()).ok().and_then(|b| unseal_with(&b, OBS_ENTROPY)).and_then(|p| String::from_utf8(p).ok()).unwrap_or_default()
+    }
+
+    pub fn has_obs_password(&self) -> bool {
+        self.obs_password_file().is_file()
+    }
+
+    /// Save (or with "" forget) OBS's WebSocket password, encrypted.
+    pub fn set_obs_password(&self, password: &str) -> Result<(), String> {
+        let f = self.obs_password_file();
+        if password.is_empty() {
+            let _ = std::fs::remove_file(f);
+            return Ok(());
+        }
+        crate::settings::write_atomic(&f, &seal_with(password.as_bytes(), OBS_ENTROPY)?).map_err(|e| e.to_string())
     }
 
     pub fn button(&self, id: &str) -> Option<QuickButton> {
@@ -380,22 +421,29 @@ fn thumb_of(width: u32, height: u32, rgba: &[u8]) -> Option<String> {
     Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
 }
 
-#[cfg(windows)]
+const OBS_ENTROPY: &[u8] = b"omnihub-obs";
+
 fn seal(b: &[u8]) -> Result<Vec<u8>, String> {
-    crate::system::dpapi::protect(b, ENTROPY).map_err(|e| e.to_string())
+    seal_with(b, ENTROPY)
 }
-#[cfg(windows)]
 fn unseal(b: &[u8]) -> Option<Vec<u8>> {
-    crate::system::dpapi::unprotect(b, ENTROPY).ok().map(|z| z.to_vec())
+    unseal_with(b, ENTROPY)
 }
-// Only Windows builds ship; elsewhere (tests, the dev preview) pins are plain.
+#[cfg(windows)]
+fn seal_with(b: &[u8], entropy: &[u8]) -> Result<Vec<u8>, String> {
+    crate::system::dpapi::protect(b, entropy).map_err(|e| e.to_string())
+}
+#[cfg(windows)]
+fn unseal_with(b: &[u8], entropy: &[u8]) -> Option<Vec<u8>> {
+    crate::system::dpapi::unprotect(b, entropy).ok().map(|z| z.to_vec())
+}
+// Only Windows builds ship; elsewhere (tests, the dev preview) these are plain.
 #[cfg(not(windows))]
-fn seal(b: &[u8]) -> Result<Vec<u8>, String> {
-    let _ = ENTROPY;
+fn seal_with(b: &[u8], _entropy: &[u8]) -> Result<Vec<u8>, String> {
     Ok(b.to_vec())
 }
 #[cfg(not(windows))]
-fn unseal(b: &[u8]) -> Option<Vec<u8>> {
+fn unseal_with(b: &[u8], _entropy: &[u8]) -> Option<Vec<u8>> {
     Some(b.to_vec())
 }
 
@@ -580,6 +628,7 @@ impl crate::core::AppCore {
                 Ok("Locked".into())
             }
             QuickAction::Clipboard => Err("The clipboard history opens on the PC".into()),
+            QuickAction::Obs { what, target } => crate::obs::run(&self.quick.state().obs_url, &self.quick.obs_password(), what, target.as_deref()),
         }
     }
 }

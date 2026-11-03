@@ -1324,6 +1324,10 @@ struct PlayReq {
 async fn games_play(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, body: Option<Json<PlayReq>>) -> ApiResult<Json<serde_json::Value>> {
     games_allowed(&core)?;
     let launch = body.and_then(|b| b.0.launch).unwrap_or(true);
+    if launch {
+        // Started from the couch: turn the screen on for it.
+        crate::system::awake::wake_screen();
+    }
     let r = core.games.play(&id, launch);
     core.audit.record(&actor(&dev), if launch { "game.play" } else { "game.boost" }, &id, r.is_ok());
     let session = r.map_err(ApiError::bad)?;

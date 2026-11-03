@@ -7,6 +7,7 @@
 pub mod apps;
 pub mod audit;
 pub mod autoclick;
+pub mod backup;
 pub mod browser;
 pub mod capture;
 pub mod chats;
@@ -31,7 +32,9 @@ pub mod mods;
 pub mod files;
 pub mod focus;
 pub mod notes;
+pub mod obs;
 pub mod play;
+pub mod presence;
 pub mod quick;
 pub mod paths;
 pub mod pkm;

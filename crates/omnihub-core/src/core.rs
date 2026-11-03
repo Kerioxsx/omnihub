@@ -81,6 +81,14 @@ pub struct AppCore {
     pub quick: Arc<crate::quick::Quick>,
     /// The PC's, controllers' and Bluetooth devices' batteries.
     pub batteries: crate::system::battery::Batteries,
+    /// The library game running now: (name, started, unix ms).
+    pub now_playing: parking_lot::Mutex<Option<(String, i64)>>,
+    /// The Discord status ("Playing …").
+    pub presence: crate::presence::Presence,
+    /// Network speed and data used per day.
+    pub netmon: crate::system::netmon::NetMonitor,
+    /// Folder backups to another drive.
+    pub backups: Arc<crate::backup::Backups>,
     /// Compress, convert, cut and take the sound out of videos (FFmpeg).
     pub video: crate::videotools::VideoTools,
     /// Links downloaded for a phone (or the PC).
@@ -165,6 +173,10 @@ impl AppCore {
             autoclick: crate::autoclick::AutoClicker::new(events.clone()),
             quick: Arc::new(crate::quick::Quick::new(&paths.data, events.clone())),
             batteries: crate::system::battery::Batteries::new(events.clone()),
+            now_playing: parking_lot::Mutex::new(None),
+            presence: crate::presence::Presence::new(&paths.data),
+            netmon: crate::system::netmon::NetMonitor::new(&paths.data),
+            backups: Arc::new(crate::backup::Backups::new(&paths.data, events.clone())),
             video,
             downloads,
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
@@ -225,6 +237,80 @@ impl AppCore {
             tracing::warn!("counters overlay: {e}");
         }
         crate::quick::watch(self.quick.clone());
+        // Network speed every two seconds; data used per day saved each minute.
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("network-use".into())
+            .spawn(move || {
+                let mut n = 0u32;
+                loop {
+                    let Some(core) = weak.upgrade() else { return };
+                    match crate::system::netmon::totals() {
+                        Some((rx, tx)) => core.netmon.take(chrono::Utc::now().timestamp_millis(), &chrono::Local::now().format("%Y-%m-%d").to_string(), rx, tx),
+                        None => return,
+                    }
+                    n += 1;
+                    if n.is_multiple_of(30) {
+                        core.netmon.save();
+                    }
+                    drop(core);
+                    std::thread::sleep(Duration::from_secs(2));
+                }
+            })
+            .ok();
+        // Backups that are due (daily, weekly, or a drive just plugged in).
+        let backups = self.backups.clone();
+        std::thread::Builder::new()
+            .name("backups".into())
+            .spawn(move || loop {
+                std::thread::sleep(Duration::from_secs(5 * 60));
+                backups.run_due(crate::db::now());
+            })
+            .ok();
+        // The Discord status: the game running and the shiny hunt going on.
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("discord-status".into())
+            .spawn(move || loop {
+                std::thread::sleep(Duration::from_secs(15));
+                let Some(core) = weak.upgrade() else { return };
+                let s = core.presence.settings();
+                if !s.enabled {
+                    core.presence.update(None);
+                    continue;
+                }
+                let now = crate::db::now() * 1000;
+                let game = core.now_playing.lock().clone();
+                let hunt = core
+                    .counters
+                    .state()
+                    .counters
+                    .into_iter()
+                    .filter(|c| c.hunt.is_some() && (c.timer_since.is_some() || now - c.updated < 10 * 60 * 1000))
+                    .max_by_key(|c| c.updated)
+                    .and_then(|c| {
+                        let h = c.hunt?;
+                        let odds = (1.0 / h.chance().max(1e-9)).round() as u64;
+                        Some((h.name, c.count, format!("1/{odds}")))
+                    });
+                core.presence.update(crate::presence::activity(&s, game, hunt));
+            })
+            .ok();
+        // Read the text in screenshots a few at a time, so search finds them
+        // by what they show (Windows' own OCR, on this PC).
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("screenshot-text".into())
+            .spawn(move || {
+                std::thread::sleep(Duration::from_secs(90));
+                loop {
+                    let Some(core) = weak.upgrade() else { return };
+                    let n = if core.games.session().is_some_and(|s| s.active()) { 0 } else { core.screenshots.index_text(12, crate::capture::ocr::recognize) };
+                    drop(core);
+                    std::thread::sleep(Duration::from_secs(if n > 0 { 20 } else { 300 }));
+                }
+            })
+            .ok();
         let weak = Arc::downgrade(self);
         std::thread::Builder::new()
             .name("batteries".into())

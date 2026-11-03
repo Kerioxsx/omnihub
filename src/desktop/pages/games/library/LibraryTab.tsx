@@ -13,6 +13,7 @@ import { Field, Segmented, TextInput } from '../../../components/ui/Form';
 import { Modal } from '../../../components/ui/Overlay';
 import { EmptyState } from '../../../components/ui/States';
 import { cx } from '../../../lib/cx';
+import { claimGamepad } from '../../../lib/padNav';
 import { useEvent } from '../../../lib/hooks';
 import { toast } from '../../../state/toasts';
 import { GameView } from './GameView';
@@ -55,6 +56,8 @@ function useGamepadNav(active: boolean, handlers: { move: (dx: number, dy: numbe
   ref.current = handlers;
   useEffect(() => {
     if (!active) return;
+    // This page drives the controller itself; app-wide controller mode waits.
+    const release = claimGamepad();
     let frame = 0;
     let held: Record<string, number> = {};
     const loop = (t: number) => {
@@ -93,6 +96,7 @@ function useGamepadNav(active: boolean, handlers: { move: (dx: number, dy: numbe
     return () => {
       cancelAnimationFrame(frame);
       held = {};
+      release();
     };
   }, [active]);
 }

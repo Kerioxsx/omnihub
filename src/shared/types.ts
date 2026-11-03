@@ -3550,7 +3550,8 @@ export type QuickAction =
   | { kind: 'counter'; id: string; event?: string | null }
   | { kind: 'screenshot' }
   | { kind: 'lock' }
-  | { kind: 'clipboard' };
+  | { kind: 'clipboard' }
+  | { kind: 'obs'; what: 'scene' | 'stream' | 'record' | 'replay' | 'mute'; target?: string | null };
 
 export interface QuickButton {
   id: string;
@@ -3571,6 +3572,14 @@ export interface QuickState {
   wheel: QuickButton[];
   deck: QuickButton[];
   deckColumns: number;
+  /** OBS's WebSocket server ("ws://127.0.0.1:4455"). */
+  obsUrl: string;
+}
+
+export interface ObsInfo {
+  hasPassword: boolean;
+  scenes: string[];
+  inputs: string[];
 }
 
 export interface ClipItem {
@@ -3641,4 +3650,67 @@ export interface NetCheck {
   onWifi: boolean | null;
   /** Wi-Fi power saving while plugged in: 0 max performance … 3 max saving. */
   wifiSaving: number | null;
+}
+
+// ---------- Discord status ----------
+
+export interface PresenceSettings {
+  enabled: boolean;
+  /** The Discord Application ID. */
+  clientId: string;
+  showGame: boolean;
+  showHunt: boolean;
+}
+
+export interface PresenceStatus {
+  settings: PresenceSettings;
+  connected: boolean;
+  showing: { details: string; state: string | null; start: number | null } | null;
+  error: string | null;
+}
+
+// ---------- network ----------
+
+export interface NetStatus {
+  down: number;
+  up: number;
+  /** [unix ms, down, up] bytes per second. */
+  history: [number, number, number][];
+  days: { date: string; down: number; up: number }[];
+  apps: { process: string; pid: number; connections: number; remotes: string[] }[];
+  supported: boolean;
+}
+
+// ---------- backups ----------
+
+export type BackupSchedule = 'manual' | 'daily' | 'weekly' | 'whenConnected';
+
+export interface BackupJob {
+  id: string;
+  name: string;
+  sources: string[];
+  dest: string;
+  schedule: BackupSchedule;
+  enabled: boolean;
+  lastRun: number | null;
+  lastResult: string | null;
+  lastOk: boolean;
+}
+
+export interface BackupRun {
+  job: string;
+  name: string;
+  copied: number;
+  bytes: number;
+  same: number;
+  failed: number;
+  missingDest: boolean;
+}
+
+export interface WakeTarget {
+  name: string;
+  mac: string;
+  ip: string;
+  broadcast: string;
+  wifi: boolean;
 }

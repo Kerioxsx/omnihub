@@ -32,6 +32,11 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.28.0
+
+- **Fortnite**: Competitive / Balanced / Pretty presets, FPS compared by settings, a replay cleaner, Wi-Fi power saving off, and a graphics driver check that suggests cleaning the shader caches after an update.
+- **OBS buttons** on the deck and wheel, a **Discord status**, a **network monitor** (speed, data per day, online programs), **backups** to another drive, **controller mode** for the whole app, screenshots **searchable by their text**, and **wake & play** from the phone.
+
 ## New in 0.27.0
 
 - **Updates always finish**: the installer no longer closes itself together with the app; if an update ever doesn't finish, OmniHub says so and offers to try again.
