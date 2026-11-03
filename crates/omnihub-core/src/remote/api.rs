@@ -92,6 +92,8 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/counters/{id}/bump", post(counters_bump))
         .route("/api/counters/{id}/event", post(counters_event))
         .route("/api/counters/{id}/timer", post(counters_timer))
+        .route("/api/deck", get(deck_list))
+        .route("/api/deck/{id}", post(deck_run))
         .route("/api/games", get(games_list))
         .route("/api/games/stop", post(games_stop))
         .route("/api/games/ping", post(games_ping))
@@ -239,6 +241,7 @@ struct Features {
     chat_agents: bool,
     servers: bool,
     counters: bool,
+    deck: bool,
 }
 
 fn features(core: &AppCore, tls: bool) -> Features {
@@ -259,6 +262,7 @@ fn features(core: &AppCore, tls: bool) -> Features {
         chat_agents: s.chats.allow_phone && s.chats.phone_agents,
         servers: s.remote.allow_servers,
         counters: true,
+        deck: !core.quick.state().deck.is_empty(),
     }
 }
 
@@ -1279,6 +1283,24 @@ async fn counters_event(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, J
 async fn counters_timer(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Json(b): Json<BumpBody>) -> ApiResult<Json<serde_json::Value>> {
     let c = core.counters.timer(&id, b.run, false).map_err(ApiError::bad)?;
     Ok(Json(json!({ "running": c.timer_since.is_some() })))
+}
+
+// ---------- macro deck (buttons set up on the PC) ----------
+
+async fn deck_list(State(core): State<Ctx>) -> Json<serde_json::Value> {
+    let s = core.quick.state();
+    // The phone gets names, icons and colours, not what the buttons type or open.
+    let buttons: Vec<_> = s.deck.iter().map(|b| json!({ "id": b.id, "label": b.label, "icon": b.icon, "color": b.color })).collect();
+    Json(json!({ "columns": s.deck_columns, "buttons": buttons }))
+}
+
+async fn deck_run(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<serde_json::Value>> {
+    let b = core.quick.state().deck.into_iter().find(|b| b.id == id).ok_or_else(|| ApiError::bad("That button is gone: pull to refresh"))?;
+    let action = b.action.clone().ok_or_else(|| ApiError::bad("That button doesn't do anything yet"))?;
+    let c = core.clone();
+    let r = tokio::task::spawn_blocking(move || c.run_quick(&action)).await?;
+    core.audit.record(&actor(&dev), "deck.run", &b.label, r.is_ok());
+    Ok(Json(json!({ "said": r.map_err(ApiError::bad)? })))
 }
 
 async fn games_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {

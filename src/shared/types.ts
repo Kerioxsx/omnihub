@@ -3531,3 +3531,84 @@ export interface EmuState {
   chosen: Record<string, string>;
   roms: Rom[];
 }
+
+// ---------- quick actions: clipboard history, wheel, macro deck ----------
+
+export type QuickAction =
+  | { kind: 'open'; target: string }
+  | { kind: 'game'; key: string }
+  | { kind: 'keys'; keys: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'media'; what: 'playPause' | 'next' | 'previous' | 'volumeUp' | 'volumeDown' | 'mute' }
+  | { kind: 'mic' }
+  | { kind: 'counter'; id: string; event?: string | null }
+  | { kind: 'screenshot' }
+  | { kind: 'lock' }
+  | { kind: 'clipboard' };
+
+export interface QuickButton {
+  id: string;
+  label: string;
+  /** A Lucide icon name ("gamepad-2"). */
+  icon: string;
+  color: string;
+  action: QuickAction | null;
+}
+
+export interface QuickState {
+  clipOn: boolean;
+  clipHotkey: string;
+  clipIgnore: string[];
+  clipMax: number;
+  wheelOn: boolean;
+  wheelHotkey: string;
+  wheel: QuickButton[];
+  deck: QuickButton[];
+  deckColumns: number;
+}
+
+export interface ClipItem {
+  id: string;
+  at: number;
+  /** Empty for a picture. */
+  text: string;
+  thumb?: string | null;
+  width: number;
+  height: number;
+  pinned: boolean;
+  app?: string | null;
+}
+
+export interface ClipList {
+  items: ClipItem[];
+  paused: boolean;
+}
+
+// ---------- batteries and PC health ----------
+
+export interface Battery {
+  id: string;
+  name: string;
+  kind: 'pc' | 'controller' | 'bluetooth';
+  percent: number | null;
+  charging: boolean | null;
+  wired: boolean;
+  minutesLeft: number | null;
+  /** [unix ms, percent], oldest first. */
+  history: [number, number][];
+}
+
+export interface HealthCheck {
+  id: string;
+  title: string;
+  status: 'ok' | 'warn' | 'bad';
+  detail: string;
+  fix: string | null;
+  route: string | null;
+}
+
+export interface PcHealth {
+  score: number;
+  checks: HealthCheck[];
+  at: number;
+}

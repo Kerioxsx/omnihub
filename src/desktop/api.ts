@@ -233,6 +233,29 @@ export const api = {
     launch: (rom: string) => call<void>('emulators_launch', { rom }),
   },
 
+  /** The macro deck, the quick-launch wheel and their hotkeys. */
+  quick: {
+    state: () => call<T.QuickState>('quick_state'),
+    save: (state: T.QuickState) => call<T.QuickState>('quick_save', { state }),
+    run: (action: T.QuickAction, notify = false) => call<string>('quick_run', { action, notify }),
+    hide: (which: 'wheel' | 'clipboard') => call<void>('quick_hide', { which }),
+    open: (which: 'wheel' | 'clipboard') => call<void>('quick_open', { which }),
+  },
+
+  /** Clipboard history (in memory; pinned items are kept, encrypted). */
+  clipboard: {
+    list: () => call<T.ClipList>('clipboard_list'),
+    copy: (id: string) => call<void>('clipboard_copy', { id }),
+    paste: (id: string) => call<void>('clipboard_paste', { id }),
+    pin: (id: string, on: boolean) => call<void>('clipboard_pin', { id, on }),
+    remove: (id: string) => call<void>('clipboard_delete', { id }),
+    clear: () => call<void>('clipboard_clear'),
+    pause: (on: boolean) => call<void>('clipboard_pause', { on }),
+  },
+
+  batteries: (fresh = false) => call<T.Battery[]>('batteries', { fresh }),
+  pcHealth: () => call<T.PcHealth>('pc_health'),
+
   /** The auto clicker (its start/stop key works from anywhere once it was opened). */
   autoclick: {
     config: () => call<T.ClickConfig>('autoclick_config'),
@@ -310,6 +333,8 @@ export const api = {
     log: () => call<T.RuleDone[]>('rules_log'),
     /** Look at the folders now (they are looked at every half minute anyway). */
     runNow: () => call<T.RuleDone[]>('rules_run'),
+    /** Each kind of file into its own folder in Downloads (and old installers to the Recycle Bin). */
+    tidyDownloads: (oldInstallers: number | null) => call<T.FolderRule[]>('rules_tidy_downloads', { oldInstallers }),
   },
 
   focus: {

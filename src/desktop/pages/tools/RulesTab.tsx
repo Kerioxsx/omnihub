@@ -3,12 +3,12 @@
 
 import { formatRelative } from '@shared/format';
 import type { FolderRule, RuleAction, RuleDone } from '@shared/types';
-import { Check, FolderInput, FolderOpen, Pencil, Play, Plus, Trash, X } from 'lucide-react';
+import { Check, FolderInput, FolderOpen, Pencil, Play, Plus, Sparkles, Trash, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
 import { Badge, Card, CardHeader } from '../../components/ui/Card';
-import { Field, Segmented, Switch, TextInput } from '../../components/ui/Form';
+import { Checkbox, Field, Segmented, Switch, TextInput } from '../../components/ui/Form';
 import { EmptyState } from '../../components/ui/States';
 import { useEvent } from '../../lib/hooks';
 import { confirm } from '../../state/dialogs';
@@ -96,6 +96,42 @@ function Editor({ rule, onDone }: { rule: FolderRule; onDone: () => void }) {
   );
 }
 
+/** One click: each kind of file in Downloads goes to its own folder there. */
+function TidyCard({ rules, onDone }: { rules: FolderRule[]; onDone: () => void }) {
+  const on = rules.some((r) => r.id.startsWith('tidy-'));
+  const [clean, setClean] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const make = async () => {
+    setBusy(true);
+    try {
+      await api.rules.tidyDownloads(clean ? 30 : null);
+      toast.success(on ? 'Tidy Downloads updated' : 'Downloads will tidy itself', 'Pictures, Videos, Music, Documents, Archives and Installers each get a folder in Downloads.');
+      onDone();
+    } catch (e) {
+      toast.error('Couldn’t set it up', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card className="flex flex-wrap items-center gap-4 bg-[linear-gradient(120deg,var(--accent-soft),transparent_60%)] p-5">
+      <span className="accent-gradient grid h-11 w-11 place-items-center rounded-xl text-white">
+        <Sparkles size={20} />
+      </span>
+      <div className="min-w-[220px] flex-1">
+        <div className="font-medium">Tidy Downloads</div>
+        <div className="text-[12.5px] text-dim">Pictures, videos, music, documents, archives and installers each go to their own folder inside Downloads.</div>
+        <div className="mt-2">
+          <Checkbox checked={clean} onChange={setClean} label="Send installers older than 30 days to the Recycle Bin" />
+        </div>
+      </div>
+      <Button variant={on ? 'secondary' : 'primary'} loading={busy} onClick={() => void make()}>
+        {on ? 'Update' : 'Turn on'}
+      </Button>
+    </Card>
+  );
+}
+
 export function RulesTab() {
   const [rules, setRules] = useState<FolderRule[]>([]);
   const [log, setLog] = useState<RuleDone[]>([]);
@@ -109,6 +145,7 @@ export function RulesTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      {!editing && <TidyCard rules={rules} onDone={load} />}
       {editing ? (
         <Editor rule={editing} onDone={() => { setEditing(null); load(); }} />
       ) : (

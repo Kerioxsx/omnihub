@@ -12,6 +12,8 @@ const App = lazy(() => import('./App').then((m) => ({ default: m.App })));
 const AmbientOverlay = lazy(() => import('./pages/overlay/AmbientOverlay').then((m) => ({ default: m.AmbientOverlay })));
 const CaseScreen = lazy(() => import('./pages/overlay/CaseScreen').then((m) => ({ default: m.CaseScreen })));
 const CounterPopout = lazy(() => import('./pages/counters/CounterPopout').then((m) => ({ default: m.CounterPopout })));
+const WheelPopup = lazy(() => import('./pages/quick/Popups').then((m) => ({ default: m.WheelPopup })));
+const ClipboardPopup = lazy(() => import('./pages/quick/Popups').then((m) => ({ default: m.ClipboardPopup })));
 const PinView = lazy(() => import('./pages/shots/PinView').then((m) => ({ default: m.PinView })));
 const RegionOverlay = lazy(() => import('./pages/overlay/RegionOverlay').then((m) => ({ default: m.RegionOverlay })));
 
@@ -48,7 +50,7 @@ function Root() {
     document.documentElement.classList.toggle('overlay-route', overlay);
     document.documentElement.classList.toggle('ambient-route', ambient);
   }, [overlay, ambient]);
-  const view = route.id === 'pin' ? <PinView /> : route.id === 'counter' ? <CounterPopout /> : route.id === 'casescreen' || overlayWindow === 'casescreen' ? <CaseScreen /> : ambient ? <AmbientOverlay /> : overlay ? <RegionOverlay /> : overlayWindow === null ? null : <App />;
+  const view = route.id === 'pin' ? <PinView /> : route.id === 'counter' ? <CounterPopout /> : route.id === 'wheel' ? <WheelPopup /> : route.id === 'clipboard' ? <ClipboardPopup /> : route.id === 'casescreen' || overlayWindow === 'casescreen' ? <CaseScreen /> : ambient ? <AmbientOverlay /> : overlay ? <RegionOverlay /> : overlayWindow === null ? null : <App />;
   return <Suspense fallback={null}>{view}</Suspense>;
 }
 

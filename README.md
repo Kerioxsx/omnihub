@@ -32,6 +32,13 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.26.0
+
+- **Quick actions**: a macro deck on the PC and the phone (media, mic, apps, games, keys, text, counters), a quick-launch wheel at the mouse (Alt+Shift+Q), and clipboard history with pictures and pins (Alt+Shift+V).
+- **Focus sounds**: rain, waves, wind, a fireplace and noises, mixed, made on the fly.
+- **Batteries** of the PC, controllers and Bluetooth devices, with history, time left and low-battery alerts.
+- **PC health score** with a fix for each problem, and **Tidy Downloads** in one click.
+
 ## New in 0.25.0
 
 - **Game library like the Steam Deck**: real cover art, a full-screen page per game with achievements, screenshots, soundtrack, players online, mods and save backups; controller navigation; a recap after each session; daily time limits.

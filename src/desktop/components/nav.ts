@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Activity, Camera, Sparkles, Timer, Wrench, Cpu, Gamepad2, HardDrive, House, LayoutGrid, Lightbulb, LockKeyhole, MessagesSquare, Music2, NotebookPen, Puzzle, ScreenShare, Server, Settings, Smartphone } from 'lucide-react';
+import { Activity, Camera, Sparkles, Zap, Timer, Wrench, Cpu, Gamepad2, HardDrive, House, LayoutGrid, Lightbulb, LockKeyhole, MessagesSquare, Music2, NotebookPen, Puzzle, ScreenShare, Server, Settings, Smartphone } from 'lucide-react';
 import type { RouteId } from '../lib/router';
 
 export interface NavItem {
@@ -19,6 +19,7 @@ export const NAV: NavItem[] = [
   { id: 'chats', label: 'Chats', icon: MessagesSquare, description: 'Claude, ChatGPT, Claude Code and Codex in one place, also from your phone; ideas and usage', group: 'workspace' },
   { id: 'focus', label: 'Focus', icon: Timer, description: 'Focus timer that keeps distractions closed, and where your time goes', group: 'workspace' },
   { id: 'counters', label: 'Counters', icon: Sparkles, description: 'Count with keys from anywhere, timers, pop-outs and shiny hunts', group: 'workspace' },
+  { id: 'quick', label: 'Quick actions', icon: Zap, description: 'A macro deck for your PC and phone, a quick-launch wheel and clipboard history', group: 'workspace' },
   { id: 'music', label: 'Music', icon: Music2, description: 'What your PC plays, with full-screen lyrics', group: 'workspace' },
   { id: 'tasks', label: 'Tasks', icon: Activity, description: 'CPU, memory, GPU and disk use of every program', group: 'performance' },
   { id: 'tools', label: 'Tools', icon: Wrench, description: 'Checksums, shredder, bulk rename, folder rules, window layouts, ports, Git projects, PATH', group: 'performance' },

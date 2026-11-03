@@ -4,6 +4,7 @@
 mod commands;
 mod ambient;
 mod gamemedia;
+mod quick;
 mod govee;
 mod chats;
 mod mcserver;
@@ -66,6 +67,7 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
             let by = payload["requestedBy"].as_str().unwrap_or("");
             by.starts_with("phone:").then(|| (format!("{} requested by {}", payload["label"].as_str().unwrap_or("Power action"), by.trim_start_matches("phone:")), "Open OmniHub to cancel.".into()))
         }
+        "battery:low" => Some((format!("{} battery at {}%", payload["name"].as_str().unwrap_or("A"), payload["percent"].as_u64().unwrap_or(0)), "Charge it soon.".into())),
         "counters:goal" => Some(("Counter goal".into(), payload["message"].as_str().unwrap_or("A goal was reached").to_string())),
         "games:recap" => Some((format!("{} · {} min", payload["name"].as_str().unwrap_or("Game"), payload["minutes"].as_u64().unwrap_or(0)), "Open OmniHub for your session recap.".into())),
         "games:sale" => Some((format!("{} is {}% off", payload["name"].as_str().unwrap_or("A game on your wishlist"), payload["discount"].as_u64().unwrap_or(0)), payload["price"].as_str().map(|p| format!("Now {p} on Steam")).unwrap_or_else(|| "On your Steam wishlist".into()))),
@@ -185,7 +187,7 @@ pub fn run(args: Vec<String>) {
                             // knowing about: always a Windows notification.
                             // During a focus round only what matters gets through.
                             let focusing = h.state::<std::sync::Arc<omnihub_core::core::AppCore>>().focus.state().is_some_and(|f| f.phase == omnihub_core::focus::Phase::Focus);
-                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request" | "counters:goal" | "games:limit" | "games:sale");
+                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request" | "counters:goal" | "games:limit" | "games:sale" | "battery:low");
                             if (hidden || important) && (!focusing || important) {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
                                     shortcuts::notify(&h, &title, &body);
@@ -403,6 +405,21 @@ pub fn run(args: Vec<String>) {
             commands::counters_image,
             commands::key_name,
             commands::counters_popout,
+            quick::quick_state,
+            quick::quick_save,
+            quick::quick_run,
+            quick::quick_hide,
+            quick::quick_open,
+            quick::clipboard_list,
+            quick::clipboard_copy,
+            quick::clipboard_paste,
+            quick::clipboard_pin,
+            quick::clipboard_delete,
+            quick::clipboard_clear,
+            quick::clipboard_pause,
+            quick::batteries,
+            quick::pc_health,
+            quick::rules_tidy_downloads,
             commands::autoclick_config,
             commands::autoclick_set_config,
             commands::autoclick_status,

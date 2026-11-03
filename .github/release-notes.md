@@ -1,23 +1,16 @@
 ## New in this version
 
-**A Steam Deck–style game library, emulators, and counters with events, goals and a stream overlay.**
+**Quick actions (a macro deck for your PC and phone, a quick-launch wheel, clipboard history), focus sounds, batteries, a PC health score and Tidy Downloads.**
 
-- **Game library** (Games → Library): every game as its real cover art, like the Steam Deck. Steam games get their covers, background and logo from Steam (or the art you set in Steam); other games get a coloured card until you pick art. Filter by favourites, playing, backlog and finished, search, and move around with a **controller** (D-pad, A to open, B to go back).
-- **Full-screen game page**: the background art and logo, Play, playing now on Steam, your hours and last played, then **achievements**, **screenshots** you took (Steam's and the app's own), the **soundtrack** (plays a Steam soundtrack you own, with links to find it on YouTube and Spotify), **mods**, **save backups** and **art & limits**.
-- **Session recap**: after you close a game, how long you played, its achievements and screenshots from that session.
-- **Save backups**: OmniHub suggests where a game keeps its saves; back them up with one click or after every session (the newest 10 kept), and put one back.
-- **Daily time limits** per game: a warning near the end, then the game is closed.
-- **Steam extras** with your own Steam Web API key (kept encrypted on this PC): achievements, friends online and what they play, and your **wishlist with sale alerts**. SteamGridDB art with your own key.
-- **Emulators** (Games → Emulators): finds RetroArch, mGBA, melonDS, Dolphin, Cemu, Ryujinx, DuckStation, PCSX2, PPSSPP, RPCS3 and more, scans your ROM folders with box art, and starts any game in the right emulator.
-- **Counter events**: give a counter events with their own keys (Wrong shiny, Fainted, Phase…). Each one is logged with the count, and **phases** start the "this phase" count again. **Undo** takes back the last change.
-- **Goals**: get told when a counter reaches a number, plus odds alerts (1×, 2×, 3× past the odds) for shiny hunts. A **celebration** when you find a shiny.
-- **Hunt stats**: shinies found, average encounters, hunting time, luckiest and longest hunts, finds by month.
-- **Stream overlay**: show counters in OBS as a Browser source (`http://127.0.0.1:47823/counter/<id>`), see-through, with size, colour, picture, timer and odds options. Only this PC can open it.
-- **Controller buttons as counter keys**: press a button on an Xbox (or XInput) controller to count.
-- **Counters on your phone** (More → Counters): count, log events and start the timer.
-- Fixed: a counter key could get stuck and stop counting after a game grabbed the keyboard; the key watcher now repairs itself.
+- **Macro deck** (Quick actions → Deck): big buttons for media keys, the microphone, apps, files, websites, games, key presses (a Discord mute key, OBS scenes, F13–F24), typed text, counters, screenshots and locking the PC. Use them on the PC or on your **phone** (More → Deck), like a stream deck. The phone only sees each button's name, icon and colour.
+- **Quick-launch wheel**: press **Alt+Shift+Q** anywhere and a wheel of up to 8 actions opens at your mouse. Point, click or press 1–8; Esc closes it.
+- **Clipboard history**: press **Alt+Shift+V** anywhere to see what you copied (text and pictures), search it, and paste any of it. Pin items to keep them after a restart (encrypted). Passwords from the vault and from password managers are never kept, and you can add apps to skip or pause it.
+- **Focus sounds** (Focus → Sounds): rain, waves, wind, a fireplace, and brown, pink and white noise, made on the fly and mixed at their own volumes. They keep playing while you use the rest of the app.
+- **Batteries** (My PC → Batteries): the PC's, Xbox controllers' and Bluetooth headsets', mice' and controllers' batteries, with today's history, time left, and a notification at 20% and 10%.
+- **PC health score** (My PC → Health): drive space, memory, restarts and pending updates, startup apps, temporary files, the Recycle Bin and Downloads, each with a button to fix it.
+- **Tidy Downloads** (Tools → Folder rules): one click sorts pictures, videos, music, documents, archives and installers into their own folders inside Downloads, and can send installers older than 30 days to the Recycle Bin.
 
-Also in 0.24.0: counters with keys from anywhere, shiny hunting, the auto clicker, the Pokémon save editor and the glass look.
+Also in 0.25.0: the Steam Deck–style game library, emulators, and counter events, goals and the stream overlay.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

@@ -624,3 +624,26 @@ has Capri speak through her local bridge (`companion::say`).
 - `system/keys.rs` re-installs the hook every 15 seconds (Windows drops
   slow hooks silently), forgets a held key after 600 ms without repeats,
   and polls XInput pads for buttons (codes `0x1000 + n`).
+
+## Quick actions, batteries and health
+
+- `quick.rs`: the clipboard history (watch thread on the sequence number,
+  text and RGBA pictures with PNG previews, pins sealed with DPAPI), the
+  wheel and deck buttons (`QuickAction`), saved in `quick.json`, and
+  `AppCore::run_quick`, which the wheel, the deck page and the phone's
+  `POST /api/deck/{id}` all use.
+- `src-tauri/src/quick.rs`: commands, the two hotkeys (registered with the
+  screenshot ones in `shortcuts.rs`) and the pop-up windows `wheel`
+  (see-through, centred on the mouse, `#/wheel`) and `clipboard`
+  (`#/clipboard`); pasting puts the item back and presses Ctrl+V once the
+  list has hidden.
+- `system/battery.rs`: readings every two minutes (from
+  `start_background`), a 24-hour history per device, time left from the
+  current fall, and `battery:low` at 20% and 10%.
+- `health.rs`: `gather()` reads the PC, `score()` turns it into checks
+  (good / look at it / fix it; 6 and 15 points off) with the page that fixes
+  each.
+- `rules.rs`: `tidy_preset` and `Rules::tidy` for Tidy Downloads.
+- Focus sounds are made in the page with Web Audio (`lib/sounds.ts`):
+  looped noise buffers through filters and slow oscillators, plus random
+  short bursts for raindrops and crackles.

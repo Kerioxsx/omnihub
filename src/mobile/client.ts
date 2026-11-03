@@ -86,6 +86,14 @@ export function isDeviceAuthFailure(path: string, _message: string): boolean {
 }
 
 /** A PC counter, as the phone sees it. */
+/** A macro deck button made on the PC (the phone only sees how it looks). */
+export interface DeckButton {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+}
+
 export interface PhoneCounter {
   id: string;
   name: string;
@@ -282,6 +290,8 @@ export const client = {
   bumpCounter: (id: string, times: number) => request<{ count: number }>('POST', `/api/counters/${encodeURIComponent(id)}/bump`, { times }),
   counterEvent: (id: string, event: string) => request<{ count: number }>('POST', `/api/counters/${encodeURIComponent(id)}/event`, { event }),
   counterTimer: (id: string, run: boolean) => request<{ running: boolean }>('POST', `/api/counters/${encodeURIComponent(id)}/timer`, { run }),
+  deck: () => request<{ columns: number; buttons: DeckButton[] }>('GET', '/api/deck'),
+  runDeck: (id: string) => request<{ said: string }>('POST', `/api/deck/${encodeURIComponent(id)}`),
   games: () => request<{ profiles: PhoneGame[]; session: GameSession | null; fps?: FpsLive | null }>('GET', '/api/games'),
   playGame: (id: string, launch: boolean) => request<{ session: GameSession }>('POST', `/api/games/${encodeURIComponent(id)}/play`, { launch }),
   stopGame: () => request<{ stopped: boolean }>('POST', '/api/games/stop'),

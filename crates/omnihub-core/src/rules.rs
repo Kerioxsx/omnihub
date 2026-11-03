@@ -145,6 +145,47 @@ pub fn apply(rule: &Rule, file: &Path) -> Result<String, String> {
     }
 }
 
+/// File types for "Tidy Downloads": (subfolder, extensions).
+pub const TIDY: &[(&str, &[&str])] = &[
+    ("Pictures", &["jpg", "jpeg", "png", "gif", "webp", "heic", "bmp", "svg", "avif", "tif", "tiff"]),
+    ("Videos", &["mp4", "mkv", "mov", "avi", "webm", "m4v", "wmv"]),
+    ("Music", &["mp3", "flac", "wav", "m4a", "ogg", "aac", "opus"]),
+    ("Documents", &["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "odt", "rtf", "md", "epub"]),
+    ("Archives", &["zip", "rar", "7z", "tar", "gz", "xz", "bz2"]),
+    ("Installers", &["exe", "msi", "msix", "appx", "msixbundle"]),
+];
+
+/// The "Tidy Downloads" rules: each kind of file into its own folder inside
+/// Downloads, and (when `old_installers` is set) installers there older
+/// than that many days to the Recycle Bin. Rules already made by this
+/// preset are kept, not doubled.
+pub fn tidy_preset(downloads: &Path, old_installers: Option<u32>) -> Vec<Rule> {
+    let mut out: Vec<Rule> = TIDY
+        .iter()
+        .map(|(sub, exts)| Rule {
+            id: format!("tidy-{}", sub.to_lowercase()),
+            name: format!("Tidy Downloads: {sub}"),
+            enabled: true,
+            folder: downloads.to_string_lossy().into_owned(),
+            extensions: exts.iter().map(|e| e.to_string()).collect(),
+            contains: Vec::new(),
+            action: Action::Move { to: downloads.join(sub).to_string_lossy().into_owned() },
+        })
+        .collect();
+    if let Some(days) = old_installers.filter(|d| *d > 0) {
+        out.push(Rule {
+            id: "tidy-old-installers".into(),
+            name: format!("Tidy Downloads: installers older than {days} days"),
+            enabled: true,
+            folder: downloads.join("Installers").to_string_lossy().into_owned(),
+            extensions: TIDY.iter().find(|t| t.0 == "Installers").map(|t| t.1.iter().map(|e| e.to_string()).collect()).unwrap_or_default(),
+            contains: Vec::new(),
+            action: Action::Recycle { days },
+        });
+    }
+    out
+}
+
 /// What a file looked like at the last look (size, modified).
 type Seen = HashMap<PathBuf, (u64, SystemTime)>;
 
@@ -192,6 +233,32 @@ impl Rules {
         }
         self.write(&list)?;
         Ok(rule)
+    }
+
+    /// Add (or refresh) the "Tidy Downloads" rules.
+    pub fn tidy(&self, downloads: &Path, old_installers: Option<u32>) -> Result<Vec<Rule>, String> {
+        if !downloads.is_dir() {
+            return Err("Couldn't find your Downloads folder.".into());
+        }
+        if old_installers.is_some() {
+            std::fs::create_dir_all(downloads.join("Installers")).map_err(|e| e.to_string())?;
+        }
+        let preset = tidy_preset(downloads, old_installers);
+        for r in &preset {
+            check(r)?;
+        }
+        let mut list = self.list.lock();
+        if old_installers.is_none() {
+            list.retain(|r| r.id != "tidy-old-installers");
+        }
+        for r in &preset {
+            match list.iter_mut().find(|x| x.id == r.id) {
+                Some(x) => *x = r.clone(),
+                None => list.push(r.clone()),
+            }
+        }
+        self.write(&list)?;
+        Ok(list.clone())
     }
 
     pub fn delete(&self, id: &str) -> Result<(), String> {
@@ -256,6 +323,25 @@ impl Rules {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tidy_downloads_preset_sorts_and_does_not_double() {
+        let t = tempfile::tempdir().unwrap();
+        let dl = t.path().join("Downloads");
+        std::fs::create_dir_all(&dl).unwrap();
+        let rules = Rules::new(t.path());
+        let list = rules.tidy(&dl, Some(30)).unwrap();
+        assert_eq!(list.len(), TIDY.len() + 1);
+        assert_eq!(rules.tidy(&dl, Some(30)).unwrap().len(), TIDY.len() + 1, "running it again doesn't add more");
+        assert_eq!(rules.tidy(&dl, None).unwrap().len(), TIDY.len(), "turning off the clean-up removes that rule");
+        let pics = list.iter().find(|r| r.id == "tidy-pictures").unwrap();
+        assert!(matches(pics, "Photo.JPG") && !matches(pics, "setup.exe") && !matches(pics, "photo.jpg.crdownload"));
+        assert_eq!(pics.action, Action::Move { to: dl.join("Pictures").to_string_lossy().into_owned() });
+        let f = dl.join("cat.png");
+        std::fs::write(&f, b"x").unwrap();
+        assert_eq!(apply(pics, &f).unwrap(), format!("Moved to {}", dl.join("Pictures").display()));
+        assert!(dl.join("Pictures/cat.png").is_file());
+    }
 
     fn rule(folder: &Path, action: Action) -> Rule {
         Rule { id: String::new(), name: "PDFs".into(), enabled: true, folder: folder.to_string_lossy().into(), extensions: vec!["PDF".into()], contains: vec![], action }

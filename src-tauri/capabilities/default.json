@@ -8,7 +8,9 @@
     "ambient-*",
     "casescreen",
     "pin-*",
-    "counter-*"
+    "counter-*",
+    "wheel",
+    "clipboard"
   ],
   "permissions": [
     "core:default",

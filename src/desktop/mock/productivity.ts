@@ -41,6 +41,22 @@ export function ruleDelete(id: string) {
 }
 export const ruleLog = () => log;
 
+const TIDY: [string, string[]][] = [
+  ['Pictures', ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic']],
+  ['Videos', ['mp4', 'mkv', 'mov', 'webm']],
+  ['Music', ['mp3', 'flac', 'wav', 'm4a']],
+  ['Documents', ['pdf', 'docx', 'xlsx', 'pptx', 'txt']],
+  ['Archives', ['zip', 'rar', '7z']],
+  ['Installers', ['exe', 'msi']],
+];
+export function ruleTidy(oldInstallers: number | null): FolderRule[] {
+  const dl = 'C:\\Users\\Player\\Downloads';
+  const made: FolderRule[] = TIDY.map(([sub, extensions]) => ({ id: `tidy-${sub.toLowerCase()}`, name: `Tidy Downloads: ${sub}`, enabled: true, folder: dl, extensions, contains: [], action: { kind: 'move', to: `${dl}\\${sub}` } }));
+  if (oldInstallers) made.push({ id: 'tidy-old-installers', name: `Tidy Downloads: installers older than ${oldInstallers} days`, enabled: true, folder: `${dl}\\Installers`, extensions: ['exe', 'msi'], contains: [], action: { kind: 'recycle', days: oldInstallers } });
+  rules = [...rules.filter((r) => !r.id.startsWith('tidy-')), ...made];
+  return rules;
+}
+
 let focus: FocusState | null = null;
 export const focusState = () => focus;
 export function focusStart(f: number, b: number, blocked: string[]): FocusState {

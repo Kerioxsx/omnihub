@@ -41,6 +41,7 @@ import * as storage from './mock/storage';
 import * as vault from './mock/vault';
 import { autoclick, counters as ctr, pkm } from './mock/counters';
 import { emulators as emus, library as lib } from './mock/library';
+import { batteries as bats, clipboard as clip, health as pcHealth, quick as qk } from './mock/quick';
 
 /** What a key is called (the same names the app uses). */
 function keyLabel(vk: number): string {
@@ -475,6 +476,21 @@ const handlers: Record<string, Handler> = {
   emulators_set_dirs: (a) => emus.setDirs(obj(a, 'dirs')),
   emulators_choose: (a) => emus.choose(str(a, 'platform'), str(a, 'emulator')),
   emulators_launch: () => emus.launch(),
+  quick_state: () => qk.state(),
+  quick_save: (a) => qk.save(obj(a, 'state')),
+  quick_run: (a) => qk.run(obj(a, 'action')),
+  quick_hide: () => undefined,
+  quick_open: () => undefined,
+  clipboard_list: () => clip.list(),
+  clipboard_copy: (a) => clip.copy(str(a, 'id')),
+  clipboard_paste: (a) => clip.copy(str(a, 'id')),
+  clipboard_pin: (a) => clip.pin(str(a, 'id'), Boolean(a?.on)),
+  clipboard_delete: (a) => clip.remove(str(a, 'id')),
+  clipboard_clear: () => clip.clear(),
+  clipboard_pause: (a) => clip.pause(Boolean(a?.on)),
+  batteries: () => bats(),
+  pc_health: () => pcHealth(),
+  rules_tidy_downloads: (a) => prod.ruleTidy((a?.oldInstallers as number | null) ?? null),
   counters_save: (a) => ctr.save(obj(a, 'input')),
   counters_delete: (a) => ctr.remove(str(a, 'id')),
   counters_bump: (a) => ctr.bump(str(a, 'id'), num(a, 'times')),

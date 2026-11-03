@@ -2,8 +2,8 @@
 // time tracker (off until you turn it on) of which programs you used.
 
 import type { FocusState, TimeReport } from '@shared/types';
-import { Clock, Pause, Play, Plus, Timer, Trash, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AudioLines, Clock, CloudRain, Flame, Pause, Play, Plus, Timer, Trash, Waves, Wind, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -11,6 +11,7 @@ import { Badge, Card, CardHeader } from '../../components/ui/Card';
 import { Segmented, Switch, type TabItem, Tabs, TextInput } from '../../components/ui/Form';
 import { EmptyState } from '../../components/ui/States';
 import { useEvent, useInterval } from '../../lib/hooks';
+import { SOUNDS, type SoundId, setMaster, setSound, soundState, stopAll, subscribeSounds } from '../../lib/sounds';
 import { confirm } from '../../state/dialogs';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
@@ -214,18 +215,65 @@ function TimeTab() {
   );
 }
 
-type Tab = 'focus' | 'time';
+const SOUND_ICON: Record<SoundId, typeof Waves> = { rain: CloudRain, waves: Waves, wind: Wind, fire: Flame, brown: AudioLines, pink: AudioLines, white: AudioLines };
+
+// A stable snapshot for useSyncExternalStore (refreshed before the page hears of a change).
+let snapshot = soundState();
+subscribeSounds(() => {
+  snapshot = soundState();
+});
+
+/** Rain, waves, wind, a fire and noises, mixed (made on the fly, no files). */
+function SoundsTab() {
+  const s = useSyncExternalStore(subscribeSounds, () => snapshot);
+  const any = Object.keys(s.levels).length > 0;
+  return (
+    <div className="space-y-4">
+      <Card className="p-5">
+        <CardHeader icon={AudioLines} title="Focus sounds" subtitle="Mix as many as you like. They keep playing while you use the rest of OmniHub." actions={any ? <Button size="sm" variant="secondary" icon={Pause} onClick={stopAll}>Stop all</Button> : undefined} />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {SOUNDS.map((x) => {
+            const Icon = SOUND_ICON[x.id];
+            const level = s.levels[x.id] ?? 0;
+            const on = level > 0;
+            return (
+              <div key={x.id} className={`rounded-2xl border p-4 transition-colors ${on ? 'border-accent/50 bg-accent-soft' : 'border-line bg-surface-2'}`}>
+                <button type="button" onClick={() => setSound(x.id, on ? 0 : 0.6)} aria-pressed={on} className="flex w-full items-center gap-3 text-left">
+                  <span className={`grid h-10 w-10 place-items-center rounded-xl ${on ? 'accent-gradient text-white' : 'bg-surface-3 text-dim'}`}>
+                    <Icon size={18} className={on ? 'animate-pulse' : ''} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-medium">{x.label}</span>
+                    <span className="block truncate text-[12px] text-dim">{x.hint}</span>
+                  </span>
+                </button>
+                <input type="range" min={0} max={100} value={Math.round(level * 100)} onChange={(e) => setSound(x.id, Number(e.target.value) / 100)} aria-label={`${x.label} volume`} className="mt-3 w-full accent-[var(--accent)]" />
+              </div>
+            );
+          })}
+        </div>
+        <label className="mt-5 flex items-center gap-3 text-[13px] text-dim">
+          Overall volume
+          <input type="range" min={0} max={100} value={Math.round(s.master * 100)} onChange={(e) => setMaster(Number(e.target.value) / 100)} className="w-56 accent-[var(--accent)]" />
+        </label>
+      </Card>
+    </div>
+  );
+}
+
+type Tab = 'focus' | 'sounds' | 'time';
 const TABS: TabItem<Tab>[] = [
   { value: 'focus', label: 'Focus timer', icon: Timer },
+  { value: 'sounds', label: 'Sounds', icon: AudioLines },
   { value: 'time', label: 'Time', icon: Clock },
 ];
 
 export function FocusPage() {
   const [tab, setTab] = useState<Tab>('focus');
   return (
-    <Page title="Focus" subtitle="A focus timer that keeps distractions closed, and where your time goes.">
+    <Page title="Focus" subtitle="A focus timer that keeps distractions closed, sounds to focus with, and where your time goes.">
       <Tabs items={TABS} value={tab} onChange={setTab} className="mb-4" />
-      {tab === 'focus' ? <FocusTab /> : <TimeTab />}
+      {tab === 'focus' ? <FocusTab /> : tab === 'sounds' ? <SoundsTab /> : <TimeTab />}
     </Page>
   );
 }

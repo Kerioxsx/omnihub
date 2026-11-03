@@ -2,7 +2,7 @@
 // Vault, Settings) with a slide-in sub-page stack.
 
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, Gamepad2, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft, SlidersVertical, SquareX, Server, ScanText, ScanBarcode, PenTool, CloudDownload, Sparkles } from 'lucide-react';
+import { Activity, Gamepad2, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft, SlidersVertical, SquareX, Server, ScanText, ScanBarcode, PenTool, CloudDownload, Grid3x3, Sparkles } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useApp } from '../state';
 import { Logo } from '../ui/Logo';
@@ -21,10 +21,11 @@ import { OpenAppsPage } from './OpenApps';
 import { ScanPage } from './Scan';
 import { BarcodePage } from './Barcode';
 import { CountersPage } from './Counters';
+import { DeckPage } from './Deck';
 import { BoardPage } from './Board';
 import { DownloadsPage } from './Downloads';
 
-export type MorePage = 'counters' | 'sound' | 'open' | 'tasks' | 'games' | 'servers' | 'notes' | 'apps' | 'vault' | 'scan' | 'barcode' | 'board' | 'downloads' | 'settings';
+export type MorePage = 'deck' | 'counters' | 'sound' | 'open' | 'tasks' | 'games' | 'servers' | 'notes' | 'apps' | 'vault' | 'scan' | 'barcode' | 'board' | 'downloads' | 'settings';
 
 export function MoreScreen({ active, page, setPage, onUnpaired }: { active: boolean; page: MorePage | null; setPage: (p: MorePage | null) => void; onUnpaired: () => void }) {
   const info = useApp((s) => s.info);
@@ -40,6 +41,7 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
     { id: 'notes', title: 'Notes & ideas', sub: 'Read, search and capture ideas for Claude', icon: <NotebookPen size={21} />, tone: 'bg-violet-500/15 text-violet-400', show: !!f?.notes },
     { id: 'apps', title: 'Apps', sub: 'Launch programs on the PC', icon: <AppWindow size={21} />, tone: 'bg-cyan-500/15 text-cyan-400', show: !!f?.apps },
     { id: 'scan', title: 'Scan', sub: 'Documents, receipts and cards to the PC, with their text', icon: <ScanText size={21} />, tone: 'bg-sky-500/15 text-sky-400', show: !!f?.uploads },
+    { id: 'deck', title: 'Deck', sub: 'Your macro buttons: media, apps, games, keys and more on the PC', icon: <Grid3x3 size={21} />, tone: 'bg-violet-500/15 text-violet-300', show: true },
     { id: 'counters', title: 'Counters', sub: 'Tap to count: shiny hunts and anything else on the PC', icon: <Sparkles size={21} />, tone: 'bg-yellow-500/15 text-yellow-400', show: true },
     { id: 'barcode', title: 'Barcode to PC', sub: 'Scan a code and type it where the PC’s cursor is', icon: <ScanBarcode size={21} />, tone: 'bg-orange-500/15 text-orange-400', show: true },
     { id: 'board', title: 'Whiteboard', sub: 'Draw here, see it on the PC', icon: <PenTool size={21} />, tone: 'bg-pink-500/15 text-pink-400', show: true },
@@ -105,6 +107,7 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
             {page === 'apps' && <AppsPage onBack={() => setPage(null)} />}
             {page === 'vault' && <VaultPage active={active} onBack={() => setPage(null)} />}
             {page === 'scan' && <ScanPage onBack={() => setPage(null)} />}
+            {page === 'deck' && <DeckPage active={active} onBack={() => setPage(null)} />}
             {page === 'counters' && <CountersPage active={active} onBack={() => setPage(null)} />}
             {page === 'barcode' && <BarcodePage active={active} onBack={() => setPage(null)} />}
             {page === 'board' && <BoardPage active={active} onBack={() => setPage(null)} />}

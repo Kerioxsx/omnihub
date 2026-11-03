@@ -77,6 +77,10 @@ pub struct AppCore {
     /// The OBS page for counters, while on.
     pub counters_overlay: parking_lot::Mutex<Option<crate::counters_overlay::OverlayServer>>,
     pub autoclick: crate::autoclick::AutoClicker,
+    /// Clipboard history, the quick-launch wheel and the macro deck.
+    pub quick: Arc<crate::quick::Quick>,
+    /// The PC's, controllers' and Bluetooth devices' batteries.
+    pub batteries: crate::system::battery::Batteries,
     /// Compress, convert, cut and take the sound out of videos (FFmpeg).
     pub video: crate::videotools::VideoTools,
     /// Links downloaded for a phone (or the PC).
@@ -159,6 +163,8 @@ impl AppCore {
             emulators: crate::games::emulators::Emulators::new(&paths.data),
             counters_overlay: parking_lot::Mutex::new(None),
             autoclick: crate::autoclick::AutoClicker::new(events.clone()),
+            quick: Arc::new(crate::quick::Quick::new(&paths.data, events.clone())),
+            batteries: crate::system::battery::Batteries::new(events.clone()),
             video,
             downloads,
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
@@ -218,6 +224,17 @@ impl AppCore {
         if let Err(e) = self.apply_counters_overlay() {
             tracing::warn!("counters overlay: {e}");
         }
+        crate::quick::watch(self.quick.clone());
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("batteries".into())
+            .spawn(move || loop {
+                let Some(core) = weak.upgrade() else { return };
+                core.batteries.sample(crate::db::now() * 1000);
+                drop(core);
+                std::thread::sleep(Duration::from_secs(120));
+            })
+            .ok();
         let weak = Arc::downgrade(self);
         std::thread::Builder::new()
             .name("vault-timer".into())

@@ -900,3 +900,41 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   counter uses one; like the keyboard hook, nothing is stored or sent.
 - The phone's counter routes need the paired phone's token like every
   other phone route.
+
+## Clipboard history
+
+- Copies are kept in memory only (up to the chosen number). Pinned text is
+  written to `clipboard-pinned.bin`, encrypted with DPAPI for this Windows
+  user; nothing else reaches the disk.
+- Never kept: anything carrying the formats password managers set
+  (`ExcludeClipboardContentFromMonitorProcessing`, or
+  `CanIncludeInClipboardHistory` = 0), anything OmniHub copied from the
+  vault (which sets those formats too and is also checked by fingerprint),
+  anything copied from an ignored app (password managers by default), and
+  anything copied while paused.
+- The history is watched by polling Windows' clipboard sequence number; it
+  is never sent to the phone, and its events carry no content.
+
+## Quick-launch wheel and macro deck
+
+- Buttons are made on the PC only (`quick.json`). The phone gets each
+  deck button's name, icon and colour, and can ask to run a button by its
+  id; it can't add buttons, see what they type or open, or run anything
+  else. Every run from the phone is in the audit log (`deck.run`).
+- Key presses and typed text are sent with `SendInput`, which Windows
+  refuses to apps running as administrator unless OmniHub is too. Opening
+  a target uses the shell's normal open (no command line).
+- The wheel and the clipboard list are hidden windows shown by global
+  hotkeys; they hide when they lose focus.
+
+## Batteries and the health score
+
+- Batteries are read from Windows (`GetSystemPowerStatus`, XInput, and the
+  battery level Windows keeps for Bluetooth devices); levels stay in memory
+  for 24 hours.
+- The health score only reads (drive space, memory, uptime, the update
+  restart flag, startup entries, sizes of the temp folders, Recycle Bin and
+  Downloads). Fixing is done on the existing pages, with their own checks.
+- Tidy Downloads makes ordinary folder rules (move by type inside
+  Downloads; optionally installers older than 30 days to the Recycle Bin),
+  which can be edited or deleted like any other.
