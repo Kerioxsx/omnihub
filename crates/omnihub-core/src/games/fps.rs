@@ -334,6 +334,9 @@ pub struct FpsRecord {
     pub mode: super::BoostMode,
     pub at: i64,
     pub summary: Summary,
+    /// The game's video settings at the time ("Performance · 240 FPS cap"), where OmniHub can read them.
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 pub use imp::{allowed, helper_admin, request_access};

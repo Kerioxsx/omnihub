@@ -9,6 +9,7 @@
 pub mod configs;
 pub mod deck;
 pub mod emulators;
+pub mod fortnite;
 pub mod fps;
 pub mod ini;
 pub mod junk;
@@ -526,6 +527,8 @@ pub struct GameHub {
     journal_path: PathBuf,
     /// Copies of the games' own settings from before OmniHub's first change.
     backups_dir: PathBuf,
+    /// The graphics drivers when the shader caches were last cleaned.
+    drivers_seen: PathBuf,
     pc_journal: PathBuf,
     /// For tests: the games' settings files; otherwise they are looked up.
     config_paths: Mutex<Option<std::collections::HashMap<ConfigGame, Vec<PathBuf>>>>,
@@ -597,6 +600,7 @@ impl GameHub {
         Arc::new(GameHub {
             journal_path: data_dir.join("games-session.json"),
             backups_dir: data_dir.join("game-settings-backup"),
+            drivers_seen: data_dir.join("gpu-drivers.txt"),
             pc_journal: data_dir.join("pc-tweaks.json"),
             config_paths: Mutex::new(None),
             library_roots: Mutex::new(library::Roots::system()),
@@ -939,7 +943,42 @@ impl GameHub {
             return Err("Close Fortnite first.".into());
         }
         let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).ok_or("Windows didn’t say where your app data is.")?;
-        Ok(clean_folders(&fortnite_cache_dirs(&local)))
+        let done = clean_folders(&fortnite_cache_dirs(&local));
+        // The caches now match these drivers.
+        fortnite::remember_drivers(&self.drivers_seen, &self.gpu_drivers());
+        Ok(done)
+    }
+
+    /// The graphics drivers, how old they are, and whether one changed since
+    /// the shader caches were last cleaned.
+    pub fn gpu_drivers(&self) -> Vec<fortnite::GpuDriver> {
+        fortnite::gpu_drivers(&self.drivers_seen, crate::db::now())
+    }
+
+    fn local_app_data() -> Result<PathBuf, String> {
+        std::env::var_os("LOCALAPPDATA").map(PathBuf::from).ok_or_else(|| "Windows didn’t say where your app data is.".to_string())
+    }
+
+    /// Fortnite's saved replays, newest first.
+    pub fn fortnite_replays(&self) -> Result<fortnite::Replays, String> {
+        Ok(fortnite::list_replays(&fortnite::replays_dir(&Self::local_app_data()?)))
+    }
+
+    /// Old replays to the Recycle Bin: all but the newest `keep`, and only
+    /// those older than `days` when given.
+    pub fn fortnite_clean_replays(&self, keep: usize, days: Option<u32>) -> Result<(usize, u64), String> {
+        fortnite::clean_replays(&fortnite::replays_dir(&Self::local_app_data()?), keep, days, crate::db::now())
+    }
+
+    /// Wi-Fi or cable, and Wi-Fi power saving.
+    pub fn net_check(&self) -> fortnite::NetCheck {
+        fortnite::NetCheck { on_wifi: tweaks::on_wifi(), wifi_saving: tweaks::wifi_saving() }
+    }
+
+    /// Wi-Fi power saving off (0) or back to Windows' default (medium, 2).
+    pub fn set_wifi_saving(&self, off: bool) -> Result<fortnite::NetCheck, String> {
+        tweaks::set_wifi_saving(if off { 0 } else { 2 })?;
+        Ok(self.net_check())
     }
 
     pub fn config_restore(&self, game: ConfigGame) -> Result<(), String> {
@@ -1450,8 +1489,10 @@ impl GameHub {
         *self.live_fps.lock() = None;
         let summary = fps_stats.lock().summary();
         if let Some(sum) = summary.clone().filter(|s| s.seconds >= 10.0) {
+            // Which settings these frames were with, to compare them later.
+            let label = (p.kind == GameKind::Fortnite).then(|| fortnite::settings_label_from(&self.config_files(ConfigGame::Fortnite))).flatten();
             let mut inner = self.inner.lock();
-            inner.store.fps_records.push(FpsRecord { profile_id: p.id.clone(), name: p.name.clone(), mode: b.mode, at: crate::db::now(), summary: sum });
+            inner.store.fps_records.push(FpsRecord { profile_id: p.id.clone(), name: p.name.clone(), mode: b.mode, at: crate::db::now(), summary: sum, label });
             let extra = inner.store.fps_records.len().saturating_sub(FPS_RECORDS);
             inner.store.fps_records.drain(..extra);
             self.save_store(&inner.store);

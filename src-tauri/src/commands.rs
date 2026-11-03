@@ -2266,6 +2266,41 @@ pub async fn games_fortnite_clean(core: Core<'_>) -> Res<games::CacheClean> {
 }
 
 #[tauri::command]
+pub async fn games_gpu_drivers(core: Core<'_>) -> Res<Vec<games::fortnite::GpuDriver>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.gpu_drivers())).await
+}
+
+#[tauri::command]
+pub async fn games_fortnite_replays(core: Core<'_>) -> Res<games::fortnite::Replays> {
+    let core = core.inner().clone();
+    blocking(move || core.games.fortnite_replays()).await
+}
+
+#[tauri::command]
+pub async fn games_fortnite_clean_replays(core: Core<'_>, keep: usize, days: Option<u32>) -> Res<(usize, u64)> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = core.games.fortnite_clean_replays(keep, days);
+        core.audit.record("desktop", "game.fortnite-replays", &r.as_ref().map(|(n, _)| format!("{n} replays")).unwrap_or_default(), r.is_ok());
+        r
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn games_net_check(core: Core<'_>) -> Res<games::fortnite::NetCheck> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.net_check())).await
+}
+
+#[tauri::command]
+pub async fn games_set_wifi_saving(core: Core<'_>, off: bool) -> Res<games::fortnite::NetCheck> {
+    let core = core.inner().clone();
+    blocking(move || core.games.set_wifi_saving(off)).await
+}
+
+#[tauri::command]
 pub async fn games_config_restore(core: Core<'_>, game: games::configs::ConfigGame) -> Res<GameConfigs> {
     let core = core.inner().clone();
     blocking(move || {

@@ -511,6 +511,20 @@ mod imp {
         Some(out.lines().any(|l| l.trim_start().starts_with("SSID") && !l.contains("BSSID") && l.split(':').nth(1).is_some_and(|v| !v.trim().is_empty())))
     }
 
+    /// The Wi-Fi adapter's power saving while plugged in (0 maximum
+    /// performance … 3 maximum saving), from the active power plan.
+    pub fn wifi_saving() -> Option<u32> {
+        let out = run("powercfg", &["/query", "SCHEME_CURRENT", crate::games::fortnite::WIFI_SUBGROUP, crate::games::fortnite::WIFI_SETTING]).ok()?;
+        crate::games::fortnite::parse_power_values(&out).map(|(ac, _)| ac)
+    }
+
+    /// Set it (plugged in only; on battery Windows keeps its own choice).
+    pub fn set_wifi_saving(value: u32) -> Result<(), String> {
+        let v = value.min(3).to_string();
+        run("powercfg", &["/setacvalueindex", "SCHEME_CURRENT", crate::games::fortnite::WIFI_SUBGROUP, crate::games::fortnite::WIFI_SETTING, &v])?;
+        run("powercfg", &["/setactive", "SCHEME_CURRENT"]).map(|_| ())
+    }
+
     // ---------- launching ----------
 
     /// Riot Client's location, from its own install record.
@@ -588,6 +602,12 @@ mod imp {
     }
     pub fn on_wifi() -> Option<bool> {
         None
+    }
+    pub fn wifi_saving() -> Option<u32> {
+        None
+    }
+    pub fn set_wifi_saving(_value: u32) -> Result<(), String> {
+        Err(ONLY.into())
     }
     pub struct TimerResolution;
     impl TimerResolution {

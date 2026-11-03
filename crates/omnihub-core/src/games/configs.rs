@@ -178,11 +178,15 @@ pub struct FortniteOptions {
     /// Fortnite's rendering mode; None follows `performance_mode`
     /// (settings saved before the choice existed).
     pub render_mode: Option<RenderMode>,
+    /// With `lowest_quality` off: every quality setting at this level
+    /// (1 medium, 2 high, 3 epic), for the Balanced and Pretty presets.
+    /// None leaves Fortnite's own quality alone.
+    pub quality: Option<u8>,
 }
 
 impl Default for FortniteOptions {
     fn default() -> Self {
-        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None }
+        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None, quality: None }
     }
 }
 
@@ -378,6 +382,14 @@ fn fortnite_edits(o: &FortniteOptions) -> Vec<Edit> {
         e.push(edit(s, "DesiredGlobalIlluminationQuality", "0", false, "Lumen global illumination off"));
         e.push(edit(s, "DesiredReflectionQuality", "0", false, "Lumen reflections off"));
         e.push(edit(s, "FortAntiAliasingMethod", "Disabled", false, "Anti-aliasing and super resolution off"));
+    } else if let Some(q) = o.quality.filter(|q| (1..=3).contains(q)) {
+        let name = ["low", "medium", "high", "epic"][q as usize];
+        e.push(edit(s, "bShowGrass", "True", false, "Grass on"));
+        e.push(edit(g, "sg.ViewDistanceQuality", o.view_distance.min(3).to_string(), true, format!("View distance: {}", ["near", "medium", "far", "epic"][o.view_distance.min(3) as usize])));
+        for (key, what) in UE_GROUPS {
+            e.push(edit(g, key, q.to_string(), true, format!("{what}: {name}")));
+        }
+        e.push(edit(g, "sg.LandscapeQuality", q.to_string(), false, format!("Landscape: {name}")));
     }
     e
 }

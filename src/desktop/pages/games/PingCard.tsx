@@ -137,7 +137,8 @@ export function PingCard({ profile, state, locked, onBoost, onHost }: { profile:
     }
   };
 
-  const best = results?.filter((r) => r.avgMs != null).sort((a, b) => (a.avgMs ?? 0) - (b.avgMs ?? 0))[0];
+  // The lowest ping among regions that don't drop packets.
+  const best = results?.filter((r) => r.avgMs != null && r.loss <= 0.1).sort((a, b) => (a.avgMs ?? 0) - (b.avgMs ?? 0))[0];
   const max = Math.max(60, ...(results ?? []).map((r) => r.maxMs ?? 0));
   const b = profile.boost;
   return (
@@ -174,7 +175,11 @@ export function PingCard({ profile, state, locked, onBoost, onHost }: { profile:
                 </div>
               );
             })}
-            {best && profile.kind === 'fortnite' && <div className="px-2 pt-1 text-[12px] text-dim">Pick <b className="text-fg">{best.label}</b> as the matchmaking region in Fortnite's settings for the lowest ping.</div>}
+            {profile.kind === 'fortnite' && best && results.length > 1 && (
+              <div className="px-2 pt-1 text-[12px] text-dim">
+                Best for you: <span className="font-semibold text-fg">{best.label}</span> ({Math.round(best.avgMs ?? 0)} ms). Pick it in Fortnite under Settings → Game → Matchmaking Region, or leave it on Auto, which chooses by ping too.
+              </div>
+            )}
             {results.some((r) => (r.jitterMs ?? 0) > 8) && <div className="px-2 pt-1 text-[12px] text-warn">Jitter above ~8 ms is what makes a game feel laggy — usually Wi-Fi or something else downloading.</div>}
           </div>
         ) : (

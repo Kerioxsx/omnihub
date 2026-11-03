@@ -322,8 +322,14 @@ let frames: number[] = [];
 const history: FpsRecord[] = (() => {
   const day = 86400;
   const now = Math.floor(Date.now() / 1000);
-  const rec = (name: string, mode: BoostMode, at: number, avg: number, low1: number, low01: number, hitches: number, seconds: number): FpsRecord => ({ profileId: '', name, mode, at, summary: { frames: Math.round(avg * seconds), seconds, avg, low1, low01, hitches } });
-  return [rec('Fortnite', 'competitive', now - 3 * day, 487.2, 341.5, 262.8, 4, 1840), rec('Fortnite', 'custom', now - 5 * day, 402.6, 268.1, 198.4, 19, 1622)];
+  const rec = (name: string, mode: BoostMode, at: number, avg: number, low1: number, low01: number, hitches: number, seconds: number, label?: string): FpsRecord => ({ profileId: '', name, mode, at, label, summary: { frames: Math.round(avg * seconds), seconds, avg, low1, low01, hitches } });
+  const perf = 'Performance · no FPS cap · low quality · 100%';
+  const dx12 = 'DirectX 12 · 240 FPS cap · medium quality · 100%';
+  return [
+    rec('Fortnite', 'competitive', now - 1 * day, 495.4, 352.0, 270.1, 3, 1500, perf),
+    rec('Fortnite', 'competitive', now - 3 * day, 487.2, 341.5, 262.8, 4, 1840, perf),
+    rec('Fortnite', 'custom', now - 5 * day, 402.6, 268.1, 198.4, 19, 1622, dx12),
+  ];
 })();
 history.forEach((h) => (h.profileId = profiles.find((p) => p.name === h.name)?.id ?? ''));
 

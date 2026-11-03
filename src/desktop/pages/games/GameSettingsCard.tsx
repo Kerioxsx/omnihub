@@ -3,14 +3,14 @@
 // and Minecraft. Shows what the file says now, what Optimize changes, and
 // puts your own settings back.
 
-import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteOptions, FortniteRenderMode, GameConfigs, GameSession, MinecraftOptions, ProOptions } from '@shared/types';
+import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteOptions, FortniteRenderMode, GameConfigs, GameSession, GpuDriver, MinecraftOptions, NetCheck, ProOptions, Replays } from '@shared/types';
 import { formatBytes, formatRelative } from '@shared/format';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, ChevronDown, Eraser, Gauge, Info, Lightbulb, RotateCcw, Sparkles, XCircle, Zap } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Eraser, ExternalLink, Film, Gauge, Info, Lightbulb, RotateCcw, Sparkles, XCircle, Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
-import { Card, CardHeader } from '../../components/ui/Card';
+import { Badge, Card, CardHeader } from '../../components/ui/Card';
 import { Segmented, Select, Switch } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
@@ -180,15 +180,14 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   ))}
                 </Select>
               </Row>
-              <Row title="Max FPS setup" hint="Everything set for the most frames: no cap, Performance mode, lowest quality, near view distance, fullscreen, Reflex on + boost, FPS counter. Press Apply after.">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  icon={Zap}
-                  onClick={() => fn({ frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true })}
-                >
-                  Set all
-                </Button>
+              <Row title="Preset" hint="Competitive: the most frames (Performance mode, lowest quality, no cap). Balanced: DirectX 12 at medium quality. Pretty: DirectX 12 at epic quality. Press Apply after; your own settings stay backed up.">
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESETS.map((p) => (
+                    <Button key={p.id} size="sm" variant="secondary" icon={p.icon} onClick={() => fn(p.set)}>
+                      {p.label}
+                    </Button>
+                  ))}
+                </div>
               </Row>
               <Row title="Rendering mode" hint="Performance is Fortnite’s lightest renderer, made for high frame rates: the biggest single gain on most PCs. DirectX 12 can be smoother on fast graphics cards; DirectX 11 suits older ones.">
                 <Segmented
@@ -200,9 +199,14 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                 />
               </Row>
               <Row title="Lowest quality everywhere" hint="Shadows, effects, post-processing, textures, foliage and grass at their lowest, and DirectX 12’s Nanite, Lumen and anti-aliasing off — what most pros play with.">
-                <Switch checked={o.fortnite.lowestQuality} onChange={(v) => fn({ lowestQuality: v })} label="Lowest quality" />
+                <Switch checked={o.fortnite.lowestQuality} onChange={(v) => fn({ lowestQuality: v, quality: v ? null : o.fortnite.quality })} label="Lowest quality" />
               </Row>
-              {o.fortnite.lowestQuality && (
+              {!o.fortnite.lowestQuality && (
+                <Row title="Quality" hint="Every quality setting at one level. Keep leaves Fortnite’s own choices alone.">
+                  <Segmented size="sm" label="Quality" value={String(o.fortnite.quality ?? 0)} onChange={(v) => fn({ quality: Number(v) || null })} options={[{ value: '0', label: 'Keep' }, { value: '1', label: 'Medium' }, { value: '2', label: 'High' }, { value: '3', label: 'Epic' }]} />
+                </Row>
+              )}
+              {(o.fortnite.lowestQuality || !!o.fortnite.quality) && (
                 <Row title="View distance">
                   <Segmented size="sm" label="View distance" value={String(o.fortnite.viewDistance)} onChange={(v) => fn({ viewDistance: Number(v) })} options={[{ value: '0', label: 'Near' }, { value: '1', label: 'Medium' }, { value: '2', label: 'Far' }, { value: '3', label: 'Epic' }]} />
                 </Row>
@@ -228,6 +232,9 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
               <Row title="Clean Fortnite caches" hint="Empties Fortnite’s logs, crash reports and web cache, and your graphics driver’s shader caches — old, bloated caches cause stutter. The first match after rebuilds its shaders, so it may hitch for a minute.">
                 <CleanCaches />
               </Row>
+              <DriverRow />
+              <ReplaysRow />
+              <WifiRow />
             </>
           )}
           {game === 'minecraft' && (
@@ -339,5 +346,94 @@ function CleanCaches() {
     <Button size="sm" variant="secondary" icon={Eraser} loading={busy} onClick={() => void run()}>
       Clean
     </Button>
+  );
+}
+
+const PRESETS: { id: string; label: string; icon: typeof Zap; set: Partial<FortniteOptions> }[] = [
+  { id: 'competitive', label: 'Competitive', icon: Zap, set: { frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 100 } },
+  { id: 'balanced', label: 'Balanced', icon: Gauge, set: { renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 1, viewDistance: 2, fullscreen: true, reflex: 2, resolutionScale: 100 } },
+  { id: 'pretty', label: 'Pretty', icon: Sparkles, set: { frameLimit: 0, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 3, viewDistance: 3, fullscreen: true, reflex: 1, resolutionScale: 100 } },
+];
+
+/** How old the graphics driver is; after it changes, clean the shader caches. */
+function DriverRow() {
+  const [d, setD] = useState<GpuDriver | null | undefined>(undefined);
+  useEffect(() => {
+    void api.games.gpuDrivers().then((l) => setD(l[0] ?? null), () => setD(null));
+  }, []);
+  if (!d) return null;
+  const old = (d.daysOld ?? 0) > 180;
+  return (
+    <Row
+      title="Graphics driver"
+      hint={
+        <>
+          {d.name} · {d.version}
+          {d.daysOld != null && ` · ${d.daysOld} days old`}
+          {d.changed && ' · Changed since the caches were last cleaned: clean them above so old shaders don’t cause stutter.'}
+        </>
+      }
+    >
+      <div className="flex items-center gap-2">
+        {d.changed && <Badge tone="warn">Clean caches</Badge>}
+        {old && <Badge tone="warn">Old</Badge>}
+        {d.updateUrl && (
+          <Button size="sm" variant="secondary" icon={ExternalLink} onClick={() => void api.app.openUrl(d.updateUrl!)}>
+            Check for updates
+          </Button>
+        )}
+      </div>
+    </Row>
+  );
+}
+
+/** Fortnite's saved replays pile up: send old ones to the Recycle Bin. */
+function ReplaysRow() {
+  const [r, setR] = useState<Replays | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => void api.games.fortniteReplays().then(setR, () => setR(null));
+  useEffect(load, []);
+  if (!r || !r.list.length) return null;
+  const clean = async () => {
+    setBusy(true);
+    try {
+      const [n, bytes] = await api.games.fortniteCleanReplays(5, 7);
+      toast.success(n ? `${n} replay${n === 1 ? '' : 's'} sent to the Recycle Bin` : 'Nothing old enough', n ? `${formatBytes(bytes)} freed. The 5 newest are kept.` : 'Replays from the last week and the 5 newest are kept.');
+      load();
+    } catch (e) {
+      toast.error('Couldn’t clean the replays', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Row title="Replays" hint={`${r.list.length} replay${r.list.length === 1 ? '' : 's'}, ${formatBytes(r.bytes)}. Cleaning keeps the 5 newest and anything from the last week; the rest go to the Recycle Bin.`}>
+      <Button size="sm" variant="secondary" icon={Film} loading={busy} onClick={() => void clean()}>
+        Clean old
+      </Button>
+    </Row>
+  );
+}
+
+/** Wi-Fi power saving adds lag spikes; and a cable beats Wi-Fi. */
+function WifiRow() {
+  const [n, setN] = useState<NetCheck | null>(null);
+  useEffect(() => {
+    void api.games.netCheck().then(setN, () => setN(null));
+  }, []);
+  if (!n || (n.onWifi === null && n.wifiSaving === null)) return null;
+  const saving = n.wifiSaving != null && n.wifiSaving > 0;
+  const set = (off: boolean) => void api.games.setWifiSaving(off).then(setN, (e: unknown) => toast.error('Couldn’t change it', errorText(e)));
+  return (
+    <Row
+      title="Wi-Fi power saving off"
+      hint={
+        n.onWifi
+          ? `You’re on Wi-Fi${saving ? ', and its power saving is on — it naps between packets, which shows up as ping spikes' : ''}. A network cable is steadier still.`
+          : 'You’re on a cable — the best for ping. This only matters on Wi-Fi.'
+      }
+    >
+      <Switch checked={n.wifiSaving === 0} onChange={(v) => set(v)} label="Wi-Fi power saving off" disabled={n.wifiSaving == null} />
+    </Row>
   );
 }

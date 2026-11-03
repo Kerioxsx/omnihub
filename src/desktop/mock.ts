@@ -123,6 +123,11 @@ const handlers: Record<string, Handler> = {
   games_config_apply: (a) => optimize.apply(str(a, 'game') as ConfigGame),
   games_config_restore: (a) => optimize.restore(str(a, 'game') as ConfigGame),
   games_fortnite_clean: () => ({ freedBytes: 1_284_000_000, files: 2316, skipped: 3 }),
+  games_gpu_drivers: () => [{ name: 'NVIDIA GeForce RTX 4070', version: '32.0.15.6094', date: Math.floor(Date.now() / 1000) - 140 * 86400, daysOld: 140, updateUrl: 'https://www.nvidia.com/en-us/geforce/drivers/', changed: true }],
+  games_fortnite_replays: () => ({ dir: 'C:\\Users\\Player\\AppData\\Local\\FortniteGame\\Saved\\Demos', bytes: 1_920_000_000, list: Array.from({ length: 18 }, (_, i) => ({ name: `UnsavedReplay-2026.10.${String(30 - i).padStart(2, '0')}-21.14.07.replay`, bytes: 60_000_000 + i * 9_000_000, at: Math.floor(Date.now() / 1000) - i * 86400 * 2 })) }),
+  games_fortnite_clean_replays: () => [12, 1_310_000_000],
+  games_net_check: () => ({ onWifi: true, wifiSaving: 2 }),
+  games_set_wifi_saving: (a) => ({ onWifi: true, wifiSaving: a?.off ? 0 : 2 }),
   displays_list: () => [
     { id: '\\\\.\\DISPLAY1#0', name: 'LG ULTRAGEAR', primary: true, builtin: false, brightness: 70, contrast: 75 },
     { id: '\\\\.\\DISPLAY2#0', name: 'DELL S2421H', primary: false, builtin: false, brightness: 55, contrast: 50 },

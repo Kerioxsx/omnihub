@@ -90,11 +90,14 @@ function ResultRow({ r, best }: { r: FpsRecord; best: boolean }) {
   const minutes = Math.max(1, Math.round(s.seconds / 60));
   return (
     <div className={cx('grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-5 rounded-lg px-2 py-1.5 text-[12.5px]', best && 'bg-good/8')}>
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-fg">{formatRelative(r.at)}</span>
-        <Badge tone={r.mode === 'competitive' ? 'accent' : r.mode === 'quality' ? 'info' : 'neutral'}>{MODE_LABEL[r.mode]}</Badge>
-        {best && <Trophy size={13} className="shrink-0 text-good" />}
-        <span className="hidden text-faint sm:inline">{minutes} min</span>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-fg">{formatRelative(r.at)}</span>
+          <Badge tone={r.mode === 'competitive' ? 'accent' : r.mode === 'quality' ? 'info' : 'neutral'}>{MODE_LABEL[r.mode]}</Badge>
+          {best && <Trophy size={13} className="shrink-0 text-good" />}
+          <span className="hidden text-faint sm:inline">{minutes} min</span>
+        </div>
+        {r.label && <div className="truncate text-[11.5px] text-faint">{r.label}</div>}
       </div>
       <div className="text-right tabular">
         <span className="font-semibold text-fg">{Math.round(s.avg)}</span> <span className="text-faint">avg</span>
@@ -104,6 +107,45 @@ function ResultRow({ r, best }: { r: FpsRecord; best: boolean }) {
       </div>
       <div className={cx('w-20 text-right tabular', s.hitches > 10 ? 'text-warn' : 'text-faint')} title="Frames that took over 2.5× the average: the stutters you notice">
         {s.hitches} stutter{s.hitches === 1 ? '' : 's'}
+      </div>
+    </div>
+  );
+}
+
+/** Average FPS and 1% lows for each set of game settings sessions were played with. */
+function BySettings({ records }: { records: FpsRecord[] }) {
+  const groups = new Map<string, { avg: number; low1: number; n: number }>();
+  for (const r of records) {
+    if (!r.label) continue;
+    const g = groups.get(r.label) ?? { avg: 0, low1: 0, n: 0 };
+    g.avg += r.summary.avg;
+    g.low1 += r.summary.low1;
+    g.n += 1;
+    groups.set(r.label, g);
+  }
+  if (groups.size < 2) return null;
+  const rows = [...groups.entries()].map(([label, g]) => ({ label, avg: g.avg / g.n, low1: g.low1 / g.n, n: g.n })).sort((a, b) => b.low1 - a.low1);
+  return (
+    <div>
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">By settings</div>
+      <div className="space-y-0.5">
+        {rows.map((x, i) => (
+          <div key={x.label} className={cx('grid grid-cols-[1fr_auto_auto] items-center gap-x-5 rounded-lg px-2 py-1.5 text-[12.5px]', i === 0 && 'bg-good/8')}>
+            <span className="flex min-w-0 items-center gap-2">
+              {i === 0 && <Trophy size={13} className="shrink-0 text-good" aria-label="Smoothest" />}
+              <span className="truncate text-fg">{x.label}</span>
+              <span className="shrink-0 text-faint">
+                {x.n} session{x.n === 1 ? '' : 's'}
+              </span>
+            </span>
+            <span className="text-right tabular">
+              <span className="font-semibold text-fg">{Math.round(x.avg)}</span> <span className="text-faint">avg</span>
+            </span>
+            <span className="text-right tabular">
+              <span className="font-semibold text-fg">{Math.round(x.low1)}</span> <span className="text-faint">1% low</span>
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -151,7 +193,8 @@ export function FpsCard({ profile, session, onMeter }: { profile: GameProfile; s
 
   const st = fps?.status;
   const ready = !!st?.installed && !!st.allowed;
-  const mine = fps?.history.filter((r) => r.profileId === profile.id).slice(0, 6) ?? [];
+  const all = fps?.history.filter((r) => r.profileId === profile.id) ?? [];
+  const mine = all.slice(0, 6);
   const best = mine.reduce<FpsRecord | null>((b, r) => (!b || r.summary.low1 > b.summary.low1 ? r : b), null);
   return (
     <Card>
@@ -194,6 +237,7 @@ export function FpsCard({ profile, session, onMeter }: { profile: GameProfile; s
         )}
         {live && <LiveFps live={live} trail={trail} />}
         {active && !live && ready && profile.boost.fpsMeter && <div className="text-[12.5px] text-faint">The readout starts once the game draws its first frames.</div>}
+        <BySettings records={all} />
         {mine.length > 0 && (
           <div>
             <div className="mb-1 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">

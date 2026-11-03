@@ -1402,6 +1402,8 @@ export interface FortniteOptions {
   reflex: number;
   /** Rendering mode; null follows performanceMode. */
   renderMode?: FortniteRenderMode | null;
+  /** With lowestQuality off: every quality setting at 1 medium, 2 high or 3 epic; null leaves it alone. */
+  quality?: number | null;
 }
 
 export type FortniteRenderMode = 'performance' | 'dx12' | 'dx11' | 'keep';
@@ -1631,6 +1633,8 @@ export interface FpsRecord {
   mode: BoostMode;
   at: number;
   summary: FpsSummary;
+  /** The game's video settings then ("Performance · 240 FPS cap"). */
+  label?: string | null;
 }
 
 export interface FpsOverview {
@@ -3613,4 +3617,28 @@ export interface PcHealth {
   score: number;
   checks: HealthCheck[];
   at: number;
+}
+
+// ---------- Fortnite helpers ----------
+
+export interface GpuDriver {
+  name: string;
+  version: string;
+  date: number | null;
+  daysOld: number | null;
+  updateUrl: string | null;
+  /** Changed since the shader caches were last cleaned. */
+  changed: boolean;
+}
+
+export interface Replays {
+  dir: string | null;
+  list: { name: string; bytes: number; at: number }[];
+  bytes: number;
+}
+
+export interface NetCheck {
+  onWifi: boolean | null;
+  /** Wi-Fi power saving while plugged in: 0 max performance … 3 max saving. */
+  wifiSaving: number | null;
 }
