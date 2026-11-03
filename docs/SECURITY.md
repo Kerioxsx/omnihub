@@ -1006,3 +1006,32 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
 - Library files on this PC are still served by token only
   (`gamemedia`), now at `http://gamemedia.localhost/<token>` on Windows,
   the form WebView2 loads.
+
+## 0.30.0
+
+- **Capri Desktop** is never bundled. Install downloads `Capri-Setup.exe`
+  only from `https://github.com/lachydotmcg/capri-desktop/releases/download/`
+  (the latest release, as GitHub's API lists it), checks it against the
+  SHA-256 GitHub publishes for the file when there is one (a mismatch is
+  deleted), and starts it; its own installer asks before installing.
+  Ollama is only talked to on `127.0.0.1:11434`; OmniHub never installs it.
+- **Party queue guest pages** (`/party/<code>`) need no pairing, like guest
+  uploads: a random 10-character code per party, ended with the party. A
+  wrong code counts against the address (20 tries a minute). Guests can only
+  search the music catalogue and add up to 15 songs each (200 in all); cover
+  images are kept only from the catalogue's own image hosts.
+- **New phone routes** use the existing permissions: voice commands need
+  "Launch apps" (and "Power actions" for quiet mode); the quiet timer and
+  schedule need "Power actions"; Capri Desktop needs "Launch apps"; photo
+  import needs "Uploads" and writes only to `Pictures\Phone\<month>`;
+  file search covers only the folders already shared with the phone, never
+  follows links, and skips system and program folders. Each action is in
+  the audit log.
+- **Screen time** closes over-limit apps with the same rules as Tasks
+  (Windows' own programs, Explorer and OmniHub can't have a limit).
+- **Price tracker and item shop**: product pages you paste are fetched with
+  a browser-like user agent to read their published price (JSON-LD or
+  meta tags) and nothing else; the shop list comes from fortnite-api.com.
+  Nothing about you is sent.
+- **App auto-updates** use winget only, at the time you pick, skipping the
+  ids you list.

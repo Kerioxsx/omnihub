@@ -142,8 +142,28 @@ export interface Status {
 
 // ---------- music ----------
 
+export interface FoundFile {
+  name: string;
+  path: string;
+  dir: boolean;
+  size: number;
+  kind: string;
+}
+
+export interface LiveStats {
+  fps: FpsLive | null;
+  cpuTemp: number | null;
+  gpuTemp: number | null;
+  cpu: number;
+  gpu: number | null;
+  memoryUsed: number;
+  memoryTotal: number;
+  game: string | null;
+}
+
+export type { QuietSchedule, QuietStatus } from '@shared/types';
 export type { AudioInfo, FpsLive, GameKind, GameSession, GameStep, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, PingResult, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
-import type { ApprovalRequest, BoardStroke, DownloadItem, DownloadMode, Scanned, ScanKind, ScanTarget, VideoJob, VideoTask, AudioInfo, FpsLive, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
+import type { QuietSchedule, QuietStatus, ApprovalRequest, BoardStroke, DownloadItem, DownloadMode, Scanned, ScanKind, ScanTarget, VideoJob, VideoTask, AudioInfo, FpsLive, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
 
 /** One app in the PC's volume mixer. */
 export interface AppVolume {
@@ -259,8 +279,17 @@ export const client = {
   power: () => request<{ enabled: boolean; actions: { action: PowerAction; label: string; destructive: boolean }[]; pending: PendingPower | null; delaySeconds: number }>('GET', '/api/power'),
   requestPower: (action: PowerAction) => request<{ pending: PendingPower }>('POST', '/api/power', { action, confirm: true }),
   cancelPower: () => request<{ cancelled: boolean }>('POST', '/api/power/cancel'),
-  quiet: () => request<{ on: boolean; since: number | null; fans: boolean }>('GET', '/api/quiet'),
-  setQuiet: (on: boolean) => request<{ on: boolean; since: number | null; fans: boolean }>('POST', '/api/quiet', { on }),
+  quiet: () => request<QuietStatus>('GET', '/api/quiet'),
+  setQuiet: (on: boolean) => request<QuietStatus>('POST', '/api/quiet', { on }),
+  quietTimer: (minutes: number | null) => request<QuietStatus>('POST', '/api/quiet/timer', { minutes }),
+  quietSchedule: (s: QuietSchedule) => request<QuietStatus>('POST', '/api/quiet/schedule', s),
+  searchFiles: (q: string) => request<{ items: FoundFile[]; more: boolean }>('GET', `/api/fs/search?q=${encodeURIComponent(q)}`),
+  live: () => request<LiveStats>('GET', '/api/live'),
+  voice: (text: string) => request<{ said: string }>('POST', '/api/voice', { text }),
+  photosCheck: (files: { name: string; size: number }[]) => request<{ have: boolean[]; dest: string }>('POST', '/api/photos/check', { files }),
+  capriDesktop: () => request<{ installed: boolean; running: boolean }>('GET', '/api/capri-desktop'),
+  setCapriDesktop: (open: boolean) => request<{ running: boolean }>('POST', '/api/capri-desktop', { open }),
+  party: () => request<{ code: string | null; queue: number; playing: { title: string; artist: string } | null }>('GET', '/api/party'),
   /** Lock the vault, cut phones off (this one too) and lock the PC. */
   panic: () => request<void>('POST', '/api/panic'),
   /** A screenshot of the PC's screen (saved on the PC too); a link to get it. */
@@ -538,6 +567,9 @@ function putChunk(url: string, chunk: Uint8Array, crc: number, signal: AbortSign
  * chunk). Call `controller.abort()` to pause (the chunk in flight stops at
  * once); call again with `resumeId` to continue a paused upload.
  */
+/** Upload destination meaning "Pictures\\Phone\\<month>" on the PC. */
+export const PHOTOS_DIR = '@photos';
+
 export async function uploadFile(
   file: File,
   onProgress: (u: UploadHandle) => void,
@@ -549,7 +581,9 @@ export async function uploadFile(
   if (id) {
     offset = (await request<{ offset: number }>('GET', `/api/upload/${id}`)).offset;
   } else {
-    const st = await request<{ id: string; offset: number }>('POST', '/api/upload', { name: file.name, size: file.size, dir: opts.dir ?? null });
+    // "@photos": a camera-roll photo, kept in Pictures\Phone\<month> on the PC.
+    const photos = opts.dir === PHOTOS_DIR;
+    const st = await request<{ id: string; offset: number }>('POST', '/api/upload', { name: file.name, size: file.size, dir: photos ? null : (opts.dir ?? null), photos });
     id = st.id;
   }
   const h: UploadHandle = { id, name: file.name, size: file.size, offset, sent: offset, state: 'uploading' };

@@ -46,6 +46,8 @@ pub enum QuickAction {
     Clipboard,
     /// Quiet mode on or off: screens off and fans at their lowest.
     Quiet,
+    /// Capri Desktop (capriai.app) open or closed.
+    CapriDesktop,
     /// OBS Studio: "scene", "stream", "record", "replay" or "mute" (with
     /// the scene or source name as `target`).
     Obs {
@@ -631,6 +633,15 @@ impl crate::core::AppCore {
             }
             QuickAction::Clipboard => Err("The clipboard history opens on the PC".into()),
             QuickAction::Obs { what, target } => crate::obs::run(&self.quick.state().obs_url, &self.quick.obs_password(), what, target.as_deref()),
+            QuickAction::CapriDesktop => {
+                if self.procs.pids_named(crate::capri_app::PROCESS).is_empty() {
+                    self.capri_app.open()?;
+                    Ok("Capri is open".into())
+                } else {
+                    self.procs.end(crate::capri_app::PROCESS)?;
+                    Ok("Capri is closed".into())
+                }
+            }
             QuickAction::Quiet => {
                 if self.quiet_status().on {
                     self.quiet_off()?;

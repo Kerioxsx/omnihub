@@ -713,3 +713,27 @@ has Capri speak through her local bridge (`companion::say`).
   window in full screen (`setWindowFullscreen`), drives itself with
   `useGamepadNav` and the keyboard, and animates with the `bp-*` classes in
   `styles.css` (off with reduced motion).
+
+## 0.30.0
+
+- Core modules: `capri_app.rs` (Capri Desktop releases, install, open,
+  Ollama), `heat.rs` (overheat alerts), `app_updates.rs` (nightly winget),
+  `party.rs` (queue and guest page), `screentime.rs` (daily limits),
+  `watchers.rs` (item shop, prices), `voicecmd.rs` (phone voice text),
+  `web.rs` (small HTTP helpers). `quiet.rs` gained the schedule and sleep
+  timer, checked by the existing quiet thread.
+- `AppCore::start_extras` runs two threads: every 5 s temperatures (only
+  while sensors answer; otherwise a look every 5 minutes), the party's
+  auto-advance and, every 30 s, screen time; every 10 minutes app updates,
+  the item shop (once a UTC day) and prices (every 6 hours). With nothing
+  set up they do no work and write nothing.
+- Phone routes live in `remote/api/extra.rs` (authed routes and the public
+  party pages), merged into the router in `remote/api.rs`. Topics `alert:`,
+  `quiet:`, `party:`, `watch:`, `screentime:` and `capri:` now reach the
+  phone; `lib.rs` maps the alerts to desktop notifications.
+- Desktop commands are in `src-tauri/src/extras.rs`; screens in
+  `pages/games/ExtrasTab.tsx`, `CapriDesktopCard.tsx`,
+  `pages/focus/LimitsTab.tsx`, `components/music/PartyModal.tsx`, and the
+  quiet and heat cards in `pages/rig/FansTab.tsx`. Phone screens:
+  `Live.tsx`, `Photos.tsx`, `Party.tsx`, `ui/VoiceButton.tsx`, a search box
+  in `Files.tsx` and the quiet card in `Power.tsx`.

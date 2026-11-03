@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowLeft,
   ChevronRight,
+  LoaderCircle,
   Search,
   LayoutGrid,
   List,
@@ -37,7 +38,7 @@ import {
 } from 'lucide-react';
 import { formatBytes, formatDate, formatDateTime, formatRelative } from '@shared/format';
 import type { VideoJob, VideoTask } from '@shared/types';
-import { client, type FsEntry } from '../client';
+import { client, type FoundFile, type FsEntry } from '../client';
 import { useEvent } from '../lib/events';
 import { useApp, toast } from '../state';
 import { useUploads } from '../uploads';
@@ -378,6 +379,7 @@ export function FilesScreen({ active }: { active: boolean }) {
         <div className="px-safe pb-tabbar">
           <UploadsPanel className={path ? 'mt-3' : ''} />
 
+          {!path && <PcSearch onOpenFolder={setPath} />}
           {!path ? (
             rootsError && !roots ? (
               <ErrorState message={rootsError} onRetry={loadRoots} />
@@ -872,5 +874,57 @@ function DestOption({ active, onClick, icon, title, sub }: { active: boolean; on
         )}
       </AnimatePresence>
     </button>
+  );
+}
+
+/** Search every shared folder by name (the PC walks them; a few seconds at most). */
+function PcSearch({ onOpenFolder }: { onOpenFolder: (path: string) => void }) {
+  const [q, setQ] = useState('');
+  const [res, setRes] = useState<{ items: FoundFile[]; more: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    if (q.trim().length < 2) return;
+    setBusy(true);
+    try {
+      setRes(await client.searchFiles(q.trim()));
+    } catch (e) {
+      toast.error("Couldn't search", errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const parent = (p: string) => p.replace(/[\\/][^\\/]*$/, '') || p;
+  return (
+    <div className="mb-3">
+      <form
+        className="relative mt-1"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run();
+        }}
+      >
+        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
+        <input className="field h-11 py-0 pl-10 pr-10" placeholder="Search the PC by name" value={q} onChange={(e) => (setQ(e.target.value), e.target.value === '' && setRes(null))} enterKeyHint="search" type="search" />
+        {busy && <LoaderCircle size={17} className="spin absolute right-3.5 top-1/2 -translate-y-1/2 text-faint" />}
+      </form>
+      {res && (
+        <div className="card mt-2 overflow-hidden">
+          {res.items.length === 0 ? (
+            <div className="px-4 py-4 text-center text-[14px] text-dim">Nothing named like “{q}” in the shared folders.</div>
+          ) : (
+            res.items.map((f, i) => (
+              <button key={f.path} onClick={() => onOpenFolder(f.dir ? f.path : parent(f.path))} className={cx('press flex w-full items-center gap-3 px-4 py-3 text-left active:bg-surface-2', i > 0 && 'border-t border-line')}>
+                {f.dir ? <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-500/15 text-violet-400"><FolderOpen size={17} /></div> : <FileIcon name={f.name} size={36} />}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[15px] font-medium">{f.name}</div>
+                  <div className="truncate text-xs text-faint">{shortPath(f.dir ? f.path : parent(f.path))}</div>
+                </div>
+              </button>
+            ))
+          )}
+          {res.more && <div className="border-t border-line px-4 py-2.5 text-center text-xs text-faint">Showing the first matches. Type more of the name to narrow it down.</div>}
+        </div>
+      )}
+    </div>
   );
 }

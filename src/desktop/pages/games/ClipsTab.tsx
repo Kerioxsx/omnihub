@@ -16,6 +16,7 @@ import { confirm } from '../../state/dialogs';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
 import { CapriToggle } from '../chats/CapriToggle';
+import { CapriDesktopCard } from './CapriDesktopCard';
 
 const EXAMPLES = ['Capri, clip that', 'Capri, record the last ten minutes', 'Capri, save the last thirty seconds', 'Capri, start recording', 'Capri, stop recording', 'Capri, call me boss', 'Capri, what’s my FPS', 'Capri, take a screenshot', 'Capri, lock my PC', 'Capri, open Spotify', 'Capri, pause the music', 'Capri, next song', 'Capri, mute', 'Capri, panic'];
 const BUILT_IN_NAMES = ['boss', 'champ', 'chief', 'captain', 'king', 'queen', 'legend', 'daddy', 'mommy', 'bro', 'dude', 'partner', 'commander', 'master chief', 'goat'];
@@ -293,6 +294,7 @@ export function ClipsTab() {
           )}
         </div>
       </Card>
+      <CapriDesktopCard />
       <p className="px-1 text-[12px] text-faint">Capri hears OmniHub through her own local link (the one Claude Code uses), so she needs “follow your coding assistant” on in her menu. A game in exclusive full-screen covers her; borderless windowed keeps her in view. Counter-Strike 2 picks up OmniHub’s link the next time it starts.</p>
     </div>
   );

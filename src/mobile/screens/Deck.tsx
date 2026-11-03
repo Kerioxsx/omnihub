@@ -2,7 +2,7 @@
 // runs the button on the PC; the phone never sees what a button types or opens.
 
 import { quickIcon } from '@shared/quickIcons';
-import { Grid3x3 } from 'lucide-react';
+import { Bot, Grid3x3 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { client, type DeckButton } from '../client';
 import { errorMessage, vibrate } from '../lib/util';
@@ -57,6 +57,43 @@ export function DeckPage({ active, onBack }: { active: boolean; onBack: () => vo
           })}
         </div>
       )}
+      <CapriDesktopSwitch active={active} />
+    </div>
+  );
+}
+
+/** Show or hide Capri Desktop (capriai.app) on the PC, when it's installed. */
+function CapriDesktopSwitch({ active }: { active: boolean }) {
+  const [st, setSt] = useState<{ installed: boolean; running: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (active) client.capriDesktop().then(setSt, () => setSt(null));
+  }, [active]);
+  if (!st?.installed) return null;
+  const flip = async () => {
+    setBusy(true);
+    vibrate(15);
+    try {
+      const r = await client.setCapriDesktop(!st.running);
+      setSt({ ...st, running: r.running });
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="px-4 pb-6">
+      <button type="button" disabled={busy} onClick={() => void flip()} className="card press flex w-full items-center gap-3.5 p-4 text-left">
+        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-fuchsia-500/15 text-fuchsia-300">
+          <Bot size={21} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[16px] font-semibold">Capri Desktop</span>
+          <span className="block text-[13px] text-dim">{st.running ? 'On the PC’s screen. Tap to close.' : 'Closed. Tap to open on the PC.'}</span>
+        </span>
+        <span className={st.running ? 'text-good' : 'text-faint'}>{st.running ? 'On' : 'Off'}</span>
+      </button>
     </div>
   );
 }

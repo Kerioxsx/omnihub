@@ -183,6 +183,11 @@ impl ScreenTime {
     }
 }
 
+/// Today on this PC ("2026-11-03"), the day limits count in.
+pub fn local_today() -> String {
+    chrono::Local::now().format("%Y-%m-%d").to_string()
+}
+
 /// Minimize the window in front (a website over its limit).
 pub fn minimize_foreground() {
     #[cfg(windows)]

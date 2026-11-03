@@ -32,6 +32,15 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.30.0
+
+- **Capri Desktop** (capriai.app): installed from its developer's GitHub releases, opened and closed from the PC, phone or deck, with Ollama set up for its local brain.
+- **Quiet mode** every night on a schedule, or with a sleep timer; **overheat alerts** on the PC and phone.
+- **Phone**: a live gaming dashboard (FPS, temperatures, ping), search of the PC's files, photo import, voice commands and the party queue.
+- **Party queue**: friends add songs from their phones with a QR code.
+- **Apps update themselves** at night (winget); **screen-time limits** for apps and websites.
+- **Games → Extras**: sensitivity converter, Fortnite item-shop alerts and a PC parts price tracker.
+
 ## New in 0.29.1
 
 - Game covers, backgrounds and logos load again. Steam's current art addresses are looked up, and games from other stores use the same game's cover on Steam.

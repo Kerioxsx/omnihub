@@ -87,6 +87,8 @@ export const quick = {
         return 'Locked';
       case 'quiet':
         return 'Screens off, fans at their lowest';
+      case 'capriDesktop':
+        return 'Capri is open';
       case 'obs':
         if (!obsPassword) throw "OBS isn't answering: open OBS and turn on Tools → WebSocket Server Settings → Enable WebSocket server";
         return a.what === 'scene' ? `Scene: ${a.target}` : a.what === 'stream' ? 'Streaming' : 'Done';

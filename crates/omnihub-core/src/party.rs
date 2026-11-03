@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 pub const MAX_QUEUE: usize = 200;
 pub const PER_GUEST: usize = 15;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct PartySong {
     pub id: String,
     pub title: String,
@@ -159,25 +159,33 @@ impl Party {
     }
 }
 
-/// The page guests open (no pairing; only the party code).
+/// The page guests open (no pairing; only the party code). Its script is
+/// served separately (`PAGE_JS` at /party.js): the companion's page policy
+/// allows no inline scripts.
 pub const PAGE: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Party queue</title><style>
 *{box-sizing:border-box}body{margin:0;font:16px/1.4 system-ui,sans-serif;background:#0b0b12;color:#eee}main{max-width:560px;margin:auto;padding:18px}
 h1{font-size:22px;margin:6px 0 2px}p.s{color:#9a9aae;margin:0 0 14px}input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #2a2a3a;background:#14141f;color:#eee;font-size:16px}
-.row{display:flex;gap:10px;align-items:center;padding:10px;border-radius:12px;background:#14141f;margin-top:8px}.row img{width:48px;height:48px;border-radius:8px;object-fit:cover;background:#222}
-.row div{flex:1;min-width:0}.t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.a{color:#9a9aae;font-size:14px}button{border:0;border-radius:10px;padding:9px 14px;background:#8b5cf6;color:#fff;font-weight:600}
-button:disabled{opacity:.5}h2{font-size:15px;color:#9a9aae;margin:22px 0 4px}.msg{margin-top:10px;color:#34d399;min-height:20px}.err{color:#f87171}
-</style></head><body><main><h1>🎉 Party queue</h1><p class="s">Add songs to what's playing.</p>
+.row{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:#14141f;margin-top:8px}.row div{flex:1;min-width:0}
+.t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.a{color:#9a9aae;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+button{border:0;border-radius:10px;padding:9px 14px;background:#8b5cf6;color:#fff;font-weight:600;font-size:15px}button:disabled{opacity:.5}
+h2{font-size:15px;color:#9a9aae;margin:22px 0 4px}.msg{margin-top:10px;color:#34d399;min-height:20px}.err{color:#f87171}.on{color:#8b5cf6}
+</style></head><body><main><h1>Party queue</h1><p class="s">Add songs to what's playing.</p>
 <input id="name" placeholder="Your name" maxlength="30" style="margin-bottom:10px"><input id="q" placeholder="Search a song or artist" autocomplete="off">
-<div id="msg" class="msg"></div><div id="res"></div><h2>Up next</h2><div id="queue"></div></main><script>
-var code=location.pathname.split('/')[2];var $=function(i){return document.getElementById(i)};
-var nm=localStorage.getItem('partyName')||'';$('name').value=nm;$('name').oninput=function(){localStorage.setItem('partyName',this.value)};
-function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-function row(s,btn){return '<div class="row"><img src="'+esc(s.cover||'')+'" alt=""><div><div class="t">'+esc(s.title)+'</div><div class="a">'+esc(s.artist)+(s.by?' · '+esc(s.by):'')+'</div></div>'+(btn||'')+'</div>'}
-function load(){fetch('/party/'+code+'/queue').then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){var h='';if(d.playing)h+=row(d.playing,'<span>▶︎</span>');d.queue.forEach(function(s){h+=row(s)});$('queue').innerHTML=h||'<p class="s">Nothing yet — add the first song!</p>'}).catch(function(){$('queue').innerHTML='<p class="s err">This party has ended.</p>'})}
-var t;$('q').oninput=function(){clearTimeout(t);var q=this.value.trim();if(q.length<2){$('res').innerHTML='';return}t=setTimeout(function(){fetch('/party/'+code+'/search?q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){window._r=d.tracks||[];$('res').innerHTML=window._r.slice(0,8).map(function(s,i){return row(s,'<button onclick="add('+i+',this)">Add</button>')}).join('')})},300)};
-function add(i,b){var s=window._r[i];b.disabled=true;fetch('/party/'+code+'/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:s.title,artist:s.artist,album:s.album||'',cover:s.cover||'',by:$('name').value})}).then(function(r){return r.json().then(function(j){if(!r.ok)throw j.error||'Couldn\'t add it';return j})}).then(function(){$('msg').className='msg';$('msg').textContent='Added: '+s.title;load()}).catch(function(e){$('msg').className='msg err';$('msg').textContent=e;b.disabled=false})}
+<div id="msg" class="msg"></div><div id="res"></div><h2>Up next</h2><div id="queue"></div></main><script src="/party.js"></script></body></html>"#;
+
+pub const PAGE_JS: &str = r#"(function(){
+var code=location.pathname.split('/')[2];var $=function(i){return document.getElementById(i)};var results=[];
+try{$('name').value=localStorage.getItem('partyName')||''}catch(e){}
+$('name').addEventListener('input',function(){try{localStorage.setItem('partyName',this.value)}catch(e){}});
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+function row(s,extra){var r=el('div','row');var d=el('div');d.appendChild(el('div','t',s.title));d.appendChild(el('div','a',s.artist+(s.by?' · '+s.by:'')));r.appendChild(d);if(extra)r.appendChild(extra);return r}
+function load(){fetch('/party/'+code+'/queue').then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){var q=$('queue');q.textContent='';if(d.playing)q.appendChild(row(d.playing,el('span','on','▶')));d.queue.forEach(function(s){q.appendChild(row(s))});if(!q.firstChild)q.appendChild(el('p','s','Nothing yet: add the first song!'))}).catch(function(){var q=$('queue');q.textContent='';q.appendChild(el('p','s err','This party has ended.'))})}
+var timer;$('q').addEventListener('input',function(){clearTimeout(timer);var q=this.value.trim();if(q.length<2){$('res').textContent='';return}
+timer=setTimeout(function(){fetch('/party/'+code+'/search?q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(function(d){results=(d.tracks||[]).slice(0,8);var box=$('res');box.textContent='';results.forEach(function(s,i){var b=el('button',null,'Add');b.setAttribute('data-i',i);box.appendChild(row(s,b))})})},300)});
+$('res').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;var s=results[+b.getAttribute('data-i')];if(!s)return;b.disabled=true;
+fetch('/party/'+code+'/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:s.title,artist:s.artist,album:s.album||'',cover:s.cover||'',by:$('name').value})}).then(function(r){return r.json().then(function(j){if(!r.ok)throw j.error||"Couldn't add it";return j})}).then(function(){$('msg').className='msg';$('msg').textContent='Added: '+s.title;load()}).catch(function(err){$('msg').className='msg err';$('msg').textContent=String(err);b.disabled=false})});
 load();setInterval(load,5000);
-</script></body></html>"#;
+})();"#;
 
 #[cfg(test)]
 mod tests {
@@ -185,6 +193,12 @@ mod tests {
 
     fn song(t: &str, a: &str, by: &str) -> PartySong {
         PartySong { id: String::new(), title: t.into(), artist: a.into(), album: String::new(), cover: String::new(), by: by.into(), at: 0 }
+    }
+
+    #[test]
+    fn reads_what_the_guest_page_sends() {
+        let s: PartySong = serde_json::from_str(r#"{"title":"Song","artist":"Artist","album":"","cover":"","by":"Sam"}"#).unwrap();
+        assert_eq!((s.title.as_str(), s.by.as_str(), s.id.as_str()), ("Song", "Sam", ""));
     }
 
     #[test]

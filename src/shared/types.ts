@@ -3552,7 +3552,8 @@ export type QuickAction =
   | { kind: 'lock' }
   | { kind: 'clipboard' }
   | { kind: 'obs'; what: 'scene' | 'stream' | 'record' | 'replay' | 'mute'; target?: string | null }
-  | { kind: 'quiet' };
+  | { kind: 'quiet' }
+  | { kind: 'capriDesktop' };
 
 export interface QuickButton {
   id: string;
@@ -3716,9 +3717,131 @@ export interface WakeTarget {
   wifi: boolean;
 }
 
+export interface QuietSchedule {
+  enabled: boolean;
+  /** "23:00" */
+  start: string;
+  end: string;
+}
+
 export interface QuietStatus {
+  schedule: QuietSchedule;
+  /** The sleep timer, when set (unix ms). */
+  timer: number | null;
   on: boolean;
   since: number | null;
   /** OmniHub can set this PC's fans; otherwise quiet mode only turns the screens off. */
   fans: boolean;
+}
+
+// ---------- 0.30 ----------
+
+export interface OllamaStatus {
+  installed: boolean;
+  running: boolean;
+  models: string[];
+  hasModel: boolean;
+}
+
+export interface CapriDesktopSettings {
+  startWithOmnihub: boolean;
+}
+
+export interface CapriDesktopStatus {
+  installed: boolean;
+  exe: string | null;
+  version: string | null;
+  running: boolean;
+  settings: CapriDesktopSettings;
+  ollama: OllamaStatus;
+  supported: boolean;
+}
+
+export interface CapriDesktopLatest {
+  version: string;
+  url: string;
+  size: number;
+  sha256: string | null;
+  notes: string;
+}
+
+export interface HeatSettings {
+  enabled: boolean;
+  cpu: number;
+  gpu: number;
+}
+
+export interface AutoUpdateSettings {
+  enabled: boolean;
+  time: string;
+  skip: string[];
+  lastRun: number | null;
+  lastResult: string | null;
+}
+
+export interface AutoUpdateState {
+  settings: AutoUpdateSettings;
+  running: boolean;
+}
+
+export interface PartySong {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  cover: string;
+  by: string;
+  at: number;
+}
+
+export interface PartyState {
+  code: string | null;
+  queue: PartySong[];
+  playing: PartySong | null;
+  auto: boolean;
+  played: number;
+}
+
+export interface PartyView {
+  state: PartyState;
+  urls: string[];
+  qrSvgs: string[];
+}
+
+export type LimitKind = 'app' | 'site';
+
+export interface ScreenLimit {
+  id: string;
+  kind: LimitKind;
+  target: string;
+  minutes: number;
+  enabled: boolean;
+}
+
+export interface LimitUse {
+  limit: ScreenLimit;
+  usedMinutes: number;
+  over: boolean;
+}
+
+export interface PriceWatch {
+  id: string;
+  name: string;
+  url: string;
+  target: number | null;
+  price: number | null;
+  currency: string | null;
+  lowest: number | null;
+  history: [number, number][];
+  checked: number | null;
+  error: string | null;
+}
+
+export interface WatchStore {
+  shopWanted: string[];
+  shopAlerts: boolean;
+  shopSeen: string[];
+  shopDate: string;
+  shopNow: string[];
+  prices: PriceWatch[];
 }

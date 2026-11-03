@@ -2,6 +2,7 @@
 //! `omnihub-core`.
 
 mod commands;
+mod extras;
 mod ambient;
 mod gamemedia;
 mod quick;
@@ -52,6 +53,21 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
         "remote:paired" => Some(("Phone paired".into(), format!("{} can now connect to this PC.", payload["name"].as_str().unwrap_or("A phone")))),
         "guest:received" => Some((format!("{} sent you a file", payload["label"].as_str().unwrap_or("A guest")), format!("{} · saved in Incoming\\Guests", payload["name"].as_str().unwrap_or("file")))),
         "video:done" => Some((format!("{} is done", payload["label"].as_str().unwrap_or("Video")), payload["output"].as_str().unwrap_or("").rsplit(['\\', '/']).next().unwrap_or("").to_string())),
+        "alert:hot" => Some((format!("{} is hot", payload["part"].as_str().unwrap_or("The PC")), format!("{:.0} °C (your limit is {:.0} °C). Check the fans and airflow.", payload["temp"].as_f64().unwrap_or(0.0), payload["limit"].as_f64().unwrap_or(0.0)))),
+        "screentime:limit" => {
+            let name = payload["name"].as_str().unwrap_or("This app");
+            match payload["left"].as_u64().unwrap_or(0) {
+                0 => Some(("Time's up".into(), format!("{name} is over today's limit."))),
+                n => Some(("Screen time".into(), format!("{n} min left for {name} today."))),
+            }
+        }
+        "watch:shop" => Some(("In the item shop today".into(), payload["item"].as_str().unwrap_or("Something you wanted").to_string())),
+        "watch:price" => Some((format!("Price drop: {}", payload["name"].as_str().unwrap_or("a part")), format!("Now {:.2}{}", payload["price"].as_f64().unwrap_or(0.0), payload["currency"].as_str().map(|c| format!(" {c}")).unwrap_or_default()))),
+        "apps:auto-updated" => {
+            let n = payload["updated"].as_array().map_or(0, |a| a.len());
+            let f = payload["failed"].as_array().map_or(0, |a| a.len());
+            (n + f > 0).then(|| ("Apps updated".into(), if f > 0 { format!("{n} updated, {f} couldn't be") } else { format!("{n} updated overnight") }))
+        }
         "download:done" => Some(("Downloaded".into(), format!("{} · in Downloads\\OmniHub", payload["name"].as_str().unwrap_or("file")))),
         "scan:saved" => Some((format!("Scan from {}", payload["from"].as_str().unwrap_or("your phone").trim_start_matches("phone:")), payload["path"].as_str().unwrap_or("").rsplit(['\\', '/']).next().unwrap_or("").to_string())),
         "approval:request" => Some(("Approve on your phone".into(), format!("{} — tap Allow in OmniHub on your phone.", payload["title"].as_str().unwrap_or("OmniHub is waiting")))),
@@ -194,7 +210,7 @@ pub fn run(args: Vec<String>) {
                             // knowing about: always a Windows notification.
                             // During a focus round only what matters gets through.
                             let focusing = h.state::<std::sync::Arc<omnihub_core::core::AppCore>>().focus.state().is_some_and(|f| f.phase == omnihub_core::focus::Phase::Focus);
-                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request" | "counters:goal" | "games:limit" | "games:sale" | "battery:low");
+                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request" | "counters:goal" | "games:limit" | "games:sale" | "battery:low" | "alert:hot" | "screentime:limit");
                             if (hidden || important) && (!focusing || important) {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
                                     shortcuts::notify(&h, &title, &body);
@@ -431,6 +447,37 @@ pub fn run(args: Vec<String>) {
             quick::open_device_manager,
             quick::quiet_status,
             quick::quiet_set,
+            extras::capri_desktop_status,
+            extras::capri_desktop_latest,
+            extras::capri_desktop_install,
+            extras::capri_desktop_open,
+            extras::capri_desktop_close,
+            extras::capri_desktop_settings_set,
+            extras::ollama_pull,
+            extras::quiet_schedule_set,
+            extras::quiet_timer_set,
+            extras::heat_get,
+            extras::heat_set,
+            extras::app_updates_get,
+            extras::app_updates_set,
+            extras::app_updates_run,
+            extras::party_get,
+            extras::party_start,
+            extras::party_stop,
+            extras::party_auto,
+            extras::party_remove,
+            extras::party_bump,
+            extras::party_next,
+            extras::screentime_list,
+            extras::screentime_save,
+            extras::screentime_delete,
+            extras::watch_get,
+            extras::watch_shop_set,
+            extras::watch_shop_check,
+            extras::watch_price_save,
+            extras::watch_price_delete,
+            extras::watch_prices_check,
+            extras::voice_command,
             quick::clipboard_list,
             quick::clipboard_copy,
             quick::clipboard_paste,

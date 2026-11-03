@@ -268,7 +268,57 @@ export const api = {
   quiet: {
     status: () => call<T.QuietStatus>('quiet_status'),
     set: (on: boolean) => call<T.QuietStatus>('quiet_set', { on }),
+    setSchedule: (schedule: T.QuietSchedule) => call<T.QuietStatus>('quiet_schedule_set', { schedule }),
+    /** Quiet mode in `minutes` (null cancels). */
+    setTimer: (minutes: number | null) => call<T.QuietStatus>('quiet_timer_set', { minutes }),
   },
+  /** Overheat alerts on the PC and phone. */
+  heat: {
+    get: () => call<T.HeatSettings>('heat_get'),
+    set: (settings: T.HeatSettings) => call<T.HeatSettings>('heat_set', { settings }),
+  },
+  /** Capri Desktop (capriai.app), installed from its developer's GitHub releases, and Ollama. */
+  capriDesktop: {
+    status: () => call<T.CapriDesktopStatus>('capri_desktop_status'),
+    latest: () => call<T.CapriDesktopLatest>('capri_desktop_latest'),
+    install: () => call<T.CapriDesktopLatest>('capri_desktop_install'),
+    open: () => call<void>('capri_desktop_open'),
+    close: () => call<void>('capri_desktop_close'),
+    setSettings: (settings: T.CapriDesktopSettings) => call<void>('capri_desktop_settings_set', { settings }),
+    pullModel: () => call<void>('ollama_pull'),
+  },
+  /** Installed apps updated by themselves at night (winget). */
+  appUpdates: {
+    get: () => call<T.AutoUpdateState>('app_updates_get'),
+    set: (settings: T.AutoUpdateSettings) => call<T.AutoUpdateState>('app_updates_set', { settings }),
+    run: () => call<T.AutoUpdateState>('app_updates_run'),
+  },
+  /** Party queue: guests add songs from their phones with a QR code. */
+  party: {
+    get: () => call<T.PartyView>('party_get'),
+    start: () => call<T.PartyView>('party_start'),
+    stop: () => call<T.PartyView>('party_stop'),
+    auto: (on: boolean) => call<T.PartyView>('party_auto', { on }),
+    remove: (id: string) => call<T.PartyView>('party_remove', { id }),
+    bump: (id: string) => call<T.PartyView>('party_bump', { id }),
+    next: () => call<T.PartyView>('party_next'),
+  },
+  /** Minutes a day for apps and websites. */
+  screenTime: {
+    list: () => call<T.LimitUse[]>('screentime_list'),
+    save: (limit: T.ScreenLimit) => call<T.LimitUse[]>('screentime_save', { limit }),
+    remove: (id: string) => call<T.LimitUse[]>('screentime_delete', { id }),
+  },
+  /** Fortnite item-shop alerts and the PC parts price tracker. */
+  watch: {
+    get: () => call<T.WatchStore>('watch_get'),
+    setShop: (wanted: string[], alerts: boolean) => call<T.WatchStore>('watch_shop_set', { wanted, alerts }),
+    checkShop: () => call<T.WatchStore>('watch_shop_check'),
+    savePrice: (watch: T.PriceWatch) => call<T.WatchStore>('watch_price_save', { watch }),
+    removePrice: (id: string) => call<T.WatchStore>('watch_price_delete', { id }),
+    checkPrices: () => call<T.WatchStore>('watch_prices_check'),
+  },
+  voice: (text: string) => call<string>('voice_command', { text }),
   openDeviceManager: () => call<void>('open_device_manager'),
 
   /** Folder backups to another drive (new and changed files; never deletes). */

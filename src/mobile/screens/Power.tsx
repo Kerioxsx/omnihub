@@ -4,10 +4,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Lock, MonitorOff, Moon, Snowflake, LogOut, RotateCcw, Power, ShieldAlert, Timer, X, LoaderCircle, Camera, Siren, Download } from 'lucide-react';
-import type { PowerAction } from '@shared/types';
+import type { PowerAction, QuietStatus } from '@shared/types';
 import { client } from '../client';
 import { usePower, secondsLeft, toast, useApp } from '../state';
-import { PageHeader, Ring, Skeleton, ErrorState } from '../ui/common';
+import { PageHeader, Ring, Skeleton, ErrorState, Switch } from '../ui/common';
 import { PullToRefresh } from '../ui/PullToRefresh';
 import { cx, errorMessage, formatCountdown, useNow, vibrate } from '../lib/util';
 import { useEvent } from '../lib/events';
@@ -418,39 +418,62 @@ export function PowerIcon({ action, size = 20 }: { action: PowerAction; size?: n
 
 /** Quiet mode: the screens off and the fans at their lowest, the PC still on. */
 function QuietCard({ active }: { active: boolean }) {
-  const [q, setQ] = useState<{ on: boolean; since: number | null; fans: boolean } | null>(null);
+  const [q, setQ] = useState<QuietStatus | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (active) client.quiet().then(setQ, () => setQ(null));
   }, [active]);
   if (!q) return null;
-  const go = async () => {
+  const run = async (f: () => Promise<QuietStatus>) => {
     setBusy(true);
     vibrate(15);
     try {
-      setQ(await client.setQuiet(!q.on));
+      setQ(await f());
     } catch (e) {
       toast.error("Couldn't do that", errorMessage(e));
     } finally {
       setBusy(false);
     }
   };
+  const left = q.timer ? Math.max(0, Math.ceil((q.timer - Date.now()) / 60_000)) : null;
+  const sched = q.schedule;
   return (
-    <button
-      type="button"
-      onClick={() => void go()}
-      disabled={busy}
-      className={cx('mb-4 flex w-full items-center gap-4 rounded-[22px] border p-4 text-left transition-colors active:scale-[0.99]', q.on ? 'border-indigo-400/50 bg-indigo-500/15' : 'border-white/10 bg-white/[0.04]')}
-    >
-      <span className={cx('grid h-12 w-12 shrink-0 place-items-center rounded-2xl', q.on ? 'bg-indigo-400 text-black' : 'bg-indigo-500/15 text-indigo-300')}>
-        {busy ? <LoaderCircle size={22} className="animate-spin" /> : <Moon size={22} />}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[16px] font-semibold">{q.on ? 'Quiet mode is on' : 'Quiet mode'}</span>
-        <span className="block text-[13px] text-dim">
-          {q.on ? 'Tap to turn the screens back on and the fans back to normal.' : 'Screens off and fans at their lowest. The PC stays on; fans never fully stop, so it can’t overheat.'}
+    <div className={cx('mb-4 rounded-[22px] border p-4', q.on ? 'border-indigo-400/50 bg-indigo-500/15' : 'border-white/10 bg-white/[0.04]')}>
+      <button type="button" onClick={() => void run(() => client.setQuiet(!q.on))} disabled={busy} className="flex w-full items-center gap-4 text-left active:scale-[0.99]">
+        <span className={cx('grid h-12 w-12 shrink-0 place-items-center rounded-2xl', q.on ? 'bg-indigo-400 text-black' : 'bg-indigo-500/15 text-indigo-300')}>
+          {busy ? <LoaderCircle size={22} className="animate-spin" /> : <Moon size={22} />}
         </span>
-      </span>
-    </button>
+        <span className="min-w-0">
+          <span className="block text-[16px] font-semibold">{q.on ? 'Quiet mode is on' : 'Quiet mode'}</span>
+          <span className="block text-[13px] text-dim">
+            {q.on ? 'Tap to turn the screens back on and the fans back to normal.' : 'Screens off and fans at their lowest. The PC stays on; fans never fully stop, so it can’t overheat.'}
+          </span>
+        </span>
+      </button>
+      {!q.on && (
+        <div className="mt-3 border-t border-white/10 pt-3">
+          <div className="mb-2 text-[13px] text-dim">{left != null ? `Sleep timer: quiet in ${left} min` : 'Sleep timer'}</div>
+          <div className="flex flex-wrap gap-2">
+            {[15, 30, 60, 90].map((m) => (
+              <button key={m} type="button" disabled={busy} onClick={() => void run(() => client.quietTimer(m))} className="press rounded-full bg-white/[0.08] px-3.5 py-1.5 text-[14px] font-medium">
+                {m < 60 ? `${m} min` : m === 60 ? '1 h' : '1½ h'}
+              </button>
+            ))}
+            {left != null && (
+              <button type="button" disabled={busy} onClick={() => void run(() => client.quietTimer(null))} className="press rounded-full px-3.5 py-1.5 text-[14px] font-medium text-bad">
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3 text-[14px]">
+        <span className="flex-1 text-dim">Every night</span>
+        <input type="time" aria-label="Quiet from" value={sched.start} onChange={(e) => void run(() => client.quietSchedule({ ...sched, start: e.target.value }))} className="rounded-lg bg-white/[0.08] px-2 py-1" />
+        <span className="text-faint">–</span>
+        <input type="time" aria-label="Quiet until" value={sched.end} onChange={(e) => void run(() => client.quietSchedule({ ...sched, end: e.target.value }))} className="rounded-lg bg-white/[0.08] px-2 py-1" />
+        <Switch label="Quiet every night" on={sched.enabled} onChange={(enabled) => void run(() => client.quietSchedule({ ...sched, enabled }))} />
+      </div>
+    </div>
   );
 }

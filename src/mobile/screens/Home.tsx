@@ -10,6 +10,7 @@ import { useEvent } from '../lib/events';
 import { useApp, useInbox, usePower, toast, type Tab } from '../state';
 import { PullToRefresh } from '../ui/PullToRefresh';
 import { Logo } from '../ui/Logo';
+import { VoiceButton } from '../ui/VoiceButton';
 import { Button, ProgressBar, Ring, SectionTitle, Skeleton, Switch } from '../ui/common';
 import { PendingPowerCard } from './Power';
 import { CallBar } from './Sound';
@@ -65,6 +66,7 @@ export function HomeScreen({ active, openMore }: { active: boolean; openMore: (p
             <div className="text-[13px] font-medium text-dim">{greeting()}</div>
             <h1 className="truncate font-display text-[26px] font-bold leading-tight tracking-tight">{info?.name || status?.hostname || 'Your PC'}</h1>
           </div>
+          <VoiceButton />
           <div className={cx('flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold', connected ? 'bg-good/12 text-good' : 'bg-warn/12 text-warn')}>
             <span className={cx('h-2 w-2 rounded-full', connected ? 'dot-live bg-good' : 'bg-warn')} />
             {connected ? 'Online' : online ? 'Connecting' : 'Offline'}

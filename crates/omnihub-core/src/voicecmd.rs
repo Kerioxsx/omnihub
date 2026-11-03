@@ -17,13 +17,17 @@ fn clean(t: &str) -> String {
 }
 
 impl AppCore {
-    /// Understand and do a sentence; says what was done.
-    pub fn voice_text(&self, text: &str) -> Result<String, String> {
+    /// Understand and do a sentence; says what was done. `power_ok`: quiet
+    /// mode may be turned on and off (the phone's power permission).
+    pub fn voice_text(&self, text: &str, power_ok: bool) -> Result<String, String> {
         let t = clean(text);
         if t.is_empty() {
             return Err("I didn't hear anything".into());
         }
         match t.as_str() {
+            "quiet mode" | "quiet" | "go quiet" | "night mode" | "good night" | "goodnight" | "wake up" | "normal mode" | "quiet mode off" | "good morning" if !power_ok => {
+                return Err("Power actions are off on the PC (OmniHub → Phone → Permissions)".into());
+            }
             "quiet mode" | "quiet" | "go quiet" | "night mode" | "good night" | "goodnight" => {
                 self.quiet_on()?;
                 return Ok("Quiet mode on".into());

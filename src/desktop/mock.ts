@@ -42,6 +42,7 @@ import * as vault from './mock/vault';
 import { autoclick, counters as ctr, pkm } from './mock/counters';
 import { emulators as emus, library as lib } from './mock/library';
 import { quiet as quietMock } from './mock/quiet';
+import { appUpdatesMock, capriDesktop, heatMock, partyMock, screenTimeMock, voiceMock, watchMock } from './mock/extras';
 import { backups as bk, batteries as bats, clipboard as clip, discord, health as pcHealth, network, obs, quick as qk } from './mock/quick';
 
 /** What a key is called (the same names the app uses). */
@@ -496,6 +497,37 @@ const handlers: Record<string, Handler> = {
   open_device_manager: () => undefined,
   quiet_status: () => quietMock.status(),
   quiet_set: (a) => quietMock.set(Boolean(a?.on)),
+  quiet_schedule_set: (a) => quietMock.setSchedule(obj(a, 'schedule')),
+  quiet_timer_set: (a) => quietMock.setTimer((a?.minutes as number | null | undefined) ?? null),
+  heat_get: () => heatMock.get(),
+  heat_set: (a) => heatMock.set(obj(a, 'settings')),
+  capri_desktop_status: () => capriDesktop.status(),
+  capri_desktop_latest: () => capriDesktop.latest(),
+  capri_desktop_install: () => capriDesktop.install(),
+  capri_desktop_open: () => capriDesktop.open(),
+  capri_desktop_close: () => capriDesktop.close(),
+  capri_desktop_settings_set: (a) => capriDesktop.setSettings(obj(a, 'settings')),
+  ollama_pull: () => capriDesktop.pull(),
+  app_updates_get: () => appUpdatesMock.get(),
+  app_updates_set: (a) => appUpdatesMock.set(obj(a, 'settings')),
+  app_updates_run: () => appUpdatesMock.run(),
+  party_get: () => partyMock.get(),
+  party_start: () => partyMock.start(),
+  party_stop: () => partyMock.stop(),
+  party_auto: (a) => partyMock.auto(Boolean(a?.on)),
+  party_remove: (a) => partyMock.remove(str(a, 'id')),
+  party_bump: (a) => partyMock.bump(str(a, 'id')),
+  party_next: () => partyMock.next(),
+  screentime_list: () => screenTimeMock.list(),
+  screentime_save: (a) => screenTimeMock.save(obj(a, 'limit')),
+  screentime_delete: (a) => screenTimeMock.remove(str(a, 'id')),
+  watch_get: () => watchMock.get(),
+  watch_shop_set: (a) => watchMock.setShop((a?.wanted as string[]) ?? [], Boolean(a?.alerts)),
+  watch_shop_check: () => watchMock.checkShop(),
+  watch_price_save: (a) => watchMock.savePrice(obj(a, 'watch')),
+  watch_price_delete: (a) => watchMock.removePrice(str(a, 'id')),
+  watch_prices_check: () => watchMock.checkPrices(),
+  voice_command: (a) => voiceMock(str(a, 'text')),
   backups_list: () => bk.list(),
   backups_save: (a) => bk.save(obj(a, 'job')),
   backups_delete: (a) => bk.remove(str(a, 'id')),

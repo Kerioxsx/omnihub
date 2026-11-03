@@ -1,17 +1,94 @@
 // App updates through winget: every installed app with a newer version,
 // updated one by one or all at once.
 
-import type { AppUpdate } from '@shared/types';
-import { ArrowUpCircle, CheckCircle2, Download, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { formatRelative } from '@shared/format';
+import type { AppUpdate, AutoUpdateSettings, AutoUpdateState } from '@shared/types';
+import { ArrowUpCircle, CheckCircle2, Download, Moon, RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
 import { Card, Skeleton } from '../../components/ui/Card';
+import { Switch, TextInput } from '../../components/ui/Form';
 import { Callout, EmptyState, ErrorState } from '../../components/ui/States';
 import { useAsync } from '../../lib/hooks';
 import { toast } from '../../state/toasts';
 
 export function UpdatesPanel({ q }: { q: string }) {
+  return (
+    <div className="space-y-4">
+      <AutoUpdateCard />
+      <UpdatesList q={q} />
+    </div>
+  );
+}
+
+/** Updates installed by themselves at night, one app at a time. */
+function AutoUpdateCard() {
+  const [st, setSt] = useState<AutoUpdateState | null>(null);
+  const [skip, setSkip] = useState('');
+  const [running, setRunning] = useState(false);
+  useEffect(() => {
+    void api.appUpdates.get().then(setSt, () => undefined);
+  }, []);
+  if (!st) return null;
+  const s = st.settings;
+  const save = async (next: AutoUpdateSettings) => {
+    try {
+      setSt(await api.appUpdates.set(next));
+    } catch (e) {
+      toast.error('Couldn’t save that', errorText(e));
+    }
+  };
+  const runNow = async () => {
+    setRunning(true);
+    try {
+      const r = await api.appUpdates.run();
+      setSt(r);
+      toast.success(r.settings.lastResult ?? 'Done');
+    } catch (e) {
+      toast.error('Couldn’t update the apps', errorText(e));
+    } finally {
+      setRunning(false);
+    }
+  };
+  const addSkip = () => {
+    const id = skip.trim();
+    if (id && !s.skip.includes(id)) void save({ ...s, skip: [...s.skip, id] });
+    setSkip('');
+  };
+  return (
+    <Card className="space-y-3 p-5">
+      <div className="flex flex-wrap items-center gap-4">
+        <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/15 text-accent">
+          <Moon size={18} />
+        </span>
+        <div className="min-w-[220px] flex-1">
+          <div className="font-medium">Update apps by themselves</div>
+          <div className="text-[12.5px] text-dim">
+            Every night at the time below, winget installs the updates it finds, one app at a time. Not while a game is boosted.
+            {s.lastRun ? ` Last time ${formatRelative(s.lastRun * 1000)}: ${s.lastResult ?? ''}` : ''}
+          </div>
+        </div>
+        <TextInput type="time" aria-label="Update time" value={s.time} className="w-[136px]" onChange={(e) => void save({ ...s, time: e.target.value })} />
+        <Switch label="Update apps by themselves" checked={s.enabled} onChange={(enabled) => void save({ ...s, enabled })} />
+        <Button size="sm" variant="secondary" icon={RefreshCw} loading={running || st.running} onClick={() => void runNow()}>
+          Run now
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 text-[12.5px]">
+        <span className="text-faint">Never update by themselves:</span>
+        {s.skip.map((id) => (
+          <button key={id} type="button" className="rounded-full border border-line bg-surface-2 px-2.5 py-0.5 hover:border-bad/50 hover:text-bad" title="Remove" onClick={() => void save({ ...s, skip: s.skip.filter((x) => x !== id) })}>
+            {id} ×
+          </button>
+        ))}
+        <TextInput value={skip} onChange={(e) => setSkip(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addSkip()} placeholder="winget id, like Valve.Steam" className="h-7 w-52 text-[12.5px]" aria-label="App to skip" />
+      </div>
+    </Card>
+  );
+}
+
+function UpdatesList({ q }: { q: string }) {
   const list = useAsync(() => api.apps.updates(), []);
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [done, setDone] = useState<Set<string>>(new Set());

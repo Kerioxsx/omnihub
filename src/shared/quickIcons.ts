@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
   AppWindow,
+  Bot,
   Camera,
   ClipboardList,
   Coffee,
@@ -65,6 +66,7 @@ export const QUICK_ICONS: Record<string, LucideIcon> = {
   'clipboard-list': ClipboardList,
   lock: Lock,
   moon: Moon,
+  bot: Bot,
   monitor: Monitor,
   tv: Tv,
   'app-window': AppWindow,

@@ -2,7 +2,7 @@
 // Vault, Settings) with a slide-in sub-page stack.
 
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, Gamepad2, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft, SlidersVertical, SquareX, Server, ScanText, ScanBarcode, PenTool, CloudDownload, Grid3x3, Sparkles } from 'lucide-react';
+import { Activity, Gamepad2, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft, SlidersVertical, SquareX, Server, ScanText, ScanBarcode, PenTool, CloudDownload, Grid3x3, Sparkles, Gauge, Images, PartyPopper } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useApp } from '../state';
 import { Logo } from '../ui/Logo';
@@ -24,8 +24,11 @@ import { CountersPage } from './Counters';
 import { DeckPage } from './Deck';
 import { BoardPage } from './Board';
 import { DownloadsPage } from './Downloads';
+import { LivePage } from './Live';
+import { PartyPage } from './Party';
+import { PhotosPage } from './Photos';
 
-export type MorePage = 'deck' | 'counters' | 'sound' | 'open' | 'tasks' | 'games' | 'servers' | 'notes' | 'apps' | 'vault' | 'scan' | 'barcode' | 'board' | 'downloads' | 'settings';
+export type MorePage = 'live' | 'photos' | 'party' | 'deck' | 'counters' | 'sound' | 'open' | 'tasks' | 'games' | 'servers' | 'notes' | 'apps' | 'vault' | 'scan' | 'barcode' | 'board' | 'downloads' | 'settings';
 
 export function MoreScreen({ active, page, setPage, onUnpaired }: { active: boolean; page: MorePage | null; setPage: (p: MorePage | null) => void; onUnpaired: () => void }) {
   const info = useApp((s) => s.info);
@@ -37,9 +40,12 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
     { id: 'open', title: 'Open apps', sub: 'Close any program on the PC', icon: <SquareX size={21} />, tone: 'bg-rose-500/15 text-rose-400', show: !!f?.tasks },
     { id: 'tasks', title: 'Tasks', sub: 'CPU, memory and GPU of every program', icon: <Activity size={21} />, tone: 'bg-emerald-500/15 text-emerald-400', show: !!f?.tasks },
     { id: 'games', title: 'Games', sub: 'Boost the PC and start a game', icon: <Gamepad2 size={21} />, tone: 'bg-fuchsia-500/15 text-fuchsia-400', show: !!f?.games },
+    { id: 'live', title: 'Gaming dashboard', sub: 'FPS, temperatures and ping, live', icon: <Gauge size={21} />, tone: 'bg-red-500/15 text-red-400', show: true },
     { id: 'servers', title: 'Minecraft servers', sub: 'Start them, players, map and console', icon: <Server size={21} />, tone: 'bg-lime-500/15 text-lime-400', show: !!f?.servers },
     { id: 'notes', title: 'Notes & ideas', sub: 'Read, search and capture ideas for Claude', icon: <NotebookPen size={21} />, tone: 'bg-violet-500/15 text-violet-400', show: !!f?.notes },
     { id: 'apps', title: 'Apps', sub: 'Launch programs on the PC', icon: <AppWindow size={21} />, tone: 'bg-cyan-500/15 text-cyan-400', show: !!f?.apps },
+    { id: 'photos', title: 'Import photos', sub: 'New camera-roll photos to Pictures on the PC', icon: <Images size={21} />, tone: 'bg-pink-500/15 text-pink-400', show: !!f?.uploads },
+    { id: 'party', title: 'Party queue', sub: 'What’s playing, and add songs', icon: <PartyPopper size={21} />, tone: 'bg-amber-500/15 text-amber-300', show: !!f?.media },
     { id: 'scan', title: 'Scan', sub: 'Documents, receipts and cards to the PC, with their text', icon: <ScanText size={21} />, tone: 'bg-sky-500/15 text-sky-400', show: !!f?.uploads },
     { id: 'deck', title: 'Deck', sub: 'Your macro buttons: media, apps, games, keys and more on the PC', icon: <Grid3x3 size={21} />, tone: 'bg-violet-500/15 text-violet-300', show: true },
     { id: 'counters', title: 'Counters', sub: 'Tap to count: shiny hunts and anything else on the PC', icon: <Sparkles size={21} />, tone: 'bg-yellow-500/15 text-yellow-400', show: true },
@@ -108,6 +114,9 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
             {page === 'vault' && <VaultPage active={active} onBack={() => setPage(null)} />}
             {page === 'scan' && <ScanPage onBack={() => setPage(null)} />}
             {page === 'deck' && <DeckPage active={active} onBack={() => setPage(null)} />}
+            {page === 'live' && <LivePage active={active} onBack={() => setPage(null)} />}
+            {page === 'photos' && <PhotosPage onBack={() => setPage(null)} />}
+            {page === 'party' && <PartyPage active={active} onBack={() => setPage(null)} />}
             {page === 'counters' && <CountersPage active={active} onBack={() => setPage(null)} />}
             {page === 'barcode' && <BarcodePage active={active} onBack={() => setPage(null)} />}
             {page === 'board' && <BoardPage active={active} onBack={() => setPage(null)} />}

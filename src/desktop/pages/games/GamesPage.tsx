@@ -4,7 +4,7 @@
 import { formatRelative } from '@shared/format';
 import type { GameKind, GameProfile, GameSession, GameStep, InstalledGame } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, CircleSlash, Clapperboard, Cpu, Gamepad2, Library, Gauge, HardDriveDownload, LoaderCircle, Plus, Rocket, Square, XCircle, Zap } from 'lucide-react';
+import { CheckCircle2, CircleSlash, Clapperboard, Cpu, Crosshair, Gamepad2, Library, Gauge, HardDriveDownload, LoaderCircle, Plus, Rocket, Square, XCircle, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -18,6 +18,7 @@ import { useEvent } from '../../lib/hooks';
 import { navigate, useRoute } from '../../lib/router';
 import { toast } from '../../state/toasts';
 import { ClipsTab } from './ClipsTab';
+import { ExtrasTab } from './ExtrasTab';
 import { EmulatorsTab } from './library/EmulatorsTab';
 import { LibraryTab } from './library/LibraryTab';
 import { LiveFps, MODE_LABEL, useFpsLive } from './FpsCard';
@@ -44,7 +45,7 @@ export function GamesPage() {
   const [session, setSession] = useState<GameSession | null>(null);
   const [installed, setInstalled] = useState<InstalledGame[] | null>(null);
   const wantTab = route.params.get('tab');
-  const tab = wantTab === 'pc' ? 'pc' : wantTab === 'clips' ? 'clips' : wantTab === 'games' ? 'games' : wantTab === 'emulators' ? 'emulators' : 'library';
+  const tab = wantTab === 'pc' ? 'pc' : wantTab === 'clips' ? 'clips' : wantTab === 'games' ? 'games' : wantTab === 'emulators' ? 'emulators' : wantTab === 'extras' ? 'extras' : 'library';
   const selected = route.params.get('id') ?? profiles?.[0]?.id ?? null;
 
   const loadInstalled = () => void api.games.library().then(setInstalled, () => setInstalled([]));
@@ -123,6 +124,7 @@ export function GamesPage() {
           { value: 'emulators', label: 'Emulators', icon: Cpu },
           { value: 'clips', label: 'Clips & Capri', icon: Clapperboard },
           { value: 'pc', label: 'Optimize PC', icon: Gauge },
+          { value: 'extras', label: 'Extras', icon: Crosshair },
         ]}
       />
       <AnimatePresence>{session && <SessionCard key="session" session={session} onDismiss={() => setSession(null)} />}</AnimatePresence>
@@ -135,6 +137,8 @@ export function GamesPage() {
         <PcOptimize />
       ) : tab === 'clips' ? (
         <ClipsTab />
+      ) : tab === 'extras' ? (
+        <ExtrasTab />
       ) : profiles && profiles.length === 0 ? (
         <Card className="mt-2 p-8">
           <EmptyState icon={Gamepad2} title="Add your first game" description="Pick a game and OmniHub sets up a boost profile for it: power plan, background apps, GPU, Wi-Fi and more — all put back when you stop playing." />

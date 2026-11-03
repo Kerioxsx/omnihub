@@ -25,6 +25,8 @@ use crate::core::AppCore;
 use crate::settings::BrowseScope;
 use crate::system::power::PowerAction;
 
+mod extra;
+
 type Ctx = Arc<AppCore>;
 
 #[derive(Debug)]
@@ -152,6 +154,7 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/vault/session", post(vault_session).delete(vault_end))
         .route("/api/vault/entries", get(vault_entries))
         .route("/api/vault/reveal", post(vault_reveal))
+        .merge(extra::authed())
         .route_layer(middleware::from_fn_with_state(core.clone(), require_device));
 
     Router::new()
@@ -164,6 +167,7 @@ pub fn router(core: Ctx) -> Router {
         .route("/guest/{code}", get(guest_page))
         .route("/guest/{code}/info", get(guest_info))
         .route("/guest/{code}/file", put(guest_file))
+        .merge(extra::public())
         .merge(authed)
         .fallback(super::assets::serve)
         .layer(DefaultBodyLimit::max(1 << 20))
@@ -624,6 +628,9 @@ struct UploadReq {
     name: String,
     size: u64,
     dir: Option<String>,
+    /// A photo from the phone's camera roll: goes to Pictures\Phone\<month>.
+    #[serde(default)]
+    photos: bool,
 }
 
 async fn upload_start(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<UploadReq>) -> ApiResult<Json<transfer::UploadStatus>> {
@@ -631,6 +638,11 @@ async fn upload_start(State(core): State<Ctx>, Extension(dev): Extension<Device>
         return Err(ApiError::forbidden("sending files to this PC is turned off"));
     }
     let dest = match req.dir.as_deref().filter(|d| !d.is_empty()) {
+        _ if req.photos => {
+            let d = extra::photos_dir();
+            std::fs::create_dir_all(&d).map_err(|e| ApiError::bad(format!("couldn't make the Pictures\\Phone folder: {e}")))?;
+            d
+        }
         Some(d) => allowed_path(&core, d)?,
         None => core.incoming_dir(),
     };
@@ -1899,7 +1911,7 @@ fn for_phone(ev: &crate::events::Event, device_id: &str) -> bool {
     if ev.topic == "inbox:removed" {
         return true;
     }
-    ["power:", "notes:", "media:", "games:", "chats:", "approval:", "board:", "download:", "video:", "scan:"].iter().any(|p| ev.topic.starts_with(p)) || matches!(ev.topic.as_str(), "mcserver:changed" | "mcserver:players" | "mcserver:guard")
+    ["power:", "notes:", "media:", "games:", "chats:", "approval:", "board:", "download:", "video:", "scan:", "alert:", "quiet:", "party:", "watch:", "screentime:", "capri:"].iter().any(|p| ev.topic.starts_with(p)) || matches!(ev.topic.as_str(), "mcserver:changed" | "mcserver:players" | "mcserver:guard")
 }
 
 async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws: WebSocketUpgrade) -> ApiResult<Response> {

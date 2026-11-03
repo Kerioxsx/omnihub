@@ -2,7 +2,7 @@
 // time tracker (off until you turn it on) of which programs you used.
 
 import type { FocusState, TimeReport } from '@shared/types';
-import { AudioLines, Clock, CloudRain, Flame, Pause, Play, Plus, Timer, Trash, Waves, Wind, X } from 'lucide-react';
+import { AudioLines, Clock, CloudRain, Flame, Hourglass, Pause, Play, Plus, Timer, Trash, Waves, Wind, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -15,6 +15,7 @@ import { SOUNDS, type SoundId, setMaster, setSound, soundState, stopAll, subscri
 import { confirm } from '../../state/dialogs';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
+import { LimitsTab } from './LimitsTab';
 
 const hm = (secs: number) => {
   const m = Math.round(secs / 60);
@@ -261,19 +262,20 @@ function SoundsTab() {
   );
 }
 
-type Tab = 'focus' | 'sounds' | 'time';
+type Tab = 'focus' | 'sounds' | 'time' | 'limits';
 const TABS: TabItem<Tab>[] = [
   { value: 'focus', label: 'Focus timer', icon: Timer },
   { value: 'sounds', label: 'Sounds', icon: AudioLines },
   { value: 'time', label: 'Time', icon: Clock },
+  { value: 'limits', label: 'Limits', icon: Hourglass },
 ];
 
 export function FocusPage() {
   const [tab, setTab] = useState<Tab>('focus');
   return (
-    <Page title="Focus" subtitle="A focus timer that keeps distractions closed, sounds to focus with, and where your time goes.">
+    <Page title="Focus" subtitle="A focus timer that keeps distractions closed, sounds to focus with, where your time goes, and daily limits.">
       <Tabs items={TABS} value={tab} onChange={setTab} className="mb-4" />
-      {tab === 'focus' ? <FocusTab /> : tab === 'sounds' ? <SoundsTab /> : <TimeTab />}
+      {tab === 'focus' ? <FocusTab /> : tab === 'sounds' ? <SoundsTab /> : tab === 'limits' ? <LimitsTab /> : <TimeTab />}
     </Page>
   );
 }

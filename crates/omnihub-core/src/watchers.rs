@@ -10,6 +10,11 @@ use std::path::{Path, PathBuf};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
+/// Today in UTC: the item shop changes at midnight UTC.
+pub fn utc_today() -> String {
+    chrono::Utc::now().format("%Y-%m-%d").to_string()
+}
+
 pub const SHOP_URL: &str = "https://fortnite-api.com/v2/shop";
 
 // ---------- the Fortnite item shop ----------

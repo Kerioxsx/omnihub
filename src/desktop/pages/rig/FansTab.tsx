@@ -2,8 +2,8 @@
 // (motherboard and graphics-card fans) and liquidctl (liquid coolers and
 // fan hubs), with what each fan does now.
 
-import type { FanProfile, QuietStatus } from '@shared/types';
-import { ExternalLink, Fan, Gauge, Moon, ShieldCheck, Snowflake, Sun, Wind } from 'lucide-react';
+import type { FanProfile, HeatSettings, QuietStatus } from '@shared/types';
+import { ExternalLink, Fan, Gauge, Moon, ShieldCheck, Snowflake, Sun, Thermometer, Wind } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { api, errorText } from '../../api';
@@ -59,6 +59,7 @@ export function FansTab({ rig }: { rig: Rig }) {
       </Card>
 
       <QuietCard />
+      <HeatCard />
 
       <Card>
         <CardHeader icon={Fan} title="Motherboard and graphics card" subtitle={st?.fans === 'on' ? `Processor ${temp(st.cpuTemp)} · graphics card ${temp(st.gpuTemp)}` : 'Through LibreHardwareMonitor'} className="px-5 pt-4" />
@@ -144,37 +145,106 @@ export function FansTab({ rig }: { rig: Rig }) {
 }
 
 /** Quiet mode: screens off and fans at their lowest, the PC still on. */
+function minsLeft(at: number | null): number | null {
+  return at == null ? null : Math.max(0, Math.ceil((at - Date.now()) / 60_000));
+}
+
 function QuietCard() {
   const [q, setQ] = useState<QuietStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [, tick] = useState(0);
   useEffect(() => {
     void api.quiet.status().then(setQ, () => undefined);
+    const t = setInterval(() => tick((n) => n + 1), 20_000);
+    return () => clearInterval(t);
   }, []);
   useEvent<QuietStatus>('quiet:changed', setQ);
-  const go = async (on: boolean) => {
+  const run = async (f: () => Promise<QuietStatus>) => {
     setBusy(true);
     try {
-      setQ(await api.quiet.set(on));
+      setQ(await f());
     } catch (e) {
       toast.error('Couldn’t do that', errorText(e));
     } finally {
       setBusy(false);
     }
   };
+  const left = minsLeft(q?.timer ?? null);
+  const sched = q?.schedule ?? { enabled: false, start: '23:00', end: '07:30' };
   return (
-    <Card className="flex flex-wrap items-center gap-4 p-5">
-      <span className="grid h-11 w-11 place-items-center rounded-xl bg-indigo-500/15 text-indigo-300">
-        <Moon size={20} />
-      </span>
-      <div className="min-w-[220px] flex-1">
-        <div className="font-medium">Quiet mode</div>
-        <div className="text-[12.5px] text-dim">
-          Screens off and fans at their lowest safe speed; the PC stays on. Fans never stop completely (the processor would overheat) and speed up if it gets warm. Ends when you touch the mouse or keyboard, or from your phone’s Power page.
+    <Card className="overflow-hidden">
+      <div className="flex flex-wrap items-center gap-4 p-5">
+        <span className="grid h-11 w-11 place-items-center rounded-xl bg-indigo-500/15 text-indigo-300">
+          <Moon size={20} />
+        </span>
+        <div className="min-w-[220px] flex-1">
+          <div className="font-medium">Quiet mode</div>
+          <div className="text-[12.5px] text-dim">
+            Screens off and fans at their lowest safe speed; the PC stays on. Fans never stop completely (the processor would overheat) and speed up if it gets warm. Ends when you touch the mouse or keyboard, or from your phone’s Power page.
+          </div>
         </div>
+        <Button loading={busy} variant={q?.on ? 'secondary' : 'primary'} icon={q?.on ? Sun : Moon} onClick={() => void run(() => api.quiet.set(!q?.on))}>
+          {q?.on ? 'Turn off' : 'Quiet now'}
+        </Button>
       </div>
-      <Button loading={busy} variant={q?.on ? 'secondary' : 'primary'} icon={q?.on ? Sun : Moon} onClick={() => void go(!q?.on)}>
-        {q?.on ? 'Turn off' : 'Quiet now'}
-      </Button>
+      <div className="divide-y divide-line border-t border-line">
+        <Row title="Sleep timer" hint={left != null ? `Quiet mode in ${left} min.` : 'Quiet mode after a while, for falling asleep to a video or music.'}>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[15, 30, 60, 90].map((m) => (
+              <Button key={m} size="sm" variant="secondary" disabled={busy} onClick={() => void run(() => api.quiet.setTimer(m))}>
+                {m < 60 ? `${m} min` : `${m / 60} h`.replace('1.5 h', '1½ h')}
+              </Button>
+            ))}
+            {left != null && (
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(() => api.quiet.setTimer(null))}>
+                Cancel
+              </Button>
+            )}
+          </div>
+        </Row>
+        <Row title="Every night" hint="Quiet at the first time, back to normal at the second (unless you ended it yourself).">
+          <div className="flex items-center gap-2">
+            <TextInput type="time" aria-label="Quiet from" value={sched.start} className="w-[136px]" onChange={(e) => void run(() => api.quiet.setSchedule({ ...sched, start: e.target.value }))} />
+            <span className="text-faint">to</span>
+            <TextInput type="time" aria-label="Quiet until" value={sched.end} className="w-[136px]" onChange={(e) => void run(() => api.quiet.setSchedule({ ...sched, end: e.target.value }))} />
+            <Switch label="Quiet every night" checked={sched.enabled} onChange={(enabled) => void run(() => api.quiet.setSchedule({ ...sched, enabled }))} />
+          </div>
+        </Row>
+      </div>
+    </Card>
+  );
+}
+
+function HeatCard() {
+  const [h, setH] = useState<HeatSettings | null>(null);
+  useEffect(() => {
+    void api.heat.get().then(setH, () => undefined);
+  }, []);
+  const save = async (next: HeatSettings) => {
+    setH(next);
+    try {
+      setH(await api.heat.set(next));
+    } catch (e) {
+      toast.error('Couldn’t save that', errorText(e));
+    }
+  };
+  if (!h) return null;
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader icon={Thermometer} title="Overheat alerts" subtitle="A notification here and on your phone when a part stays above its limit for 20 seconds (again at most every 10 minutes). Uses the same temperature readings as the fans." className="px-5 py-4" actions={<Switch label="Overheat alerts" checked={h.enabled} onChange={(enabled) => void save({ ...h, enabled })} />} />
+      {h.enabled && (
+        <div className="grid gap-4 px-5 pb-5 sm:grid-cols-2">
+          {([['cpu', 'Processor', 60, 105], ['gpu', 'Graphics card', 60, 100]] as const).map(([k, label, min, max]) => (
+            <label key={k} className="block">
+              <div className="mb-1.5 flex items-center justify-between text-[12.5px]">
+                <span className="text-dim">{label}</span>
+                <span className="font-semibold tabular-nums">{h[k]} °C</span>
+              </div>
+              <input type="range" min={min} max={max} step={1} value={h[k]} onChange={(e) => setH({ ...h, [k]: Number(e.target.value) })} onPointerUp={() => void save(h)} onKeyUp={() => void save(h)} className="w-full accent-[var(--accent)]" aria-label={`${label} limit`} />
+            </label>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
