@@ -77,11 +77,31 @@
   FileClose $0
   Delete "$INSTDIR\.omnihub-write-test"
 
+  ; An update is started by OmniHub itself, which then closes on its own.
+  ; Closing can take a while (Minecraft servers save their worlds, fans go
+  ; back to the hardware), so wait up to 45 seconds before closing it by
+  ; force: forcing it early could lose a world, and it used to stop this
+  ; very installer too (see below).
+  ${If} $UpdateMode = 1
+    Push $2
+    StrCpy $2 0
+    omnihub_wait_exit:
+      nsExec::Exec 'cmd.exe /C tasklist /FI "IMAGENAME eq omnihub.exe" /NH | find /I "omnihub.exe"'
+      Pop $1
+      ${If} $1 == 0
+      ${AndIf} $2 < 90
+        Sleep 500
+        IntOp $2 $2 + 1
+        Goto omnihub_wait_exit
+      ${EndIf}
+    Pop $2
+  ${EndIf}
+
   ; Close every OmniHub still running, wherever it runs from: the app
   ; (it hides to the tray when asked to close), a copy in another folder,
   ; and the helper Brave, Chrome or Edge start for the OmniHub extension.
   ; Any of them would keep files locked.
-  nsExec::Exec 'cmd.exe /C tasklist /FI "IMAGENAME eq omnihub.exe" /NH | find "omnihub.exe"'
+  nsExec::Exec 'cmd.exe /C tasklist /FI "IMAGENAME eq omnihub.exe" /NH | find /I "omnihub.exe"'
   Pop $1
   ${If} $1 == 0
     ${IfNot} ${Silent}
@@ -92,7 +112,10 @@
       Abort
     ${EndIf}
     omnihub_close:
-    nsExec::Exec 'taskkill.exe /F /T /IM omnihub.exe'
+    ; Only omnihub.exe itself, never its process tree (/T): an update's
+    ; installer is started by OmniHub, so it is in that tree and /T closed
+    ; the installer halfway, leaving no new version.
+    nsExec::Exec 'taskkill.exe /F /IM omnihub.exe'
     Pop $1
     Sleep 1000
   ${EndIf}

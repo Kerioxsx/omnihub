@@ -9,7 +9,13 @@
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Fragment>
-    <CustomAction Id="OmniHubCloseRunning" Directory="TARGETDIR" ExeCommand="taskkill.exe /F /T /IM omnihub.exe" Execute="immediate" Return="ignore" />
+    <!--
+      An update is started by OmniHub, which then closes on its own; that can
+      take a while (Minecraft servers save their worlds). Wait up to about a
+      minute, then close what's left by force. Never the process tree (/T):
+      the installer started by OmniHub is in that tree.
+    -->
+    <CustomAction Id="OmniHubCloseRunning" Directory="TARGETDIR" ExeCommand="cmd.exe /C &quot;for /L %i in (1,1,60) do @((tasklist /NH /FI &quot;IMAGENAME eq omnihub.exe&quot; | find /I &quot;omnihub.exe&quot; &gt;nul || exit 0) &amp; ping -n 2 127.0.0.1 &gt;nul) &amp; taskkill.exe /F /IM omnihub.exe&quot;" Execute="immediate" Return="ignore" />
     <InstallExecuteSequence>
       <Custom Action="OmniHubCloseRunning" Before="InstallValidate" />
     </InstallExecuteSequence>

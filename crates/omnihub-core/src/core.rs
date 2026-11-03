@@ -322,7 +322,8 @@ impl AppCore {
                         if let crate::update::UpdateState::Available { release } = core.updater.check() {
                             // No surprise Windows prompt from the tray: an
                             // install that needs approval waits for a click.
-                            if s.auto_install && !core.updater.needs_approval() {
+                            // Nor again by itself after that version didn't finish installing.
+                            if s.auto_install && !core.updater.needs_approval() && core.updater.failed_version() != Some(release.version.as_str()) {
                                 pending = Some(release);
                             }
                         }

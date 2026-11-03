@@ -197,6 +197,17 @@ pub struct Updater {
     in_use: Mutex<Option<Box<dyn Fn() -> bool + Send + Sync>>>,
     /// The version that ran before this one, when this start follows an update.
     updated_from: Option<String>,
+    /// Written when an installer starts: the version it installs.
+    pending_file: PathBuf,
+    /// A version whose installer ran but didn't finish (this start still
+    /// runs the old version). Not installed again by itself.
+    failed: Option<String>,
+}
+
+/// What `pending-update.txt` says about the last installer, seen at start.
+pub fn unfinished(pending: Option<&str>, current: &str) -> Option<String> {
+    let v = pending?.trim();
+    (!v.is_empty() && is_newer(v, current)).then(|| v.to_string())
 }
 
 impl Updater {
@@ -207,16 +218,27 @@ impl Updater {
         let before = std::fs::read_to_string(&marker).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
         let updated_from = before.filter(|b| *b != current);
         let _ = std::fs::write(&marker, &current);
+        // An installer that was started but this is still the older version:
+        // the update didn't finish (it was stopped, or a file was in use).
+        let pending_file = data_dir.join("pending-update.txt");
+        let failed = unfinished(std::fs::read_to_string(&pending_file).ok().as_deref(), &current);
+        let _ = std::fs::remove_file(&pending_file);
+        let state = match &failed {
+            Some(v) => UpdateState::Failed { message: format!("The update to {v} didn't finish, so this is still {current}. Click Update to try again; if it keeps failing, download the setup from the website (your data stays).") },
+            None => UpdateState::Idle,
+        };
         Updater {
             events,
             dir: cache_dir.join("updates"),
             current,
             api_url: Mutex::new(std::env::var("OMNIHUB_UPDATE_URL").unwrap_or_else(|_| LATEST_RELEASE_API.to_string())),
-            state: Mutex::new(UpdateState::Idle),
+            state: Mutex::new(state),
             busy: AtomicBool::new(false),
             on_exit: Mutex::new(None),
             in_use: Mutex::new(None),
             updated_from,
+            pending_file,
+            failed,
         }
     }
 
@@ -235,6 +257,12 @@ impl Updater {
     /// The version that ran before this start, when OmniHub was just updated.
     pub fn updated_from(&self) -> Option<&str> {
         self.updated_from.as_deref()
+    }
+
+    /// A version whose update didn't finish last time (automatic updates
+    /// leave it to a click, so a failing install doesn't repeat by itself).
+    pub fn failed_version(&self) -> Option<&str> {
+        self.failed.as_deref()
     }
 
     pub fn set_in_use(&self, f: impl Fn() -> bool + Send + Sync + 'static) {
@@ -324,7 +352,10 @@ impl Updater {
         }
         let r = self.download(release).and_then(|(path, kind)| {
             self.set(UpdateState::Installing { version: release.version.clone() });
-            run_installer(&path, &kind)
+            run_installer(&path, &kind)?;
+            // Checked at the next start: still this version means it didn't finish.
+            let _ = std::fs::write(&self.pending_file, &release.version);
+            Ok(())
         });
         match r {
             Ok(()) => {
@@ -433,6 +464,21 @@ mod tests {
         assert!(parse_release(br#"{"tag_name":"v9.0.0","prerelease":true}"#).is_err());
         assert!(parse_release(br#"{"tag_name":"nightly"}"#).is_err());
         assert!(parse_release(b"<html>").is_err());
+    }
+
+    #[test]
+    fn notices_an_update_that_did_not_finish() {
+        assert_eq!(unfinished(Some("0.27.0\n"), "0.26.0").as_deref(), Some("0.27.0"));
+        assert_eq!(unfinished(Some("0.27.0"), "0.27.0"), None, "it finished");
+        assert_eq!(unfinished(Some("0.26.0"), "0.27.0"), None);
+        assert_eq!(unfinished(None, "0.27.0"), None);
+        let t = tempfile::tempdir().unwrap();
+        std::fs::write(t.path().join("pending-update.txt"), "99.0.0").unwrap();
+        let u = Updater::new(t.path(), t.path(), EventBus::new());
+        assert_eq!(u.failed_version(), Some("99.0.0"));
+        assert!(matches!(u.state(), UpdateState::Failed { .. }));
+        assert!(!t.path().join("pending-update.txt").exists(), "said once");
+        assert_eq!(Updater::new(t.path(), t.path(), EventBus::new()).failed_version(), None);
     }
 
     #[test]

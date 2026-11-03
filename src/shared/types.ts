@@ -1724,6 +1724,8 @@ export interface UpdateInfo {
   state: UpdateState;
   /** The version that ran before, on the first start after an update. */
   updatedFrom?: string | null;
+  /** A version whose update didn't finish last time. */
+  failedVersion?: string | null;
 }
 
 /** yt-dlp and Deno, for videos YouTube will not embed. */

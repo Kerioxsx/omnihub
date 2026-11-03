@@ -20,6 +20,9 @@ export function useUpdate() {
       if (i.updatedFrom && !announced) {
         announced = true;
         toast.success(`Updated to OmniHub ${i.current}`, 'OmniHub restarted to finish the update. Your settings and data are kept.');
+      } else if (i.failedVersion && !announced) {
+        announced = true;
+        toast.warn(`The update to ${i.failedVersion} didn't finish`, 'You still have the version before, with all your data. Click the update card in the sidebar to try again.', { duration: 12000 });
       }
     }, () => undefined);
   }, []);
@@ -88,7 +91,7 @@ export function UpdateCard({ collapsed }: { collapsed?: boolean }) {
                 {busy ? <LoaderCircle size={14} className="animate-spin" /> : <ArrowDownToLine size={14} />}
                 {s.state === 'available' ? `Update to ${s.release.version}` : s.state === 'downloading' ? `Downloading ${s.version}…` : `Installing ${s.version}…`}
               </div>
-              <div className="mt-0.5 text-[11px] text-dim">{s.state === 'available' ? 'One click — your settings and data stay' : s.state === 'downloading' ? `${Math.round(pct)}%` : 'OmniHub restarts in a moment'}</div>
+              <div className="mt-0.5 text-[11px] text-dim">{s.state === 'available' ? (info?.failedVersion === s.release.version ? 'Last try didn’t finish — click to try again' : 'One click — your settings and data stay') : s.state === 'downloading' ? `${Math.round(pct)}%` : 'OmniHub restarts in a moment'}</div>
               {busy && <div className="absolute inset-x-0 bottom-0 h-0.5 bg-accent transition-[width]" style={{ width: `${pct}%` }} />}
             </>
           )}

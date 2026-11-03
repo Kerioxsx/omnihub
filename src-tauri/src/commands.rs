@@ -1980,17 +1980,23 @@ pub struct UpdateInfo {
     state: omnihub_core::update::UpdateState,
     /// The version that ran before, on the first start after an update.
     updated_from: Option<String>,
+    /// A version whose update didn't finish last time.
+    failed_version: Option<String>,
+}
+
+fn update_info(core: &AppCore, state: omnihub_core::update::UpdateState) -> UpdateInfo {
+    UpdateInfo { current: core.updater.current_version().to_string(), state, updated_from: core.updater.updated_from().map(str::to_string), failed_version: core.updater.failed_version().map(str::to_string) }
 }
 
 #[tauri::command]
 pub async fn update_state(core: Core<'_>) -> Res<UpdateInfo> {
-    Ok(UpdateInfo { current: core.updater.current_version().to_string(), state: core.updater.state(), updated_from: core.updater.updated_from().map(str::to_string) })
+    Ok(update_info(&core, core.updater.state()))
 }
 
 #[tauri::command]
 pub async fn update_check(core: Core<'_>) -> Res<UpdateInfo> {
     let core = core.inner().clone();
-    blocking(move || Ok(UpdateInfo { current: core.updater.current_version().to_string(), state: core.updater.check(), updated_from: core.updater.updated_from().map(str::to_string) })).await
+    blocking(move || Ok(update_info(&core, core.updater.check()))).await
 }
 
 /// Download, verify and run the installer for the available version; the
