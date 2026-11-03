@@ -696,3 +696,20 @@ has Capri speak through her local bridge (`companion::say`).
   the GPU curve is None, so the card goes back to its own control).
 - Reached from `/api/quiet` (phone), `quiet_set` (desktop) and
   `QuickAction::Quiet` (deck and wheel).
+
+## Game art and Big Picture (0.29.1)
+
+- `games/storeart.rs`: `StoreArt` keeps Steam store art addresses by game
+  key for a week. `library_games` merges them over the fixed addresses, then
+  local Steam art and custom art win over both. Missing games are looked up
+  on a background thread (`find_store_art`), at most 60 name searches a run,
+  and `library:changed` reloads the page when something new is found.
+- `games/steam.rs`: `local_art` also searches the hashed folders newer Steam
+  clients use inside `appcache/librarycache/<app>/`.
+- `games/shelf.rs`: `media_url` builds the address for the platform
+  (`http://gamemedia.localhost/` on Windows, `gamemedia://localhost/`
+  elsewhere).
+- `pages/games/library/BigPicture.tsx`: full-screen library. It puts the
+  window in full screen (`setWindowFullscreen`), drives itself with
+  `useGamepadNav` and the keyboard, and animates with the `bp-*` classes in
+  `styles.css` (off with reduced motion).

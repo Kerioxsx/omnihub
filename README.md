@@ -32,6 +32,11 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.29.1
+
+- Game covers, backgrounds and logos load again. Steam's current art addresses are looked up, and games from other stores use the same game's cover on Steam.
+- **Big Picture**: the library full screen for a controller, with animated backgrounds and covers (Library → Big Picture, or the View button).
+
 ## New in 0.29.0
 
 - **Quiet mode** from the phone, the PC or a deck button: screens off and fans at their lowest safe speed while the PC stays on; it ends when you're back at the PC. A **Lowest** fan profile too.

@@ -291,6 +291,12 @@ impl PlayHub {
         }
     }
 
+    /// Run a voice command heard elsewhere (the phone's microphone).
+    pub fn run_voice(&self, cmd: voice::Command) -> bool {
+        let tx = self.tx.lock();
+        tx.as_ref().is_some_and(|tx| tx.send(Msg::Voice(cmd)).is_ok())
+    }
+
     /// The games to notice: (program, name).
     fn watch_list(&self, core: &AppCore) -> Vec<(String, String)> {
         let mut st = self.state.lock();

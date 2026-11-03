@@ -1,14 +1,14 @@
 ## New in this version
 
-**Quiet mode: the screens off and the fans at their lowest, from your phone, with the PC still on.**
+**Game covers show again, and the library has a full-screen Big Picture mode.**
 
-- **Quiet mode** (phone: Power; PC: My PC → Fans; or a deck or wheel button): turns every screen off and drops the fans to their lowest safe speed. Downloads, Minecraft servers and your phone keep working.
-- **Fans never stop completely**: a running processor would overheat within minutes. They sit at their minimum (30%, pumps 50%) and still speed up if the PC gets warm. The graphics card goes back to its own control, which on most cards stops its fans entirely while it's cool.
-- **Ends by itself** when someone touches the PC's mouse or keyboard, or with one tap on the phone. The fans go back to the profile they had.
-- **Lowest** is also a fan profile of its own (My PC → Fans), for whenever you want the PC as quiet as is safe.
-- Fan control needs LibreHardwareMonitor (or a supported cooler), set up under My PC → Fans. Without it, quiet mode just turns the screens off.
+- **Covers, backgrounds and logos load again.** Three causes, all fixed: Windows didn't load OmniHub's own image addresses for art Steam keeps on your PC; Steam moved its web art to new addresses that OmniHub's security rules blocked; and newer Steam versions keep that art in different folders.
+- **Steam's current art addresses**: OmniHub asks Steam's store which art each game has (no key needed) and keeps the answer for a week, so newer games get their covers too.
+- **Covers for games from other stores**: Epic, Xbox, EA and other games use the cover of the same game on Steam, when Steam sells it under the same name.
+- **Big Picture** (Library → Big Picture, or the View button on a controller): your library fills the screen. Rows for recently played, favourites, playing and all games. The focused game's art fills the background and drifts slowly, covers glide and grow as you move, with soft sounds. D-pad or stick to move, A to play, B to leave (keyboard: arrows, Enter, Esc).
+- A game's name no longer shows twice on a coloured card when you hover it.
 
-Also in 0.28.0: Fortnite presets and checks, OBS on the deck, a Discord status, a network monitor, backups, controller mode, and screenshots searchable by their text.
+Also in 0.29.0: quiet mode, with the screens off and the fans at their lowest, from your phone.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

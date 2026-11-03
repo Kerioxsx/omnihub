@@ -21,6 +21,7 @@ pub mod reshade;
 pub mod steam;
 pub mod roblox;
 pub mod shelf;
+pub mod storeart;
 pub mod tweaks;
 
 use std::path::{Path, PathBuf};

@@ -73,6 +73,8 @@ pub struct AppCore {
     pub counters: crate::counters::Counters,
     /// The game library's notes, sessions and save backups.
     pub shelf: crate::games::shelf::Shelf,
+    /// Game art addresses asked of Steam's store.
+    pub store_art: Arc<crate::games::storeart::StoreArt>,
     pub emulators: crate::games::emulators::Emulators,
     /// The OBS page for counters, while on.
     pub counters_overlay: parking_lot::Mutex<Option<crate::counters_overlay::OverlayServer>>,
@@ -91,6 +93,14 @@ pub struct AppCore {
     pub backups: Arc<crate::backup::Backups>,
     /// Screens off and fans at their lowest (from the phone, the deck…).
     pub quiet: crate::quiet::Quiet,
+    /// Capri Desktop (the fan-made companion app) and Ollama.
+    pub capri_app: crate::capri_app::CapriApp,
+    pub heat: crate::heat::Heat,
+    pub app_updates: crate::app_updates::AutoUpdates,
+    pub party: crate::party::Party,
+    pub screentime: crate::screentime::ScreenTime,
+    /// The Fortnite item shop and price watches.
+    pub watchers: crate::watchers::Watchers,
     /// Compress, convert, cut and take the sound out of videos (FFmpeg).
     pub video: crate::videotools::VideoTools,
     /// Links downloaded for a phone (or the PC).
@@ -170,6 +180,7 @@ impl AppCore {
             pkm: crate::pkm::Editor::default(),
             counters: crate::counters::Counters::new(&paths.data, events.clone()),
             shelf: crate::games::shelf::Shelf::new(&paths.data, events.clone()),
+            store_art: Arc::new(crate::games::storeart::StoreArt::new(&paths.cache)),
             emulators: crate::games::emulators::Emulators::new(&paths.data),
             counters_overlay: parking_lot::Mutex::new(None),
             autoclick: crate::autoclick::AutoClicker::new(events.clone()),
@@ -179,7 +190,13 @@ impl AppCore {
             presence: crate::presence::Presence::new(&paths.data),
             netmon: crate::system::netmon::NetMonitor::new(&paths.data),
             backups: Arc::new(crate::backup::Backups::new(&paths.data, events.clone())),
-            quiet: crate::quiet::Quiet::default(),
+            quiet: crate::quiet::Quiet::new(&paths.data),
+            capri_app: crate::capri_app::CapriApp::new(&paths.data, &paths.cache, events.clone()),
+            heat: crate::heat::Heat::new(&paths.data),
+            app_updates: crate::app_updates::AutoUpdates::new(&paths.data),
+            party: crate::party::Party::default(),
+            screentime: crate::screentime::ScreenTime::new(&paths.data),
+            watchers: crate::watchers::Watchers::new(&paths.data),
             video,
             downloads,
             airplay: crate::capture::airplay::AirPlay::new(&paths.data.join("addons"), &paths.data, events.clone()),
@@ -261,6 +278,7 @@ impl AppCore {
                 }
             })
             .ok();
+        self.start_extras();
         // Quiet mode ends when someone uses the PC's mouse or keyboard.
         let weak = Arc::downgrade(self);
         std::thread::Builder::new()
@@ -815,6 +833,123 @@ pub fn low_space_due(vols: &[crate::storage::volumes::VolumeInfo], percent: u8, 
         }
     }
     due
+}
+
+impl AppCore {
+    /// Background checks for the 0.30 features: overheat alerts, screen
+    /// time, the party queue, scheduled app updates, the item shop and prices,
+    /// and starting Capri Desktop with OmniHub.
+    fn start_extras(self: &Arc<Self>) {
+        if self.capri_app.settings().start_with_omnihub && self.procs.pids_named(crate::capri_app::PROCESS).is_empty() {
+            let _ = self.capri_app.open();
+        }
+        // Every 5 s: temperatures, the party queue; every 30 s: screen time.
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("watchers-fast".into())
+            .spawn(move || {
+                let mut n = 0u64;
+                let mut has_temps = false;
+                loop {
+                    std::thread::sleep(Duration::from_secs(5));
+                    let Some(core) = weak.upgrade() else { return };
+                    n += 1;
+                    let now = chrono::Utc::now().timestamp_millis();
+                    if core.heat.settings().enabled {
+                        // Keep the readings fresh; without sensors, look again every 5 minutes.
+                        if n % 4 == 1 && (has_temps || n % 60 == 1) {
+                            core.rig.hold();
+                        }
+                        let st = core.rig.status();
+                        has_temps = st.cpu_temp.is_some() || st.gpu_temp.is_some();
+                        for a in core.heat.check(st.cpu_temp, st.gpu_temp, now) {
+                            core.events.emit("alert:hot", &a);
+                        }
+                    }
+                    if let Some(m) = core.media.state() {
+                        if core.party.song_ended(&m.title, &m.artist, m.playing, m.position_ms, m.duration_ms) {
+                            let _ = core.party_play_next();
+                        }
+                    }
+                    if n.is_multiple_of(6) {
+                        let fg = crate::capture::screenshots::foreground_app();
+                        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+                        for act in core.screentime.tick(fg.exe.as_deref(), fg.title.as_deref(), 30, &today) {
+                            match act {
+                                crate::screentime::Act::Warn { name, left } => core.events.emit("screentime:limit", serde_json::json!({ "name": name, "left": left })),
+                                crate::screentime::Act::CloseApp { exe, name } => {
+                                    let _ = core.procs.end(&exe);
+                                    core.events.emit("screentime:limit", serde_json::json!({ "name": name, "left": 0 }));
+                                }
+                                crate::screentime::Act::HideSite { name } => {
+                                    crate::screentime::minimize_foreground();
+                                    core.events.emit("screentime:limit", serde_json::json!({ "name": name, "left": 0 }));
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .ok();
+        // Every 10 minutes: app updates due, the item shop, prices.
+        let weak = Arc::downgrade(self);
+        std::thread::Builder::new()
+            .name("watchers-slow".into())
+            .spawn(move || {
+                std::thread::sleep(Duration::from_secs(60));
+                let mut shop_at: Option<String> = None;
+                let mut n = 0u64;
+                loop {
+                    let Some(core) = weak.upgrade() else { return };
+                    let local = chrono::Local::now();
+                    let minute = local.format("%H").to_string().parse::<u32>().unwrap_or(0) * 60 + local.format("%M").to_string().parse::<u32>().unwrap_or(0);
+                    let now = crate::db::now();
+                    let today_start = now - (minute as i64 * 60) - local.format("%S").to_string().parse::<i64>().unwrap_or(0);
+                    let boosting = core.games.session().is_some_and(|s| s.active());
+                    if !boosting && crate::app_updates::is_due(&core.app_updates.settings(), minute, today_start, now) {
+                        if let Ok((done, failed)) = core.app_updates.run(now) {
+                            if !done.is_empty() || !failed.is_empty() {
+                                core.events.emit("apps:auto-updated", serde_json::json!({ "updated": done, "failed": failed }));
+                            }
+                        }
+                    }
+                    // The shop changes at midnight UTC.
+                    let utc_day = chrono::Utc::now().format("%Y-%m-%d").to_string();
+                    let w = core.watchers.get();
+                    if w.shop_alerts && !w.shop_wanted.is_empty() && shop_at.as_deref() != Some(utc_day.as_str()) {
+                        if let Ok(hits) = core.watchers.check_shop(&utc_day) {
+                            shop_at = Some(utc_day.clone());
+                            for h in hits {
+                                core.events.emit("watch:shop", serde_json::json!({ "item": h }));
+                            }
+                        }
+                    }
+                    // Prices every 6 hours.
+                    if n.is_multiple_of(36) {
+                        for p in core.watchers.get().prices {
+                            let read = crate::watchers::fetch_price(&p.url);
+                            if let Some(d) = core.watchers.record(&p.id, read, now) {
+                                core.events.emit("watch:price", &d);
+                            }
+                        }
+                    }
+                    n += 1;
+                    drop(core);
+                    std::thread::sleep(Duration::from_secs(600));
+                }
+            })
+            .ok();
+    }
+
+    /// Hand the next party song to the music app.
+    pub fn party_play_next(&self) -> Result<Option<crate::party::PartySong>, String> {
+        let Some(song) = self.party.take_next() else { return Ok(None) };
+        let item = crate::media::catalog::Item::Track { title: song.title.clone(), artist: song.artist.clone(), album: song.album.clone() };
+        let app = self.media.state().map(|m| m.app_name);
+        crate::media::catalog::play(&item, crate::media::catalog::Source::Auto, app.as_deref())?;
+        self.events.emit("party:changed", self.party.state());
+        Ok(Some(song))
+    }
 }
 
 #[cfg(test)]

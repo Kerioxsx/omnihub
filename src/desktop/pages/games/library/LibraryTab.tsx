@@ -4,7 +4,7 @@
 // (GameView). Friends online and wishlist sales sit beside it.
 
 import type { LibraryGame, ShelfStatus, SteamAccount, SteamFriend, WishItem } from '@shared/types';
-import { Gamepad2, Heart, KeyRound, Search, Sparkles, Star, Tag, Users } from 'lucide-react';
+import { Gamepad2, Heart, KeyRound, Maximize2, Search, Sparkles, Star, Tag, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../../../api';
 import { Button } from '../../../components/ui/Button';
@@ -16,6 +16,7 @@ import { cx } from '../../../lib/cx';
 import { claimGamepad } from '../../../lib/padNav';
 import { useEvent } from '../../../lib/hooks';
 import { toast } from '../../../state/toasts';
+import { BigPicture } from './BigPicture';
 import { GameView } from './GameView';
 
 export const STATUS_LABEL: Record<ShelfStatus, string> = { '': 'No status', playing: 'Playing', backlog: 'Backlog', finished: 'Finished', dropped: 'Dropped' };
@@ -44,14 +45,14 @@ export function Cover({ game, className, bare }: { game: LibraryGame; className?
   }
   return (
     <div className={cx('flex h-full w-full items-end p-3', className)} style={{ background: `linear-gradient(160deg, hsl(${hue} 55% 38%), hsl(${(hue + 50) % 360} 60% 16%))` }}>
-      {!bare && <span className="font-display text-[17px] font-bold leading-tight text-white drop-shadow">{game.name}</span>}
+      {!bare && <span className="font-display text-[17px] font-bold leading-tight text-white drop-shadow transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0">{game.name}</span>}
     </div>
   );
 }
 
 type Filter = 'all' | 'favorites' | 'playing' | 'backlog' | 'finished' | 'recent';
 
-function useGamepadNav(active: boolean, handlers: { move: (dx: number, dy: number) => void; ok: () => void; back: () => void; start: () => void }) {
+export function useGamepadNav(active: boolean, handlers: { move: (dx: number, dy: number) => void; ok: () => void; back: () => void; start: () => void; select?: () => void }) {
   const ref = useRef(handlers);
   ref.current = handlers;
   useEffect(() => {
@@ -74,6 +75,7 @@ function useGamepadNav(active: boolean, handlers: { move: (dx: number, dy: numbe
           ['a', b(0), () => ref.current.ok()],
           ['b', b(1), () => ref.current.back()],
           ['s', b(9), () => ref.current.start()],
+          ['v', b(8), () => ref.current.select?.()],
         ];
         for (const [k, on, act] of dirs) {
           if (!on) {
@@ -230,6 +232,7 @@ export function LibraryTab() {
   const [open, setOpen] = useState<string | null>(null);
   const [focus, setFocus] = useState(0);
   const [keys, setKeys] = useState(false);
+  const [big, setBig] = useState(false);
   const grid = useRef<HTMLDivElement>(null);
   const load = useCallback(() => {
     void api.library.games().then(setGames, (e) => toast.error('Couldn’t read your games', errorText(e)));
@@ -259,7 +262,7 @@ export function LibraryTab() {
     while (n < el.children.length && (el.children[n] as HTMLElement).offsetTop === first) n++;
     return Math.max(1, n);
   };
-  useGamepadNav(!open && !keys, {
+  useGamepadNav(!open && !keys && !big, {
     move: (dx, dy) =>
       setFocus((f) => {
         const next = Math.min(shown.length - 1, Math.max(0, f + dx + dy * columns()));
@@ -269,6 +272,7 @@ export function LibraryTab() {
     ok: () => shown[focus] && setOpen(shown[focus].key),
     back: () => undefined,
     start: () => shown[focus] && void api.library.play(shown[focus].key),
+    select: () => setBig(true),
   });
 
   if (games && games.length === 0) return <EmptyState icon={Gamepad2} title="No games found" description="OmniHub looks for Steam, Epic, Riot, Minecraft and Roblox games. Install one, or add games from the Games tab." />;
@@ -307,6 +311,9 @@ export function LibraryTab() {
             <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
             <TextInput aria-label="Search games" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="w-56 pl-8" />
           </div>
+          <Button icon={Maximize2} onClick={() => setBig(true)} title="Full screen, for a controller (View button)">
+            Big Picture
+          </Button>
           <Button icon={KeyRound} onClick={() => setKeys(true)}>
             Steam extras
           </Button>
@@ -351,9 +358,8 @@ export function LibraryTab() {
         <WishlistCard account={account} />
       </div>
       {current && <GameView game={current} onClose={() => setOpen(null)} onChanged={load} />}
+      {big && games && <BigPicture games={games} onClose={() => setBig(false)} />}
       <KeysDialog open={keys} onClose={() => setKeys(false)} account={account} onSaved={load} />
     </div>
   );
 }
-
-export { useGamepadNav };

@@ -162,7 +162,7 @@ pub struct Art {
 
 /// Steam's own artwork for an app (its servers).
 pub fn art_urls(app: u32) -> Art {
-    let base = format!("https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{app}");
+    let base = format!("https://shared.steamstatic.com/store_item_assets/steam/apps/{app}");
     Art { cover: Some(format!("{base}/library_600x900_2x.jpg")), hero: Some(format!("{base}/library_hero.jpg")), logo: Some(format!("{base}/logo.png")), header: Some(format!("{base}/header.jpg")) }
 }
 
@@ -170,14 +170,22 @@ pub fn art_urls(app: u32) -> Art {
 pub fn local_art(steam: &Path, app: u32) -> HashMap<&'static str, PathBuf> {
     let cache = steam.join("appcache").join("librarycache");
     let mut out = HashMap::new();
-    for (kind, names) in [("cover", ["library_600x900_2x.jpg", "library_600x900.jpg"]), ("hero", ["library_hero.jpg", "library_hero_blur.jpg"]), ("logo", ["logo.png", "logo_2x.png"]), ("header", ["header.jpg", "library_header.jpg"])] {
-        for n in names {
-            let folder = cache.join(app.to_string()).join(n);
-            let flat = cache.join(format!("{app}_{n}"));
-            if let Some(p) = [folder, flat].into_iter().find(|p| p.is_file()) {
-                out.insert(kind, p);
-                break;
-            }
+    // Newer Steam keeps them in <app>/ or in a hashed folder inside it.
+    let folder = cache.join(app.to_string());
+    let mut dirs = vec![folder.clone()];
+    if let Ok(rd) = std::fs::read_dir(&folder) {
+        dirs.extend(rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()));
+    }
+    let kinds: [(&str, &[&str]); 4] = [
+        ("cover", &["library_600x900_2x.jpg", "library_600x900.jpg", "library_capsule_2x.jpg", "library_capsule.jpg"]),
+        ("hero", &["library_hero.jpg", "library_hero_2x.jpg", "library_hero_blur.jpg"]),
+        ("logo", &["logo.png", "logo_2x.png", "library_logo.png"]),
+        ("header", &["header.jpg", "library_header.jpg", "header_2x.jpg"]),
+    ];
+    for (kind, names) in kinds {
+        let found = names.iter().find_map(|n| dirs.iter().map(|d| d.join(n)).chain([cache.join(format!("{app}_{n}"))]).find(|p| p.is_file()));
+        if let Some(p) = found {
+            out.insert(kind, p);
         }
     }
     // Custom art set in Steam: userdata/<id>/config/grid/<app>p.png (cover), <app>_hero, <app>_logo.
@@ -422,6 +430,21 @@ pub fn steamgriddb(key: &str, name: &str) -> Result<Art, String> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn finds_art_in_newer_steam_cache_folders() {
+        let t = tempfile::tempdir().unwrap();
+        let app = t.path().join("appcache/librarycache/570");
+        std::fs::create_dir_all(app.join("a1b2c3")).unwrap();
+        std::fs::write(app.join("a1b2c3/library_capsule.jpg"), b"x").unwrap();
+        std::fs::write(app.join("header.jpg"), b"x").unwrap();
+        std::fs::write(t.path().join("appcache/librarycache/570_library_hero.jpg"), b"x").unwrap();
+        let art = local_art(t.path(), 570);
+        assert!(art["cover"].ends_with("library_capsule.jpg"));
+        assert!(art["header"].ends_with("header.jpg"));
+        assert!(art["hero"].ends_with("570_library_hero.jpg"));
+        assert!(!art.contains_key("logo"));
+    }
     use super::*;
 
     #[test]
@@ -494,7 +517,7 @@ mod tests {
         assert_eq!((w[0].name.as_str(), w[0].discount, w[0].price.as_deref()), ("Cheap", 75, Some("$4.99")));
         let f = friends("k", "s", &get).unwrap();
         assert_eq!((f[0].name.as_str(), f[0].game.as_deref(), f[0].game_id), ("Amy", Some("Celeste"), Some(504230)));
-        assert_eq!(art_urls(730).cover.unwrap(), "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/730/library_600x900_2x.jpg");
+        assert_eq!(art_urls(730).cover.unwrap(), "https://shared.steamstatic.com/store_item_assets/steam/apps/730/library_600x900_2x.jpg");
         assert!(http_get("https://example.com/").is_err());
     }
 }

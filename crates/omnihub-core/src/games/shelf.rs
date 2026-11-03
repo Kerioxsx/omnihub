@@ -97,6 +97,16 @@ pub struct Shelf {
     events: EventBus,
 }
 
+/// The address the pages load a library file from. Windows' WebView only
+/// loads OmniHub's own protocols as `http://<name>.localhost/`.
+pub fn media_url(token: &str) -> String {
+    if cfg!(windows) {
+        format!("http://gamemedia.localhost/{token}")
+    } else {
+        format!("gamemedia://localhost/{token}")
+    }
+}
+
 /// A name safe for a folder ("steam:730" → "steam_730").
 pub fn safe(key: &str) -> String {
     key.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).take(80).collect()
@@ -223,7 +233,7 @@ impl Shelf {
             return Some(value.to_string());
         }
         let p = self.art_dir.join(value);
-        p.is_file().then(|| format!("gamemedia://localhost/{}", self.media_token(&p)))
+        p.is_file().then(|| media_url(&self.media_token(&p)))
     }
 
     // ---------- keys ----------
@@ -487,7 +497,7 @@ mod tests {
         std::fs::write(&png, b"x").unwrap();
         let e = s.set_art("steam:1", "cover", Some(png.to_str().unwrap())).unwrap();
         let src = s.art_src(e.cover.as_deref().unwrap()).unwrap();
-        assert!(src.starts_with("gamemedia://localhost/"));
+        assert!(src.starts_with(&media_url("")));
         assert_eq!(s.media_path(src.rsplit('/').next().unwrap()).unwrap().extension().unwrap(), "png");
         s.set_art("steam:1", "cover", None).unwrap();
         assert_eq!(std::fs::read_dir(&s.art_dir).unwrap().count(), 0);

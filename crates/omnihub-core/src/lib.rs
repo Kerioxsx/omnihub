@@ -4,11 +4,13 @@
 //! be unit tested on any OS, reused by the headless companion server, and
 //! wrapped by the Tauri app.
 
+pub mod app_updates;
 pub mod apps;
 pub mod audit;
 pub mod autoclick;
 pub mod backup;
 pub mod browser;
+pub mod capri_app;
 pub mod capture;
 pub mod chats;
 pub mod claude;
@@ -24,6 +26,7 @@ pub mod events;
 pub mod games;
 pub mod govee;
 pub mod health;
+pub mod heat;
 pub mod helper;
 pub mod images;
 pub mod mcserver;
@@ -37,12 +40,14 @@ pub mod play;
 pub mod presence;
 pub mod quick;
 pub mod quiet;
+pub mod party;
 pub mod paths;
 pub mod pkm;
 pub mod remote;
 pub mod rig;
 pub mod rules;
 pub mod scan;
+pub mod screentime;
 pub mod settings;
 pub mod startup;
 pub mod storage;
@@ -50,5 +55,8 @@ pub mod system;
 pub mod thumbs;
 pub mod update;
 pub mod videotools;
+pub mod voicecmd;
+pub mod watchers;
+pub mod web;
 pub mod vault;
 pub mod winget;

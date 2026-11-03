@@ -82,7 +82,7 @@ pub struct SteamAccount {
 }
 
 fn media_src(core: &AppCore, p: &Path) -> String {
-    format!("gamemedia://localhost/{}", core.shelf.media_token(p))
+    super::shelf::media_url(&core.shelf.media_token(p))
 }
 
 fn modified_ms(p: &Path) -> i64 {
@@ -108,13 +108,19 @@ impl AppCore {
         };
         let entries = self.shelf.entries();
         let totals = self.shelf.totals();
-        self.games
+        let list: Vec<LibraryGame> = self
+            .games
             .library()
             .into_iter()
             .map(|g| {
                 let app = g.key.strip_prefix("steam:").and_then(|a| a.parse::<u32>().ok());
                 let e = entries.get(&g.key).cloned().unwrap_or_default();
-                let mut art = app.map(steam::art_urls).unwrap_or_default();
+                // Steam's current addresses when known, else its older fixed ones.
+                let found = self.store_art.get(&g.key);
+                let mut art = app.or(found.as_ref().and_then(|f| f.app)).map(steam::art_urls).unwrap_or_default();
+                if let Some(f) = found.and_then(|f| f.art) {
+                    art = steam::Art { cover: f.cover.or(art.cover), hero: f.hero.or(art.hero), logo: f.logo.or(art.logo), header: f.header.or(art.header) };
+                }
                 if let (Some(app), Some(root)) = (app, &steam_root) {
                     // Steam's own copies here (and custom art set in Steam) come first: they work offline.
                     let mut local = steam::local_art(root, app);
@@ -157,7 +163,30 @@ impl AppCore {
                     profile_id: g.profile_id,
                 }
             })
-            .collect()
+            .collect();
+        self.find_store_art(&list);
+        list
+    }
+
+    /// In the background, ask Steam's store for art it hasn't been asked
+    /// about this week (games with their own art set here are skipped).
+    fn find_store_art(&self, list: &[LibraryGame]) {
+        let now = chrono::Utc::now().timestamp();
+        let entries = self.shelf.entries();
+        let todo = self.store_art.missing(list.iter().filter(|g| entries.get(&g.key).is_none_or(|e| e.cover.is_none())).map(|g| (g.key.as_str(), g.app, g.name.as_str())), now);
+        if todo.is_empty() {
+            return;
+        }
+        let store = self.store_art.clone();
+        let events = self.events.clone();
+        std::thread::Builder::new()
+            .name("store-art".into())
+            .spawn(move || {
+                if store.fetch(todo, now, &steam::http_get) {
+                    events.emit("library:changed", serde_json::json!({}));
+                }
+            })
+            .ok();
     }
 
     fn find_game(&self, key: &str) -> Result<super::library::InstalledGame, String> {

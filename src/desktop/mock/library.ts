@@ -3,7 +3,7 @@
 import type { EmuState, GameDetail, GameRecap, LibraryGame, SessionRec, ShelfEntry, ShelfPatch, SteamAccount, SteamAchievement, SteamFriend, WishItem } from '@shared/types';
 import { emit } from './bus';
 
-const STEAM = 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps';
+const STEAM = 'https://shared.steamstatic.com/store_item_assets/steam/apps';
 const art = (app: number) => ({ cover: `${STEAM}/${app}/library_600x900_2x.jpg`, hero: `${STEAM}/${app}/library_hero.jpg`, logo: `${STEAM}/${app}/logo.png`, header: `${STEAM}/${app}/header.jpg` });
 const now = Date.now();
 const H = 3600_000;

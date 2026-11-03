@@ -988,3 +988,21 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   0%.
 - It ends on the next local keyboard or mouse input (Windows'
   GetLastInputInfo) and restores the fan profile from before.
+
+## Game art (0.29.1)
+
+- Art addresses come from Steam's public store API
+  (`api.steampowered.com/IStoreBrowseService/GetItems`), with no key. For
+  games from other stores, the game's **name** is sent to Steam's store
+  search (`store.steampowered.com/api/storesearch`) to find the same game;
+  a cover is used only when the names match exactly. Answers are kept for a
+  week in `store-art.json` in the cache folder. Games with art you set
+  yourself are not looked up.
+- These requests go through the same Steam-only HTTP helper as the rest of
+  the library (`steam::http_get`), which refuses any other host.
+- The window's image policy (`img-src`) now also allows Steam's other image
+  hosts (`shared.steamstatic.com`, `cdn.steamstatic.com`, the Fastly and
+  Akamai variants and `store.steampowered.com`). Images only; no scripts.
+- Library files on this PC are still served by token only
+  (`gamemedia`), now at `http://gamemedia.localhost/<token>` on Windows,
+  the form WebView2 loads.
