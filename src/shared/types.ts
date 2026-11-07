@@ -3845,3 +3845,9 @@ export interface WatchStore {
   shopNow: string[];
   prices: PriceWatch[];
 }
+
+export interface LightResult {
+  set: number;
+  skippedBluetooth: number;
+  failed: number;
+}

@@ -4,13 +4,15 @@
 // screen behind and drifts slowly; covers glide and grow as you move.
 
 import type { LibraryGame } from '@shared/types';
-import { Gamepad2, Play, X } from 'lucide-react';
+import { Gamepad2, Play, Settings2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../../../api';
 import { cx } from '../../../lib/cx';
 import { setWindowFullscreen } from '../../../lib/nowPlaying';
 import { toast } from '../../../state/toasts';
-import { Cover, STATUS_LABEL, ago, hours, useGamepadNav } from './LibraryTab';
+import { confirmBack, padPrefs, usePadInput, useConnectedPads } from '../../../lib/pads';
+import { Cover, STATUS_LABEL, ago, hours } from './LibraryTab';
+import { Glyph, PadPanel, applyLight } from './PadPanel';
 
 const W = 176; // cover width, px
 const GAP = 22;
@@ -21,6 +23,7 @@ type Row = { title: string; games: LibraryGame[] };
 let audio: AudioContext | null = null;
 /** A soft tick (or a rising chime for "play"). */
 function blip(kind: 'move' | 'play' | 'back') {
+  if (!padPrefs().sounds) return;
   try {
     audio ??= new AudioContext();
     const t = audio.currentTime;
@@ -101,6 +104,13 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
   const [cols, setCols] = useState<number[]>(() => rows.map(() => 0));
   const [launching, setLaunching] = useState<LibraryGame | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const [panel, setPanel] = useState(false);
+  const pads = useConnectedPads();
+  const psKey = pads.filter((x) => x.family === 'playstation').map((x) => `${x.index}${x.id}`).join('|');
+  // Colour PlayStation light bars when Big Picture opens or one connects.
+  useEffect(() => {
+    if (psKey) void applyLight();
+  }, [psKey]);
   const col = cols[row] ?? 0;
   const focused = rows[row]?.games[col];
 
@@ -149,10 +159,25 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
     );
   };
 
-  useGamepadNav(true, { move, ok: () => play(), back: () => (launching ? setLaunching(null) : close()), start: () => play() });
+  const lastPad = usePadInput(
+    !panel,
+    {
+      move,
+      ok: () => play(),
+      back: () => (launching ? setLaunching(null) : close()),
+      start: () => play(),
+      menu: () => setPanel(true),
+      select: () => setPanel(true),
+      bumper: (d) => move(d * 5, 0),
+    },
+    { haptics: true },
+  );
+  const family = lastPad?.family ?? pads[0]?.family ?? 'xbox';
+  const cb = confirmBack(family);
+  const side = (i: number) => (i === 1 ? 'right' : 'bottom') as 'right' | 'bottom';
 
-  const ref = useRef({ move, play, close });
-  ref.current = { move, play, close };
+  const ref = useRef({ move, play, close, panel });
+  ref.current = { move, play, close, panel };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const map: Record<string, () => void> = {
@@ -163,6 +188,12 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
         Enter: () => ref.current.play(),
         Escape: () => ref.current.close(),
       };
+      if (ref.current.panel) return;
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setPanel(true);
+        return;
+      }
       const f = map[e.key];
       if (f) {
         e.preventDefault();
@@ -193,6 +224,9 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
         </span>
         <span className="flex items-center gap-6">
           <Clock />
+          <button type="button" onClick={() => setPanel(true)} aria-label="Controllers" title="Controllers (C)" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 transition hover:bg-white/20">
+            <Settings2 size={19} />
+          </button>
           <button type="button" onClick={close} aria-label="Leave Big Picture" className="grid h-10 w-10 place-items-center rounded-full bg-white/10 transition hover:bg-white/20">
             <X size={20} />
           </button>
@@ -270,9 +304,18 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
 
       <footer className="absolute inset-x-0 bottom-0 flex items-center justify-end gap-8 bg-gradient-to-t from-black/80 to-transparent px-14 pb-7 pt-10 text-[14px] font-medium text-white/75">
         <Hint k="✥" label="Move" />
-        <Hint k="A" label="Play" />
-        <Hint k="B" label="Back" />
+        <span className="flex items-center gap-2">
+          <Glyph family={family} which={side(cb.ok)} /> Play
+        </span>
+        <span className="flex items-center gap-2">
+          <Glyph family={family} which={side(cb.back)} /> Back
+        </span>
+        <span className="flex items-center gap-2">
+          <Glyph family={family} which="top" /> Controllers
+        </span>
       </footer>
+
+      {panel && <PadPanel lastPad={lastPad} onClose={() => setPanel(false)} />}
 
       {launching && (
         <div className="bp-in absolute inset-0 z-20 grid place-items-center bg-black/75 backdrop-blur-md">

@@ -737,3 +737,18 @@ has Capri speak through her local bridge (`companion::say`).
   quiet and heat cards in `pages/rig/FansTab.tsx`. Phone screens:
   `Live.tsx`, `Photos.tsx`, `Party.tsx`, `ui/VoiceButton.tsx`, a search box
   in `Files.tsx` and the quiet card in `Power.tsx`.
+
+## Controllers (0.30.1)
+
+- `src/desktop/lib/pads.ts`: identifies controllers from the browser's
+  gamepad id (vendor and product, in Chromium's or Firefox's format), their
+  button symbols, preferences, vibration (`vibrationActuator`), and
+  `usePadInput`, the one input loop the library, the game page and Big
+  Picture share (D-pad, stick with dead zone, DirectInput hat on axes[9]
+  for non-standard pads, Nintendo confirm/back, buttons held when a view
+  opens ignored until released).
+- `pages/games/library/PadPanel.tsx`: Big Picture's controller panel;
+  `applyLight` colours PlayStation light bars through `pads_set_light`.
+- `crates/omnihub-core/src/pads.rs`: the DualShock 4 and DualSense output
+  reports (USB, and Bluetooth with its CRC-32), sent with
+  `HidD_SetOutputReport` or `WriteFile`.

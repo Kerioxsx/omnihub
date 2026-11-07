@@ -319,6 +319,8 @@ export const api = {
     checkPrices: () => call<T.WatchStore>('watch_prices_check'),
   },
   voice: (text: string) => call<string>('voice_command', { text }),
+  /** PlayStation controllers' light bar colour ("#ff6a00"); Bluetooth only when allowed. */
+  padsSetLight: (color: string, bluetooth: boolean) => call<T.LightResult>('pads_set_light', { color, bluetooth }),
   openDeviceManager: () => call<void>('open_device_manager'),
 
   /** Folder backups to another drive (new and changed files; never deletes). */

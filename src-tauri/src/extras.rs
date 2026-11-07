@@ -306,3 +306,12 @@ pub async fn voice_command(core: Core<'_>, text: String) -> Res<String> {
     let core = core.inner().clone();
     blocking(move || core.voice_text(&text, true)).await
 }
+
+// ---------- controllers ----------
+
+/// Set the light bar of the PlayStation controllers connected ("#ff6a00").
+#[tauri::command]
+pub async fn pads_set_light(color: String, bluetooth: bool) -> Res<omnihub_core::pads::LightResult> {
+    let rgb = omnihub_core::pads::parse_color(&color).ok_or("Pick a colour")?;
+    blocking(move || Ok(omnihub_core::pads::set_light(rgb, bluetooth))).await
+}

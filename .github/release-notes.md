@@ -1,22 +1,17 @@
 ## New in this version
 
-**Capri Desktop, nightly quiet mode, overheat alerts, a gaming dashboard on your phone, a party queue, screen-time limits and more.**
+**Big Picture works with every kind of controller.**
 
-- **Capri Desktop** (Games → Clips & Capri): installs the free companion from capriai.app straight from its developer's GitHub releases (checked against GitHub's checksum), opens and closes it, can start it with OmniHub, and gets Ollama ready for its local brain (downloads the model its site suggests). Open or close it from your phone's Deck page or a deck button.
-- **Quiet mode on a schedule, and a sleep timer** (My PC → Fans, or the phone's Power page): quiet every night between two times, or in 15 minutes to 1½ hours.
-- **Overheat alerts**: a notification on the PC and the phone when the processor or graphics card stays above your limit for 20 seconds.
-- **Gaming dashboard on the phone** (More → Gaming dashboard): FPS, 1% lows, temperatures, load and ping, live, so the PC's screen stays clean.
-- **Search the PC from the phone**: a search box on the Files page looks through every shared folder by name.
-- **Apps update themselves at night** (Apps → Updates): winget installs the updates it finds, one app at a time, skipping the ones you list and never during a game boost.
-- **Party queue** (Music → Party queue): friends scan a QR code and add songs from their phones, no app or pairing. Songs play one after another in your music app.
-- **Screen-time limits** (Focus → Limits): minutes a day for an app or a website. A warning five minutes before; at the limit the app closes (a website's browser window is minimized).
-- **Sensitivity converter** (Games → Extras): the same aim in CS2, VALORANT, Fortnite, Apex, Overwatch 2 and Call of Duty, with eDPI and centimetres per full turn.
-- **Fortnite item-shop alerts** (Games → Extras): say what you're waiting for; you're told the day it's in the shop.
-- **Import phone photos** (phone: More → Import photos): only photos not already on the PC are sent, into Pictures › Phone, a folder for each month.
-- **PC parts price tracker** (Games → Extras): paste a product page; OmniHub checks the price every 6 hours and tells you when it drops or falls under your target.
-- **Voice commands from the phone**: the microphone button on the phone's Home page ("start Fortnite", "quiet mode", "clip that", "open Spotify"). The microphone needs the secure (HTTPS) connection; otherwise you type the command.
+- **Every controller is recognised**: Xbox (including Elite), PlayStation 4, PlayStation 5 and DualSense Edge, Switch Pro, Joy-Con (single or a pair), Switch 2 Pro and Joy-Con 2, GameCube and Switch Online controllers, Steam controllers, and any other gamepad Windows sees (8BitDo, PowerA, HORI, Logitech and more), even ones without a standard layout.
+- **The right button symbols**: Big Picture shows A/B/Y on Xbox controllers, ✕/○/△ on PlayStation ones and the Nintendo letters on Nintendo ones, for whichever controller you last pressed.
+- **Nintendo layout**: on Nintendo controllers, A (the right button) confirms and B goes back, like on a Switch (can be turned off).
+- **Vibration**: a light buzz when you move and a stronger one when you pick a game, at the strength you choose (off, light, medium, strong), on controllers that report vibration to Windows apps.
+- **PlayStation light bar colour**: DualShock 4, DualSense and DualSense Edge light up in your theme's colour or one you pick. Over a cable by default; Bluetooth is optional, because over Bluetooth it puts the controller in the mode Steam uses and some older games then don't see it until it's turned off and on.
+- **Controllers panel** (Y / △ / X, View, or the button at the top of Big Picture): the controllers connected with a live button test, a vibration test, stick dead zone, vibration strength, light colour and navigation sounds, all usable with the controller.
+- The shoulder buttons jump five games at a time. A button held while a screen opens no longer presses something on the new screen.
+- Honest limits: Switch 2 controllers' HD rumble has no public way in for Windows apps, and Elite paddles work as whatever buttons the Xbox Accessories app gives them.
 
-Also in 0.29.1: game covers load again, and the library has a full-screen Big Picture mode.
+Also in 0.30.0: Capri Desktop, nightly quiet mode, overheat alerts, a gaming dashboard on your phone, a party queue, screen-time limits and more.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

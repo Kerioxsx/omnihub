@@ -1035,3 +1035,14 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   Nothing about you is sent.
 - **App auto-updates** use winget only, at the time you pick, skipping the
   ids you list.
+
+## Controllers (0.30.1)
+
+- `pads.rs` opens only PlayStation controllers (Sony vendor id with a known
+  DualShock 4 / DualSense / DualSense Edge product id) through Windows' HID
+  API and writes one output report: the light bar colour (and, for the
+  DualSense, the first player light). Nothing is read from the controller
+  but its vendor and product ids. Bluetooth controllers are left alone
+  unless "Light also over Bluetooth" is on.
+- Controller preferences are kept in the window's local storage
+  (`omnihub.pads`); nothing about controllers leaves the PC.

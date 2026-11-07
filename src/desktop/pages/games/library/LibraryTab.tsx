@@ -13,7 +13,7 @@ import { Field, Segmented, TextInput } from '../../../components/ui/Form';
 import { Modal } from '../../../components/ui/Overlay';
 import { EmptyState } from '../../../components/ui/States';
 import { cx } from '../../../lib/cx';
-import { claimGamepad } from '../../../lib/padNav';
+import { usePadInput } from '../../../lib/pads';
 import { useEvent } from '../../../lib/hooks';
 import { toast } from '../../../state/toasts';
 import { BigPicture } from './BigPicture';
@@ -52,55 +52,9 @@ export function Cover({ game, className, bare }: { game: LibraryGame; className?
 
 type Filter = 'all' | 'favorites' | 'playing' | 'backlog' | 'finished' | 'recent';
 
+/** The library's controller input (shared with Big Picture: every controller type, Nintendo layout, dead zone). */
 export function useGamepadNav(active: boolean, handlers: { move: (dx: number, dy: number) => void; ok: () => void; back: () => void; start: () => void; select?: () => void }) {
-  const ref = useRef(handlers);
-  ref.current = handlers;
-  useEffect(() => {
-    if (!active) return;
-    // This page drives the controller itself; app-wide controller mode waits.
-    const release = claimGamepad();
-    let frame = 0;
-    let held: Record<string, number> = {};
-    const loop = (t: number) => {
-      for (const pad of navigator.getGamepads?.() ?? []) {
-        if (!pad) continue;
-        const b = (i: number) => !!pad.buttons[i]?.pressed;
-        const ax = pad.axes[0] ?? 0;
-        const ay = pad.axes[1] ?? 0;
-        const dirs: [string, boolean, () => void][] = [
-          ['l', b(14) || ax < -0.6, () => ref.current.move(-1, 0)],
-          ['r', b(15) || ax > 0.6, () => ref.current.move(1, 0)],
-          ['u', b(12) || ay < -0.6, () => ref.current.move(0, -1)],
-          ['d', b(13) || ay > 0.6, () => ref.current.move(0, 1)],
-          ['a', b(0), () => ref.current.ok()],
-          ['b', b(1), () => ref.current.back()],
-          ['s', b(9), () => ref.current.start()],
-          ['v', b(8), () => ref.current.select?.()],
-        ];
-        for (const [k, on, act] of dirs) {
-          if (!on) {
-            delete held[k];
-            continue;
-          }
-          // First press at once, then repeat while held (moves only).
-          if (held[k] === undefined) {
-            held[k] = t + 380;
-            act();
-          } else if ('lrud'.includes(k) && t > held[k]) {
-            held[k] = t + 110;
-            act();
-          }
-        }
-      }
-      frame = requestAnimationFrame(loop);
-    };
-    frame = requestAnimationFrame(loop);
-    return () => {
-      cancelAnimationFrame(frame);
-      held = {};
-      release();
-    };
-  }, [active]);
+  usePadInput(active, handlers);
 }
 
 function KeysDialog({ open, onClose, account, onSaved }: { open: boolean; onClose: () => void; account: SteamAccount | null; onSaved: () => void }) {

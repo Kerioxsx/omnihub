@@ -528,6 +528,7 @@ const handlers: Record<string, Handler> = {
   watch_price_delete: (a) => watchMock.removePrice(str(a, 'id')),
   watch_prices_check: () => watchMock.checkPrices(),
   voice_command: (a) => voiceMock(str(a, 'text')),
+  pads_set_light: (a) => ({ set: 1, skippedBluetooth: bool(a, 'bluetooth') ? 0 : 1, failed: 0 }),
   backups_list: () => bk.list(),
   backups_save: (a) => bk.save(obj(a, 'job')),
   backups_delete: (a) => bk.remove(str(a, 'id')),

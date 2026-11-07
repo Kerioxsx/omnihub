@@ -478,6 +478,7 @@ pub fn run(args: Vec<String>) {
             extras::watch_price_delete,
             extras::watch_prices_check,
             extras::voice_command,
+            extras::pads_set_light,
             quick::clipboard_list,
             quick::clipboard_copy,
             quick::clipboard_paste,

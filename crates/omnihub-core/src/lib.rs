@@ -36,6 +36,7 @@ pub mod files;
 pub mod focus;
 pub mod notes;
 pub mod obs;
+pub mod pads;
 pub mod play;
 pub mod presence;
 pub mod quick;
