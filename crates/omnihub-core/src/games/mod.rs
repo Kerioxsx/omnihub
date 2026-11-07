@@ -14,6 +14,7 @@ pub mod fps;
 pub mod ini;
 pub mod junk;
 pub mod library;
+pub mod mover;
 pub mod nvidia;
 pub mod pc;
 pub mod ping;

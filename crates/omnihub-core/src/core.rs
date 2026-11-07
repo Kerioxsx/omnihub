@@ -80,6 +80,8 @@ pub struct AppCore {
     /// Karaoke Studio: language, practice history.
     pub karaoke: crate::karaoke::Karaoke,
     pub nightlight: crate::nightlight::NightLight,
+    pub timers: crate::timers::Timers,
+    pub after_downloads: parking_lot::Mutex<crate::timers::AfterDownloads>,
     pub speedrun: crate::speedrun::Speedrun,
     /// Family and guest phones limited to some areas.
     pub phone_limits: crate::remote::limits::PhoneLimits,
@@ -196,6 +198,8 @@ impl AppCore {
             sites: crate::sites::Sites::new(&paths.data),
             karaoke: crate::karaoke::Karaoke::new(&paths.data),
             nightlight: crate::nightlight::NightLight::new(&paths.data),
+            timers: crate::timers::Timers::new(&paths.data),
+            after_downloads: parking_lot::Mutex::new(Default::default()),
             speedrun: crate::speedrun::Speedrun::new(&paths.data, events.clone()),
             speedrun_keys: std::sync::atomic::AtomicBool::new(false),
             phone_limits: crate::remote::limits::PhoneLimits::new(&paths.data),
@@ -875,10 +879,24 @@ impl AppCore {
             .spawn(move || {
                 let mut n = 0u64;
                 let mut has_temps = false;
+                let mut last_lock = 0i64;
                 loop {
                     std::thread::sleep(Duration::from_secs(5));
                     let Some(core) = weak.upgrade() else { return };
                     n += 1;
+                    core.timers_tick(&mut last_lock);
+                    {
+                        let ours = core.downloads.list().iter().any(|d| d.state == crate::downloads::State::Running);
+                        let down = core.netmon.status(Vec::new()).down;
+                        let mut a = core.after_downloads.lock();
+                        if a.sample(chrono::Utc::now().timestamp_millis(), ours, down) {
+                            let action = if a.action == "sleep" { crate::system::power::PowerAction::Sleep } else { crate::system::power::PowerAction::Shutdown };
+                            *a = Default::default();
+                            drop(a);
+                            core.power.schedule(action, 60, "downloads finished");
+                            core.events.emit("downloads:after", serde_json::json!({ "done": true }));
+                        }
+                    }
                     let now = chrono::Utc::now().timestamp_millis();
                     if core.heat.settings().enabled {
                         // Keep the readings fresh; without sensors, look again every 5 minutes.
@@ -959,6 +977,22 @@ impl AppCore {
                     if core.watchers.recap_due(&local.format("%Y-%m-%d").to_string(), minute) {
                         let (title, body) = core.daily_recap();
                         core.events.emit("watch:recap", serde_json::json!({ "title": title, "body": body }));
+                    }
+                    // Free games and patch notes every 6 hours.
+                    if n.is_multiple_of(36) {
+                        let w = core.watchers.get();
+                        if w.free_alerts {
+                            let found = core.watchers.check_free();
+                            for g in core.watchers.new_free(found) {
+                                core.events.emit("watch:free", &g);
+                            }
+                        }
+                        if w.patch_alerts {
+                            let games: Vec<(u32, String)> = core.games.library().into_iter().filter_map(|g| Some((g.key.strip_prefix("steam:")?.parse().ok()?, g.name))).collect();
+                            for p in core.watchers.check_patches(&games) {
+                                core.events.emit("watch:patch", &p);
+                            }
+                        }
                     }
                     // Prices every 6 hours.
                     if n.is_multiple_of(36) {

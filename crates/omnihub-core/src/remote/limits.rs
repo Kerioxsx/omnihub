@@ -30,7 +30,7 @@ pub fn area_of(path: &str) -> Option<&'static str> {
         "media" | "sound" | "party" | "displays" | "bluetooth" | "sites" => "music",
         "files" | "fs" | "upload" | "inbox" | "photos" | "downloads" | "scan" | "print" | "screenshot" | "video" => "files",
         "games" | "counters" | "servers" => "games",
-        "notes" | "ideas" | "tasks" | "board" => "notes",
+        "notes" | "ideas" | "tasks" | "board" | "timers" | "alarms" => "notes",
         "chats" | "voice" => "chats",
         "screen" | "type" | "clipboard" | "open-link" | "open-apps" | "apps" | "live" => "screen",
         "power" | "quiet" | "panic" => "power",
@@ -92,7 +92,7 @@ impl PhoneLimits {
     pub fn allows_event(&self, device: &str, topic: &str) -> bool {
         let area = match topic.split(':').next().unwrap_or("") {
             "media" | "party" => "music",
-            "notes" | "board" => "notes",
+            "notes" | "board" | "timer" => "notes",
             "chats" => "chats",
             "games" | "counters" | "mcserver" | "capri" => "games",
             "power" | "quiet" => "power",

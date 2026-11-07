@@ -21,6 +21,8 @@ pub mod schedtask;
 pub mod screenmode;
 pub mod session_end;
 pub mod shell;
+pub mod wifi;
+pub mod winpin;
 pub mod wol;
 
 /// The signed-in user's first name for greetings ("Sam" from "Sam Rivera"),

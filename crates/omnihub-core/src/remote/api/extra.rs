@@ -34,6 +34,10 @@ pub(super) fn authed() -> Router<Ctx> {
         .route("/api/bluetooth", get(bt_list))
         .route("/api/bluetooth/connect", post(bt_connect))
         .route("/api/bluetooth/forget", post(bt_forget))
+        .route("/api/timers", get(timers_get).post(timers_start))
+        .route("/api/timers/{id}", axum::routing::delete(timers_cancel))
+        .route("/api/alarms", post(alarm_save))
+        .route("/api/alarms/{id}", axum::routing::delete(alarm_delete))
 }
 
 pub(super) fn public() -> Router<Ctx> {
@@ -447,4 +451,34 @@ mod tests {
         assert!(!photo_imported(t.path(), "IMG_2.jpg", 3));
         assert!(photos_dir().ends_with(chrono::Local::now().format("%Y-%m").to_string()));
     }
+}
+
+// ---------- timers and alarms ----------
+
+async fn timers_get(State(core): State<Ctx>) -> Json<crate::timers::TimersState> {
+    Json(core.timers.get())
+}
+
+#[derive(Deserialize)]
+struct CountdownReq {
+    minutes: u32,
+    #[serde(default)]
+    label: String,
+}
+
+async fn timers_start(State(core): State<Ctx>, Json(req): Json<CountdownReq>) -> ApiResult<Json<crate::timers::TimersState>> {
+    let now = chrono::Utc::now().timestamp_millis();
+    Ok(Json(core.timers.start(req.minutes, &req.label, now).map_err(ApiError::bad)?))
+}
+
+async fn timers_cancel(State(core): State<Ctx>, UrlPath(id): UrlPath<String>) -> Json<crate::timers::TimersState> {
+    Json(core.timers.cancel(&id))
+}
+
+async fn alarm_save(State(core): State<Ctx>, Json(a): Json<crate::timers::Alarm>) -> ApiResult<Json<crate::timers::TimersState>> {
+    Ok(Json(core.timers.save_alarm(a).map_err(ApiError::bad)?))
+}
+
+async fn alarm_delete(State(core): State<Ctx>, UrlPath(id): UrlPath<String>) -> Json<crate::timers::TimersState> {
+    Json(core.timers.delete_alarm(&id))
 }

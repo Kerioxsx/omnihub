@@ -80,6 +80,10 @@ pub enum QuickAction {
     Screen { width: u32, height: u32, hz: u32 },
     /// HDR on or off.
     Hdr { on: bool },
+    /// Pin the window in front above everything (or unpin it).
+    PinWindow,
+    /// Play music (a song, album or playlist name) in your music app.
+    Music { query: String },
 }
 
 /// A scene: one tap does several things (lights, fans, notifications…).
@@ -133,6 +137,7 @@ impl QuickAction {
             QuickAction::Fans { profile } if !FAN_PROFILES.contains(&profile.as_str()) => Err("Pick a fan profile".into()),
             QuickAction::Sound { output } if output.is_empty() => Err("Pick where the sound comes out".into()),
             QuickAction::Input { input } if input.is_empty() => Err("Pick a microphone".into()),
+            QuickAction::Music { query } if query.trim().is_empty() || query.len() > 200 => Err("Type a song, album or playlist".into()),
             QuickAction::Screen { width, height, hz } if *width < 640 || *height < 480 || *hz == 0 => Err("Pick a screen mode".into()),
             _ => Ok(()),
         }
@@ -799,6 +804,16 @@ impl crate::core::AppCore {
             QuickAction::Input { input } => {
                 crate::media::outputs::set_default(input)?;
                 Ok("Microphone changed".into())
+            }
+            QuickAction::PinWindow => {
+                let (title, on) = crate::system::winpin::toggle_front()?;
+                Ok(format!("{} {}", if on { "Pinned" } else { "Unpinned" }, if title.is_empty() { "the window".to_string() } else { title.chars().take(40).collect() }))
+            }
+            QuickAction::Music { query } => {
+                let app = self.media.state().map(|m| m.app_name);
+                let item = crate::media::catalog::Item::Track { title: query.trim().to_string(), artist: String::new(), album: String::new() };
+                crate::media::catalog::play(&item, crate::media::catalog::Source::Auto, app.as_deref())?;
+                Ok(format!("Playing {}", query.trim()))
             }
             QuickAction::Screen { width, height, hz } => {
                 use crate::system::screenmode;

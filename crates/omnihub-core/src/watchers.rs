@@ -143,6 +143,13 @@ pub struct WatchStore {
     pub recap_time: String,
     /// The day it was last sent (local, "2026-11-07").
     pub recap_date: String,
+    /// Tell me about games free to keep (Epic, and Steam via GamerPower).
+    pub free_alerts: bool,
+    pub free_seen: Vec<String>,
+    /// Tell me when my Steam games get patch notes.
+    pub patch_alerts: bool,
+    /// App id → the newest patch note already seen.
+    pub patch_seen: std::collections::HashMap<String, String>,
     pub shop_wanted: Vec<String>,
     pub shop_alerts: bool,
     pub shop_seen: Vec<String>,
@@ -465,6 +472,139 @@ impl crate::core::AppCore {
     }
 }
 
+// ---------- free games and patch notes ----------
+
+pub const EPIC_FREE: &str = "https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=US&allowCountries=US";
+pub const GAMERPOWER: &str = "https://www.gamerpower.com/api/giveaways?platform=steam&type=game";
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FreeGame {
+    pub title: String,
+    pub store: String,
+    pub url: String,
+    /// When the offer ends ("2026-11-13"), when known.
+    pub until: String,
+}
+
+/// Epic's free-to-keep games right now (100% off, live today).
+pub fn epic_free(v: &serde_json::Value, today: &str) -> Vec<FreeGame> {
+    let els = v.pointer("/data/Catalog/searchStore/elements").and_then(|e| e.as_array()).cloned().unwrap_or_default();
+    els.iter()
+        .filter_map(|e| {
+            let offer = e.pointer("/promotions/promotionalOffers/0/promotionalOffers/0")?;
+            let free = offer.pointer("/discountSetting/discountPercentage").and_then(|d| d.as_i64()) == Some(0) || e.pointer("/price/totalPrice/discountPrice").and_then(|d| d.as_i64()) == Some(0);
+            let start = offer.get("startDate")?.as_str()?.get(..10)?;
+            let end = offer.get("endDate")?.as_str()?.get(..10)?.to_string();
+            if !free || start > today || end.as_str() < today {
+                return None;
+            }
+            let slug = e.pointer("/catalogNs/mappings/0/pageSlug").or_else(|| e.get("productSlug")).and_then(|s| s.as_str()).filter(|s| !s.is_empty())?;
+            Some(FreeGame { title: e.get("title")?.as_str()?.to_string(), store: "Epic Games".into(), url: format!("https://store.epicgames.com/p/{}", slug.trim_end_matches("/home")), until: end })
+        })
+        .collect()
+}
+
+/// Steam games free to keep, from GamerPower's list.
+pub fn gamerpower_free(v: &serde_json::Value) -> Vec<FreeGame> {
+    v.as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|g| {
+                    let url = g.get("open_giveaway_url").or_else(|| g.get("gamerpower_url"))?.as_str()?.to_string();
+                    url.starts_with("https://").then(|| FreeGame {
+                        title: g.get("title").and_then(|t| t.as_str()).unwrap_or("A game").trim_end_matches(" (Steam) Giveaway").trim_end_matches(" Giveaway").to_string(),
+                        store: "Steam".into(),
+                        url,
+                        until: g.get("end_date").and_then(|d| d.as_str()).filter(|d| *d != "N/A").and_then(|d| d.get(..10)).unwrap_or("").to_string(),
+                    })
+                })
+                .take(10)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchNote {
+    pub game: String,
+    pub title: String,
+    pub url: String,
+    pub gid: String,
+}
+
+/// The newest patch note in Steam's news for a game.
+pub fn steam_patch(v: &serde_json::Value, game: &str) -> Option<PatchNote> {
+    let items = v.pointer("/appnews/newsitems")?.as_array()?;
+    items.iter().find_map(|n| {
+        let title = n.get("title")?.as_str()?;
+        let tags: Vec<&str> = n.get("tags").and_then(|t| t.as_array()).map(|a| a.iter().filter_map(|x| x.as_str()).collect()).unwrap_or_default();
+        let t = title.to_lowercase();
+        let patch = tags.contains(&"patchnotes") || ["patch", "update", "hotfix", "release notes"].iter().any(|w| t.contains(w));
+        patch.then(|| PatchNote { game: game.to_string(), title: title.to_string(), url: n.get("url").and_then(|u| u.as_str()).unwrap_or("").to_string(), gid: n.get("gid").and_then(|g| g.as_str()).unwrap_or("").to_string() })
+    })
+}
+
+impl Watchers {
+    pub fn set_game_alerts(&self, free: bool, patches: bool) -> WatchStore {
+        let mut s = self.get();
+        s.free_alerts = free;
+        s.patch_alerts = patches;
+        self.put(s)
+    }
+
+    /// Free games not told about before (marks them as told).
+    pub fn new_free(&self, found: Vec<FreeGame>) -> Vec<FreeGame> {
+        let mut s = self.get();
+        let fresh: Vec<FreeGame> = found.into_iter().filter(|g| !s.free_seen.contains(&g.url)).collect();
+        s.free_seen.extend(fresh.iter().map(|g| g.url.clone()));
+        let n = s.free_seen.len();
+        if n > 300 {
+            s.free_seen.drain(..n - 300);
+        }
+        self.put(s);
+        fresh
+    }
+
+    pub fn check_free(&self) -> Vec<FreeGame> {
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let mut all = Vec::new();
+        if let Ok(v) = crate::web::get_json(EPIC_FREE) {
+            all.extend(epic_free(&v, &today));
+        }
+        if let Ok(v) = crate::web::get_json(GAMERPOWER) {
+            all.extend(gamerpower_free(&v));
+        }
+        all
+    }
+
+    /// New patch notes for these Steam games: (app id, name).
+    pub fn check_patches(&self, games: &[(u32, String)]) -> Vec<PatchNote> {
+        let mut s = self.get();
+        let mut out = Vec::new();
+        for (app, name) in games.iter().take(40) {
+            let url = format!("https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid={app}&count=5&maxlength=200");
+            let Ok(v) = crate::web::get_json(&url) else { continue };
+            let Some(p) = steam_patch(&v, name) else { continue };
+            let key = app.to_string();
+            match s.patch_seen.get(&key) {
+                Some(seen) if *seen == p.gid => {}
+                Some(_) => {
+                    s.patch_seen.insert(key, p.gid.clone());
+                    out.push(p);
+                }
+                // The first look only remembers what's there.
+                None => {
+                    s.patch_seen.insert(key, p.gid.clone());
+                }
+            }
+        }
+        self.put(s);
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -543,5 +683,25 @@ mod tests {
         assert!(w.recap_due("2026-11-07", 21 * 60 + 5));
         assert!(!w.recap_due("2026-11-07", 22 * 60), "once a day");
         assert!(w.recap_due("2026-11-08", 23 * 60));
+    }
+
+    #[test]
+    fn finds_free_games_and_patches() {
+        let epic = serde_json::json!({"data":{"Catalog":{"searchStore":{"elements":[
+            {"title":"Free One","productSlug":"free-one","price":{"totalPrice":{"discountPrice":0}},"promotions":{"promotionalOffers":[{"promotionalOffers":[{"startDate":"2026-11-05T16:00:00.000Z","endDate":"2026-11-12T16:00:00.000Z","discountSetting":{"discountPercentage":0}}]}]}},
+            {"title":"Next Week","productSlug":"later","promotions":{"promotionalOffers":[],"upcomingPromotionalOffers":[{}]}},
+            {"title":"Half Off","productSlug":"half","price":{"totalPrice":{"discountPrice":999}},"promotions":{"promotionalOffers":[{"promotionalOffers":[{"startDate":"2026-11-05T16:00:00.000Z","endDate":"2026-11-12T16:00:00.000Z","discountSetting":{"discountPercentage":50}}]}]}}
+        ]}}}});
+        let f = epic_free(&epic, "2026-11-07");
+        assert_eq!(f.len(), 1);
+        assert_eq!((f[0].url.as_str(), f[0].until.as_str()), ("https://store.epicgames.com/p/free-one", "2026-11-12"));
+        let gp = serde_json::json!([{"title":"Indie Thing (Steam) Giveaway","open_giveaway_url":"https://www.gamerpower.com/open/indie","end_date":"2026-11-10 23:59:00"}]);
+        assert_eq!(gamerpower_free(&gp)[0].title, "Indie Thing");
+        let news = serde_json::json!({"appnews":{"newsitems":[{"gid":"1","title":"Community spotlight","tags":[]},{"gid":"2","title":"Patch 1.4 notes","url":"https://store.steampowered.com/news/2","tags":["patchnotes"]}]}});
+        assert_eq!(steam_patch(&news, "Game").unwrap().gid, "2");
+        let t = tempfile::tempdir().unwrap();
+        let w = Watchers::new(t.path());
+        assert_eq!(w.new_free(f.clone()).len(), 1);
+        assert!(w.new_free(f).is_empty(), "told once");
     }
 }

@@ -1925,7 +1925,7 @@ fn for_phone(ev: &crate::events::Event, device_id: &str) -> bool {
     if ev.topic == "inbox:removed" {
         return true;
     }
-    ["power:", "notes:", "media:", "games:", "chats:", "approval:", "board:", "download:", "video:", "scan:", "alert:", "quiet:", "party:", "watch:", "screentime:", "capri:"].iter().any(|p| ev.topic.starts_with(p)) || matches!(ev.topic.as_str(), "mcserver:changed" | "mcserver:players" | "mcserver:guard")
+    ["power:", "notes:", "media:", "games:", "chats:", "approval:", "board:", "download:", "video:", "scan:", "alert:", "quiet:", "party:", "watch:", "screentime:", "capri:", "timer:"].iter().any(|p| ev.topic.starts_with(p)) || matches!(ev.topic.as_str(), "mcserver:changed" | "mcserver:players" | "mcserver:guard")
 }
 
 async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws: WebSocketUpgrade) -> ApiResult<Response> {
