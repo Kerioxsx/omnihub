@@ -82,6 +82,8 @@ pub struct AppCore {
     pub nightlight: crate::nightlight::NightLight,
     pub timers: crate::timers::Timers,
     pub soundboard: crate::soundboard::Soundboard,
+    pub net_limits: crate::system::netlimit::NetLimits,
+    pub snippets: crate::snippets::Snippets,
     pub after_downloads: parking_lot::Mutex<crate::timers::AfterDownloads>,
     pub speedrun: crate::speedrun::Speedrun,
     /// Family and guest phones limited to some areas.
@@ -201,6 +203,8 @@ impl AppCore {
             nightlight: crate::nightlight::NightLight::new(&paths.data),
             timers: crate::timers::Timers::new(&paths.data),
             soundboard: crate::soundboard::Soundboard::new(&paths.data),
+            net_limits: crate::system::netlimit::NetLimits::new(&paths.data),
+            snippets: crate::snippets::Snippets::new(&paths.data),
             after_downloads: parking_lot::Mutex::new(Default::default()),
             speedrun: crate::speedrun::Speedrun::new(&paths.data, events.clone()),
             speedrun_keys: std::sync::atomic::AtomicBool::new(false),
@@ -263,6 +267,7 @@ impl AppCore {
             keys.extend(self.speedrun.watched_keys());
         }
         keys.extend(self.soundboard.watched_keys());
+        keys.extend(self.snippets.watched_keys());
         keys.sort_unstable();
         keys.dedup();
         crate::system::keys::watch(&keys);
@@ -281,6 +286,9 @@ impl AppCore {
             }
             for s in core.soundboard.for_key(vk) {
                 core.play_sound(&s);
+            }
+            if let Some(text) = core.snippets.for_key(vk) {
+                crate::snippets::type_soon(text, 120);
             }
             if clicker {
                 core.refresh_keys();

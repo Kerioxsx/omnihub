@@ -56,6 +56,9 @@ pub enum AdminOp {
     /// The game's NVIDIA driver profile (see `nvidia`).
     NvidiaOn(String),
     NvidiaOff(String),
+    /// Cap a program's upload, in Kbps (see `system::netlimit`).
+    LimitOn(String, u32),
+    LimitOff(String),
 }
 
 impl AdminOp {
@@ -67,11 +70,18 @@ impl AdminOp {
             AdminOp::StartHighOff(e) => format!("ifeo-:{e}"),
             AdminOp::NvidiaOn(e) => format!("nv+:{e}"),
             AdminOp::NvidiaOff(e) => format!("nv-:{e}"),
+            AdminOp::LimitOn(e, kbps) => format!("lim+:{kbps}:{e}"),
+            AdminOp::LimitOff(e) => format!("lim-:{e}"),
         }
     }
 
     pub fn parse(arg: &str) -> Option<AdminOp> {
         let (op, exe) = arg.split_once(':')?;
+        if op == "lim+" {
+            let (n, exe) = exe.split_once(':')?;
+            let kbps: u32 = n.parse().ok()?;
+            return crate::system::netlimit::check(exe, kbps).ok().map(|_| AdminOp::LimitOn(exe.to_string(), kbps));
+        }
         if !valid_exe_name(exe) {
             return None;
         }
@@ -83,6 +93,7 @@ impl AdminOp {
             "ifeo-" => AdminOp::StartHighOff(exe),
             "nv+" => AdminOp::NvidiaOn(exe),
             "nv-" => AdminOp::NvidiaOff(exe),
+            "lim-" => AdminOp::LimitOff(exe),
             _ => return None,
         })
     }
@@ -288,6 +299,8 @@ mod imp {
                 AdminOp::StartHighOff(exe) => start_high_off(exe),
                 AdminOp::NvidiaOn(exe) => crate::games::nvidia::apply(exe).map(|_| ()),
                 AdminOp::NvidiaOff(exe) => crate::games::nvidia::undo(exe),
+                AdminOp::LimitOn(exe, kbps) => limit_on(exe, *kbps),
+                AdminOp::LimitOff(exe) => run("powershell", &["-NoProfile", "-NonInteractive", "-Command", &format!("Remove-NetQosPolicy -Name '{}' -Confirm:$false", crate::system::netlimit::policy_name(exe))]).map(|_| ()),
             };
             if let Err(e) = r {
                 tracing::warn!("{}: {e}", op.arg());
@@ -303,6 +316,14 @@ mod imp {
         let name = qos_policy_name(exe);
         let _ = run("powershell", &["-NoProfile", "-NonInteractive", "-Command", &format!("Remove-NetQosPolicy -Name '{name}' -Confirm:$false -ErrorAction SilentlyContinue")]);
         run("powershell", &["-NoProfile", "-NonInteractive", "-Command", &format!("New-NetQosPolicy -Name '{name}' -AppPathNameMatchCondition '{exe}' -DSCPAction 46 -NetworkProfile All | Out-Null")]).map(|_| ())
+    }
+
+    fn limit_on(exe: &str, kbps: u32) -> Result<(), String> {
+        RegKey::predef(HKEY_LOCAL_MACHINE).create_subkey(r"SYSTEM\CurrentControlSet\Services\Tcpip\QoS").and_then(|(k, _)| k.set_value("Do not use NLA", &"1")).map_err(|e| e.to_string())?;
+        let name = crate::system::netlimit::policy_name(exe);
+        let _ = run("powershell", &["-NoProfile", "-NonInteractive", "-Command", &format!("Remove-NetQosPolicy -Name '{name}' -Confirm:$false -ErrorAction SilentlyContinue")]);
+        let bits = u64::from(kbps) * 1000;
+        run("powershell", &["-NoProfile", "-NonInteractive", "-Command", &format!("New-NetQosPolicy -Name '{name}' -AppPathNameMatchCondition '{exe}' -ThrottleRateActionBitsPerSecond {bits} -NetworkProfile All | Out-Null")]).map(|_| ())
     }
 
     fn start_high_off(exe: &str) -> Result<(), String> {
@@ -659,6 +680,12 @@ mod tests {
         assert_eq!(AdminOp::parse("ifeo-:GTA5.exe"), Some(AdminOp::StartHighOff("GTA5.exe".into())));
         assert_eq!(AdminOp::parse("qos+:evil'.exe"), None);
         assert_eq!(AdminOp::parse("rm:cs2.exe"), None);
+        let lim = AdminOp::LimitOn("OneDrive.exe".into(), 2000);
+        assert_eq!(lim.arg(), "lim+:2000:OneDrive.exe");
+        assert_eq!(AdminOp::parse(&lim.arg()), Some(lim));
+        assert_eq!(AdminOp::parse("lim+:5:OneDrive.exe"), None);
+        assert_eq!(AdminOp::parse("lim+:2000:a;b.exe"), None);
+        assert_eq!(AdminOp::parse("lim-:OneDrive.exe"), Some(AdminOp::LimitOff("OneDrive.exe".into())));
         assert_eq!(qos_policy_name("cs2.exe"), "OmniHub - cs2.exe");
     }
 }

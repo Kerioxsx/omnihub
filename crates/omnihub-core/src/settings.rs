@@ -103,6 +103,10 @@ pub struct PlaySettings {
     pub folder: Option<String>,
     /// Clip big moments by itself (CS2 multi-kills, League multikills).
     pub auto_clip: bool,
+    /// Clip eliminations in any game, read off the screen (see `play::elims`).
+    pub elim_clips: bool,
+    /// The words that mean an elimination ("eliminated", "knocked down").
+    pub elim_words: Vec<String>,
 }
 
 impl Default for PlaySettings {
@@ -122,6 +126,8 @@ impl Default for PlaySettings {
             monitor: 0,
             folder: None,
             auto_clip: true,
+            elim_clips: false,
+            elim_words: crate::play::elims::DEFAULT_WORDS.iter().map(|w| w.to_string()).collect(),
         }
     }
 }

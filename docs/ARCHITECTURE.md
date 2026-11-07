@@ -808,3 +808,18 @@ has Capri speak through her local bridge (`companion::say`).
   desktop widgets, live wallpaper) and their views in `pages/floats/`.
 - Phone: Local AI in `Chats.tsx`, scenes in `Deck.tsx`, alerts in `App.tsx`,
   `SyncFolder.tsx`.
+
+## 0.32.0
+
+- `timers.rs` (timers, alarms, bedtime, after-downloads), ticked by the fast
+  watcher loop in `core.rs`; free games and patch notes in `watchers.rs`.
+- `pccheck.rs` (drive health, stress test, ready to play), `games/mover.rs`
+  (copy, check, junction), `system/winpin.rs`, `system/wifi.rs`.
+- `soundboard.rs` (sounds; played by the hidden `soundboard` window,
+  `pages/floats/SoundboardPlayer.tsx`), `snippets.rs` (text shortcuts), both
+  on the key hook through `refresh_keys`.
+- `system/netlimit.rs` (app upload caps) through `games/tweaks.rs` `AdminOp`.
+- `play/elims.rs` (OCR elimination clips, a thread in `play::PlayHub::start`).
+- `translate.rs` (OCR + Ollama); the overlay window (`src-tauri/src/overlay.rs`)
+  now has modes: region capture, colour picker and ruler
+  (`pages/overlay/PickerOverlay.tsx`), translator (`TranslateOverlay.tsx`).

@@ -3,7 +3,7 @@
 
 import type { AudioOutput, ClipItem, ClipList, Counter, GoveePreset, LibraryGame, ObsInfo, QuickAction, QuickButton, QuickState, Scene, ScreenModes } from '@shared/types';
 import { QUICK_COLORS, QUICK_ICONS } from '@shared/quickIcons';
-import { ArrowDown, ArrowUp, ClipboardList, Clapperboard, Copy, Monitor, Volume2, FolderOpen, Grid3x3, Image as ImageIcon, Pause, Pencil, Pin, PinOff, Play, Plus, Radio, Smartphone, Trash2, Disc3 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ClipboardList, Clapperboard, Copy, Monitor, Volume2, FolderOpen, Grid3x3, Image as ImageIcon, Pause, Pencil, Pin, PinOff, Play, Plus, Radio, Smartphone, Trash2, Disc3, Type } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -19,9 +19,10 @@ import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
 import { DesktopTab } from './DesktopTab';
 import { SoundboardTab } from './SoundboardTab';
+import { TextTab } from './TextTab';
 import { ACTION_KINDS, ButtonFace, ChordInput, FAN_LABEL, MEDIA_LABEL, OBS_LABEL, STEP_KINDS, ago, blankAction, describe } from './shared';
 
-type Tab = 'deck' | 'scenes' | 'soundboard' | 'desktop' | 'wheel' | 'clipboard';
+type Tab = 'deck' | 'scenes' | 'soundboard' | 'text' | 'desktop' | 'wheel' | 'clipboard';
 
 // ---------- the button editor (deck and wheel) ----------
 
@@ -768,7 +769,7 @@ function ClipboardTab({ state, save }: { state: QuickState; save: (s: QuickState
 
 export function QuickPage() {
   const route = useRoute();
-  const tab = (['deck', 'scenes', 'soundboard', 'desktop', 'wheel', 'clipboard'] as Tab[]).find((t) => t === route.params.get('tab')) ?? 'deck';
+  const tab = (['deck', 'scenes', 'soundboard', 'text', 'desktop', 'wheel', 'clipboard'] as Tab[]).find((t) => t === route.params.get('tab')) ?? 'deck';
   const { state, save } = useQuick();
   return (
     <Page title="Quick actions" subtitle="A macro deck for your PC and phone, scenes that set everything in one tap, a quick-launch wheel at your mouse, and clipboard history." actions={state && <Kbd>{tab === 'clipboard' ? state.clipHotkey : state.wheelHotkey}</Kbd>}>
@@ -780,12 +781,13 @@ export function QuickPage() {
           { value: 'deck', label: 'Deck', icon: Grid3x3 },
           { value: 'scenes', label: 'Scenes', icon: Clapperboard },
           { value: 'soundboard', label: 'Soundboard', icon: Volume2 },
+          { value: 'text', label: 'Text shortcuts', icon: Type },
           { value: 'desktop', label: 'Desktop', icon: Monitor },
           { value: 'wheel', label: 'Wheel', icon: Disc3 },
           { value: 'clipboard', label: 'Clipboard', icon: ClipboardList },
         ]}
       />
-      {!state ? null : tab === 'deck' ? <DeckTab state={state} save={save} /> : tab === 'scenes' ? <ScenesTab state={state} save={save} /> : tab === 'desktop' ? <DesktopTab /> : tab === 'soundboard' ? <SoundboardTab /> : tab === 'wheel' ? <WheelTab state={state} save={save} /> : <ClipboardTab state={state} save={save} />}
+      {!state ? null : tab === 'deck' ? <DeckTab state={state} save={save} /> : tab === 'scenes' ? <ScenesTab state={state} save={save} /> : tab === 'desktop' ? <DesktopTab /> : tab === 'soundboard' ? <SoundboardTab /> : tab === 'text' ? <TextTab /> : tab === 'wheel' ? <WheelTab state={state} save={save} /> : <ClipboardTab state={state} save={save} />}
     </Page>
   );
 }

@@ -267,6 +267,12 @@ export interface PendingRegion {
   image: string;
 }
 
+export interface Translation {
+  text: string;
+  translated: string;
+  model: string;
+}
+
 export interface Rect {
   x: number;
   y: number;
@@ -936,6 +942,9 @@ export interface PlaySettings {
   monitor: number;
   folder: string | null;
   autoClip: boolean;
+  /** Clip eliminations in any game, read off the screen (Windows OCR). */
+  elimClips: boolean;
+  elimWords: string[];
 }
 
 export interface PlayStatus {
@@ -4108,6 +4117,29 @@ export interface PinWindow {
   title: string;
   app: string;
   pinned: boolean;
+}
+
+/** Saved text typed into the app in front when its key is pressed. */
+export interface Snippet {
+  id: string;
+  name: string;
+  text: string;
+  /** Windows virtual-key code, 0 = none. */
+  key: number;
+}
+
+export interface SnippetSettings {
+  snippets: Snippet[];
+  keysOn: boolean;
+}
+
+/** A cap on how fast a program uploads (a Windows QoS policy). */
+export interface AppLimit {
+  exe: string;
+  /** Kilobits per second. */
+  kbps: number;
+  /** Windows has the policy now. */
+  active: boolean;
 }
 
 export interface SoundboardSound {

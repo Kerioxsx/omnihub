@@ -50,7 +50,7 @@ export const settings: Settings = {
   approvals: { enabled: false, vault: true, admin: true, shred: true, environment: true },
   updates: { check: true, autoInstall: true },
   chats: { allowPhone: true, phoneAgents: true, claudeMode: 'acceptEdits', codexSandbox: 'workspace-write', capri: false },
-  play: { capriReacts: false, voice: false, voiceOnlyInGames: true, nickname: '', nicknames: [], replay: false, replayMinutes: 10, clipSeconds: 30, fps: 60, quality: 'standard', gameAudio: true, monitor: 0, folder: null, autoClip: true },
+  play: { capriReacts: false, voice: false, voiceOnlyInGames: true, nickname: '', nicknames: [], replay: false, replayMinutes: 10, clipSeconds: 30, fps: 60, quality: 'standard', gameAudio: true, monitor: 0, folder: null, autoClip: true, elimClips: false, elimWords: ['eliminated', 'knocked down', 'elimination'] },
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {

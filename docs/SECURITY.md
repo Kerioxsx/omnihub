@@ -1108,3 +1108,28 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
 - The **crosshair**, **widgets** and **wallpaper** are OmniHub windows; the
   crosshair ignores the mouse, and the wallpaper is placed in the desktop's
   WorkerW window. Nothing is injected into games.
+
+## 0.32.0
+
+- **App speed limits** are Windows QoS policies named `OmniHub limit - <app>`,
+  made and removed by the elevated helper (`lim+:<kbps>:<app>.exe`,
+  `lim-:<app>.exe`). The program name and speed are checked on both sides
+  (letters, digits, space, `.`, `_`, `-`, `(`, `)`; 64 Kbps to 1 Gbps) before
+  anything reaches PowerShell. Windows only shapes outgoing traffic.
+- **Text shortcuts** and the **soundboard** use the existing key hook, which
+  only reports the keys asked for and stores nothing. Letters, digits, space,
+  Enter, Tab and modifiers can't be shortcut keys, so typing never triggers
+  one. Shortcut text is typed with `SendInput`, at most 2000 characters.
+- The **colour picker**, **ruler** and **screen translator** use the same
+  frozen screen as region screenshots, kept in memory until the overlay
+  closes; nothing is saved. The translator sends the recognised text to
+  Ollama on 127.0.0.1 only.
+- **Elimination clips** read the middle of the screen with Windows OCR every
+  1.5 seconds while a game runs and instant replay records; each picture is
+  dropped after reading.
+- **Free game and patch alerts** read Epic's public promotions feed,
+  GamerPower and Steam's public news API; no account or key is used.
+- **Moving a game** copies and checks every file before the original is
+  deleted, and refuses a folder that is already a link.
+- **Bedtime** locks the PC (`LockWorkStation`); it never closes apps or
+  shuts down.

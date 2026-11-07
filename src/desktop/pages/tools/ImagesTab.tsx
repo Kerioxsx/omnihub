@@ -11,6 +11,7 @@ import { Badge, Card, CardHeader } from '../../components/ui/Card';
 import { Field, Segmented, Select } from '../../components/ui/Form';
 import { Callout, EmptyState } from '../../components/ui/States';
 import { toast } from '../../state/toasts';
+import { PickerCard } from './PickerCard';
 
 type Kind = ImageJob['kind'];
 const KINDS: { value: Kind; label: string }[] = [
@@ -66,7 +67,9 @@ export function ImagesTab() {
 
   const located = files.filter((f) => f.hasLocation).length;
   return (
-    <Card className="p-5">
+    <>
+      <PickerCard />
+      <Card className="p-5">
       <CardHeader icon={ImageIcon} title="Images" subtitle="Remove location and camera details, resize, compress, or turn HEIC into JPG. Originals stay as they are." actions={<Button icon={FolderOpen} onClick={() => void choose()}>Choose pictures…</Button>} />
       {!files.length ? (
         <EmptyState compact icon={ImageIcon} title="No pictures chosen" description="Pick photos to clean up before sharing, or a folder’s worth to shrink." className="mt-4" />
@@ -134,5 +137,6 @@ export function ImagesTab() {
         </>
       )}
     </Card>
+    </>
   );
 }

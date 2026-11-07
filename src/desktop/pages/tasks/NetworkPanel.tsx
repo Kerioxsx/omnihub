@@ -9,11 +9,13 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { Card, CardHeader } from '../../components/ui/Card';
 import { Sparkline } from '../home/Sparkline';
+import { LimitControl, speed, useAppLimits } from './AppLimits';
 
 const rate = (b: number) => `${formatBytes(b, 1)}/s`;
 
 export function NetworkPanel({ paused }: { paused?: boolean }) {
   const [n, setN] = useState<NetStatus | null>(null);
+  const limits = useAppLimits();
   useEffect(() => {
     if (paused) return;
     let alive = true;
@@ -67,21 +69,46 @@ export function NetworkPanel({ paused }: { paused?: boolean }) {
         </div>
       </Card>
       <Card className="p-5">
-        <CardHeader icon={Globe} title="Online programs" subtitle="Programs with connections open right now, and where to." />
+        <CardHeader icon={Globe} title="Online programs" subtitle="Programs with connections open right now, and where to. The gauge caps a program’s upload (administrator approval; downloads aren’t capped)." />
         <div className="mt-3 max-h-[300px] space-y-1 overflow-y-auto">
           {n.apps.length === 0 && <div className="py-6 text-center text-[13px] text-faint">Nothing connected right now.</div>}
-          {n.apps.map((a) => (
-            <div key={`${a.process}-${a.pid}`} className="rounded-lg px-2 py-1.5 hover:bg-surface-2">
-              <div className="flex items-center justify-between gap-3 text-[13px]">
-                <span className="truncate font-medium">{a.process.replace(/\.exe$/i, '')}</span>
-                <span className="shrink-0 tabular text-faint">
-                  {a.connections} connection{a.connections === 1 ? '' : 's'}
-                </span>
+          {n.apps.map((a) => {
+            const lim = limits.list.find((l) => l.exe.toLowerCase() === a.process.toLowerCase());
+            return (
+              <div key={`${a.process}-${a.pid}`} className="rounded-lg px-2 py-1.5 hover:bg-surface-2">
+                <div className="flex items-center justify-between gap-3 text-[13px]">
+                  <span className="truncate font-medium">{a.process.replace(/\.exe$/i, '')}</span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="tabular text-faint">
+                      {a.connections} connection{a.connections === 1 ? '' : 's'}
+                    </span>
+                    {/\.exe$/i.test(a.process) && <LimitControl exe={a.process} limit={lim} busy={limits.busy === a.process} onSet={(k) => void limits.set(a.process, k)} onRemove={() => void limits.remove(a.process)} />}
+                  </span>
+                </div>
+                <div className="truncate font-mono text-[11px] text-faint">{a.remotes.join(' · ')}</div>
               </div>
-              <div className="truncate font-mono text-[11px] text-faint">{a.remotes.join(' · ')}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+        {limits.list.some((l) => !n.apps.some((a) => a.process.toLowerCase() === l.exe.toLowerCase())) && (
+          <div className="mt-3 border-t border-line pt-3">
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-faint">Limits on programs that aren’t online</div>
+            {limits.list
+              .filter((l) => !n.apps.some((a) => a.process.toLowerCase() === l.exe.toLowerCase()))
+              .map((l) => (
+                <div key={l.exe} className="flex items-center justify-between gap-3 px-2 py-1 text-[13px]">
+                  <span className="truncate">
+                    {l.exe.replace(/\.exe$/i, '')}{' '}
+                    <span className="text-faint">
+                      · upload ≤ {speed(l.kbps)}
+                      {l.active ? '' : ' · not active (removed outside OmniHub?)'}
+                    </span>
+                  </span>
+                  <LimitControl exe={l.exe} limit={l} busy={limits.busy === l.exe} onSet={(k) => void limits.set(l.exe, k)} onRemove={() => void limits.remove(l.exe)} />
+                </div>
+              ))}
+          </div>
+        )}
       </Card>
     </div>
   );

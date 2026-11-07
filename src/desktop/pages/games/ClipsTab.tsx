@@ -177,6 +177,14 @@ export function ClipsTab() {
                 ))}
               </Select>
             </Row>
+            <Row title="Clip my eliminations (any game)" hint="Reads the middle of the screen every couple of seconds with Windows’ own OCR; “Eliminated” or “Knocked down” saves a clip. Nothing is kept. Works best in borderless or windowed mode.">
+              <Switch checked={p.elimClips} onChange={(v) => set({ elimClips: v })} label="Clip my eliminations" />
+            </Row>
+            {p.elimClips && (
+              <Row title="Words to look for" hint="Separated by commas — add your game’s words, in the language Windows reads.">
+                <TextInput defaultValue={p.elimWords.join(', ')} onBlur={(e) => set({ elimWords: e.target.value.split(',').map((w) => w.trim()).filter((w) => w.length >= 3).slice(0, 20) })} className="w-[240px]" aria-label="Words to look for" />
+              </Row>
+            )}
             <Row title="Quality">
               <Segmented size="sm" label="Quality" value={p.quality} onChange={(v) => set({ quality: v })} options={[{ value: 'standard', label: 'Standard' }, { value: 'high', label: 'High' }]} />
             </Row>

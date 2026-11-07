@@ -74,6 +74,8 @@ let mockWins = [
   { handle: 3, title: 'Notes.txt - Notepad', app: 'notepad.exe', pinned: true },
 ];
 let mockAfter = { action: '', quietSince: 0 };
+let mockSnippets = { keysOn: true, snippets: [{ id: 'a1', name: 'Good game', text: 'gg wp, thanks for the games!', key: 0x7c }] };
+let mockAppLimits = [{ exe: 'OneDrive.exe', kbps: 2000, active: true }];
 let mockBoard = { sounds: [{ id: 's1', name: 'Air horn', path: 'C:\\Sounds\\air horn.mp3', key: 0x61, volume: 80 }, { id: 's2', name: 'Bruh', path: 'C:\\Sounds\\bruh.wav', key: 0, volume: 100 }], output: '', keysOn: true };
 let mockBt = [
   { address: 'B8:F6:53:CA:1B:2E', name: 'WH-1000XM5', connected: true, kind: 'audio' as const, audio: true },
@@ -371,6 +373,13 @@ const handlers: Record<string, Handler> = {
   shots_region_pending: () => media.regionPending(),
   shots_region_commit: (a) => media.regionCommit(str(a, 'id'), obj<Rect>(a, 'rect')),
   shots_region_cancel: () => media.regionCancel(),
+  shots_tool_begin: () => media.regionBegin(),
+  shots_overlay_mode: () => (location.hash.includes('mode=pick') ? 'pick' : location.hash.includes('mode=translate') ? 'translate' : 'region'),
+  shots_region_pixel: () => null,
+  shots_region_translate: async () => {
+    await new Promise((r) => setTimeout(r, 700));
+    return { text: 'Appuyez sur A pour continuer\nSauvegarde en cours…', translated: 'Press A to continue\nSaving…', model: 'llama3.2' };
+  },
   shots_thumb: (a) => media.shotThumb(str(a, 'id')),
   shots_image: (a) => media.shotImage(str(a, 'id')),
   shots_pin: () => null,
@@ -657,6 +666,19 @@ const handlers: Record<string, Handler> = {
     mockWins = mockWins.map((w) => (w.handle === num(a, 'handle') ? { ...w, pinned: Boolean(a?.on) } : w));
     return Boolean(a?.on);
   },
+  snippets_get: () => mockSnippets,
+  snippets_save: (a) => {
+    const s = (a?.settings ?? mockSnippets) as typeof mockSnippets;
+    mockSnippets = { ...s, snippets: s.snippets.map((x, i) => ({ ...x, id: x.id || `s${Date.now()}${i}`, name: x.name.trim() || x.text.split('\n')[0].slice(0, 24) })) };
+    return mockSnippets;
+  },
+  net_limits: () => mockAppLimits,
+  net_limit_set: (a) => {
+    const exe = str(a, 'exe');
+    mockAppLimits = [...mockAppLimits.filter((x) => x.exe.toLowerCase() !== exe.toLowerCase()), { exe, kbps: num(a, 'kbps'), active: true }].sort((x, y) => x.exe.localeCompare(y.exe));
+    return mockAppLimits;
+  },
+  net_limit_remove: (a) => (mockAppLimits = mockAppLimits.filter((x) => x.exe !== str(a, 'exe'))),
   after_downloads_get: () => mockAfter,
   after_downloads_set: (a) => (mockAfter = { action: str(a, 'action'), quietSince: 0 }),
   game_move: async () => {

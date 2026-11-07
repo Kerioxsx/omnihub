@@ -18,6 +18,7 @@
 
 pub mod clips;
 pub mod cs2;
+pub mod elims;
 mod lines;
 pub mod lol;
 pub mod voice;
@@ -265,6 +266,40 @@ impl PlayHub {
                 std::thread::sleep(Duration::from_secs(2));
                 let Some(core) = weak.upgrade() else { return };
                 hub.tick(&core);
+            }
+        });
+        // Eliminations on screen (only while asked, a game runs and replay records).
+        let _ = std::thread::Builder::new().name("play-elims".into()).spawn({
+            let weak = weak.clone();
+            let hub = hub.clone();
+            move || {
+                let mut last: Option<Instant> = None;
+                loop {
+                    std::thread::sleep(Duration::from_millis(1500));
+                    let Some(core) = weak.upgrade() else { return };
+                    let s = core.settings.get().play;
+                    let ready = s.elim_clips && s.replay && {
+                        let st = hub.state.lock();
+                        st.game.is_some() && st.recorder.is_some()
+                    };
+                    if !ready || last.is_some_and(|t| t.elapsed() < Duration::from_secs(elims::COOLDOWN_SECS)) {
+                        continue;
+                    }
+                    let Ok(png) = elims::grab(s.monitor) else { continue };
+                    drop(core);
+                    let Ok(text) = crate::capture::ocr::recognize_bytes(png) else { continue };
+                    if elims::matches(&text, &s.elim_words) {
+                        last = Some(Instant::now());
+                        let queued = {
+                            let mut st = hub.state.lock();
+                            st.auto_clip.is_none() && st.auto_clip.replace((Instant::now() + Duration::from_secs(4), s.clip_seconds.clamp(10, 60))).is_none()
+                        };
+                        if queued {
+                            hub.events.emit("play:elim", serde_json::json!({}));
+                            hub.send_wake();
+                        }
+                    }
+                }
             }
         });
         let _ = std::thread::Builder::new().name("play-act".into()).spawn(move || loop {

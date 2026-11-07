@@ -757,6 +757,37 @@ pub async fn window_pin(handle: i64, on: bool) -> Res<bool> {
 }
 
 #[tauri::command]
+pub async fn snippets_get(core: Core<'_>) -> Res<omnihub_core::snippets::SnippetSettings> {
+    Ok(core.snippets.get())
+}
+
+#[tauri::command]
+pub async fn snippets_save(core: Core<'_>, settings: omnihub_core::snippets::SnippetSettings) -> Res<omnihub_core::snippets::SnippetSettings> {
+    let s = core.snippets.save(settings)?;
+    core.refresh_keys();
+    Ok(s)
+}
+
+#[tauri::command]
+pub async fn net_limits(core: Core<'_>) -> Res<Vec<omnihub_core::system::netlimit::AppLimit>> {
+    let c = core.inner().clone();
+    blocking(move || Ok(c.net_limits.list())).await
+}
+
+/// Cap a program's upload (administrator prompt).
+#[tauri::command]
+pub async fn net_limit_set(core: Core<'_>, exe: String, kbps: u32) -> Res<Vec<omnihub_core::system::netlimit::AppLimit>> {
+    let c = core.inner().clone();
+    blocking(move || c.net_limits.set(&exe, kbps)).await
+}
+
+#[tauri::command]
+pub async fn net_limit_remove(core: Core<'_>, exe: String) -> Res<Vec<omnihub_core::system::netlimit::AppLimit>> {
+    let c = core.inner().clone();
+    blocking(move || c.net_limits.remove(&exe)).await
+}
+
+#[tauri::command]
 pub async fn after_downloads_get(core: Core<'_>) -> Res<omnihub_core::timers::AfterDownloads> {
     Ok(core.after_downloads.lock().clone())
 }

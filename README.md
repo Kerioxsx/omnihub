@@ -32,6 +32,16 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.32.0
+
+- **Timers, alarms and a bedtime lock** that ring on the PC and the phone, and **shut down or sleep when downloads finish**.
+- **Slow down an app's internet**: cap a program's upload (Windows QoS; uploads only, administrator approval).
+- **Soundboard** with keys that work in games, and **text shortcuts** that type saved text into the app in front.
+- **Colour picker and ruler**, and a **screen translator** (Windows OCR + a local Ollama model, nothing leaves the PC).
+- **Clip my eliminations in any game**: OCR on the middle of the screen saves an instant-replay clip.
+- **Free game and patch notes alerts**, **PC checks** (drive health, stress test, ready to play), **pin any window on top**, **Wi-Fi QR for guests**.
+- **Move a game to another drive** with a link left behind, **music per game** through scenes, a **Big Picture keyboard**, and an **aim trainer**.
+
 ## New in 0.31.0
 
 - **Scenes**: one tap for lights, fans, notifications, Discord, sound, microphone, screen mode and HDR, also run by themselves when a game starts (and undone when it closes).

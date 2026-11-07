@@ -569,6 +569,36 @@ pub async fn shots_region_begin(app: AppHandle) -> Res<()> {
     crate::overlay::begin(app, true).await
 }
 
+/// A tool on a frozen copy of the screen: "pick" (colour picker and ruler)
+/// or "translate" (the screen translator).
+#[tauri::command]
+pub async fn shots_tool_begin(app: AppHandle, mode: String) -> Res<()> {
+    let mode = match mode.as_str() {
+        "pick" => "pick",
+        "translate" => "translate",
+        _ => return Err("Unknown tool".into()),
+    };
+    crate::overlay::begin_mode(app, true, mode).await
+}
+
+/// One exact pixel of the frozen screen.
+#[tauri::command]
+pub async fn shots_region_pixel(core: Core<'_>, x: u32, y: u32) -> Res<Option<[u8; 3]>> {
+    Ok(core.screenshots.region_pixel(x, y))
+}
+
+/// Read and translate a box of the frozen screen (OCR, then Ollama).
+#[tauri::command]
+pub async fn shots_region_translate(core: Core<'_>, id: String, rect: Rect, to: String) -> Res<omnihub_core::translate::Translation> {
+    let c = core.inner().clone();
+    blocking(move || c.translate_region(&id, rect, &to)).await
+}
+
+#[tauri::command]
+pub async fn shots_overlay_mode() -> Res<String> {
+    Ok(crate::overlay::mode().to_string())
+}
+
 #[tauri::command]
 pub async fn shots_region_pending(core: Core<'_>) -> Res<Option<PendingRegion>> {
     Ok(crate::overlay::pending(&core))

@@ -48,7 +48,7 @@ export function ToolsPage() {
     if (t && TABS.some((x) => x.value === t)) setTab(t);
   }, [route.params]);
   return (
-    <Page title="Tools" subtitle="Timers and bedtime, PC checks, files, images, video, downloads, the phone’s whiteboard, an auto clicker, a Pokémon save editor, folder rules, backups, layouts, ports, Git projects and PATH." scroll={tab !== 'ports'}>
+    <Page title="Tools" subtitle="Timers and bedtime, PC checks, files, images, a screen colour picker and translator, video, downloads, the phone’s whiteboard, an auto clicker, a Pokémon save editor, folder rules, backups, layouts, ports, Git projects and PATH." scroll={tab !== 'ports'}>
       <Tabs items={TABS} value={tab} onChange={setTab} className="mb-4" />
       {tab === 'timers' && <TimersTab />}
       {tab === 'checks' && <ChecksTab />}

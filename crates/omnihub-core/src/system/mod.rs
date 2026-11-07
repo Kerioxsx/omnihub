@@ -11,6 +11,7 @@ pub mod firewall;
 pub mod gpu;
 pub mod keys;
 pub mod layouts;
+pub mod netlimit;
 pub mod netmon;
 pub mod open_apps;
 pub mod ports;

@@ -116,6 +116,13 @@ export const api = {
     regionPending: () => call<T.PendingRegion | null>('shots_region_pending'),
     regionCommit: (id: string, rect: T.Rect) => call<T.Screenshot>('shots_region_commit', { id, rect }),
     regionCancel: () => call<void>('shots_region_cancel'),
+    /** A tool on a frozen screen (same overlay window): colour picker and ruler, or translator. */
+    toolBegin: (mode: 'pick' | 'translate') => call<void>('shots_tool_begin', { mode }),
+    overlayMode: () => call<'region' | 'pick' | 'translate'>('shots_overlay_mode'),
+    /** One exact pixel of the frozen screen (the preview is a JPEG). */
+    regionPixel: (x: number, y: number) => call<[number, number, number] | null>('shots_region_pixel', { x, y }),
+    /** Read a box of the frozen screen and translate it with the local AI model. */
+    regionTranslate: (id: string, rect: T.Rect, to: string) => call<T.Translation>('shots_region_translate', { id, rect, to }),
     thumb: (id: string) => call<string>('shots_thumb', { id }),
     image: (id: string) => call<string>('shots_image', { id }),
     pin: (id: string) => call<void>('shots_pin', { id }),
@@ -361,6 +368,17 @@ export const api = {
   pin: {
     windows: () => call<T.PinWindow[]>('windows_list'),
     set: (handle: number, on: boolean) => call<boolean>('window_pin', { handle, on }),
+  },
+  /** Text shortcuts: keys that type saved text. */
+  snippets: {
+    get: () => call<T.SnippetSettings>('snippets_get'),
+    save: (settings: T.SnippetSettings) => call<T.SnippetSettings>('snippets_save', { settings }),
+  },
+  /** Slow down a program's upload (administrator prompt; Windows QoS). */
+  netLimits: {
+    list: () => call<T.AppLimit[]>('net_limits'),
+    set: (exe: string, kbps: number) => call<T.AppLimit[]>('net_limit_set', { exe, kbps }),
+    remove: (exe: string) => call<T.AppLimit[]>('net_limit_remove', { exe }),
   },
   afterDownloads: {
     get: () => call<{ action: string; quietSince: number }>('after_downloads_get'),

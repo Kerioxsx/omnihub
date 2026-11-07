@@ -460,6 +460,34 @@ impl ScreenshotLibrary {
         self.store(&crop, &app, dir, format)
     }
 
+    /// The same crop as PNG bytes, without saving it or ending the capture
+    /// (the translator reads several boxes from one frozen screen).
+    pub fn region_png(&self, id: &str, rect: Rect) -> Result<Vec<u8>, ShotError> {
+        let crop = {
+            let guard = self.pending.lock();
+            let (pid, img, _) = guard.as_ref().ok_or(ShotError::NotFound)?;
+            if pid != id {
+                return Err(ShotError::NotFound);
+            }
+            let x = rect.x.min(img.width().saturating_sub(1));
+            let y = rect.y.min(img.height().saturating_sub(1));
+            let w = rect.width.clamp(1, img.width() - x);
+            let h = rect.height.clamp(1, img.height() - y);
+            image::imageops::crop_imm(img, x, y, w, h).to_image()
+        };
+        let mut out = std::io::Cursor::new(Vec::new());
+        crop.write_to(&mut out, image::ImageFormat::Png)?;
+        Ok(out.into_inner())
+    }
+
+    /// One pixel of the frozen screen, exactly (the preview is a JPEG).
+    pub fn region_pixel(&self, x: u32, y: u32) -> Option<[u8; 3]> {
+        let guard = self.pending.lock();
+        let (_, img, _) = guard.as_ref()?;
+        let p = img.get_pixel_checked(x, y)?;
+        Some([p[0], p[1], p[2]])
+    }
+
     pub fn pending_region_id(&self) -> Option<String> {
         self.pending.lock().as_ref().map(|p| p.0.clone())
     }
