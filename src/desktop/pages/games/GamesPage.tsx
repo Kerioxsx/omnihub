@@ -28,7 +28,7 @@ import { GAMES, GameTile, launchSummary } from './shared';
 
 const ORDER: GameKind[] = ['fortnite', 'roblox', 'valorant', 'cs2', 'apex', 'overwatch', 'rocketLeague', 'league', 'gta5', 'callOfDuty', 'minecraft', 'cyberpunk', 'custom'];
 
-const SOURCE: Record<InstalledGame['source'], string> = { epic: 'Epic Games', steam: 'Steam', riot: 'Riot', roblox: 'Roblox', minecraft: 'Minecraft Launcher' };
+const SOURCE: Record<InstalledGame['source'], string> = { epic: 'Epic Games', steam: 'Steam', riot: 'Riot', roblox: 'Roblox', minecraft: 'Minecraft Launcher', gog: 'GOG', ubisoft: 'Ubisoft Connect', ea: 'EA app', battlenet: 'Battle.net', xbox: 'Xbox / Game Pass' };
 
 const PHASE: Record<GameSession['phase'], string> = {
   starting: 'Boosting…',

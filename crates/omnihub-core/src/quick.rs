@@ -55,6 +55,54 @@ pub enum QuickAction {
         #[serde(default)]
         target: Option<String>,
     },
+    /// Runs one of your scenes (its id).
+    Scene { id: String },
+    /// Govee lights: on or off, optionally a preset and a brightness (1–100).
+    Lights {
+        on: bool,
+        #[serde(default)]
+        preset: Option<String>,
+        #[serde(default)]
+        brightness: Option<u8>,
+    },
+    /// The fan profile: "lowest", "silent", "auto" or "fast".
+    Fans { profile: String },
+    /// Windows notifications on or off (do not disturb).
+    Notifications { on: bool },
+    /// Discord status (Rich Presence) on or off.
+    Discord { on: bool },
+    /// Where the sound comes out (a playback device's id).
+    Sound { output: String },
+}
+
+/// A scene: one tap does several things (lights, fans, notifications…).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Scene {
+    pub id: String,
+    pub name: String,
+    pub icon: String,
+    pub color: String,
+    pub steps: Vec<QuickAction>,
+}
+
+pub const MAX_SCENES: usize = 24;
+pub const MAX_STEPS: usize = 20;
+pub const FAN_PROFILES: &[&str] = &["lowest", "silent", "auto", "fast"];
+
+fn scene(id: &str, name: &str, icon: &str, color: &str, steps: Vec<QuickAction>) -> Scene {
+    Scene { id: id.into(), name: name.into(), icon: icon.into(), color: color.into(), steps }
+}
+
+/// Ready-made scenes to start from (each one yours to change).
+pub fn default_scenes() -> Vec<Scene> {
+    use QuickAction::*;
+    vec![
+        scene("gaming", "Gaming", "gamepad-2", "#f87171", vec![Fans { profile: "fast".into() }, Notifications { on: false }, Discord { on: true }, Lights { on: true, preset: None, brightness: Some(100) }]),
+        scene("movie", "Movie", "film", "#a78bfa", vec![Lights { on: true, preset: None, brightness: Some(15) }, Fans { profile: "silent".into() }, Notifications { on: false }]),
+        scene("sleep", "Sleep", "moon", "#60a5fa", vec![Lights { on: false, preset: None, brightness: None }, Fans { profile: "lowest".into() }, Notifications { on: false }]),
+        scene("normal", "Back to normal", "sun", "#fbbf24", vec![Fans { profile: "auto".into() }, Notifications { on: true }, Lights { on: true, preset: None, brightness: Some(70) }]),
+    ]
 }
 
 impl QuickAction {
@@ -68,6 +116,10 @@ impl QuickAction {
             QuickAction::Counter { id, .. } if id.is_empty() => Err("Pick a counter".into()),
             QuickAction::Obs { what, .. } if !crate::obs::WHATS.iter().any(|w| w.0 == what) => Err("Pick what OBS should do".into()),
             QuickAction::Obs { what, target } if (what == "scene" || what == "mute") && target.as_deref().is_none_or(|t| t.trim().is_empty()) => Err(if what == "scene" { "Pick the scene".into() } else { "Pick the source".into() }),
+            QuickAction::Scene { id } if id.is_empty() => Err("Pick a scene".into()),
+            QuickAction::Lights { brightness: Some(b), .. } if !(1..=100).contains(b) => Err("Brightness goes from 1 to 100".into()),
+            QuickAction::Fans { profile } if !FAN_PROFILES.contains(&profile.as_str()) => Err("Pick a fan profile".into()),
+            QuickAction::Sound { output } if output.is_empty() => Err("Pick where the sound comes out".into()),
             _ => Ok(()),
         }
     }
@@ -96,6 +148,8 @@ pub struct QuickButton {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct QuickState {
+    /// Scenes: one tap does several things.
+    pub scenes: Vec<Scene>,
     pub clip_on: bool,
     pub clip_hotkey: String,
     /// Program names whose copies are never kept ("keepass.exe").
@@ -116,6 +170,7 @@ pub const MAX_DECK: usize = 30;
 impl Default for QuickState {
     fn default() -> Self {
         QuickState {
+            scenes: default_scenes(),
             clip_on: true,
             clip_hotkey: "Alt+Shift+V".into(),
             clip_ignore: ["keepass.exe", "keepassxc.exe", "1password.exe", "bitwarden.exe", "lastpass.exe", "dashlane.exe", "enpass.exe", "proton pass.exe"].map(String::from).to_vec(),
@@ -221,6 +276,27 @@ impl Quick {
             }
             if let Some(a) = &b.action {
                 a.check()?;
+            }
+        }
+        if next.scenes.len() > MAX_SCENES {
+            return Err(format!("Keep it to {MAX_SCENES} scenes"));
+        }
+        for sc in next.scenes.iter_mut() {
+            sc.name = sc.name.trim().chars().take(30).collect();
+            if sc.name.is_empty() {
+                return Err("Every scene needs a name".into());
+            }
+            if sc.steps.len() > MAX_STEPS {
+                return Err(format!("“{}” has more than {MAX_STEPS} steps", sc.name));
+            }
+            if sc.id.is_empty() {
+                sc.id = uuid::Uuid::new_v4().simple().to_string()[..10].to_string();
+            }
+            for st in &sc.steps {
+                if matches!(st, QuickAction::Scene { .. } | QuickAction::Clipboard) {
+                    return Err(format!("“{}” can't run another scene or the clipboard", sc.name));
+                }
+                st.check()?;
             }
         }
         if next.deck.iter().any(|b| b.action == Some(QuickAction::Clipboard)) {
@@ -574,6 +650,19 @@ mod imp {
     }
 }
 
+/// Windows' notification banners on or off (what "Do not disturb" turns off).
+#[cfg(windows)]
+pub fn notifications(on: bool) -> Result<(), String> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    let (k, _) = winreg::RegKey::predef(HKEY_CURRENT_USER).create_subkey(r"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings").map_err(|e| e.to_string())?;
+    k.set_value("NOC_GLOBAL_SETTING_TOASTS_ENABLED", &u32::from(on)).map_err(|e| e.to_string())
+}
+
+#[cfg(not(windows))]
+pub fn notifications(_on: bool) -> Result<(), String> {
+    Ok(())
+}
+
 impl crate::core::AppCore {
     /// Do a wheel slot's or deck button's action; says what was done.
     pub fn run_quick(&self, action: &QuickAction) -> Result<String, String> {
@@ -641,6 +730,52 @@ impl crate::core::AppCore {
                     self.procs.end(crate::capri_app::PROCESS)?;
                     Ok("Capri is closed".into())
                 }
+            }
+            QuickAction::Scene { id } => {
+                let sc = self.quick.state().scenes.into_iter().find(|x| &x.id == id).ok_or("That scene no longer exists")?;
+                let mut failed = Vec::new();
+                for st in sc.steps.iter().filter(|st| !matches!(st, QuickAction::Scene { .. })) {
+                    if let Err(e) = st.check().and_then(|_| self.run_quick(st)) {
+                        failed.push(e);
+                    }
+                }
+                self.events.emit("scene:ran", serde_json::json!({ "id": sc.id, "name": sc.name, "failed": failed }));
+                match failed.len() {
+                    0 => Ok(format!("{} is on", sc.name)),
+                    n => Err(format!("{}: {} of {} steps didn't work ({})", sc.name, n, sc.steps.len(), failed.join("; "))),
+                }
+            }
+            QuickAction::Lights { on, preset, brightness } => {
+                if let Some(p) = preset.as_deref().filter(|p| !p.is_empty() && *on) {
+                    self.govee.apply_preset(p, &[])?;
+                }
+                let mut patch = serde_json::json!({ "on": on });
+                if let (Some(b), true) = (brightness, *on) {
+                    patch["brightness"] = serde_json::json!(b);
+                }
+                self.govee.update(&patch)?;
+                Ok(if *on { "Lights on".into() } else { "Lights off".into() })
+            }
+            QuickAction::Fans { profile } => {
+                self.rig.update(&serde_json::json!({ "fans": { "profile": profile } }))?;
+                Ok(format!("Fans: {profile}"))
+            }
+            QuickAction::Notifications { on } => {
+                notifications(*on)?;
+                Ok(if *on { "Notifications on".into() } else { "Notifications off".into() })
+            }
+            QuickAction::Discord { on } => {
+                let mut ps = self.presence.settings();
+                if *on && !crate::presence::valid_client_id(&ps.client_id) {
+                    return Err("Set up the Discord status first (Games → Extras)".into());
+                }
+                ps.enabled = *on;
+                self.presence.save(ps)?;
+                Ok(if *on { "Discord status on".into() } else { "Discord status off".into() })
+            }
+            QuickAction::Sound { output } => {
+                crate::media::outputs::set_default(output)?;
+                Ok("Sound output changed".into())
             }
             QuickAction::Quiet => {
                 if self.quiet_status().on {

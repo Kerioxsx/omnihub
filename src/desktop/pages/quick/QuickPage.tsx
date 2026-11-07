@@ -1,9 +1,9 @@
 // Quick actions: the macro deck (here and on the phone), the quick-launch
 // wheel (a hotkey shows it at the mouse) and the clipboard history.
 
-import type { ClipItem, ClipList, Counter, LibraryGame, ObsInfo, QuickAction, QuickButton, QuickState } from '@shared/types';
+import type { AudioOutput, ClipItem, ClipList, Counter, GoveePreset, LibraryGame, ObsInfo, QuickAction, QuickButton, QuickState, Scene } from '@shared/types';
 import { QUICK_COLORS, QUICK_ICONS } from '@shared/quickIcons';
-import { ArrowDown, ArrowUp, ClipboardList, Copy, FolderOpen, Grid3x3, Image as ImageIcon, Pause, Pencil, Pin, PinOff, Play, Plus, Radio, Smartphone, Trash2, Disc3 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ClipboardList, Clapperboard, Copy, FolderOpen, Grid3x3, Image as ImageIcon, Pause, Pencil, Pin, PinOff, Play, Plus, Radio, Smartphone, Trash2, Disc3 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -17,13 +17,13 @@ import { useEvent } from '../../lib/hooks';
 import { navigate, useRoute } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
-import { ACTION_KINDS, ButtonFace, ChordInput, MEDIA_LABEL, OBS_LABEL, ago, blankAction, describe } from './shared';
+import { ACTION_KINDS, ButtonFace, ChordInput, FAN_LABEL, MEDIA_LABEL, OBS_LABEL, STEP_KINDS, ago, blankAction, describe } from './shared';
 
-type Tab = 'deck' | 'wheel' | 'clipboard';
+type Tab = 'deck' | 'scenes' | 'wheel' | 'clipboard';
 
 // ---------- the button editor (deck and wheel) ----------
 
-function ActionFields({ action, onChange, games, counters }: { action: QuickAction; onChange: (a: QuickAction) => void; games: LibraryGame[]; counters: Counter[] }) {
+function ActionFields({ action, onChange, games, counters, extra }: { action: QuickAction; onChange: (a: QuickAction) => void; games: LibraryGame[]; counters: Counter[]; extra?: Extra }) {
   switch (action.kind) {
     case 'open':
       return (
@@ -102,9 +102,104 @@ function ActionFields({ action, onChange, games, counters }: { action: QuickActi
     }
     case 'obs':
       return <ObsFields action={action} onChange={onChange} />;
+    case 'scene':
+      return (
+        <Field label="Scene">
+          <Select value={action.id} onChange={(e) => onChange({ ...action, id: e.target.value })}>
+            <option value="">Pick a scene…</option>
+            {(extra?.scenes ?? []).map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      );
+    case 'lights':
+      return (
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Lights">
+            <Select value={action.on ? 'on' : 'off'} onChange={(e) => onChange({ ...action, on: e.target.value === 'on' })}>
+              <option value="on">On</option>
+              <option value="off">Off</option>
+            </Select>
+          </Field>
+          <Field label="Preset">
+            <Select value={action.preset ?? ''} disabled={!action.on} onChange={(e) => onChange({ ...action, preset: e.target.value || null })}>
+              <option value="">Keep the colours</option>
+              {(extra?.presets ?? []).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Brightness">
+            <Select value={String(action.brightness ?? '')} disabled={!action.on} onChange={(e) => onChange({ ...action, brightness: e.target.value ? Number(e.target.value) : null })}>
+              <option value="">Keep it</option>
+              {[10, 15, 25, 40, 50, 70, 85, 100].map((b) => (
+                <option key={b} value={b}>
+                  {b}%
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+      );
+    case 'fans':
+      return (
+        <Field label="Fan profile">
+          <Select value={action.profile} onChange={(e) => onChange({ ...action, profile: e.target.value as typeof action.profile })}>
+            {Object.entries(FAN_LABEL).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      );
+    case 'notifications':
+    case 'discord':
+      return (
+        <Field label={action.kind === 'discord' ? 'Discord status' : 'Windows notifications'}>
+          <Select value={action.on ? 'on' : 'off'} onChange={(e) => onChange({ ...action, on: e.target.value === 'on' })}>
+            <option value="on">On</option>
+            <option value="off">{action.kind === 'discord' ? 'Off' : 'Off (do not disturb)'}</option>
+          </Select>
+        </Field>
+      );
+    case 'sound':
+      return (
+        <Field label="Sound comes out of">
+          <Select value={action.output} onChange={(e) => onChange({ ...action, output: e.target.value })}>
+            <option value="">Pick a device…</option>
+            {(extra?.outputs ?? []).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      );
     default:
       return null;
   }
+}
+
+/** Lists the step editors need (scenes, light presets, sound devices). */
+interface Extra {
+  scenes: Scene[];
+  presets: GoveePreset[];
+  outputs: AudioOutput[];
+}
+
+function useExtra(open: boolean): Extra {
+  const [x, setX] = useState<Extra>({ scenes: [], presets: [], outputs: [] });
+  useEffect(() => {
+    if (!open) return;
+    void Promise.all([api.quick.state().then((s) => s.scenes, () => []), api.govee.presets().catch(() => []), api.audioOutputs().catch(() => [])]).then(([scenes, presets, outputs]) => setX({ scenes, presets, outputs }));
+  }, [open]);
+  return x;
 }
 
 function ObsFields({ action, onChange }: { action: Extract<QuickAction, { kind: 'obs' }>; onChange: (a: QuickAction) => void }) {
@@ -213,6 +308,7 @@ function ButtonEditor({ open, initial, onClose, onSave, forDeck }: { open: boole
   }, [open, initial]);
   const kinds = ACTION_KINDS.filter((k) => !(forDeck && k.value === 'clipboard'));
   const action = b.action ?? blankAction('media');
+  const extra = useExtra(open);
   return (
     <Modal
       open={open}
@@ -240,7 +336,7 @@ function ButtonEditor({ open, initial, onClose, onSave, forDeck }: { open: boole
             value={action.kind}
             onChange={(e) => {
               const kind = e.target.value as QuickAction['kind'];
-              const icon = { media: 'play', open: 'app-window', game: 'gamepad-2', keys: 'keyboard', text: 'message-square', mic: 'mic-off', counter: 'sparkles', screenshot: 'camera', lock: 'lock', clipboard: 'clipboard-list', obs: 'radio', quiet: 'moon', capriDesktop: 'bot' }[kind];
+              const icon = ({ media: 'play', open: 'app-window', game: 'gamepad-2', keys: 'keyboard', text: 'message-square', mic: 'mic-off', counter: 'sparkles', screenshot: 'camera', lock: 'lock', clipboard: 'clipboard-list', obs: 'radio', quiet: 'moon', capriDesktop: 'bot', scene: 'zap', lights: 'lightbulb', fans: 'fan', notifications: 'bell-off', discord: 'message-circle', sound: 'headphones' } as Record<string, string>)[kind];
               setB({ ...b, action: blankAction(kind), icon: b.icon === 'zap' || !initial ? icon : b.icon });
             }}
           >
@@ -251,7 +347,7 @@ function ButtonEditor({ open, initial, onClose, onSave, forDeck }: { open: boole
             ))}
           </Select>
         </Field>
-        <ActionFields action={action} onChange={(a) => setB({ ...b, action: a })} games={games} counters={counters} />
+        <ActionFields action={action} onChange={(a) => setB({ ...b, action: a })} games={games} counters={counters} extra={extra} />
         <Field label="Icon">
           <div className="flex flex-wrap gap-1">
             {Object.entries(QUICK_ICONS).map(([name, Icon]) => (
@@ -604,23 +700,197 @@ function ClipboardTab({ state, save }: { state: QuickState; save: (s: QuickState
 
 export function QuickPage() {
   const route = useRoute();
-  const tab = (['deck', 'wheel', 'clipboard'] as Tab[]).find((t) => t === route.params.get('tab')) ?? 'deck';
+  const tab = (['deck', 'scenes', 'wheel', 'clipboard'] as Tab[]).find((t) => t === route.params.get('tab')) ?? 'deck';
   const { state, save } = useQuick();
   return (
-    <Page title="Quick actions" subtitle="A macro deck for your PC and phone, a quick-launch wheel at your mouse, and clipboard history." actions={state && <Kbd>{tab === 'clipboard' ? state.clipHotkey : state.wheelHotkey}</Kbd>}>
+    <Page title="Quick actions" subtitle="A macro deck for your PC and phone, scenes that set everything in one tap, a quick-launch wheel at your mouse, and clipboard history." actions={state && <Kbd>{tab === 'clipboard' ? state.clipHotkey : state.wheelHotkey}</Kbd>}>
       <Tabs
         className="mb-5"
         value={tab}
         onChange={(t) => navigate('quick', t === 'deck' ? {} : { tab: t })}
         items={[
           { value: 'deck', label: 'Deck', icon: Grid3x3 },
+          { value: 'scenes', label: 'Scenes', icon: Clapperboard },
           { value: 'wheel', label: 'Wheel', icon: Disc3 },
           { value: 'clipboard', label: 'Clipboard', icon: ClipboardList },
         ]}
       />
-      {!state ? null : tab === 'deck' ? <DeckTab state={state} save={save} /> : tab === 'wheel' ? <WheelTab state={state} save={save} /> : <ClipboardTab state={state} save={save} />}
+      {!state ? null : tab === 'deck' ? <DeckTab state={state} save={save} /> : tab === 'scenes' ? <ScenesTab state={state} save={save} /> : tab === 'wheel' ? <WheelTab state={state} save={save} /> : <ClipboardTab state={state} save={save} />}
     </Page>
   );
 }
 
 
+
+// ---------- scenes ----------
+
+function SceneEditor({ open, initial, onClose, onSave }: { open: boolean; initial: Scene | null; onClose: () => void; onSave: (s: Scene) => void }) {
+  const blank: Scene = { id: '', name: '', icon: 'zap', color: QUICK_COLORS[0], steps: [blankAction('lights')] };
+  const [sc, setSc] = useState<Scene>(blank);
+  const [games, setGames] = useState<LibraryGame[]>([]);
+  const [counters, setCounters] = useState<Counter[]>([]);
+  const extra = useExtra(open);
+  useEffect(() => {
+    if (!open) return;
+    setSc(initial ?? blank);
+    void api.library.games().then(setGames, () => setGames([]));
+    void api.counters.state().then((s) => setCounters(s.counters), () => setCounters([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial]);
+  const setStep = (i: number, a: QuickAction) => setSc({ ...sc, steps: sc.steps.map((x, k) => (k === i ? a : x)) });
+  const move = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= sc.steps.length) return;
+    const steps = [...sc.steps];
+    [steps[i], steps[j]] = [steps[j], steps[i]];
+    setSc({ ...sc, steps });
+  };
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={initial ? 'Edit scene' : 'New scene'}
+      description="Steps run one after another when you tap the scene, here, on the deck or on your phone."
+      size="lg"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button disabled={!sc.name.trim() || sc.steps.length === 0} onClick={() => onSave({ ...sc, name: sc.name.trim() })}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex items-start gap-3">
+          <ButtonFace button={{ icon: sc.icon, color: sc.color, label: sc.name }} size="lg" />
+          <Field label="Name" className="flex-1">
+            <TextInput value={sc.name} maxLength={30} onChange={(e) => setSc({ ...sc, name: e.target.value })} placeholder="Gaming" autoFocus />
+          </Field>
+        </div>
+        <div className="space-y-3">
+          {sc.steps.map((st, i) => (
+            <div key={i} className="rounded-xl border border-line bg-surface-2/40 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-3 text-[11.5px] font-semibold text-dim">{i + 1}</span>
+                <Select value={st.kind} onChange={(e) => setStep(i, blankAction(e.target.value as QuickAction['kind']))} className="h-8 flex-1 py-0 text-[13px]" aria-label={`Step ${i + 1}`}>
+                  {STEP_KINDS.map((k) => (
+                    <option key={k.value} value={k.value}>
+                      {k.label}
+                    </option>
+                  ))}
+                </Select>
+                <IconButton size="sm" icon={ArrowUp} label="Earlier" disabled={i === 0} onClick={() => move(i, -1)} />
+                <IconButton size="sm" icon={ArrowDown} label="Later" disabled={i === sc.steps.length - 1} onClick={() => move(i, 1)} />
+                <IconButton size="sm" icon={Trash2} label="Remove step" onClick={() => setSc({ ...sc, steps: sc.steps.filter((_, k) => k !== i) })} />
+              </div>
+              <ActionFields action={st} onChange={(a) => setStep(i, a)} games={games} counters={counters} extra={extra} />
+            </div>
+          ))}
+          <Button size="sm" variant="ghost" icon={Plus} disabled={sc.steps.length >= 20} onClick={() => setSc({ ...sc, steps: [...sc.steps, blankAction('fans')] })}>
+            Add a step
+          </Button>
+        </div>
+        <Field label="Icon">
+          <div className="flex flex-wrap gap-1">
+            {Object.entries(QUICK_ICONS).map(([name, Icon]) => (
+              <button key={name} type="button" aria-label={name} aria-pressed={sc.icon === name} onClick={() => setSc({ ...sc, icon: name })} className={cx('grid h-8 w-8 place-items-center rounded-lg border transition-colors', sc.icon === name ? 'border-accent bg-accent-soft text-accent' : 'border-transparent text-dim hover:bg-surface-2 hover:text-fg')}>
+                <Icon size={15} />
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="Colour">
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_COLORS.map((c) => (
+              <button key={c} type="button" aria-label={`Colour ${c}`} aria-pressed={sc.color === c} onClick={() => setSc({ ...sc, color: c })} className={cx('h-7 w-7 rounded-full border-2 transition-transform hover:scale-110', sc.color === c ? 'border-fg' : 'border-transparent')} style={{ background: c }} />
+            ))}
+          </div>
+        </Field>
+      </div>
+    </Modal>
+  );
+}
+
+function ScenesTab({ state, save }: { state: QuickState; save: (s: QuickState) => Promise<boolean> }) {
+  const [editing, setEditing] = useState<Scene | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const run = async (sc: Scene) => {
+    setBusy(sc.id);
+    try {
+      toast.success(await api.quick.run({ kind: 'scene', id: sc.id }));
+    } catch (e) {
+      toast.error('Not everything worked', errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const store = async (sc: Scene) => {
+    const scenes = sc.id ? state.scenes.map((x) => (x.id === sc.id ? sc : x)) : [...state.scenes, sc];
+    if (await save({ ...state, scenes })) setOpen(false);
+  };
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[13px] text-dim">One tap sets everything: lights, fans, notifications, Discord, where the sound comes out, a game, keys. Tap them here, on the deck (add a “Run a scene” button) or on your phone’s Deck page.</p>
+        <Button
+          icon={Plus}
+          disabled={state.scenes.length >= 24}
+          onClick={() => {
+            setEditing(null);
+            setOpen(true);
+          }}
+        >
+          New scene
+        </Button>
+      </div>
+      {state.scenes.length === 0 ? (
+        <EmptyState icon={Clapperboard} title="No scenes yet" description="Make one for gaming, a movie or bedtime." />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {state.scenes.map((sc) => (
+            <Card key={sc.id} className="flex flex-col gap-3 p-4">
+              <div className="flex items-center gap-3">
+                <ButtonFace button={{ icon: sc.icon, color: sc.color, label: sc.name }} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[14.5px] font-semibold text-fg">{sc.name}</div>
+                  <div className="text-[12px] text-faint">{sc.steps.length} {sc.steps.length === 1 ? 'step' : 'steps'}</div>
+                </div>
+                <IconButton
+                  icon={Pencil}
+                  label="Edit"
+                  onClick={() => {
+                    setEditing(sc);
+                    setOpen(true);
+                  }}
+                />
+                <IconButton
+                  icon={Trash2}
+                  label="Delete"
+                  onClick={() =>
+                    void confirm({ title: `Delete “${sc.name}”?`, confirmLabel: 'Delete', tone: 'danger' }).then((ok) => ok && save({ ...state, scenes: state.scenes.filter((x) => x.id !== sc.id) }))
+                  }
+                />
+              </div>
+              <ul className="space-y-0.5 text-[12.5px] text-dim">
+                {sc.steps.slice(0, 5).map((st, i) => (
+                  <li key={i} className="truncate">
+                    · {describe(st)}
+                  </li>
+                ))}
+                {sc.steps.length > 5 && <li className="text-faint">and {sc.steps.length - 5} more</li>}
+              </ul>
+              <Button variant="primary" icon={Play} loading={busy === sc.id} onClick={() => void run(sc)} className="mt-auto">
+                Run
+              </Button>
+            </Card>
+          ))}
+        </div>
+      )}
+      <SceneEditor open={open} initial={editing} onClose={() => setOpen(false)} onSave={(sc) => void store(sc)} />
+    </div>
+  );
+}

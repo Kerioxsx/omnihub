@@ -8,6 +8,12 @@ const now = () => Date.now();
 const b = (id: string, label: string, icon: string, color: string, action: QuickAction): QuickButton => ({ id, label, icon, color, action });
 
 let state: QuickState = {
+  scenes: [
+    { id: 'gaming', name: 'Gaming', icon: 'gamepad-2', color: '#f87171', steps: [{ kind: 'fans', profile: 'fast' }, { kind: 'notifications', on: false }, { kind: 'discord', on: true }, { kind: 'lights', on: true, preset: null, brightness: 100 }] },
+    { id: 'movie', name: 'Movie', icon: 'film', color: '#a78bfa', steps: [{ kind: 'lights', on: true, preset: null, brightness: 15 }, { kind: 'fans', profile: 'silent' }, { kind: 'notifications', on: false }] },
+    { id: 'sleep', name: 'Sleep', icon: 'moon', color: '#60a5fa', steps: [{ kind: 'lights', on: false, preset: null, brightness: null }, { kind: 'fans', profile: 'lowest' }, { kind: 'notifications', on: false }] },
+    { id: 'normal', name: 'Back to normal', icon: 'sun', color: '#fbbf24', steps: [{ kind: 'fans', profile: 'auto' }, { kind: 'notifications', on: true }, { kind: 'lights', on: true, preset: null, brightness: 70 }] },
+  ],
   clipOn: true,
   clipHotkey: 'Alt+Shift+V',
   clipIgnore: ['keepass.exe', 'keepassxc.exe', '1password.exe', 'bitwarden.exe'],
@@ -87,6 +93,18 @@ export const quick = {
         return 'Locked';
       case 'quiet':
         return 'Screens off, fans at their lowest';
+      case 'scene':
+        return `${state.scenes.find((x) => x.id === a.id)?.name ?? 'Scene'} is on`;
+      case 'lights':
+        return a.on ? 'Lights on' : 'Lights off';
+      case 'fans':
+        return `Fans: ${a.profile}`;
+      case 'notifications':
+        return a.on ? 'Notifications on' : 'Notifications off';
+      case 'discord':
+        return a.on ? 'Discord status on' : 'Discord status off';
+      case 'sound':
+        return 'Sound output changed';
       case 'capriDesktop':
         return 'Capri is open';
       case 'obs':

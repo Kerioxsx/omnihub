@@ -1,6 +1,7 @@
 //! The games installed on this PC, read from the launchers' own records:
 //! Epic Games (install manifests), Steam (library folders and app
-//! manifests), Riot (product settings), Roblox and Minecraft (Java). Each
+//! manifests), Riot (product settings), Roblox and Minecraft (Java), and
+//! GOG, Ubisoft, EA, Battle.net and Xbox / Game Pass (see stores.rs). Each
 //! comes with what a profile needs: how to start it and which program to
 //! follow.
 
@@ -16,7 +17,7 @@ pub struct InstalledGame {
     /// Stable id: "<source>:<launcher's id>".
     pub key: String,
     pub name: String,
-    /// epic, steam, riot, roblox, minecraft
+    /// epic, steam, riot, roblox, minecraft, gog, ubisoft, ea, battlenet, xbox
     pub source: String,
     pub kind: GameKind,
     pub launch: Launch,
@@ -35,6 +36,8 @@ pub struct Roots {
     pub steam: Option<PathBuf>,
     pub riot_metadata: Option<PathBuf>,
     pub minecraft: Option<PathBuf>,
+    /// Also GOG, Ubisoft, EA, Battle.net and Xbox (the real PC only).
+    pub other_stores: bool,
 }
 
 impl Roots {
@@ -45,6 +48,7 @@ impl Roots {
             steam: steam_root(),
             riot_metadata: program_data.as_ref().map(|p| p.join(r"Riot Games\Metadata")),
             minecraft: dirs::config_dir().map(|d| d.join(".minecraft")),
+            other_stores: true,
         }
     }
 }
@@ -277,6 +281,9 @@ pub fn scan(roots: &Roots, roblox_player: Option<String>) -> Vec<InstalledGame> 
     if let Some(d) = &roots.minecraft {
         out.extend(minecraft(d));
     }
+    if roots.other_stores {
+        out.extend(super::stores::scan());
+    }
     if let Some(p) = roblox_player {
         out.push(InstalledGame { key: "roblox:player".into(), name: "Roblox".into(), source: "roblox".into(), kind: GameKind::Roblox, launch: Launch::Roblox { place_id: None }, process: super::roblox::PLAYER_EXE.into(), exe_path: Some(p), install_dir: None, profile_id: None });
     }
@@ -307,7 +314,7 @@ mod tests {
         write(&steam.join("steamapps").join("libraryfolders.vdf"), &format!("\"libraryfolders\" {{ \"0\" {{ \"path\" \"{}\" }} }}", other.display().to_string().replace('\\', "\\\\")));
         write(&steam.join("steamapps").join("appmanifest_1.acf"), "\"AppState\" { \"appid\" \"1\" \"name\" \"Road 96\" \"installdir\" \"Road\" }");
         std::fs::create_dir_all(steam.join("steamapps").join("common").join("Road")).unwrap();
-        let games = scan(&Roots { epic_manifests: None, steam: Some(steam), riot_metadata: None, minecraft: None }, None);
+        let games = scan(&Roots { epic_manifests: None, steam: Some(steam), riot_metadata: None, minecraft: None, other_stores: false }, None);
         assert_eq!(games.iter().filter(|g| g.name == "Road 96").count(), 1, "{games:?}");
     }
 
@@ -343,7 +350,7 @@ mod tests {
         let mc = root.join(".minecraft");
         write(&mc.join("options.txt"), "maxFps:120\n");
 
-        let games = scan(&Roots { epic_manifests: Some(epic), steam: Some(steam), riot_metadata: Some(riot), minecraft: Some(mc) }, Some("C:/Roblox/RobloxPlayerBeta.exe".into()));
+        let games = scan(&Roots { epic_manifests: Some(epic), steam: Some(steam), riot_metadata: Some(riot), minecraft: Some(mc), other_stores: false }, Some("C:/Roblox/RobloxPlayerBeta.exe".into()));
         let names: Vec<&str> = games.iter().map(|g| g.name.as_str()).collect();
         assert_eq!(names, vec!["Counter-Strike 2", "Fortnite", "Indie \"Quoted\" Game", "Minecraft", "Roblox", "Skate Park", "VALORANT"]);
         let f = games.iter().find(|g| g.kind == GameKind::Fortnite).unwrap();

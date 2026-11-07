@@ -1475,7 +1475,7 @@ export interface GameConfigs {
 export interface InstalledGame {
   key: string;
   name: string;
-  source: 'epic' | 'steam' | 'riot' | 'roblox' | 'minecraft';
+  source: 'epic' | 'steam' | 'riot' | 'roblox' | 'minecraft' | 'gog' | 'ubisoft' | 'ea' | 'battlenet' | 'xbox';
   kind: GameKind;
   launch: GameLaunch;
   process: string;
@@ -3553,7 +3553,22 @@ export type QuickAction =
   | { kind: 'clipboard' }
   | { kind: 'obs'; what: 'scene' | 'stream' | 'record' | 'replay' | 'mute'; target?: string | null }
   | { kind: 'quiet' }
-  | { kind: 'capriDesktop' };
+  | { kind: 'capriDesktop' }
+  | { kind: 'scene'; id: string }
+  | { kind: 'lights'; on: boolean; preset?: string | null; brightness?: number | null }
+  | { kind: 'fans'; profile: 'lowest' | 'silent' | 'auto' | 'fast' }
+  | { kind: 'notifications'; on: boolean }
+  | { kind: 'discord'; on: boolean }
+  | { kind: 'sound'; output: string };
+
+/** One tap, several things: lights, fans, notifications, Discord, sound… */
+export interface Scene {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  steps: QuickAction[];
+}
 
 export interface QuickButton {
   id: string;
@@ -3565,6 +3580,7 @@ export interface QuickButton {
 }
 
 export interface QuickState {
+  scenes: Scene[];
   clipOn: boolean;
   clipHotkey: string;
   clipIgnore: string[];

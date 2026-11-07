@@ -22,6 +22,7 @@ pub mod steam;
 pub mod roblox;
 pub mod shelf;
 pub mod storeart;
+pub mod stores;
 pub mod tweaks;
 
 use std::path::{Path, PathBuf};
@@ -299,6 +300,10 @@ fn needed_by(launch: &Launch) -> &'static [&'static str] {
 }
 
 fn url_allowed(url: &str) -> bool {
+    // An Xbox app by its package ("shell:AppsFolder\\<family>!<app>"), nothing else of the shell's.
+    if let Some(app) = url.strip_prefix("shell:AppsFolder\\") {
+        return app.split_once('!').is_some_and(|(f, a)| !f.is_empty() && !a.is_empty() && f.chars().chain(a.chars()).all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-')));
+    }
     ["steam://", "com.epicgames.launcher://", "roblox://", "roblox-player:", "https://", "http://", "battlenet://", "uplay://", "origin2://", "minecraft://"].iter().any(|p| url.starts_with(p)) && !url.chars().any(|c| c.is_whitespace() || c == '"')
 }
 

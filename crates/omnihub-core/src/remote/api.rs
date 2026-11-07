@@ -96,6 +96,7 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/counters/{id}/timer", post(counters_timer))
         .route("/api/deck", get(deck_list))
         .route("/api/deck/{id}", post(deck_run))
+        .route("/api/scenes/{id}", post(scene_run))
         .route("/api/games", get(games_list))
         .route("/api/games/stop", post(games_stop))
         .route("/api/games/ping", post(games_ping))
@@ -1328,7 +1329,17 @@ async fn deck_list(State(core): State<Ctx>) -> Json<serde_json::Value> {
     let s = core.quick.state();
     // The phone gets names, icons and colours, not what the buttons type or open.
     let buttons: Vec<_> = s.deck.iter().map(|b| json!({ "id": b.id, "label": b.label, "icon": b.icon, "color": b.color })).collect();
-    Json(json!({ "columns": s.deck_columns, "buttons": buttons }))
+    let scenes: Vec<_> = s.scenes.iter().map(|b| json!({ "id": b.id, "label": b.name, "icon": b.icon, "color": b.color })).collect();
+    Json(json!({ "columns": s.deck_columns, "buttons": buttons, "scenes": scenes }))
+}
+
+async fn scene_run(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<serde_json::Value>> {
+    let sc = core.quick.state().scenes.into_iter().find(|b| b.id == id).ok_or_else(|| ApiError::bad("That scene is gone: pull to refresh"))?;
+    let c = core.clone();
+    let action = crate::quick::QuickAction::Scene { id: sc.id.clone() };
+    let r = tokio::task::spawn_blocking(move || c.run_quick(&action)).await?;
+    core.audit.record(&actor(&dev), "scene.run", &sc.name, r.is_ok());
+    Ok(Json(json!({ "said": r.map_err(ApiError::bad)? })))
 }
 
 async fn deck_run(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<serde_json::Value>> {

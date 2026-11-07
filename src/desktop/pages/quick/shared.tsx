@@ -21,7 +21,18 @@ export const ACTION_KINDS: { value: QuickAction['kind']; label: string }[] = [
   { value: 'capriDesktop', label: 'Capri Desktop (open or close)' },
   { value: 'obs', label: 'OBS: scene, stream, recording, replay, mute' },
   { value: 'clipboard', label: 'Clipboard history (PC only)' },
+  { value: 'scene', label: 'Run a scene' },
+  { value: 'lights', label: 'Lights (Govee): on, off, preset, brightness' },
+  { value: 'fans', label: 'Fan profile' },
+  { value: 'notifications', label: 'Windows notifications on / off' },
+  { value: 'discord', label: 'Discord status on / off' },
+  { value: 'sound', label: 'Where the sound comes out' },
 ];
+
+/** What a scene's steps can be (not another scene or the clipboard). */
+export const STEP_KINDS = ACTION_KINDS.filter((k) => k.value !== 'scene' && k.value !== 'clipboard');
+
+export const FAN_LABEL: Record<string, string> = { lowest: 'Lowest (quiet mode)', silent: 'Silent', auto: 'Auto', fast: 'Fast' };
 
 export const OBS_LABEL: Record<string, string> = { scene: 'Switch to a scene', stream: 'Start / stop streaming', record: 'Start / stop recording', replay: 'Save the replay buffer', mute: 'Mute / unmute a source' };
 
@@ -43,6 +54,18 @@ export function blankAction(kind: QuickAction['kind']): QuickAction {
       return { kind, id: '', event: null };
     case 'obs':
       return { kind, what: 'stream', target: null };
+    case 'scene':
+      return { kind, id: '' };
+    case 'lights':
+      return { kind, on: true, preset: null, brightness: 80 };
+    case 'fans':
+      return { kind, profile: 'auto' };
+    case 'notifications':
+      return { kind, on: false };
+    case 'discord':
+      return { kind, on: true };
+    case 'sound':
+      return { kind, output: '' };
     default:
       return { kind } as QuickAction;
   }
@@ -78,6 +101,18 @@ export function describe(a: QuickAction | null): string {
       return 'Opens or closes Capri';
     case 'obs':
       return a.what === 'scene' ? `OBS scene: ${a.target ?? ''}` : a.what === 'mute' ? `OBS: mute ${a.target ?? ''}` : `OBS: ${OBS_LABEL[a.what]?.toLowerCase() ?? a.what}`;
+    case 'scene':
+      return 'Runs a scene';
+    case 'lights':
+      return a.on ? `Lights on${a.brightness ? ` at ${a.brightness}%` : ''}${a.preset ? ' with a preset' : ''}` : 'Lights off';
+    case 'fans':
+      return `Fans: ${FAN_LABEL[a.profile] ?? a.profile}`;
+    case 'notifications':
+      return a.on ? 'Notifications on' : 'Notifications off (do not disturb)';
+    case 'discord':
+      return a.on ? 'Discord status on' : 'Discord status off';
+    case 'sound':
+      return 'Changes where the sound comes out';
   }
 }
 

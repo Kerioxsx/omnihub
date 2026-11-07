@@ -11,6 +11,8 @@ import {
   Coffee,
   Crosshair,
   Flame,
+  Fan,
+  Film,
   Folder,
   Gamepad2,
   Globe,
@@ -35,6 +37,8 @@ import {
   SkipForward,
   Sparkles,
   Star,
+  Sun,
+  BellOff,
   Swords,
   Terminal,
   Timer,
@@ -90,6 +94,10 @@ export const QUICK_ICONS: Record<string, LucideIcon> = {
   lightbulb: Lightbulb,
   'message-circle': MessageCircle,
   'message-square': MessageSquare,
+  film: Film,
+  sun: Sun,
+  fan: Fan,
+  'bell-off': BellOff,
 };
 
 export const quickIcon = (name: string): LucideIcon => QUICK_ICONS[name] ?? Zap;
