@@ -823,3 +823,21 @@ has Capri speak through her local bridge (`companion::say`).
 - `translate.rs` (OCR + Ollama); the overlay window (`src-tauri/src/overlay.rs`)
   now has modes: region capture, colour picker and ruler
   (`pages/overlay/PickerOverlay.tsx`), translator (`TranslateOverlay.tsx`).
+
+## 0.33.0
+
+- Performance: `games/fps.rs` (display latency, present mode),
+  `games/nvidia.rs` (`smart_cap`, `set_cap`), `games/pc.rs`
+  (`VariableRefresh`), `games/thermal.rs` (heat log per session, sampled
+  from the fast watcher), `system/freeze.rs` (suspend/resume threads),
+  `pccheck.rs` (overlays, shader caches), `bench.rs`, Fortnite alerts in
+  `watchers.rs`. Boost steps for paused apps and core parking in
+  `games/mod.rs` (journalled like the others).
+- Emulators: `games/emuinstall.rs`, `games/bios.rs` (MD5), `games/romdat.rs`
+  (DAT parse, CRC32, rename), `games/emusaves.rs`, `games/padsetup.rs`,
+  per-game `RomOpts` and `Netplay` in `games/emulators.rs`,
+  `games/retroach.rs`, ROM entries (`rom:<id>`) in `games/deck.rs`,
+  `padremote.rs` + `/api/pad` for the phone controller.
+- `deals.rs` (CheapShark), `remote/peer.rs` (PC-to-PC client with a pinned
+  certificate and a small HTTP/1.1 client), weekly report in `watchers.rs`,
+  `home.rs` (Home Assistant, Shelly) with `QuickAction::Home`.

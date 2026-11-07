@@ -357,6 +357,53 @@ export interface DatReport {
   duplicates: string[][];
 }
 
+export interface DealGame {
+  id: string;
+  title: string;
+  thumb: string;
+  cheapest: number;
+}
+
+export interface Deal {
+  store: string;
+  price: number;
+  retail: number;
+  savings: number;
+  url: string;
+}
+
+export interface GameDeals {
+  title: string;
+  deals: Deal[];
+  /** [price, unix seconds] */
+  lowestEver: [number, number] | null;
+}
+
+/** Another PC with OmniHub, paired as a device. */
+export interface PeerPc {
+  id: string;
+  name: string;
+  url: string;
+  /** Its certificate's SHA-256 (empty for plain http). */
+  fingerprint: string;
+}
+
+/** A smart-home device: "ha:light.desk" or "shelly:192.168.1.40". */
+export interface HomeDevice {
+  id: string;
+  name: string;
+  kind: string;
+  /** on · off · "" (scenes and scripts) */
+  state: string;
+}
+
+export interface HomeStatus {
+  url: string;
+  connected: boolean;
+  /** [name, IP address] */
+  shelly: [string, string][];
+}
+
 export interface Translation {
   text: string;
   translated: string;
@@ -3692,7 +3739,8 @@ export type QuickAction =
   | { kind: 'hdr'; on: boolean }
   | { kind: 'pinWindow' }
   | { kind: 'music'; query: string }
-  | { kind: 'playSound'; id: string };
+  | { kind: 'playSound'; id: string }
+  | { kind: 'home'; device: string; action: 'on' | 'off' | 'toggle' };
 
 /** One tap, several things: lights, fans, notifications, Discord, sound… */
 export interface Scene {
@@ -4031,6 +4079,8 @@ export interface WatchStore {
   patchAlerts: boolean;
   /** Fortnite updates and server downtime. */
   fortniteAlerts: boolean;
+  /** A summary of the week every Sunday evening. */
+  weeklyOn: boolean;
   patchSeen: Record<string, string>;
   streamers: Streamer[];
   /** "21:00", or "" for off. */

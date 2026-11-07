@@ -181,6 +181,9 @@ export function App() {
         case 'watch:live':
           toast.info(`${payload?.handle ?? 'A creator'} is live`, payload?.title || (payload?.platform === 'youtube' ? 'On YouTube' : 'On Twitch'), payload?.url ? { label: 'Watch', run: () => window.open(payload.url, '_blank', 'noopener') } : undefined);
           break;
+        case 'watch:weekly':
+          toast.info(payload?.title ?? 'Your week on the PC', payload?.body ?? '');
+          break;
         case 'watch:recap':
           toast.info(payload?.title ?? 'Your day on the PC', payload?.body ?? '');
           break;

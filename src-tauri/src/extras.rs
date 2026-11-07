@@ -596,6 +596,22 @@ pub async fn watch_recap_now(core: Core<'_>) -> Res<serde_json::Value> {
     .await
 }
 
+#[tauri::command]
+pub async fn watch_weekly_set(core: Core<'_>, on: bool) -> Res<WatchStore> {
+    Ok(core.watchers.set_weekly(on))
+}
+
+/// The weekly report now (to preview it).
+#[tauri::command]
+pub async fn watch_weekly_now(core: Core<'_>) -> Res<serde_json::Value> {
+    let c = core.inner().clone();
+    blocking(move || {
+        let (title, body) = c.weekly_report();
+        Ok(serde_json::json!({ "title": title, "body": body }))
+    })
+    .await
+}
+
 // ---------- 0.31: similar photos ----------
 
 static SIMILAR_STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -777,6 +793,93 @@ pub async fn bench_run(core: Core<'_>) -> Res<Vec<omnihub_core::bench::BenchResu
     .await;
     RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
     r
+}
+
+#[tauri::command]
+pub async fn deals_search(title: String) -> Res<Vec<omnihub_core::deals::DealGame>> {
+    blocking(move || omnihub_core::deals::search(&title)).await
+}
+
+#[tauri::command]
+pub async fn deals_game(id: String) -> Res<omnihub_core::deals::GameDeals> {
+    blocking(move || omnihub_core::deals::game(&id)).await
+}
+
+#[tauri::command]
+pub async fn peers_list(core: Core<'_>) -> Res<Vec<omnihub_core::remote::peer::PeerPc>> {
+    Ok(core.peers.list())
+}
+
+/// Pair with another PC's OmniHub (the PIN from "Pair a phone" there).
+#[tauri::command]
+pub async fn peers_pair(core: Core<'_>, url: String, pin: String) -> Res<omnihub_core::remote::peer::PeerPc> {
+    let c = core.inner().clone();
+    let name = c.settings.get().remote.device_name;
+    let r = blocking(move || c.peers.pair(&url, &pin, &name)).await;
+    core.audit.record("desktop", "peers.pair", r.as_ref().map(|p| p.name.as_str()).unwrap_or(""), r.is_ok());
+    r
+}
+
+#[tauri::command]
+pub async fn peers_forget(core: Core<'_>, id: String) -> Res<Vec<omnihub_core::remote::peer::PeerPc>> {
+    core.peers.forget(&id)
+}
+
+/// The other PC's status (processor, memory, disks, uptime).
+#[tauri::command]
+pub async fn peers_status(core: Core<'_>, id: String) -> Res<serde_json::Value> {
+    let c = core.inner().clone();
+    blocking(move || c.peers.call(&id, "GET", "/api/status", None)).await
+}
+
+/// "lock", "sleep", "restart", "shutdown", "displayOff"; or music: "toggle", "next", "previous".
+#[tauri::command]
+pub async fn peers_action(core: Core<'_>, id: String, action: String) -> Res<()> {
+    let power = ["lock", "sleep", "restart", "shutdown", "displayOff"];
+    let media = ["toggle", "next", "previous"];
+    let c = core.inner().clone();
+    let a = action.clone();
+    let r = blocking(move || {
+        if power.contains(&a.as_str()) {
+            c.peers.call(&id, "POST", "/api/power", Some(serde_json::json!({ "action": a, "confirm": true }))).map(|_| ())
+        } else if media.contains(&a.as_str()) {
+            c.peers.call(&id, "POST", "/api/media/control", Some(serde_json::json!({ "action": a, "positionMs": 0 }))).map(|_| ())
+        } else {
+            Err("Unknown action".into())
+        }
+    })
+    .await;
+    core.audit.record("desktop", "peers.action", &action, r.is_ok());
+    r
+}
+
+#[tauri::command]
+pub async fn home_status(core: Core<'_>) -> Res<omnihub_core::home::HomeStatus> {
+    Ok(core.home.status())
+}
+
+/// Connect Home Assistant (an empty token disconnects); the token is kept encrypted.
+#[tauri::command]
+pub async fn home_connect(core: Core<'_>, url: String, token: String) -> Res<omnihub_core::home::HomeStatus> {
+    let c = core.inner().clone();
+    blocking(move || c.home.connect(&url, &token)).await
+}
+
+#[tauri::command]
+pub async fn home_set_shelly(core: Core<'_>, plugs: Vec<(String, String)>) -> Res<omnihub_core::home::HomeStatus> {
+    core.home.set_shelly(plugs)
+}
+
+#[tauri::command]
+pub async fn home_devices(core: Core<'_>) -> Res<Vec<omnihub_core::home::HomeDevice>> {
+    let c = core.inner().clone();
+    blocking(move || c.home.devices()).await
+}
+
+#[tauri::command]
+pub async fn home_run(core: Core<'_>, device: String, action: String) -> Res<String> {
+    let c = core.inner().clone();
+    blocking(move || c.home.run(&device, &action)).await
 }
 
 /// Empty Windows' standby memory list (administrator prompt).

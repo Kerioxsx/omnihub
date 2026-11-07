@@ -33,6 +33,7 @@ export const ACTION_KINDS: { value: QuickAction['kind']; label: string }[] = [
   { value: 'pinWindow', label: 'Pin the window in front on top (or unpin)' },
   { value: 'music', label: 'Play music (a song, album or playlist)' },
   { value: 'playSound', label: 'Play a soundboard sound' },
+  { value: 'home', label: 'Smart home device (Home Assistant, Shelly)' },
 ];
 
 /** What a scene's steps can be (not another scene or the clipboard). */
@@ -82,6 +83,8 @@ export function blankAction(kind: QuickAction['kind']): QuickAction {
       return { kind, query: '' };
     case 'playSound':
       return { kind, id: '' };
+    case 'home':
+      return { kind, device: '', action: 'toggle' };
     default:
       return { kind } as QuickAction;
   }
@@ -141,6 +144,8 @@ export function describe(a: QuickAction | null): string {
       return `Plays ${a.query || 'music'}`;
     case 'playSound':
       return 'Plays a sound';
+    case 'home':
+      return `Smart home: ${a.action === 'toggle' ? 'toggles' : `turns ${a.action}`} a device`;
   }
 }
 

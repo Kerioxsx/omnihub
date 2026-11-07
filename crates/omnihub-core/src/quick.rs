@@ -86,6 +86,8 @@ pub enum QuickAction {
     Music { query: String },
     /// Play a soundboard sound (its id).
     PlaySound { id: String },
+    /// Switch a smart-home device ("ha:light.desk", "shelly:192.168.1.40"): on, off or toggle.
+    Home { device: String, action: String },
 }
 
 /// A scene: one tap does several things (lights, fans, notifications…).
@@ -140,6 +142,7 @@ impl QuickAction {
             QuickAction::Sound { output } if output.is_empty() => Err("Pick where the sound comes out".into()),
             QuickAction::Input { input } if input.is_empty() => Err("Pick a microphone".into()),
             QuickAction::Music { query } if query.trim().is_empty() || query.len() > 200 => Err("Type a song, album or playlist".into()),
+            QuickAction::Home { device, action } if device.is_empty() || !["on", "off", "toggle"].contains(&action.as_str()) => Err("Pick a device and on, off or toggle".into()),
             QuickAction::Screen { width, height, hz } if *width < 640 || *height < 480 || *hz == 0 => Err("Pick a screen mode".into()),
             _ => Ok(()),
         }
@@ -812,6 +815,7 @@ impl crate::core::AppCore {
                 self.play_sound(&s);
                 Ok(format!("Playing {}", s.name))
             }
+            QuickAction::Home { device, action } => self.home.run(device, action),
             QuickAction::PinWindow => {
                 let (title, on) = crate::system::winpin::toggle_front()?;
                 Ok(format!("{} {}", if on { "Pinned" } else { "Unpinned" }, if title.is_empty() { "the window".to_string() } else { title.chars().take(40).collect() }))

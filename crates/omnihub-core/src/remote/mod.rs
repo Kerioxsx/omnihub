@@ -14,6 +14,7 @@ pub mod board;
 pub mod guest;
 pub mod limits;
 pub mod net;
+pub mod peer;
 pub mod transfer;
 
 use std::collections::HashMap;

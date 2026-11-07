@@ -32,6 +32,12 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.33.0
+
+- **Performance**: latency to the screen, a smart frame cap (NVIDIA), VRR for windowed games, paused background apps and core parking off while playing, standby memory, a heat report after each game, overlay and shader-cache checks, a repeatable benchmark, a mouse polling-rate test, stretched resolution per game, and Fortnite update and downtime alerts.
+- **Emulators**: install and update from official GitHub releases (checksums checked), a BIOS checker (your own files), a DAT-based ROM organizer, saves and memory-card backup, controller setup, per-game fullscreen/shaders/options, cheats, RetroArch netplay, RetroAchievements, ROMs in the Library, and the phone as a controller.
+- **More**: hide a whole folder in the vault, game deals across stores, control a second PC, a weekly report, and smart home (Home Assistant, Shelly) from scenes and the deck.
+
 ## New in 0.32.0
 
 - **Timers, alarms and a bedtime lock** that ring on the PC and the phone, and **shut down or sleep when downloads finish**.

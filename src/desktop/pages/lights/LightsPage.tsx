@@ -3,7 +3,7 @@
 // a light's own scene), presets, each light's own settings, timers, setup.
 
 import type { GoveePreset } from '@shared/types';
-import { AlarmClock, Lightbulb, Moon, Plus, Power, Settings2, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { AlarmClock, Home, Lightbulb, Moon, Plus, Power, Settings2, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -19,11 +19,12 @@ import { LightCard } from './LightCard';
 import { LiveStrip } from './LiveStrip';
 import { LookEditor } from './LookEditor';
 import { SetupTab } from './SetupTab';
+import { SmartHomeTab } from './SmartHomeTab';
 import { TimersTab } from './TimersTab';
 import { useGovee } from './useGovee';
 
-type Tab = 'show' | 'lights' | 'timers' | 'setup';
-const TABS: Tab[] = ['show', 'lights', 'timers', 'setup'];
+type Tab = 'show' | 'lights' | 'timers' | 'home' | 'setup';
+const TABS: Tab[] = ['show', 'lights', 'timers', 'home', 'setup'];
 
 function PresetChip({ p, active, onApply, onDelete }: { p: GoveePreset; active: boolean; onApply: () => void; onDelete?: () => void }) {
   const swatch = p.look.mode === 'color' ? [p.look.color] : p.look.mode === 'white' ? ['#fff1dc'] : p.look.mode === 'screen' ? ['#1d4ed8', '#7c3aed', '#f97316'] : p.look.mode === 'music' ? ['#ff2bd6', '#7c3aed', '#00d4ff'] : p.look.colors.length ? p.look.colors : ['#ff0000', '#00ff00', '#0000ff'];
@@ -125,6 +126,7 @@ export function LightsPage() {
             { value: 'show', label: 'What they show', icon: Sparkles },
             { value: 'lights', label: `Lights${lights.length ? ` (${lights.length})` : ''}`, icon: Lightbulb },
             { value: 'timers', label: 'Timers', icon: AlarmClock },
+            { value: 'home', label: 'Smart home', icon: Home },
             { value: 'setup', label: 'Setup', icon: Settings2 },
           ]}
         />
@@ -205,6 +207,7 @@ export function LightsPage() {
 
         {tab === 'timers' && <TimersTab govee={govee} />}
         {tab === 'setup' && <SetupTab govee={govee} />}
+        {tab === 'home' && <SmartHomeTab />}
       </div>
     </Page>
   );

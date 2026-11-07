@@ -1024,6 +1024,22 @@ pub async fn hidden_hide(core: Core<'_>, path: String, job: String) -> Res<omnih
     Ok(h)
 }
 
+/// Every file in a folder (for hiding a whole folder), at most 5000.
+#[tauri::command]
+pub async fn hidden_folder_files(path: String) -> Res<Vec<String>> {
+    blocking(move || omnihub_core::vault::hidden::folder_files(Path::new(&path))).await
+}
+
+/// After hiding a folder's files: remove the folders left empty.
+#[tauri::command]
+pub async fn hidden_tidy_folder(path: String) -> Res<()> {
+    blocking(move || {
+        omnihub_core::vault::hidden::tidy_empty(Path::new(&path));
+        Ok(())
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn hidden_unhide(core: Core<'_>, id: String, folder: Option<String>, job: String) -> Res<String> {
     let to = hidden_job(core.inner(), job, String::new(), move |c, p, stop| c.vault.unhide(&id, folder.as_deref().map(Path::new), p, stop).map_err(err)).await?;

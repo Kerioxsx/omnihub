@@ -1133,3 +1133,34 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   deleted, and refuses a folder that is already a link.
 - **Bedtime** locks the PC (`LockWorkStation`); it never closes apps or
   shuts down.
+
+## 0.33.0
+
+- **Emulator installs** come only from each emulator's own GitHub releases
+  (the download URL must be under `github.com/<repo>/releases/download/`),
+  and the file's SHA-256 must equal the `digest` GitHub publishes; a file
+  without one is refused, a mismatch is deleted. Archives unpack through the
+  mods unpacker (no paths outside the target). BIOS files and games are
+  never downloaded; the BIOS checker only hashes files in a folder you pick.
+- **The ROM organizer** renames inside the same folder, never replaces a
+  file, and refuses names with path separators.
+- **RetroAchievements keys, Home Assistant tokens and the tokens other PCs
+  give** are encrypted with DPAPI for the Windows account. Errors from
+  RetroAchievements never repeat the request URL (it carries the key).
+- **Other PCs**: pairing uses the other PC's PIN; its TLS certificate's
+  SHA-256 is recorded then and every later connection must present the
+  same certificate. Actions are limited to status, power and music, and are
+  in the audit log on both PCs.
+- **Smart home** offers lights, switches, fans, scenes, scripts, input
+  booleans and media players only; door locks, alarms and covers (garage
+  doors) are left out. Shelly plugs must be private (LAN) IPv4 addresses.
+- **The phone controller** needs "let phones use the mouse and keyboard";
+  held keys are released when the phone says so, leaves the page or goes
+  quiet for four seconds.
+- **Pausing background apps** never touches Windows' own processes,
+  anti-cheat services, launchers, OmniHub or the game; they are resumed
+  when the game ends or after a crash. **Standby memory** is cleared by the
+  elevated helper (`standby`). The smart frame cap goes through the helper
+  as `nvcap:<fps>:<game>.exe` (30–1000 FPS, or 0 to remove).
+- **Game deals** read CheapShark's public API; **Fortnite alerts** read the
+  Epic launcher's local manifest and Epic's public status page.

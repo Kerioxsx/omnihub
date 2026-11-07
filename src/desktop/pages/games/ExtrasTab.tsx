@@ -14,6 +14,7 @@ import { cx } from '../../lib/cx';
 import { toast } from '../../state/toasts';
 import { AimTrainerCard } from './AimTrainer';
 import { MouseRateCard, StretchedCard } from './StretchedCard';
+import { DealsCard } from './DealsCard';
 import { CrosshairCard } from './CrosshairCard';
 import { GameAlertsCard, ReadyCard } from './GameAlertsCard';
 
@@ -346,6 +347,22 @@ function RecapCard({ w, setW }: { w: WatchStore; setW: (w: WatchStore) => void }
           </>
         )}
       </div>
+      <div className="mt-3 flex items-center gap-3 border-t border-line pt-3 text-[13px] text-fg">
+        Weekly report, Sunday evening <span className="text-faint">(games, frame rates, clips, internet, health)</span>
+        <Switch checked={w.weeklyOn} onChange={(v) => void api.watch.setWeekly(v).then(setW, (e: unknown) => toast.error('Couldn’t save', errorText(e)))} label="Weekly report" />
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() =>
+            void api.watch.weeklyNow().then(
+              (r) => toast.info(r.title, r.body),
+              (e: unknown) => toast.error('No report', errorText(e)),
+            )
+          }
+        >
+          Show this week’s
+        </Button>
+      </div>
     </Card>
   );
 }
@@ -375,6 +392,7 @@ export function ExtrasTab() {
       <AimTrainerCard />
       <MouseRateCard />
       <StretchedCard />
+      <DealsCard />
       <CrosshairCard />
       {content}
       <p className="flex items-center gap-1.5 px-1 text-[11.5px] text-faint">

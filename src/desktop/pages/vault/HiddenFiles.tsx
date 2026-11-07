@@ -84,6 +84,19 @@ export function HiddenFiles() {
   };
 
   const pick = async () => hideMany(await api.app.pickFiles('Choose files to hide'));
+  // A whole folder: each file hidden (and later put back) in its own place.
+  const pickFolder = async () => {
+    const dir = await api.app.pickFolder('Choose a folder to hide');
+    if (!dir) return;
+    try {
+      const files = await api.hidden.folderFiles(dir);
+      if (!files.length) return toast.info('That folder is empty');
+      await hideMany(files);
+      await api.hidden.tidyFolder(dir);
+    } catch (e) {
+      toast.error('Couldn’t hide that folder', errorText(e));
+    }
+  };
 
   useDropClaim({ title: 'Drop to hide in OmniHub', detail: 'Encrypted with your vault key and removed from where it is now.', icon: EyeOff, onDrop: (paths) => void hideMany(paths) });
 
@@ -132,6 +145,9 @@ export function HiddenFiles() {
           <div className="truncate text-[12px] text-faint">Any file, any size — encrypted, and gone from its folder until you unhide it.</div>
         </div>
         {!!files?.length && <SearchInput value={q} onChange={setQ} placeholder="Search hidden files" className="w-56" aria-label="Search hidden files" />}
+        <Button variant="ghost" onClick={() => void pickFolder()}>
+          Hide a folder…
+        </Button>
         <Button variant="primary" icon={FolderInput} onClick={() => void pick()}>
           Hide files…
         </Button>

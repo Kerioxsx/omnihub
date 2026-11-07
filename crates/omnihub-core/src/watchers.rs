@@ -162,6 +162,10 @@ pub struct WatchStore {
     pub fortnite_version: String,
     /// Epic's status page said Fortnite was down when last looked.
     pub fortnite_down: bool,
+    /// A summary of the week every Sunday evening.
+    pub weekly_on: bool,
+    /// The week it was last sent ("2026-W45").
+    pub weekly_week: String,
 }
 
 /// Epic's public status page (Statuspage's summary).
@@ -470,6 +474,32 @@ pub fn recap_text(games: &[(String, u64)], data_bytes: Option<u64>, health: Opti
     ("Your day on the PC".into(), lines.join(" "))
 }
 
+/// The week's summary: (title, body).
+pub fn weekly_text(games: &[(String, u64)], fps: &[(String, f32)], clips: usize, shots: usize, data_bytes: Option<u64>, health: Option<u8>) -> (String, String) {
+    let total: u64 = games.iter().map(|g| g.1).sum();
+    let mut lines = Vec::new();
+    if total > 0 {
+        let top: Vec<String> = games.iter().take(3).map(|(n, m)| format!("{n} {}", mins(*m))).collect();
+        lines.push(format!("Played {} this week: {}.", mins(total), top.join(", ")));
+    } else {
+        lines.push("No games this week.".into());
+    }
+    if !fps.is_empty() {
+        let f: Vec<String> = fps.iter().take(3).map(|(n, a)| format!("{n} {a:.0} FPS")).collect();
+        lines.push(format!("Average frames: {}.", f.join(", ")));
+    }
+    if clips + shots > 0 {
+        lines.push(format!("{clips} clip{} and {shots} screenshot{} saved.", if clips == 1 { "" } else { "s" }, if shots == 1 { "" } else { "s" }));
+    }
+    if let Some(b) = data_bytes.filter(|b| *b > 0) {
+        lines.push(format!("{:.1} GB of internet used.", b as f64 / 1e9));
+    }
+    if let Some(h) = health {
+        lines.push(format!("PC health {h}/100."));
+    }
+    ("Your week on the PC".into(), lines.join(" "))
+}
+
 fn mins(m: u64) -> String {
     if m >= 60 {
         format!("{} h {} min", m / 60, m % 60)
@@ -489,6 +519,24 @@ impl Watchers {
         Ok(self.put(s))
     }
 
+    pub fn set_weekly(&self, on: bool) -> WatchStore {
+        let mut s = self.get();
+        s.weekly_on = on;
+        self.put(s)
+    }
+
+    /// Whether the weekly report is due: Sunday from 19:00, once a week.
+    pub fn weekly_due(&self, week: &str, sunday: bool, minute: u32) -> bool {
+        let s = self.get();
+        if !s.weekly_on || !sunday || minute < 19 * 60 || s.weekly_week == week {
+            return false;
+        }
+        let mut s2 = s;
+        s2.weekly_week = week.to_string();
+        self.put(s2);
+        true
+    }
+
     /// Whether the recap is due now (once a day, at or after its time).
     pub fn recap_due(&self, today: &str, minute: u32) -> bool {
         let s = self.get();
@@ -504,6 +552,41 @@ impl Watchers {
 }
 
 impl crate::core::AppCore {
+    /// The last seven days: games, frame rates, clips and screenshots,
+    /// internet used, and the PC's health now.
+    pub fn weekly_report(&self) -> (String, String) {
+        let now = crate::db::now();
+        let start_ms = (now - 7 * 86_400) * 1000;
+        let mut by: Vec<(String, u64)> = Vec::new();
+        for s in self.shelf.sessions(None, 2000).into_iter().filter(|s| s.end >= start_ms) {
+            let m = ((s.end - s.start.max(start_ms)).max(0) / 60_000) as u64;
+            match by.iter_mut().find(|g| g.0 == s.name) {
+                Some(g) => g.1 += m,
+                None => by.push((s.name.clone(), m)),
+            }
+        }
+        by.retain(|g| g.1 > 0);
+        by.sort_by_key(|g| std::cmp::Reverse(g.1));
+        let mut fps: Vec<(String, f32, u32)> = Vec::new();
+        for r in self.games.fps_history(None).into_iter().filter(|r| r.at >= now - 7 * 86_400) {
+            match fps.iter_mut().find(|x| x.0 == r.name) {
+                Some(x) => {
+                    x.1 += r.summary.avg;
+                    x.2 += 1;
+                }
+                None => fps.push((r.name.clone(), r.summary.avg, 1)),
+            }
+        }
+        let fps: Vec<(String, f32)> = fps.into_iter().map(|(n, s, c)| (n, s / c as f32)).collect();
+        let clips = self.play.clips(&self.settings.get().play).into_iter().filter(|c| c.created >= now - 7 * 86_400).count();
+        let filter = crate::capture::screenshots::ShotFilter { query: String::new(), tag: None, app: None, favorites: false, limit: Some(2000) };
+        let shots = self.screenshots.list(&filter).unwrap_or_default().into_iter().filter(|x| x.created >= now - 7 * 86_400).count();
+        let days = self.netmon.status(Vec::new()).days;
+        let data: u64 = days.iter().rev().take(7).map(|d| d.down + d.up).sum();
+        let health = crate::health::score(&crate::health::gather(), now * 1000).score;
+        weekly_text(&by, &fps, clips, shots, Some(data), Some(health))
+    }
+
     /// Today's summary: games played, internet used, PC health.
     pub fn daily_recap(&self) -> (String, String) {
         use chrono::TimeZone;
@@ -762,6 +845,21 @@ mod tests {
         assert!(w.recap_due("2026-11-07", 21 * 60 + 5));
         assert!(!w.recap_due("2026-11-07", 22 * 60), "once a day");
         assert!(w.recap_due("2026-11-08", 23 * 60));
+    }
+
+    #[test]
+    fn weekly_summary() {
+        let (t, b) = weekly_text(&[("Fortnite".into(), 410), ("Minecraft".into(), 30)], &[("Fortnite".into(), 212.4)], 3, 1, Some(42_000_000_000), Some(91));
+        assert_eq!(t, "Your week on the PC");
+        assert_eq!(b, "Played 7 h 20 min this week: Fortnite 6 h 50 min, Minecraft 30 min. Average frames: Fortnite 212 FPS. 3 clips and 1 screenshot saved. 42.0 GB of internet used. PC health 91/100.");
+        let tmp = tempfile::tempdir().unwrap();
+        let w = Watchers::new(tmp.path());
+        assert!(!w.weekly_due("2026-W45", true, 20 * 60), "off by default");
+        w.set_weekly(true);
+        assert!(!w.weekly_due("2026-W45", false, 20 * 60));
+        assert!(!w.weekly_due("2026-W45", true, 18 * 60));
+        assert!(w.weekly_due("2026-W45", true, 20 * 60));
+        assert!(!w.weekly_due("2026-W45", true, 21 * 60), "once a week");
     }
 
     #[test]

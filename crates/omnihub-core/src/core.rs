@@ -86,6 +86,8 @@ pub struct AppCore {
     pub snippets: crate::snippets::Snippets,
     pub bench: crate::bench::Bench,
     pub pad: crate::padremote::PadRemote,
+    pub peers: crate::remote::peer::Peers,
+    pub home: crate::home::Home,
     pub after_downloads: parking_lot::Mutex<crate::timers::AfterDownloads>,
     pub speedrun: crate::speedrun::Speedrun,
     /// Family and guest phones limited to some areas.
@@ -211,6 +213,8 @@ impl AppCore {
             snippets: crate::snippets::Snippets::new(&paths.data),
             bench: crate::bench::Bench::new(&paths.data),
             pad: Default::default(),
+            peers: crate::remote::peer::Peers::new(&paths.data),
+            home: crate::home::Home::new(&paths.data),
             after_downloads: parking_lot::Mutex::new(Default::default()),
             speedrun: crate::speedrun::Speedrun::new(&paths.data, events.clone()),
             speedrun_keys: std::sync::atomic::AtomicBool::new(false),
@@ -1008,6 +1012,15 @@ impl AppCore {
                     if core.watchers.recap_due(&local.format("%Y-%m-%d").to_string(), minute) {
                         let (title, body) = core.daily_recap();
                         core.events.emit("watch:recap", serde_json::json!({ "title": title, "body": body }));
+                    }
+                    // The weekly report, Sunday evening.
+                    {
+                        use chrono::Datelike;
+                        let week = format!("{}-W{:02}", local.iso_week().year(), local.iso_week().week());
+                        if core.watchers.weekly_due(&week, local.weekday() == chrono::Weekday::Sun, minute) {
+                            let (title, body) = core.weekly_report();
+                            core.events.emit("watch:weekly", serde_json::json!({ "title": title, "body": body }));
+                        }
                     }
                     // Fortnite updates and downtime, every 10 minutes.
                     if core.watchers.get().fortnite_alerts {

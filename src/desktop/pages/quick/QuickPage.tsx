@@ -1,7 +1,7 @@
 // Quick actions: the macro deck (here and on the phone), the quick-launch
 // wheel (a hotkey shows it at the mouse) and the clipboard history.
 
-import type { AudioOutput, ClipItem, ClipList, Counter, GoveePreset, LibraryGame, ObsInfo, QuickAction, QuickButton, QuickState, Scene, ScreenModes } from '@shared/types';
+import type { AudioOutput, ClipItem, ClipList, Counter, GoveePreset, HomeDevice, LibraryGame, ObsInfo, QuickAction, QuickButton, QuickState, Scene, ScreenModes } from '@shared/types';
 import { QUICK_COLORS, QUICK_ICONS } from '@shared/quickIcons';
 import { ArrowDown, ArrowUp, ClipboardList, Clapperboard, Copy, Monitor, Volume2, FolderOpen, Grid3x3, Image as ImageIcon, Pause, Pencil, Pin, PinOff, Play, Plus, Radio, Smartphone, Trash2, Disc3, Type } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -184,6 +184,28 @@ function ActionFields({ action, onChange, games, counters, extra }: { action: Qu
           </Select>
         </Field>
       );
+    case 'home':
+      return (
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <Field label="Device" hint="Set up in Lights → Smart home.">
+            <Select value={action.device} onChange={(e) => onChange({ ...action, device: e.target.value })}>
+              <option value="">Pick a device…</option>
+              {(extra?.home ?? []).map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Do">
+            <Select value={action.action} onChange={(e) => onChange({ ...action, action: e.target.value as 'on' | 'off' | 'toggle' })}>
+              <option value="toggle">Toggle</option>
+              <option value="on">Turn on (or run)</option>
+              <option value="off">Turn off</option>
+            </Select>
+          </Field>
+        </div>
+      );
     case 'music':
       return (
         <Field label="Music to play" hint="In your music app (Spotify or Apple Music). Set a scene to run with a game for music per game.">
@@ -260,13 +282,14 @@ interface Extra {
   inputs: AudioOutput[];
   screen: ScreenModes | null;
   sounds: { id: string; name: string }[];
+  home: HomeDevice[];
 }
 
 function useExtra(open: boolean): Extra {
-  const [x, setX] = useState<Extra>({ scenes: [], presets: [], outputs: [], inputs: [], screen: null, sounds: [] });
+  const [x, setX] = useState<Extra>({ scenes: [], presets: [], outputs: [], inputs: [], screen: null, sounds: [], home: [] });
   useEffect(() => {
     if (!open) return;
-    void Promise.all([api.quick.state().then((s) => s.scenes, () => []), api.govee.presets().catch(() => []), api.audioOutputs().catch(() => []), api.audioInputs().catch(() => []), api.screenModes().catch(() => null), api.soundboard.get().then((b) => b.sounds, () => [])]).then(([scenes, presets, outputs, inputs, screen, sounds]) => setX({ scenes, presets, outputs, inputs, screen, sounds }));
+    void Promise.all([api.quick.state().then((s) => s.scenes, () => []), api.govee.presets().catch(() => []), api.audioOutputs().catch(() => []), api.audioInputs().catch(() => []), api.screenModes().catch(() => null), api.soundboard.get().then((b) => b.sounds, () => []), api.home.devices().catch(() => [])]).then(([scenes, presets, outputs, inputs, screen, sounds, home]) => setX({ scenes, presets, outputs, inputs, screen, sounds, home }));
   }, [open]);
   return x;
 }
@@ -405,7 +428,7 @@ function ButtonEditor({ open, initial, onClose, onSave, forDeck }: { open: boole
             value={action.kind}
             onChange={(e) => {
               const kind = e.target.value as QuickAction['kind'];
-              const icon = ({ media: 'play', open: 'app-window', game: 'gamepad-2', keys: 'keyboard', text: 'message-square', mic: 'mic-off', counter: 'sparkles', screenshot: 'camera', lock: 'lock', clipboard: 'clipboard-list', obs: 'radio', quiet: 'moon', capriDesktop: 'bot', scene: 'zap', lights: 'lightbulb', fans: 'fan', notifications: 'bell-off', discord: 'message-circle', sound: 'headphones', pinWindow: 'monitor', music: 'music', playSound: 'volume-2' } as Record<string, string>)[kind];
+              const icon = ({ media: 'play', open: 'app-window', game: 'gamepad-2', keys: 'keyboard', text: 'message-square', mic: 'mic-off', counter: 'sparkles', screenshot: 'camera', lock: 'lock', clipboard: 'clipboard-list', obs: 'radio', quiet: 'moon', capriDesktop: 'bot', scene: 'zap', lights: 'lightbulb', fans: 'fan', notifications: 'bell-off', discord: 'message-circle', sound: 'headphones', pinWindow: 'monitor', music: 'music', playSound: 'volume-2', home: 'home' } as Record<string, string>)[kind];
               setB({ ...b, action: blankAction(kind), icon: b.icon === 'zap' || !initial ? icon : b.icon });
             }}
           >

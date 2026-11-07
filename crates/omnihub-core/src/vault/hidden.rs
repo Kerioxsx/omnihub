@@ -460,6 +460,24 @@ mod imp {
     pub fn hide_folder(_dir: &std::path::Path) {}
 }
 
+/// Every file in a folder (to hide it whole), at most 5000.
+pub fn folder_files(dir: &Path) -> Result<Vec<String>, String> {
+    let files: Vec<String> = walkdir::WalkDir::new(dir).follow_links(false).into_iter().filter_map(Result::ok).filter(|e| e.file_type().is_file()).map(|e| e.path().display().to_string()).take(5001).collect();
+    if files.len() > 5000 {
+        return Err("That folder has more than 5000 files: hide smaller folders".into());
+    }
+    Ok(files)
+}
+
+/// Remove the folders a hidden folder left empty (the deepest first).
+pub fn tidy_empty(dir: &Path) {
+    let mut dirs: Vec<PathBuf> = walkdir::WalkDir::new(dir).follow_links(false).into_iter().filter_map(Result::ok).filter(|e| e.file_type().is_dir()).map(|e| e.into_path()).collect();
+    dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
+    for d in dirs {
+        let _ = std::fs::remove_dir(d);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

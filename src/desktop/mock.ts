@@ -85,6 +85,8 @@ let emuOffers = [
   { id: 'rpcs3', name: 'RPCS3', platforms: ['ps3'], installed: null, latest: null },
 ];
 let mockRaUser: string | null = null;
+let mockHome = { url: '', connected: false, shelly: [] as [string, string][] };
+let mockPeers = [{ id: 'p1', name: 'LIVING-ROOM-PC', url: 'https://192.168.1.31:7878', fingerprint: '3F:A2:91:0C' }];
 let mockBench = [{ at: Math.floor(Date.now() / 1000) - 86400 * 7, single: 1834.2, multi: 21877, memory: 24.35, threads: 16, cpuTemp: 68 }];
 let mockAppLimits = [{ exe: 'OneDrive.exe', kbps: 2000, active: true }];
 let mockBoard = { sounds: [{ id: 's1', name: 'Air horn', path: 'C:\\Sounds\\air horn.mp3', key: 0x61, volume: 80 }, { id: 's2', name: 'Bruh', path: 'C:\\Sounds\\bruh.wav', key: 0, volume: 100 }], output: '', keysOn: true };
@@ -495,6 +497,8 @@ const handlers: Record<string, Handler> = {
   vault_status: () => vault.status(),
   hidden_list: () => vault.hiddenList(),
   hidden_hide: (a) => vault.hide(str(a, 'path'), str(a, 'job')),
+  hidden_folder_files: (a) => [`${str(a, 'path')}\\photo1.jpg`, `${str(a, 'path')}\\notes.txt`],
+  hidden_tidy_folder: () => undefined,
   hidden_unhide: (a) => vault.unhide(str(a, 'id'), optStr(a, 'folder'), str(a, 'job')),
   hidden_save_copy: (a) => vault.hiddenCopy(str(a, 'id'), str(a, 'job')),
   hidden_open: (a) => vault.hiddenCopy(str(a, 'id'), str(a, 'job')),
@@ -723,6 +727,42 @@ const handlers: Record<string, Handler> = {
     mockSnippets = { ...s, snippets: s.snippets.map((x, i) => ({ ...x, id: x.id || `s${Date.now()}${i}`, name: x.name.trim() || x.text.split('\n')[0].slice(0, 24) })) };
     return mockSnippets;
   },
+  home_status: () => mockHome,
+  home_connect: (a) => (mockHome = { ...mockHome, url: str(a, 'url'), connected: !!str(a, 'token') }),
+  home_set_shelly: (a) => (mockHome = { ...mockHome, shelly: (a?.plugs ?? []) as [string, string][] }),
+  home_devices: () => [
+    ...(mockHome.connected
+      ? [
+          { id: 'ha:light.desk', name: 'Desk lamp', kind: 'light', state: 'on' },
+          { id: 'ha:switch.monitor_backlight', name: 'Monitor backlight', kind: 'switch', state: 'off' },
+          { id: 'ha:scene.movie', name: 'Movie night', kind: 'scene', state: '' },
+        ]
+      : []),
+    ...mockHome.shelly.map(([name, ip]) => ({ id: `shelly:${ip}`, name, kind: 'plug', state: '' })),
+  ],
+  home_run: (a) => `${str(a, 'device')}: ${str(a, 'action')}`,
+  peers_list: () => mockPeers,
+  peers_pair: (a) => {
+    const pc = { id: `p${mockPeers.length + 1}`, name: 'LIVING-ROOM-PC', url: `https://${str(a, 'url')}`, fingerprint: '3F:A2:91:0C:77:E1:5B:D4:...' };
+    mockPeers = [...mockPeers, pc];
+    return pc;
+  },
+  peers_forget: (a) => (mockPeers = mockPeers.filter((p) => p.id !== str(a, 'id'))),
+  peers_status: () => ({ hostname: 'LIVING-ROOM-PC', cpu: 7.5, memory: { used: 6_000_000_000, total: 16_000_000_000 }, uptime: 52_000 }),
+  peers_action: () => undefined,
+  deals_search: (a) => [
+    { id: '612', title: `${str(a, 'title')}: Game of the Year`, thumb: '', cheapest: 3.99 },
+    { id: '613', title: str(a, 'title'), thumb: '', cheapest: 9.99 },
+  ],
+  deals_game: () => ({
+    title: 'BioShock Infinite',
+    lowestEver: [2.99, 1543028665],
+    deals: [
+      { store: 'GOG', price: 3.99, retail: 29.99, savings: 86.7, url: 'https://www.cheapshark.com/redirect?dealID=def' },
+      { store: 'Fanatical', price: 4.49, retail: 29.99, savings: 85, url: 'https://www.cheapshark.com/redirect?dealID=ghi' },
+      { store: 'Steam', price: 29.99, retail: 29.99, savings: 0, url: 'https://www.cheapshark.com/redirect?dealID=abc' },
+    ],
+  }),
   standby_purge: async () => new Promise((r) => setTimeout(r, 600)),
   bench_results: () => mockBench,
   bench_run: async () => {

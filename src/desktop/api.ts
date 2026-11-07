@@ -350,6 +350,8 @@ export const api = {
     checkStreamers: () => call<T.WatchStore>('watch_streamers_check'),
     setRecap: (time: string) => call<T.WatchStore>('watch_recap_set', { time }),
     recapNow: () => call<{ title: string; body: string }>('watch_recap_now'),
+    setWeekly: (on: boolean) => call<T.WatchStore>('watch_weekly_set', { on }),
+    weeklyNow: () => call<{ title: string; body: string }>('watch_weekly_now'),
     setGameAlerts: (free: boolean, patches: boolean, fortnite?: boolean) => call<T.WatchStore>('watch_game_alerts', { free, patches, fortnite: fortnite ?? null }),
   },
   voice: (text: string) => call<string>('voice_command', { text }),
@@ -399,6 +401,28 @@ export const api = {
   snippets: {
     get: () => call<T.SnippetSettings>('snippets_get'),
     save: (settings: T.SnippetSettings) => call<T.SnippetSettings>('snippets_save', { settings }),
+  },
+  /** Smart home: Home Assistant (token kept encrypted) and Shelly plugs. */
+  home: {
+    status: () => call<T.HomeStatus>('home_status'),
+    connect: (url: string, token: string) => call<T.HomeStatus>('home_connect', { url, token }),
+    setShelly: (plugs: [string, string][]) => call<T.HomeStatus>('home_set_shelly', { plugs }),
+    devices: () => call<T.HomeDevice[]>('home_devices'),
+    run: (device: string, action: 'on' | 'off' | 'toggle') => call<string>('home_run', { device, action }),
+  },
+  /** Your other PCs with OmniHub, paired like a phone. */
+  peers: {
+    list: () => call<T.PeerPc[]>('peers_list'),
+    pair: (url: string, pin: string) => call<T.PeerPc>('peers_pair', { url, pin }),
+    forget: (id: string) => call<T.PeerPc[]>('peers_forget', { id }),
+    status: (id: string) => call<unknown>('peers_status', { id }),
+    /** lock · sleep · restart · shutdown · displayOff · toggle · next · previous */
+    action: (id: string, action: string) => call<void>('peers_action', { id, action }),
+  },
+  /** Game deals across stores (CheapShark, US dollars). */
+  deals: {
+    search: (title: string) => call<T.DealGame[]>('deals_search', { title }),
+    game: (id: string) => call<T.GameDeals>('deals_game', { id }),
   },
   /** Slow down a program's upload (administrator prompt; Windows QoS). */
   netLimits: {
@@ -525,6 +549,9 @@ export const api = {
     hide: (path: string, job: string) => call<T.HiddenResult>('hidden_hide', { path, job }),
     /** Back where it came from (or into `folder`); returns where it went. */
     unhide: (id: string, folder: string | null, job: string) => call<string>('hidden_unhide', { id, folder, job }),
+    /** The files in a folder, to hide it whole; then remove the empty folders. */
+    folderFiles: (path: string) => call<string[]>('hidden_folder_files', { path }),
+    tidyFolder: (path: string) => call<void>('hidden_tidy_folder', { path }),
     saveCopy: (id: string, path: string, job: string) => call<void>('hidden_save_copy', { id, path, job }),
     /** Open a temporary copy in its app (removed when the vault locks). */
     open: (id: string, job: string) => call<void>('hidden_open', { id, job }),
