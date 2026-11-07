@@ -10,6 +10,7 @@ pub mod askpc;
 pub mod audit;
 pub mod autoclick;
 pub mod backup;
+pub mod bench;
 pub mod browser;
 pub mod capri_app;
 pub mod capture;

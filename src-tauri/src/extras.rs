@@ -700,8 +700,8 @@ pub async fn bedtime_snooze(core: Core<'_>, minutes: u32) -> Res<omnihub_core::t
 }
 
 #[tauri::command]
-pub async fn watch_game_alerts(core: Core<'_>, free: bool, patches: bool) -> Res<WatchStore> {
-    Ok(core.watchers.set_game_alerts(free, patches))
+pub async fn watch_game_alerts(core: Core<'_>, free: bool, patches: bool, fortnite: Option<bool>) -> Res<WatchStore> {
+    Ok(core.watchers.set_game_alerts(free, patches, fortnite))
 }
 
 #[tauri::command]
@@ -754,6 +754,35 @@ pub async fn windows_list() -> Res<Vec<omnihub_core::system::winpin::PinWindow>>
 #[tauri::command]
 pub async fn window_pin(handle: i64, on: bool) -> Res<bool> {
     blocking(move || omnihub_core::system::winpin::set(handle, on)).await
+}
+
+#[tauri::command]
+pub async fn bench_results(core: Core<'_>) -> Res<Vec<omnihub_core::bench::BenchResult>> {
+    Ok(core.bench.results())
+}
+
+/// Run the benchmark (progress as "bench:progress" events); returns every run.
+#[tauri::command]
+pub async fn bench_run(core: Core<'_>) -> Res<Vec<omnihub_core::bench::BenchResult>> {
+    static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if RUNNING.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return Err("The benchmark is already running".into());
+    }
+    let c = core.inner().clone();
+    let r = blocking(move || {
+        c.rig.hold();
+        let r = omnihub_core::bench::run(&|| c.rig.status().cpu_temp, &|p| c.events.emit("bench:progress", serde_json::json!({ "percent": p })));
+        Ok(c.bench.add(r))
+    })
+    .await;
+    RUNNING.store(false, std::sync::atomic::Ordering::SeqCst);
+    r
+}
+
+/// Empty Windows' standby memory list (administrator prompt).
+#[tauri::command]
+pub async fn standby_purge() -> Res<()> {
+    blocking(|| omnihub_core::games::tweaks::run_admin(&[omnihub_core::games::tweaks::AdminOp::PurgeStandby])).await
 }
 
 #[tauri::command]

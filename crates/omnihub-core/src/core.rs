@@ -84,6 +84,7 @@ pub struct AppCore {
     pub soundboard: crate::soundboard::Soundboard,
     pub net_limits: crate::system::netlimit::NetLimits,
     pub snippets: crate::snippets::Snippets,
+    pub bench: crate::bench::Bench,
     pub after_downloads: parking_lot::Mutex<crate::timers::AfterDownloads>,
     pub speedrun: crate::speedrun::Speedrun,
     /// Family and guest phones limited to some areas.
@@ -205,6 +206,7 @@ impl AppCore {
             soundboard: crate::soundboard::Soundboard::new(&paths.data),
             net_limits: crate::system::netlimit::NetLimits::new(&paths.data),
             snippets: crate::snippets::Snippets::new(&paths.data),
+            bench: crate::bench::Bench::new(&paths.data),
             after_downloads: parking_lot::Mutex::new(Default::default()),
             speedrun: crate::speedrun::Speedrun::new(&paths.data, events.clone()),
             speedrun_keys: std::sync::atomic::AtomicBool::new(false),
@@ -923,6 +925,14 @@ impl AppCore {
                             core.events.emit("alert:hot", &a);
                         }
                     }
+                    // Temperatures during a boosted game, for its heat report.
+                    if core.games.session().is_some_and(|s| s.active()) {
+                        if n % 4 == 1 {
+                            core.rig.hold();
+                        }
+                        let st = core.rig.status();
+                        core.games.thermal_sample(st.cpu_temp, st.gpu_temp);
+                    }
                     if let Some(m) = core.media.state() {
                         if core.party.song_ended(&m.title, &m.artist, m.playing, m.position_ms, m.duration_ms) {
                             let _ = core.party_play_next();
@@ -991,6 +1001,13 @@ impl AppCore {
                     if core.watchers.recap_due(&local.format("%Y-%m-%d").to_string(), minute) {
                         let (title, body) = core.daily_recap();
                         core.events.emit("watch:recap", serde_json::json!({ "title": title, "body": body }));
+                    }
+                    // Fortnite updates and downtime, every 10 minutes.
+                    if core.watchers.get().fortnite_alerts {
+                        let trouble = crate::web::get_json(crate::watchers::EPIC_STATUS).ok().map(|v| crate::watchers::fortnite_trouble(&v));
+                        for news in core.watchers.check_fortnite(crate::watchers::installed_fortnite_version(), trouble) {
+                            core.events.emit("watch:fortnite", &news);
+                        }
                     }
                     // Free games and patch notes every 6 hours.
                     if n.is_multiple_of(36) {

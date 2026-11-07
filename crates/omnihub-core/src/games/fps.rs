@@ -49,6 +49,14 @@ pub struct Live {
     pub frame_ms: f32,
     /// The slowest frame of the second, ms.
     pub worst_ms: f32,
+    /// From the game handing a frame over to it reaching the screen, ms
+    /// (PresentMon's display latency), when Windows reports it.
+    #[serde(default)]
+    pub latency_ms: Option<f32>,
+    /// How frames reach the screen ("Hardware: Independent Flip" is the
+    /// direct path; "Composed" means the desktop is in between).
+    #[serde(default)]
+    pub present_mode: String,
 }
 
 /// A whole session.
@@ -65,6 +73,9 @@ pub struct Summary {
     /// Frames that took more than 2.5× the average (and over 8 ms): the
     /// stutters you notice.
     pub hitches: u32,
+    /// Average display latency, ms (see [`Live::latency_ms`]).
+    #[serde(default)]
+    pub latency_ms: Option<f32>,
 }
 
 /// 0.01 ms steps up to 100 ms; slower frames are kept as they are.
@@ -84,6 +95,10 @@ pub struct Stats {
     recent: VecDeque<f32>,
     recent_ms: f64,
     second: (u32, f64, f32),
+    /// Display latency: this second (count, sum), and all of it.
+    lat_second: (u32, f64),
+    lat_total: (u64, f64),
+    mode: String,
 }
 
 impl Stats {
@@ -119,16 +134,31 @@ impl Stats {
         self.second.2 = self.second.2.max(ms);
     }
 
+    /// A frame's display latency (ms) and present mode, from the same line.
+    pub fn add_display(&mut self, latency: Option<f32>, mode: Option<&str>) {
+        if let Some(l) = latency.filter(|l| l.is_finite() && *l > 0.0 && *l < 1000.0) {
+            self.lat_second.0 += 1;
+            self.lat_second.1 += f64::from(l);
+            self.lat_total.0 += 1;
+            self.lat_total.1 += f64::from(l);
+        }
+        if let Some(m) = mode.filter(|m| !m.is_empty() && *m != self.mode) {
+            self.mode = m.to_string();
+        }
+    }
+
     /// The second since the last tick (None when no frame arrived).
     pub fn tick(&mut self) -> Option<Live> {
         let (n, ms, worst) = std::mem::take(&mut self.second);
+        let (ln, lsum) = std::mem::take(&mut self.lat_second);
         if n == 0 || ms <= 0.0 {
             return None;
         }
         let mut recent: Vec<f32> = self.recent.iter().copied().collect();
         recent.sort_by(f32::total_cmp);
         let p99 = recent[((recent.len() as f64 * 0.99) as usize).min(recent.len() - 1)];
-        Some(Live { fps: (f64::from(n) * 1000.0 / ms) as f32, low1: 1000.0 / p99, frame_ms: (ms / f64::from(n)) as f32, worst_ms: worst })
+        let latency_ms = (ln > 0).then(|| (lsum / f64::from(ln)) as f32);
+        Some(Live { fps: (f64::from(n) * 1000.0 / ms) as f32, low1: 1000.0 / p99, frame_ms: (ms / f64::from(n)) as f32, worst_ms: worst, latency_ms, present_mode: self.mode.clone() })
     }
 
     /// The frame time below which a share `q` of all frames fall.
@@ -160,6 +190,7 @@ impl Stats {
             low1: 1000.0 / self.percentile(0.99)?,
             low01: 1000.0 / self.percentile(0.999)?,
             hitches: self.hitches,
+            latency_ms: (self.lat_total.0 > 0).then(|| (self.lat_total.1 / self.lat_total.0 as f64) as f32),
         })
     }
 }
@@ -169,6 +200,11 @@ impl Stats {
 pub struct CsvReader {
     ms: Option<usize>,
     swap: Option<usize>,
+    lat: Option<usize>,
+    mode: Option<usize>,
+    /// The display latency and present mode of the last frame returned.
+    pub last_latency: Option<f32>,
+    pub last_mode: Option<String>,
     /// Frames per swap chain: a game can have more than one (a launcher
     /// overlay, a loading screen); the busiest is the game.
     counts: std::collections::HashMap<String, u64>,
@@ -184,6 +220,8 @@ impl CsvReader {
             let find = |names: &[&str]| cols.iter().position(|c| names.iter().any(|n| c.trim().eq_ignore_ascii_case(n)));
             self.ms = find(&["MsBetweenPresents", "MsBetweenAppStart", "FrameTime"]);
             self.swap = find(&["SwapChainAddress"]);
+            self.lat = find(&["msUntilDisplayed", "DisplayLatency"]);
+            self.mode = find(&["PresentMode"]);
             return None;
         }
         let ms: f32 = cols.get(self.ms?)?.trim().parse().ok()?;
@@ -197,7 +235,12 @@ impl CsvReader {
         if self.main.is_none() || n > main_count {
             self.main = Some(swap.clone());
         }
-        (self.main.as_deref() == Some(swap.as_str())).then_some(ms)
+        let main = self.main.as_deref() == Some(swap.as_str());
+        if main {
+            self.last_latency = self.lat.and_then(|i| cols.get(i)).and_then(|v| v.trim().parse().ok());
+            self.last_mode = self.mode.and_then(|i| cols.get(i)).map(|v| v.trim().to_string());
+        }
+        main.then_some(ms)
     }
 
     pub fn has_header(&self) -> bool {
@@ -247,7 +290,9 @@ impl Meter {
                 for line in BufReader::new(stdout).lines() {
                     let Ok(line) = line else { break };
                     if let Some(ms) = csv.line(&line) {
-                        stats.lock().add(ms);
+                        let mut st = stats.lock();
+                        st.add(ms);
+                        st.add_display(csv.last_latency, csv.last_mode.as_deref());
                     } else if csv.has_header() {
                         seen.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
@@ -444,6 +489,19 @@ mod tests {
         let mut v1 = CsvReader::default();
         v1.line("Application,ProcessID,SwapChainAddress,Runtime,SyncInterval,PresentFlags,Dropped,TimeInSeconds,msInPresentAPI,msBetweenPresents");
         assert_eq!(v1.line("a.exe,1,0xA,DXGI,0,0,0,0.1,0.2,3.5"), Some(3.5));
+        // Display latency and how frames reach the screen.
+        let mut d = CsvReader::default();
+        d.line("Application,ProcessID,SwapChainAddress,Runtime,SyncInterval,PresentFlags,Dropped,TimeInSeconds,msInPresentAPI,msBetweenPresents,AllowsTearing,PresentMode,msUntilRenderComplete,msUntilDisplayed");
+        assert_eq!(d.line("a.exe,1,0xA,DXGI,0,0,0,0.1,0.2,4.0,1,Hardware: Independent Flip,NA,6.5"), Some(4.0));
+        assert_eq!((d.last_latency, d.last_mode.as_deref()), (Some(6.5), Some("Hardware: Independent Flip")));
+        let mut st = Stats::default();
+        st.add(4.0);
+        st.add_display(d.last_latency, d.last_mode.as_deref());
+        st.add(4.0);
+        st.add_display(Some(8.5), None);
+        let live = st.tick().unwrap();
+        assert_eq!((live.latency_ms, live.present_mode.as_str()), (Some(7.5), "Hardware: Independent Flip"));
+        assert_eq!(st.summary().unwrap().latency_ms, Some(7.5));
     }
 
     #[test]

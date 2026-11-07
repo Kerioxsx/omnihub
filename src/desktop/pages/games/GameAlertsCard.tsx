@@ -13,10 +13,10 @@ import { navigate } from '../../lib/router';
 import { toast } from '../../state/toasts';
 
 export function GameAlertsCard({ w, setW }: { w: WatchStore; setW: (w: WatchStore) => void }) {
-  const set = (free: boolean, patches: boolean) => void api.watch.setGameAlerts(free, patches).then(setW, (e: unknown) => toast.error('Couldn’t save', errorText(e)));
+  const set = (free: boolean, patches: boolean, fortnite = w.fortniteAlerts) => void api.watch.setGameAlerts(free, patches, fortnite).then(setW, (e: unknown) => toast.error('Couldn’t save', errorText(e)));
   return (
     <Card className="p-5">
-      <CardHeader icon={Gift} title="Free games and patch notes" subtitle="Checked every 6 hours; alerts here and on your phone." />
+      <CardHeader icon={Gift} title="Free games and patch notes" subtitle="Checked every 6 hours (Fortnite every 10 minutes); alerts here and on your phone." />
       <div className="mt-4 space-y-3">
         <div className="flex items-center justify-between gap-3 text-[13.5px] text-fg">
           <span>
@@ -29,6 +29,12 @@ export function GameAlertsCard({ w, setW }: { w: WatchStore; setW: (w: WatchStor
             Patch notes for your Steam games <span className="text-faint">(from Steam’s news)</span>
           </span>
           <Switch checked={w.patchAlerts} onChange={(v) => set(w.freeAlerts, v)} label="Patch note alerts" />
+        </div>
+        <div className="flex items-center justify-between gap-3 text-[13.5px] text-fg">
+          <span>
+            Fortnite updates and server downtime <span className="text-faint">(your installed version, and Epic’s status page)</span>
+          </span>
+          <Switch checked={w.fortniteAlerts} onChange={(v) => set(w.freeAlerts, w.patchAlerts, v)} label="Fortnite alerts" />
         </div>
       </div>
     </Card>

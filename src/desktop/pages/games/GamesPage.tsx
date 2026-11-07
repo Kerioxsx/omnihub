@@ -289,6 +289,19 @@ function SessionCard({ session, onDismiss }: { session: GameSession; onDismiss: 
                 <span>
                   <b className="text-[16px] tabular text-fg">{Math.round(sum.low01)}</b> <span className="text-faint">0.1% low</span>
                 </span>
+                {sum.latencyMs != null && (
+                  <span>
+                    <b className="text-[16px] tabular text-fg">{sum.latencyMs.toFixed(1)} ms</b> <span className="text-faint">to screen</span>
+                  </span>
+                )}
+            {ended && session.thermal && (
+              <div className={cx('mt-2 rounded-xl border px-4 py-2.5 text-[12.5px]', session.thermal.hotCpu >= 0.1 || session.thermal.hotGpu >= 0.1 ? 'border-warn/40 bg-warn/8 text-fg' : 'border-line bg-surface-2/60 text-dim')}>
+                <span className="font-semibold text-fg">Heat: </span>
+                {session.thermal.maxCpu != null && `processor up to ${Math.round(session.thermal.maxCpu)} °C`}
+                {session.thermal.maxCpu != null && session.thermal.maxGpu != null && ', '}
+                {session.thermal.maxGpu != null && `graphics card up to ${Math.round(session.thermal.maxGpu)} °C`}. {session.thermal.verdict}
+              </div>
+            )}
                 <span>
                   <b className={cx('text-[16px] tabular', sum.hitches > 10 ? 'text-warn' : 'text-fg')}>{sum.hitches}</b> <span className="text-faint">stutters over {Math.max(1, Math.round(sum.seconds / 60))} min</span>
                 </span>

@@ -70,6 +70,14 @@ pub fn status_text(code: i32) -> String {
     }
 }
 
+/// A frame cap a little under the monitor's refresh rate, so G-Sync or
+/// FreeSync stays engaged and frames don't queue up (the same rule NVIDIA
+/// Reflex uses: refresh − refresh² / 3600; 144 Hz → 138 FPS).
+pub fn smart_cap(hz: u32) -> u32 {
+    let hz = f64::from(hz.clamp(30, 1000));
+    (hz - hz * hz / 3600.0).floor().max(30.0) as u32
+}
+
 /// What to do with one setting, given what the profile holds now:
 /// `Some(true)` set it, `Some(false)` it is already set, `None` leave it
 /// (the user chose another value themselves).
@@ -347,12 +355,42 @@ mod imp {
         let drs = Drs::open()?;
         let Some(profile) = drs.find(exe)? else { return Ok(NvidiaState { on: false, set: Vec::new() }) };
         let mut set = Vec::new();
+        let mut count = 0;
         for c in &CHOICES {
-            if drs.get(profile, c.id)?.is_some_and(|(v, _)| v == c.value) {
-                set.push(c.label.to_string());
+            match drs.get(profile, c.id)? {
+                Some((v, _)) if v == c.value => {
+                    set.push(c.label.to_string());
+                    count += 1;
+                }
+                // A frame cap the user (or the smart cap) chose counts too.
+                Some((v, _)) if c.id == FRL_FPS_ID && v > 0 => {
+                    set.push(format!("Driver frame cap: {v} FPS"));
+                    count += 1;
+                }
+                _ => {}
             }
         }
-        Ok(NvidiaState { on: set.len() == CHOICES.len(), set })
+        Ok(NvidiaState { on: count == CHOICES.len(), set })
+    }
+
+    /// The game's driver frame cap, if one is set.
+    pub fn cap(exe: &str) -> Result<Option<u32>, String> {
+        let drs = Drs::open()?;
+        let Some(profile) = drs.find(exe)? else { return Ok(None) };
+        Ok(drs.get(profile, FRL_FPS_ID)?.map(|(v, _)| v).filter(|v| *v > 0))
+    }
+
+    /// Elevated: cap the game at `fps` in its driver profile (0 removes it).
+    pub fn set_cap(exe: &str, fps: u32) -> Result<(), String> {
+        let drs = Drs::open()?;
+        if fps == 0 {
+            let Some(profile) = drs.find(exe)? else { return Ok(()) };
+            drs.restore(profile, FRL_FPS_ID)?;
+        } else {
+            let profile = drs.find_or_create(exe)?;
+            drs.set(profile, FRL_FPS_ID, fps)?;
+        }
+        drs.save()
     }
 
     /// Elevated: set the choices on the game's profile. Returns what changed.
@@ -396,6 +434,12 @@ mod imp {
 
     pub fn available() -> bool {
         false
+    }
+    pub fn cap(_exe: &str) -> Result<Option<u32>, String> {
+        Ok(None)
+    }
+    pub fn set_cap(_exe: &str, _fps: u32) -> Result<(), String> {
+        Err("NVIDIA settings are set on Windows".into())
     }
     pub fn state(_exe: &str) -> Result<NvidiaState, String> {
         Err("Windows only".into())

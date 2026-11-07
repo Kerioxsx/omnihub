@@ -2083,6 +2083,16 @@ pub async fn games_delete(core: Core<'_>, id: String) -> Res<()> {
 }
 
 #[tauri::command]
+pub async fn games_fps_cap(core: Core<'_>, id: String, fps: u32) -> Res<Option<games::GameState>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        core.games.set_fps_cap(&id, fps)?;
+        Ok(core.games.state(&id))
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn games_state(core: Core<'_>, id: String) -> Res<Option<games::GameState>> {
     let core = core.inner().clone();
     blocking(move || Ok(core.games.state(&id))).await

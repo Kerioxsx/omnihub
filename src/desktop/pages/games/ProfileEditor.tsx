@@ -56,7 +56,7 @@ const NEVER = new Set(['omnihub.exe', 'explorer.exe', 'steam.exe', 'steamwebhelp
 function withMode(b: GameBoost, mode: BoostMode): GameBoost {
   if (mode === 'custom') return { ...b, mode };
   const competitive = mode === 'competitive';
-  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, freeMemory: true, preciseTimer: true, fullSpeed: true, nvidiaProfile: competitive };
+  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, freeMemory: true, preciseTimer: true, fullSpeed: true, coresAwake: true, nvidiaProfile: competitive };
 }
 
 const MODES: { value: BoostMode; icon: LucideIcon; title: string; blurb: (game: string, hasSettings: boolean) => string }[] = [
@@ -103,6 +103,15 @@ export function ProfileEditor({ profile, session, busy, activeHere, onSaved, onD
     void api.games.state(profile.id).then(setState, () => undefined);
   }, [profile.id, activeHere]);
 
+  const setCap = async (fps: number) => {
+    try {
+      setState(await api.games.setFpsCap(profile.id, fps));
+      toast.success(fps ? `Capped at ${fps} FPS` : 'Frame cap removed', fps ? 'In the game’s NVIDIA driver profile. Takes effect the next time the game starts.' : undefined);
+    } catch (e) {
+      toast.error('Couldn’t change the frame cap', errorText(e));
+    }
+  };
+
   const commit = async (p: GameProfile) => {
     setSaved('saving');
     try {
@@ -144,7 +153,7 @@ export function ProfileEditor({ profile, session, busy, activeHere, onSaved, onD
     change({ ...draft, launch: { type: 'exe', path: f, args: draft.launch.type === 'exe' ? draft.launch.args : '' }, process: draft.process || name, exePath: f }, true);
   };
 
-  const addApp = async (e: React.MouseEvent) => {
+  const addApp = async (e: React.MouseEvent, field: 'closeApps' | 'freezeApps' = 'closeApps') => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     let running: ProcessGroup[] = [];
     try {
@@ -152,17 +161,17 @@ export function ProfileEditor({ profile, session, busy, activeHere, onSaved, onD
     } catch {
       /* show suggestions only */
     }
-    const chosen = new Set(draft.boost.closeApps.map((a) => a.toLowerCase()));
+    const chosen = new Set(draft.boost[field].map((a) => a.toLowerCase()));
     const fmt = (b: number) => `${(b / 1024 / 1024 / 1024).toFixed(1)} GB`;
     const items: MenuItem[] = [{ kind: 'header', label: 'Running now' }];
     running
       .filter((p) => !chosen.has(p.name.toLowerCase()))
       .slice(0, 14)
-      .forEach((p) => items.push({ label: p.name.replace(/\.exe$/i, ''), hint: p.memory > 200 * 1024 * 1024 ? fmt(p.memory) : undefined, onSelect: () => boost({ closeApps: [...draft.boost.closeApps, p.name] }) }));
+      .forEach((p) => items.push({ label: p.name.replace(/\.exe$/i, ''), hint: p.memory > 200 * 1024 * 1024 ? fmt(p.memory) : undefined, onSelect: () => boost({ [field]: [...draft.boost[field], p.name] }) }));
     const extra = SUGGEST.filter((s) => !chosen.has(s.toLowerCase()) && !running.some((p) => p.name.toLowerCase() === s.toLowerCase()));
     if (extra.length) {
       items.push({ kind: 'separator' }, { kind: 'header', label: 'Common' });
-      extra.slice(0, 8).forEach((s) => items.push({ label: s.replace(/\.exe$/i, ''), onSelect: () => boost({ closeApps: [...draft.boost.closeApps, s] }) }));
+      extra.slice(0, 8).forEach((s) => items.push({ label: s.replace(/\.exe$/i, ''), onSelect: () => boost({ [field]: [...draft.boost[field], s] }) }));
     }
     openMenu({ clientX: r.left, clientY: r.bottom + 4, preventDefault: () => undefined }, items);
   };
@@ -310,6 +319,21 @@ export function ProfileEditor({ profile, session, busy, activeHere, onSaved, onD
               </label>
             )}
           </Row>
+          <Row title="Pause while playing" hint="Your picks are paused for the game — they use no processor at all — and carry on where they stopped when it closes. Good for launchers, sync apps or a big browser. Windows’ own programs and what the game needs are never paused." stack>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {b.freezeApps.map((a) => (
+                <span key={a} className="inline-flex items-center gap-1 rounded-full border border-line bg-surface-2 py-0.5 pl-2.5 pr-1 text-[12.5px] text-fg">
+                  {a.replace(/\.exe$/i, '')}
+                  <button type="button" onClick={() => boost({ freezeApps: b.freezeApps.filter((x) => x !== a) })} className="grid h-5 w-5 place-items-center rounded-full text-faint hover:bg-surface-3 hover:text-fg" aria-label={`Don't pause ${a}`}>
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+              <Button size="sm" variant="ghost" icon={Plus} onClick={(e) => void addApp(e, 'freezeApps')}>
+                Add
+              </Button>
+            </div>
+          </Row>
           <Row title="Background apps at lower priority" hint="Browsers, Steam and Epic web views, Spotify and sync apps run at “Below normal” while you play, so the game gets the processor first.">
             <Switch checked={b.lowerBackground} disabled={set} onChange={(v) => boost({ lowerBackground: v })} label="Background apps at lower priority" />
           </Row>
@@ -318,6 +342,9 @@ export function ProfileEditor({ profile, session, busy, activeHere, onSaved, onD
           </Row>
           <Row title="Precise timer (0.5 ms)" hint="Windows’ finest timer while you play: games with frame limiters keep steadier frame times. Windows 11 needs “Precise timer for games” in Optimize PC once.">
             <Switch checked={b.preciseTimer} disabled={set} onChange={(v) => boost({ preciseTimer: v })} label="Precise timer" />
+          </Row>
+          <Row title="Every core awake" hint="Turns off core parking while you play, so Windows doesn't put processor cores to sleep and wake them mid-game (the Ultimate and High performance plans already do this).">
+            <Switch checked={b.coresAwake} disabled={set} onChange={(v) => boost({ coresAwake: v })} label="Every core awake" />
           </Row>
           <Row title="Full speed" hint="Windows never moves the game to power-saving cores or slows it to save energy (it can on laptops and newer Intel processors).">
             <Switch checked={b.fullSpeed} disabled={set} onChange={(v) => boost({ fullSpeed: v })} label="Full speed" />
@@ -340,6 +367,23 @@ export function ProfileEditor({ profile, session, busy, activeHere, onSaved, onD
           {state?.nvidiaProfile !== null && (
             <Row title="NVIDIA settings for the game" badge={<AdminBadge on={state?.nvidiaProfile ?? undefined} />} hint="The game's profile in the NVIDIA driver: prefer maximum performance, low latency mode on, fast texture filtering, no forced VSync and no driver frame cap. Anything you set for the game there yourself stays.">
               <Switch checked={b.nvidiaProfile} disabled={set} onChange={(v) => boost({ nvidiaProfile: v })} label="NVIDIA settings for the game" />
+            </Row>
+          )}
+          {state?.smartCap != null && (
+            <Row
+              title="Smart frame cap"
+              badge={<AdminBadge on={state.fpsCap != null || undefined} />}
+              hint={`A cap a little under your monitor's refresh rate (${state.smartCap} FPS here) keeps G-Sync or FreeSync engaged and stops frames queuing up, for lower, steadier latency. Set in the game's NVIDIA driver profile.${state.fpsCap != null ? ` Now: ${state.fpsCap} FPS.` : ''}`}
+            >
+              {state.fpsCap != null ? (
+                <Button size="sm" variant="ghost" onClick={() => void setCap(0)}>
+                  Remove the {state.fpsCap} FPS cap
+                </Button>
+              ) : (
+                <Button size="sm" onClick={() => void setCap(state.smartCap ?? 0)}>
+                  Cap at {state.smartCap} FPS
+                </Button>
+              )}
             </Row>
           )}
           {!draft.exePath && (b.gpuHighPerformance || b.fullscreenOptimizationsOff) && <div className="px-5 py-2.5 text-[12px] text-faint">GPU and fullscreen settings are applied once OmniHub has seen the game run.</div>}

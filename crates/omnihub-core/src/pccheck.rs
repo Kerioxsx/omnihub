@@ -179,6 +179,43 @@ pub struct ReadyItem {
     pub route: Option<String>,
 }
 
+/// Programs that draw over games (process → the name people know). Each
+/// can cost frames or add latency; some games' anti-cheat dislikes them.
+pub const OVERLAYS: &[(&str, &str)] = &[
+    ("NVIDIA Overlay.exe", "NVIDIA overlay"),
+    ("GameBar.exe", "Xbox Game Bar"),
+    ("RTSS.exe", "RivaTuner Statistics Server"),
+    ("MSIAfterburner.exe", "MSI Afterburner"),
+    ("Overwolf.exe", "Overwolf"),
+    ("Medal.exe", "Medal"),
+    ("Outplayed.exe", "Outplayed"),
+    ("RazerCortex.exe", "Razer Cortex"),
+    ("FPSMonitor.exe", "FPS Monitor"),
+];
+
+/// The overlays among the running programs (`running(name)` says whether one runs).
+pub fn overlays(running: &dyn Fn(&str) -> bool) -> Vec<&'static str> {
+    OVERLAYS.iter().filter(|(p, _)| running(p)).map(|(_, n)| *n).collect()
+}
+
+/// Graphics drivers' shader caches (vendor, folder under %LOCALAPPDATA%).
+pub const SHADER_CACHES: &[(&str, &str)] = &[("NVIDIA", r"NVIDIA\DXCache"), ("NVIDIA", r"NVIDIA\GLCache"), ("AMD", r"AMD\DxCache"), ("AMD", r"AMD\DxcCache"), ("AMD", r"AMD\VkCache"), ("Intel", r"Intel\ShaderCache"), ("DirectX", "D3DSCache")];
+
+/// Bytes in the shader caches that exist, per vendor (largest first).
+pub fn shader_cache_sizes(local: &std::path::Path) -> Vec<(String, u64)> {
+    let mut by: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
+    for (vendor, rel) in SHADER_CACHES {
+        let dir = local.join(rel.replace('\\', std::path::MAIN_SEPARATOR_STR));
+        if dir.is_dir() {
+            let n: u64 = walkdir::WalkDir::new(&dir).into_iter().filter_map(Result::ok).filter(|e| e.file_type().is_file()).filter_map(|e| e.metadata().ok()).map(|m| m.len()).sum();
+            *by.entry(vendor.to_string()).or_default() += n;
+        }
+    }
+    let mut v: Vec<(String, u64)> = by.into_iter().collect();
+    v.sort_by_key(|x| std::cmp::Reverse(x.1));
+    v
+}
+
 fn item(title: &str, status: &str, detail: String, route: Option<&str>) -> ReadyItem {
     ReadyItem { title: title.into(), status: status.into(), detail, route: route.map(String::from) }
 }
@@ -206,6 +243,24 @@ impl crate::core::AppCore {
             Some(t) => item("Temperatures", "ok", format!("{t:.0} °C."), None),
             None => item("Temperatures", "ok", "Not readable on this PC.".into(), None),
         });
+        let on = overlays(&|p| !self.procs.pids_named(p).is_empty());
+        out.push(if on.is_empty() {
+            item("Overlays", "ok", "None of the usual overlays are running (Discord's and Steam's are set in those apps).".into(), None)
+        } else {
+            item("Overlays", "warn", format!("Running: {}. Overlays can cost frames and add delay; close the ones you don't use. Discord's and Steam's are set in those apps.", on.join(", ")), Some("tasks"))
+        });
+        if let Some(local) = dirs::data_local_dir() {
+            let caches = shader_cache_sizes(&local);
+            let nvidia = caches.iter().find(|(v, _)| v == "NVIDIA").map(|x| x.1);
+            if let Some(n) = nvidia {
+                let gb = n as f64 / 1e9;
+                out.push(if gb >= 3.6 {
+                    item("Shader cache", "warn", format!("The NVIDIA shader cache holds {gb:.1} GB, close to the driver's usual 4 GB limit: older shaders get thrown out and rebuilt, which stutters. In the NVIDIA Control Panel → Manage 3D settings, set Shader Cache Size to 10 GB or Unlimited."), None)
+                } else {
+                    item("Shader cache", "ok", format!("The NVIDIA shader cache holds {gb:.1} GB."), None)
+                });
+            }
+        }
         let quiet = self.quiet_status().on;
         if quiet {
             out.push(item("Quiet mode", "warn", "Quiet mode is on: the fans are at their lowest.".into(), None));
@@ -238,6 +293,18 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overlays_and_shader_caches() {
+        assert_eq!(overlays(&|p| p == "RTSS.exe" || p == "chrome.exe"), vec!["RivaTuner Statistics Server"]);
+        let t = tempfile::tempdir().unwrap();
+        let nv = t.path().join("NVIDIA").join("DXCache");
+        std::fs::create_dir_all(&nv).unwrap();
+        std::fs::write(nv.join("a.bin"), vec![0u8; 3000]).unwrap();
+        std::fs::create_dir_all(t.path().join("D3DSCache").join("x")).unwrap();
+        std::fs::write(t.path().join("D3DSCache").join("x").join("b"), vec![0u8; 100]).unwrap();
+        assert_eq!(shader_cache_sizes(t.path()), vec![("NVIDIA".to_string(), 3000), ("DirectX".to_string(), 100)]);
+    }
 
     #[test]
     fn reads_drives_and_judges_heat() {

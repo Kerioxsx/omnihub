@@ -13,6 +13,7 @@ import { EmptyState } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { toast } from '../../state/toasts';
 import { AimTrainerCard } from './AimTrainer';
+import { MouseRateCard, StretchedCard } from './StretchedCard';
 import { CrosshairCard } from './CrosshairCard';
 import { GameAlertsCard, ReadyCard } from './GameAlertsCard';
 
@@ -372,6 +373,8 @@ export function ExtrasTab() {
       <ReadyCard />
       <SensitivityCard />
       <AimTrainerCard />
+      <MouseRateCard />
+      <StretchedCard />
       <CrosshairCard />
       {content}
       <p className="flex items-center gap-1.5 px-1 text-[11.5px] text-faint">

@@ -329,7 +329,7 @@ export const api = {
     checkStreamers: () => call<T.WatchStore>('watch_streamers_check'),
     setRecap: (time: string) => call<T.WatchStore>('watch_recap_set', { time }),
     recapNow: () => call<{ title: string; body: string }>('watch_recap_now'),
-    setGameAlerts: (free: boolean, patches: boolean) => call<T.WatchStore>('watch_game_alerts', { free, patches }),
+    setGameAlerts: (free: boolean, patches: boolean, fortnite?: boolean) => call<T.WatchStore>('watch_game_alerts', { free, patches, fortnite: fortnite ?? null }),
   },
   voice: (text: string) => call<string>('voice_command', { text }),
   /** PlayStation controllers' light bar colour ("#ff6a00"); Bluetooth only when allowed. */
@@ -364,6 +364,11 @@ export const api = {
     stress: (seconds: number) => call<void>('stress_start', { seconds }),
     stopStress: () => call<void>('stress_stop'),
     ready: () => call<T.ReadyItem[]>('game_ready'),
+    benchResults: () => call<T.BenchResult[]>('bench_results'),
+    /** Runs for 10–30 seconds; progress as "bench:progress". */
+    bench: () => call<T.BenchResult[]>('bench_run'),
+    /** Empty Windows' standby memory list (administrator prompt). */
+    purgeStandby: () => call<void>('standby_purge'),
   },
   pin: {
     windows: () => call<T.PinWindow[]>('windows_list'),
@@ -630,6 +635,8 @@ export const api = {
     save: (profile: T.GameProfile) => call<{ profile: T.GameProfile; warnings: string[] }>('games_save', { profile }),
     remove: (id: string) => call<void>('games_delete', { id }),
     state: (id: string) => call<T.GameState | null>('games_state', { id }),
+    /** The game's NVIDIA driver frame cap (administrator prompt); 0 removes it. */
+    setFpsCap: (id: string, fps: number) => call<T.GameState | null>('games_fps_cap', { id, fps }),
     play: (id: string, launch: boolean) => call<T.GameSession>('games_play', { id, launch }),
     stop: () => call<boolean>('games_stop'),
     ping: (id: string | null, host?: string) => call<T.PingResult[]>('games_ping', { id, host: host ?? null }),

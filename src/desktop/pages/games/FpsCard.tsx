@@ -70,15 +70,24 @@ export function LiveFps({ live, trail, compact }: { live: FpsLive; trail: number
         <Stat label="1% low" value={`${Math.round(live.low1)}`} />
         <Stat label="Frame time" value={`${live.frameMs.toFixed(2)} ms`} />
         <Stat label="Slowest frame" value={`${live.worstMs.toFixed(1)} ms`} warn={live.worstMs > Math.max(live.frameMs * 2.5, 8)} />
+        {live.latencyMs != null && <Stat label="To screen" value={`${live.latencyMs.toFixed(1)} ms`} warn={live.latencyMs > 25} title={directPath(live.presentMode)} />}
         <Sparkline values={trail} className={cx('ml-auto min-w-[140px] flex-1 basis-40', compact ? 'h-10' : 'h-14')} />
       </div>
     </div>
   );
 }
 
-function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+/** What the present mode means for latency, in plain words. */
+export function directPath(mode: string): string {
+  if (!mode) return 'From the game handing a frame over to it reaching the screen.';
+  if (/independent flip/i.test(mode)) return `${mode}: the direct path to the screen (lowest latency).`;
+  if (/composed/i.test(mode)) return `${mode}: the desktop sits in between, which adds latency. Fullscreen or turning off overlays can help.`;
+  return mode;
+}
+
+function Stat({ label, value, warn, title }: { label: string; value: string; warn?: boolean; title?: string }) {
   return (
-    <div>
+    <div title={title}>
       <div className="text-[11px] font-medium uppercase tracking-[0.06em] text-faint">{label}</div>
       <div className={cx('text-[16px] font-semibold tabular', warn ? 'text-warn' : 'text-fg')}>{value}</div>
     </div>

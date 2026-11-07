@@ -28,6 +28,7 @@ pub enum TweakId {
     GameDvr,
     GameMode,
     WindowedGames,
+    VariableRefresh,
     GpuScheduling,
     PreciseTimer,
     NetworkThrottling,
@@ -37,9 +38,9 @@ pub enum TweakId {
 }
 
 impl TweakId {
-    pub fn all() -> [TweakId; 12] {
+    pub fn all() -> [TweakId; 13] {
         use TweakId::*;
-        [RefreshRate, MemorySpeed, PowerPlan, GameDvr, GameMode, WindowedGames, GpuScheduling, PreciseTimer, NetworkThrottling, MouseAcceleration, StickyKeys, MemoryIntegrity]
+        [RefreshRate, MemorySpeed, PowerPlan, GameDvr, GameMode, WindowedGames, VariableRefresh, GpuScheduling, PreciseTimer, NetworkThrottling, MouseAcceleration, StickyKeys, MemoryIntegrity]
     }
 
     fn key(self) -> &'static str {
@@ -50,6 +51,7 @@ impl TweakId {
             TweakId::GameDvr => "gameDvr",
             TweakId::GameMode => "gameMode",
             TweakId::WindowedGames => "windowedGames",
+            TweakId::VariableRefresh => "variableRefresh",
             TweakId::GpuScheduling => "gpuScheduling",
             TweakId::PreciseTimer => "preciseTimer",
             TweakId::NetworkThrottling => "networkThrottling",
@@ -165,6 +167,7 @@ fn describe(id: TweakId) -> (&'static str, &'static str, Impact, bool, bool) {
         TweakId::GameDvr => ("Background game recording off", "Xbox Game Bar can record games in the background (Game DVR), which costs frames. Screenshots with Win+Shift+S still work.", Impact::Medium, false, false),
         TweakId::GameMode => ("Game Mode", "Windows holds back updates and background work while a game runs.", Impact::Low, false, false),
         TweakId::WindowedGames => ("Optimizations for windowed games", "Windows 11 runs games in borderless windows with the same low input delay as fullscreen.", Impact::Medium, false, false),
+        TweakId::VariableRefresh => ("Variable refresh rate in windowed games", "Lets G-Sync or FreeSync work in borderless games that don't support it themselves, so frames show as they're ready: no tearing, less stutter. G-Sync or FreeSync itself must also be on in the graphics driver (NVIDIA Control Panel or AMD Software) and in the monitor's own menu.", Impact::Medium, false, false),
         TweakId::GpuScheduling => ("Hardware-accelerated GPU scheduling", "The graphics card schedules its own work: lower delay, and needed for DLSS frame generation. Takes effect after a restart.", Impact::Medium, true, true),
         TweakId::PreciseTimer => ("Precise timer for games", "Lets a boost's 0.5 ms Windows timer reach the game (Windows 11 otherwise keeps it to the program that asked). Games that pace frames with short waits hold steadier frame times. Takes effect after a restart.", Impact::Low, true, true),
         TweakId::NetworkThrottling => ("No network throttling during media", "Windows slows network handling while audio or video plays and keeps 20% of the processor for background work. This lifts the limit and keeps 10%. Takes effect after a restart.", Impact::Low, true, true),
@@ -172,6 +175,11 @@ fn describe(id: TweakId) -> (&'static str, &'static str, Impact, bool, bool) {
         TweakId::MouseAcceleration => ("Mouse acceleration off", "“Enhance pointer precision” off, so the same hand movement always turns the same amount — for aim, not frames.", Impact::Low, false, false),
         TweakId::MemoryIntegrity => ("Memory Integrity", "A Windows security feature that Microsoft says can lower game performance. Your choice, in Windows Security → Core isolation.", Impact::High, false, true),
     }
+}
+
+/// The monitors and their refresh rates.
+pub fn displays() -> Vec<Display> {
+    imp::displays()
 }
 
 /// Every tweak and its state.
@@ -452,6 +460,13 @@ mod imp {
                 let on = read_string(HKEY_CURRENT_USER, DX, DX_GLOBAL).and_then(|l| dx_get(&l, "SwapEffectUpgradeEnable")).as_deref() == Some("1");
                 st(true, on, if on { "On".into() } else { "Off".into() })
             }
+            TweakId::VariableRefresh => {
+                if build() < 18362 {
+                    return st(false, false, "Needs Windows 10 1903 or later".into());
+                }
+                let on = read_string(HKEY_CURRENT_USER, DX, DX_GLOBAL).and_then(|l| dx_get(&l, "VRROptimizeEnable")).as_deref() == Some("1");
+                st(true, on, if on { "On".into() } else { "Off".into() })
+            }
             TweakId::GpuScheduling => {
                 if build() < 19041 {
                     return st(false, false, "Needs Windows 10 2004 or later".into());
@@ -527,9 +542,10 @@ mod imp {
                 hkcu_set_dword(GAMEBAR, "AutoGameModeEnabled", Some(1))?;
                 Ok((before, None))
             }
-            TweakId::WindowedGames => {
+            TweakId::WindowedGames | TweakId::VariableRefresh => {
+                let key = if id == TweakId::WindowedGames { "SwapEffectUpgradeEnable" } else { "VRROptimizeEnable" };
                 let before = read_string(HKEY_CURRENT_USER, DX, DX_GLOBAL);
-                let next = dx_set(before.as_deref().unwrap_or_default(), "SwapEffectUpgradeEnable", Some("1"));
+                let next = dx_set(before.as_deref().unwrap_or_default(), key, Some("1"));
                 RegKey::predef(HKEY_CURRENT_USER).create_subkey(DX).and_then(|(k, _)| k.set_value(DX_GLOBAL, &next)).map_err(|e| e.to_string())?;
                 Ok((json!(before), None))
             }
@@ -585,13 +601,14 @@ mod imp {
                 hkcu_set_dword(DVR_APP, "AppCaptureEnabled", n("app"))
             }
             TweakId::GameMode => hkcu_set_dword(GAMEBAR, "AutoGameModeEnabled", before.as_u64().map(|v| v as u32)),
-            TweakId::WindowedGames => {
+            TweakId::WindowedGames | TweakId::VariableRefresh => {
+                let key = if id == TweakId::WindowedGames { "SwapEffectUpgradeEnable" } else { "VRROptimizeEnable" };
                 let k = RegKey::predef(HKEY_CURRENT_USER).create_subkey(DX).map_err(|e| e.to_string())?.0;
                 match before.as_str() {
                     Some(v) => k.set_value(DX_GLOBAL, &v.to_string()).map_err(|e| e.to_string()),
                     None => {
                         let now = k.get_value::<String, _>(DX_GLOBAL).unwrap_or_default();
-                        let rest = dx_set(&now, "SwapEffectUpgradeEnable", None);
+                        let rest = dx_set(&now, key, None);
                         if rest.is_empty() {
                             let _ = k.delete_value(DX_GLOBAL);
                             Ok(())

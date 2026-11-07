@@ -2,8 +2,8 @@
 // a Wi-Fi QR code for guests, and pinning any window on top.
 
 import { formatBytes } from '@shared/format';
-import type { DriveHealth, PinWindow, StressResult, WifiQr } from '@shared/types';
-import { Flame, HardDrive, Pin, PinOff, QrCode, RefreshCw, Square } from 'lucide-react';
+import type { BenchResult, DriveHealth, PinWindow, StressResult, WifiQr } from '@shared/types';
+import { Flame, Gauge, HardDrive, MemoryStick, Pin, PinOff, QrCode, RefreshCw, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
@@ -185,11 +185,106 @@ function Pins() {
   );
 }
 
+/** Percent change, and the line comparing a run with the one before (as the core does). */
+const pct = (a: number, b: number) => (a > 0 ? ((b - a) / a) * 100 : 0);
+
+function Bench() {
+  const [runs, setRuns] = useState<BenchResult[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
+  useEffect(() => void api.pcCheck.benchResults().then(setRuns, () => setRuns([])), []);
+  useEvent<{ percent: number }>('bench:progress', (p) => setProgress(p.percent));
+  const go = async () => {
+    setBusy(true);
+    setProgress(0);
+    try {
+      setRuns(await api.pcCheck.bench());
+    } catch (e) {
+      toast.error('The benchmark didn’t finish', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const list = runs ?? [];
+  const last = list[list.length - 1];
+  const prev = list[list.length - 2];
+  const parts: [string, keyof BenchResult, string][] = [
+    ['One core', 'single', 'MB/s'],
+    ['All cores', 'multi', 'MB/s'],
+    ['Memory', 'memory', 'GB/s'],
+  ];
+  return (
+    <Card className="p-5">
+      <CardHeader
+        icon={Gauge}
+        title="Benchmark"
+        subtitle="The same work every time, so you can compare: run it now and again after a change, or in a month. Close games and big programs first."
+        actions={
+          <Button size="sm" variant="primary" loading={busy} onClick={() => void go()}>
+            Run (about 20 s)
+          </Button>
+        }
+      />
+      {busy && <ProgressBar value={progress} className="mt-4" />}
+      {last && (
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          {parts.map(([label, key, unit]) => {
+            const v = last[key] as number;
+            const d = prev ? pct(prev[key] as number, v) : 0;
+            return (
+              <div key={key} className="rounded-xl border border-line bg-surface-2/50 px-3 py-2.5">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-faint">{label}</div>
+                <div className="font-display text-[20px] font-semibold tabular text-fg">
+                  {key === 'memory' ? v.toFixed(1) : Math.round(v).toLocaleString()} <span className="text-[12px] font-normal text-dim">{unit}</span>
+                </div>
+                {prev && <div className={d <= -5 ? 'text-[12px] text-warn' : 'text-[12px] text-faint'}>{d >= 0 ? '+' : ''}{d.toFixed(0)}% vs last time</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {last && prev && parts.some(([, k]) => pct(prev[k] as number, last[k] as number) <= -5) && <Callout tone="warn" className="mt-3" title="Slower than last time">Check temperatures, background programs and the power plan, then run it again.</Callout>}
+      {list.length > 1 && <div className="mt-3 text-[12px] text-faint">{list.length} runs kept · first {new Date(list[0].at * 1000).toLocaleDateString()}{last.cpuTemp != null ? ` · processor reached ${Math.round(last.cpuTemp)} °C this time` : ''}</div>}
+    </Card>
+  );
+}
+
+function Standby() {
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    try {
+      await api.pcCheck.purgeStandby();
+      toast.success('Standby memory cleared');
+    } catch (e) {
+      toast.error('Couldn’t clear it', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card className="p-5">
+      <CardHeader
+        icon={MemoryStick}
+        title="Clear standby memory"
+        subtitle="Windows keeps recently used files in spare memory and hands it to programs as they need it, so this usually isn’t needed. It can help a game that stutters on a PC with little memory. Asks for administrator approval."
+        actions={
+          <Button size="sm" loading={busy} onClick={() => void go()}>
+            Clear now
+          </Button>
+        }
+      />
+    </Card>
+  );
+}
+
 export function ChecksTab() {
   return (
     <div className="space-y-4">
       <Drives />
       <Stress />
+      <Bench />
+      <Standby />
       <Pins />
       <Wifi />
     </div>

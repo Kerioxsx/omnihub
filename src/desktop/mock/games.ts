@@ -28,7 +28,7 @@ const TEMPLATES: Record<GameKind, { name: string; launch: GameLaunch; process: s
 export function withMode(b: GameBoost, mode: BoostMode): GameBoost {
   if (mode === 'custom') return { ...b, mode };
   const competitive = mode === 'competitive';
-  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, freeMemory: true, preciseTimer: true, fullSpeed: true, nvidiaProfile: competitive };
+  return { ...b, mode, powerPlan: 'ultimate', priority: competitive ? 'high' : 'aboveNormal', reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, wifiLowLatency: true, gameSettings: competitive, closeJunk: true, lowerBackground: true, freeMemory: true, preciseTimer: true, fullSpeed: true, coresAwake: true, nvidiaProfile: competitive };
 }
 
 const defaultMode = (kind: GameKind): BoostMode => (kind === 'gta5' || kind === 'cyberpunk' || kind === 'custom' ? 'quality' : 'competitive');
@@ -44,7 +44,7 @@ function template(kind: GameKind): GameProfile {
     launch: t.launch,
     process: t.process,
     exePath: kind === 'fortnite' ? 'C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe' : kind === 'roblox' ? 'C:\\Users\\You\\AppData\\Local\\Roblox\\Versions\\version-6d3a1b2c4e5f4a1b\\RobloxPlayerBeta.exe' : null,
-    boost: withMode({ mode: 'custom', powerPlan: 'ultimate', priority: 'high', closeApps: [], reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, fullscreenOptimizationsOff: false, wifiLowLatency: true, networkPriority: false, startHighPriority: false, gameSettings: true, closeJunk: true, lowerBackground: true, freeMemory: true, preciseTimer: true, fullSpeed: true, fpsMeter: true, nvidiaProfile: false }, defaultMode(kind)),
+    boost: withMode({ mode: 'custom', powerPlan: 'ultimate', priority: 'high', closeApps: [], reopenApps: true, silenceNotifications: true, gameMode: true, gpuHighPerformance: true, fullscreenOptimizationsOff: false, wifiLowLatency: true, networkPriority: false, startHighPriority: false, gameSettings: true, closeJunk: true, lowerBackground: true, freeMemory: true, preciseTimer: true, fullSpeed: true, fpsMeter: true, nvidiaProfile: false, freezeApps: [], coresAwake: true }, defaultMode(kind)),
     pingHost: null,
     roblox: { ...ROBLOX_DEFAULT },
     lastPlayed: null,
@@ -105,7 +105,14 @@ export function state(id: string): GameState | null {
   const p = profiles.find((q) => q.id === id);
   if (!p) return null;
   const a = applied.get(id) ?? { qos: false, ifeo: false, nv: false };
-  return { networkPriority: a.qos, startHighPriority: a.ifeo, nvidiaProfile: a.nv, onWifi: true, running: false };
+  return { networkPriority: a.qos, startHighPriority: a.ifeo, nvidiaProfile: a.nv, onWifi: true, running: false, fpsCap: caps.get(id) ?? null, smartCap: 138 };
+}
+
+const caps = new Map<string, number>();
+export function setFpsCap(id: string, fps: number): GameState | null {
+  if (fps) caps.set(id, fps);
+  else caps.delete(id);
+  return state(id);
 }
 
 function push(f: (s: GameSession) => void) {
@@ -121,7 +128,7 @@ export function play(id: string, launch: boolean): GameSession {
   if (session && session.phase !== 'ended') throw new Error(`${session.name} is already boosted — stop that first.`);
   timers.forEach(clearTimeout);
   timers = [];
-  session = { profileId: id, name: p.name, mode: p.boost.mode, phase: 'starting', startedAt: Math.floor(Date.now() / 1000), endedAt: null, launched: false, steps: [], restored: [], message: null, fps: null };
+  session = { profileId: id, name: p.name, mode: p.boost.mode, phase: 'starting', startedAt: Math.floor(Date.now() / 1000), endedAt: null, launched: false, steps: [], restored: [], message: null, fps: null, thermal: null };
   emit('games:session', session);
   const b = p.boost;
   const steps: GameStep[] = [];
@@ -322,7 +329,7 @@ let frames: number[] = [];
 const history: FpsRecord[] = (() => {
   const day = 86400;
   const now = Math.floor(Date.now() / 1000);
-  const rec = (name: string, mode: BoostMode, at: number, avg: number, low1: number, low01: number, hitches: number, seconds: number, label?: string): FpsRecord => ({ profileId: '', name, mode, at, label, summary: { frames: Math.round(avg * seconds), seconds, avg, low1, low01, hitches } });
+  const rec = (name: string, mode: BoostMode, at: number, avg: number, low1: number, low01: number, hitches: number, seconds: number, label?: string): FpsRecord => ({ profileId: '', name, mode, at, label, summary: { frames: Math.round(avg * seconds), seconds, avg, low1, low01, hitches, latencyMs: null } });
   const perf = 'Performance · no FPS cap · low quality · 100%';
   const dx12 = 'DirectX 12 · 240 FPS cap · medium quality · 100%';
   return [
@@ -352,7 +359,7 @@ function startFps(p: GameProfile) {
     }
     frames.push(...sec);
     const recent = frames.slice(-Math.round(10_000 / base)).sort((a, b) => a - b);
-    live = { fps: (sec.length * 1000) / t, low1: 1000 / recent[Math.floor(recent.length * 0.99)], frameMs: t / sec.length, worstMs: Math.max(...sec) };
+    live = { fps: (sec.length * 1000) / t, low1: 1000 / recent[Math.floor(recent.length * 0.99)], frameMs: t / sec.length, worstMs: Math.max(...sec), latencyMs: 6 + Math.random() * 3, presentMode: 'Hardware: Independent Flip' };
     emit('games:fps', live);
   }, 1000);
 }
@@ -365,7 +372,7 @@ function stopFps(): FpsSummary | null {
   const total = frames.reduce((a, b) => a + b, 0);
   const sorted = [...frames].sort((a, b) => a - b);
   const avgMs = total / frames.length;
-  const summary = { frames: frames.length, seconds: total / 1000, avg: (frames.length * 1000) / total, low1: 1000 / sorted[Math.floor(sorted.length * 0.99)], low01: 1000 / sorted[Math.floor(sorted.length * 0.999)], hitches: frames.filter((f) => f > Math.max(avgMs * 2.5, 8)).length };
+  const summary = { frames: frames.length, seconds: total / 1000, avg: (frames.length * 1000) / total, low1: 1000 / sorted[Math.floor(sorted.length * 0.99)], low01: 1000 / sorted[Math.floor(sorted.length * 0.999)], hitches: frames.filter((f) => f > Math.max(avgMs * 2.5, 8)).length, latencyMs: 7.4 };
   const p = profiles.find((q) => q.id === session?.profileId);
   if (p && summary.seconds >= 10) history.unshift({ profileId: p.id, name: p.name, mode: p.boost.mode, at: Math.floor(Date.now() / 1000), summary });
   frames = [];

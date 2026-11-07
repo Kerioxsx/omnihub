@@ -1391,6 +1391,10 @@ export interface GameBoost {
   fpsMeter: boolean;
   /** Per game, admin once: the game's NVIDIA driver profile set for speed. */
   nvidiaProfile: boolean;
+  /** Programs paused for the game, resumed after it. */
+  freezeApps: string[];
+  /** Core parking off while playing. */
+  coresAwake: boolean;
 }
 
 // ---------- the games' own settings, installed games, PC tweaks ----------
@@ -1493,7 +1497,7 @@ export interface InstalledGame {
   profileId: string | null;
 }
 
-export type TweakId = 'refreshRate' | 'memorySpeed' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'gpuScheduling' | 'preciseTimer' | 'networkThrottling' | 'mouseAcceleration' | 'stickyKeys' | 'memoryIntegrity';
+export type TweakId = 'refreshRate' | 'memorySpeed' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'variableRefresh' | 'gpuScheduling' | 'preciseTimer' | 'networkThrottling' | 'mouseAcceleration' | 'stickyKeys' | 'memoryIntegrity';
 
 export interface PcTweak {
   id: TweakId;
@@ -1607,6 +1611,19 @@ export interface GameSession {
   message: string | null;
   /** Frames per second over the session, when the FPS meter ran. */
   fps: FpsSummary | null;
+  /** How hot the PC ran (when temperatures can be read). */
+  thermal: ThermalReport | null;
+}
+
+export interface ThermalReport {
+  maxCpu: number | null;
+  maxGpu: number | null;
+  avgCpu: number | null;
+  avgGpu: number | null;
+  /** Share of the game (0–1) at or over the hot point. */
+  hotCpu: number;
+  hotGpu: number;
+  verdict: string;
 }
 
 // ---------- FPS meter, lag under load ----------
@@ -1617,6 +1634,10 @@ export interface FpsLive {
   low1: number;
   frameMs: number;
   worstMs: number;
+  /** Frame handed over → on screen, ms (PresentMon's display latency). */
+  latencyMs: number | null;
+  /** "Hardware: Independent Flip" is the direct path; "Composed…" goes through the desktop. */
+  presentMode: string;
 }
 
 export interface FpsSummary {
@@ -1627,6 +1648,7 @@ export interface FpsSummary {
   low01: number;
   /** Frames over 2.5× the average (and 8 ms). */
   hitches: number;
+  latencyMs: number | null;
 }
 
 export interface FpsStatus {
@@ -1672,6 +1694,10 @@ export interface GameState {
   nvidiaProfile: boolean | null;
   onWifi: boolean | null;
   running: boolean;
+  /** The game's NVIDIA driver frame cap, if set. */
+  fpsCap: number | null;
+  /** The cap that suits the fastest monitor; null without an NVIDIA driver. */
+  smartCap: number | null;
 }
 
 export interface PingTarget {
@@ -3911,6 +3937,8 @@ export interface WatchStore {
   freeAlerts: boolean;
   freeSeen: string[];
   patchAlerts: boolean;
+  /** Fortnite updates and server downtime. */
+  fortniteAlerts: boolean;
   patchSeen: Record<string, string>;
   streamers: Streamer[];
   /** "21:00", or "" for off. */
@@ -4117,6 +4145,18 @@ export interface PinWindow {
   title: string;
   app: string;
   pinned: boolean;
+}
+
+/** One benchmark run (the same work every time). */
+export interface BenchResult {
+  at: number;
+  /** MB/s of SHA-256 on one core. */
+  single: number;
+  multi: number;
+  /** GB/s of memory copy. */
+  memory: number;
+  threads: number;
+  cpuTemp: number | null;
 }
 
 /** Saved text typed into the app in front when its key is pressed. */

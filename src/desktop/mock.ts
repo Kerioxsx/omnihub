@@ -75,6 +75,7 @@ let mockWins = [
 ];
 let mockAfter = { action: '', quietSince: 0 };
 let mockSnippets = { keysOn: true, snippets: [{ id: 'a1', name: 'Good game', text: 'gg wp, thanks for the games!', key: 0x7c }] };
+let mockBench = [{ at: Math.floor(Date.now() / 1000) - 86400 * 7, single: 1834.2, multi: 21877, memory: 24.35, threads: 16, cpuTemp: 68 }];
 let mockAppLimits = [{ exe: 'OneDrive.exe', kbps: 2000, active: true }];
 let mockBoard = { sounds: [{ id: 's1', name: 'Air horn', path: 'C:\\Sounds\\air horn.mp3', key: 0x61, volume: 80 }, { id: 's2', name: 'Bruh', path: 'C:\\Sounds\\bruh.wav', key: 0, volume: 100 }], output: '', keysOn: true };
 let mockBt = [
@@ -151,6 +152,7 @@ const handlers: Record<string, Handler> = {
   games_save: (a) => games.save(obj<GameProfile>(a, 'profile')),
   games_delete: (a) => games.remove(str(a, 'id')),
   games_state: (a) => games.state(str(a, 'id')),
+  games_fps_cap: (a) => games.setFpsCap(str(a, 'id'), num(a, 'fps')),
   games_play: (a) => games.play(str(a, 'id'), bool(a, 'launch')),
   games_stop: () => games.stop(),
   games_ping: (a) => games.ping(optStr(a, 'id'), optStr(a, 'host')),
@@ -640,7 +642,7 @@ const handlers: Record<string, Handler> = {
   alarm_delete: (a) => (mockTimers = { ...mockTimers, alarms: mockTimers.alarms.filter((x) => x.id !== str(a, 'id')) }),
   bedtime_save: (a) => (mockTimers = { ...mockTimers, bedtime: a?.bedtime as typeof mockTimers.bedtime }),
   bedtime_snooze: () => mockTimers,
-  watch_game_alerts: (a) => ({ ...watchMock.get(), freeAlerts: Boolean(a?.free), patchAlerts: Boolean(a?.patches) }),
+  watch_game_alerts: (a) => ({ ...watchMock.get(), freeAlerts: Boolean(a?.free), patchAlerts: Boolean(a?.patches), fortniteAlerts: Boolean(a?.fortnite) }),
   drives_health: () => [
     { name: 'Samsung SSD 990 PRO 2TB', media: 'SSD', bus: 'NVMe', health: 'Healthy', size: 2_000_398_934_016, temperature: 41, wear: 3, powerOnHours: 1520, readErrors: 0, writeErrors: 0, verdict: 'Healthy.' },
     { name: 'WDC WD40EZAZ', media: 'HDD', bus: 'SATA', health: 'Healthy', size: 4_000_787_030_016, temperature: 36, wear: null, powerOnHours: 21980, readErrors: 4, writeErrors: 0, verdict: 'Worth watching: back up what matters on it.' },
@@ -671,6 +673,16 @@ const handlers: Record<string, Handler> = {
     const s = (a?.settings ?? mockSnippets) as typeof mockSnippets;
     mockSnippets = { ...s, snippets: s.snippets.map((x, i) => ({ ...x, id: x.id || `s${Date.now()}${i}`, name: x.name.trim() || x.text.split('\n')[0].slice(0, 24) })) };
     return mockSnippets;
+  },
+  standby_purge: async () => new Promise((r) => setTimeout(r, 600)),
+  bench_results: () => mockBench,
+  bench_run: async () => {
+    for (const p of [5, 35, 75, 100]) {
+      emit('bench:progress', { percent: p });
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    mockBench = [...mockBench, { at: Math.floor(Date.now() / 1000), single: 1820 + Math.random() * 40, multi: 21400 + Math.random() * 500, memory: 24.1, threads: 16, cpuTemp: 71 }];
+    return mockBench;
   },
   net_limits: () => mockAppLimits,
   net_limit_set: (a) => {

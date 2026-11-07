@@ -59,6 +59,10 @@ pub enum AdminOp {
     /// Cap a program's upload, in Kbps (see `system::netlimit`).
     LimitOn(String, u32),
     LimitOff(String),
+    /// The game's NVIDIA driver frame cap (0 removes it).
+    NvCap(String, u32),
+    /// Empty Windows' standby memory list (cached files kept in RAM).
+    PurgeStandby,
 }
 
 impl AdminOp {
@@ -72,11 +76,21 @@ impl AdminOp {
             AdminOp::NvidiaOff(e) => format!("nv-:{e}"),
             AdminOp::LimitOn(e, kbps) => format!("lim+:{kbps}:{e}"),
             AdminOp::LimitOff(e) => format!("lim-:{e}"),
+            AdminOp::NvCap(e, fps) => format!("nvcap:{fps}:{e}"),
+            AdminOp::PurgeStandby => "standby".into(),
         }
     }
 
     pub fn parse(arg: &str) -> Option<AdminOp> {
+        if arg == "standby" {
+            return Some(AdminOp::PurgeStandby);
+        }
         let (op, exe) = arg.split_once(':')?;
+        if op == "nvcap" {
+            let (n, exe) = exe.split_once(':')?;
+            let fps: u32 = n.parse().ok()?;
+            return (valid_exe_name(exe) && (fps == 0 || (30..=1000).contains(&fps))).then(|| AdminOp::NvCap(exe.to_string(), fps));
+        }
         if op == "lim+" {
             let (n, exe) = exe.split_once(':')?;
             let kbps: u32 = n.parse().ok()?;
@@ -98,6 +112,11 @@ impl AdminOp {
         })
     }
 }
+
+/// The power plan's processor group, and its core-parking setting
+/// ("Processor performance core parking min cores").
+pub const SUB_PROCESSOR: &str = "54533251-82be-4824-96c1-47b60b740d00";
+pub const CPMINCORES: &str = "0cc5b647-c1df-4637-891a-dec35c318583";
 
 pub fn qos_policy_name(exe: &str) -> String {
     format!("OmniHub - {exe}")
@@ -300,6 +319,8 @@ mod imp {
                 AdminOp::NvidiaOn(exe) => crate::games::nvidia::apply(exe).map(|_| ()),
                 AdminOp::NvidiaOff(exe) => crate::games::nvidia::undo(exe),
                 AdminOp::LimitOn(exe, kbps) => limit_on(exe, *kbps),
+                AdminOp::NvCap(exe, fps) => crate::games::nvidia::set_cap(exe, *fps),
+                AdminOp::PurgeStandby => purge_standby(),
                 AdminOp::LimitOff(exe) => run("powershell", &["-NoProfile", "-NonInteractive", "-Command", &format!("Remove-NetQosPolicy -Name '{}' -Confirm:$false", crate::system::netlimit::policy_name(exe))]).map(|_| ()),
             };
             if let Err(e) = r {
@@ -384,6 +405,42 @@ mod imp {
         fn drop(&mut self) {
             unsafe {
                 windows::Win32::NetworkManagement::WiFi::WlanCloseHandle(self.0, None);
+            }
+        }
+    }
+
+    // ---------- standby memory ----------
+
+    /// Elevated: empty the standby list (NtSetSystemInformation with
+    /// SystemMemoryListInformation / MemoryPurgeStandbyList, which needs
+    /// SeProfileSingleProcessPrivilege).
+    fn purge_standby() -> Result<(), String> {
+        use windows::core::w;
+        use windows::Win32::Foundation::{CloseHandle, HANDLE, LUID};
+        use windows::Win32::Security::{AdjustTokenPrivileges, LookupPrivilegeValueW, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY};
+        use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+        type SetInfo = unsafe extern "system" fn(u32, *mut core::ffi::c_void, u32) -> i32;
+        const SYSTEM_MEMORY_LIST_INFORMATION: u32 = 80;
+        const MEMORY_PURGE_STANDBY_LIST: u32 = 4;
+        // SAFETY: token handle owned and closed here; the ntdll export has the documented signature.
+        unsafe {
+            let mut token = HANDLE::default();
+            OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &mut token).map_err(|e| e.message().to_string())?;
+            let mut luid = LUID::default();
+            let r = LookupPrivilegeValueW(None, w!("SeProfileSingleProcessPrivilege"), &mut luid);
+            if r.is_ok() {
+                let tp = TOKEN_PRIVILEGES { PrivilegeCount: 1, Privileges: [LUID_AND_ATTRIBUTES { Luid: luid, Attributes: SE_PRIVILEGE_ENABLED }] };
+                let _ = AdjustTokenPrivileges(token, false, Some(&tp), 0, None, None);
+            }
+            let _ = CloseHandle(token);
+            let f = ntdll(c"NtSetSystemInformation").ok_or("ntdll has no NtSetSystemInformation")?;
+            let set: SetInfo = std::mem::transmute(f);
+            let mut cmd = MEMORY_PURGE_STANDBY_LIST;
+            let status = set(SYSTEM_MEMORY_LIST_INFORMATION, (&mut cmd as *mut u32).cast(), 4);
+            if status == 0 {
+                Ok(())
+            } else {
+                Err(format!("Windows answered {status:#x}"))
             }
         }
     }
@@ -546,6 +603,26 @@ mod imp {
         run("powercfg", &["/setactive", "SCHEME_CURRENT"]).map(|_| ())
     }
 
+    /// Core parking: the share of cores (%) the active plan keeps awake,
+    /// plugged in and on battery, with the plan's GUID.
+    pub fn min_cores() -> Option<(String, u32, u32)> {
+        let scheme = active_plan()?;
+        let out = run("powercfg", &["/query", &scheme, super::SUB_PROCESSOR, super::CPMINCORES]).ok()?;
+        crate::games::fortnite::parse_power_values(&out).map(|(ac, dc)| (scheme, ac, dc))
+    }
+
+    pub fn set_min_cores(scheme: &str, ac: u32, dc: u32) -> Result<(), String> {
+        if super::guids(scheme).len() != 1 {
+            return Err("Not a power plan".into());
+        }
+        run("powercfg", &["/setacvalueindex", scheme, super::SUB_PROCESSOR, super::CPMINCORES, &ac.min(100).to_string()])?;
+        run("powercfg", &["/setdcvalueindex", scheme, super::SUB_PROCESSOR, super::CPMINCORES, &dc.min(100).to_string()])?;
+        if active_plan().as_deref() == Some(scheme) {
+            run("powercfg", &["/setactive", scheme])?;
+        }
+        Ok(())
+    }
+
     // ---------- launching ----------
 
     /// Riot Client's location, from its own install record.
@@ -627,6 +704,12 @@ mod imp {
     pub fn wifi_saving() -> Option<u32> {
         None
     }
+    pub fn min_cores() -> Option<(String, u32, u32)> {
+        None
+    }
+    pub fn set_min_cores(_scheme: &str, _ac: u32, _dc: u32) -> Result<(), String> {
+        Err(ONLY.into())
+    }
     pub fn set_wifi_saving(_value: u32) -> Result<(), String> {
         Err(ONLY.into())
     }
@@ -686,6 +769,15 @@ mod tests {
         assert_eq!(AdminOp::parse("lim+:5:OneDrive.exe"), None);
         assert_eq!(AdminOp::parse("lim+:2000:a;b.exe"), None);
         assert_eq!(AdminOp::parse("lim-:OneDrive.exe"), Some(AdminOp::LimitOff("OneDrive.exe".into())));
+        let cap = AdminOp::NvCap("cs2.exe".into(), 138);
+        assert_eq!(AdminOp::parse(&cap.arg()), Some(cap));
+        assert_eq!(AdminOp::parse("nvcap:0:cs2.exe"), Some(AdminOp::NvCap("cs2.exe".into(), 0)));
+        assert_eq!(AdminOp::parse("nvcap:5:cs2.exe"), None);
+        assert_eq!(AdminOp::parse("standby"), Some(AdminOp::PurgeStandby));
+        assert_eq!(AdminOp::parse(&AdminOp::PurgeStandby.arg()), Some(AdminOp::PurgeStandby));
+        assert_eq!(crate::games::nvidia::smart_cap(144), 138);
+        assert_eq!(crate::games::nvidia::smart_cap(240), 224);
+        assert_eq!(crate::games::nvidia::smart_cap(60), 59);
         assert_eq!(qos_policy_name("cs2.exe"), "OmniHub - cs2.exe");
     }
 }

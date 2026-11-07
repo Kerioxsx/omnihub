@@ -169,6 +169,9 @@ export function App() {
         case 'watch:free':
           toast.info(`Free to keep: ${payload?.title ?? 'a game'}`, payload?.store ?? '', payload?.url ? { label: 'Open', run: () => window.open(payload.url, '_blank', 'noopener') } : undefined);
           break;
+        case 'watch:fortnite':
+          toast.info(payload?.title ?? 'Fortnite', payload?.body ?? '');
+          break;
         case 'watch:patch':
           toast.info(`${payload?.game ?? 'A game'} updated`, payload?.title ?? '');
           break;

@@ -5,7 +5,7 @@
 
 import type { ConfigStatus, GameConfigs, PcStatus, PcTweak, TweakId } from '@shared/types';
 import { motion } from 'motion/react';
-import { ArrowRight, CheckCircle2, Cpu, ExternalLink, Gauge, Keyboard, MemoryStick, Monitor, MonitorPlay, MousePointer2, Network, Power, RotateCcw, ShieldAlert, Sparkles, SquareStack, Timer, Trash2, Video, Zap } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Cpu, ExternalLink, Gauge, Keyboard, MemoryStick, Monitor, MonitorCheck, MonitorPlay, MousePointer2, Network, Power, RotateCcw, ShieldAlert, Sparkles, SquareStack, Timer, Trash2, Video, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
@@ -23,6 +23,7 @@ const ICON: Record<TweakId, typeof Zap> = {
   gameDvr: Video,
   gameMode: Gauge,
   windowedGames: SquareStack,
+  variableRefresh: MonitorCheck,
   gpuScheduling: MonitorPlay,
   preciseTimer: Timer,
   networkThrottling: Network,

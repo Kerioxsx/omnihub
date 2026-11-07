@@ -24,6 +24,7 @@ pub mod roblox;
 pub mod shelf;
 pub mod storeart;
 pub mod stores;
+pub mod thermal;
 pub mod tweaks;
 
 use std::path::{Path, PathBuf};
@@ -180,6 +181,10 @@ pub struct Boost {
     /// speed (full clocks, low latency, fast texture filtering, no forced
     /// VSync).
     pub nvidia_profile: bool,
+    /// Programs paused for the game and resumed after it (see `system::freeze`).
+    pub freeze_apps: Vec<String>,
+    /// Every processor core stays awake (core parking off in the power plan).
+    pub cores_awake: bool,
 }
 
 impl Boost {
@@ -205,6 +210,7 @@ impl Boost {
         b.free_memory = true;
         b.precise_timer = true;
         b.full_speed = true;
+        b.cores_awake = true;
         // Texture filtering's fast setting is a (small) picture trade-off.
         b.nvidia_profile = competitive;
         b
@@ -234,6 +240,8 @@ impl Default for Boost {
             full_speed: true,
             fps_meter: true,
             nvidia_profile: false,
+            freeze_apps: Vec::new(),
+            cores_awake: true,
         }
     }
 }
@@ -464,6 +472,9 @@ pub struct Session {
     pub message: Option<String>,
     /// Frames per second over the session, when the FPS meter ran.
     pub fps: Option<fps::Summary>,
+    /// How hot it ran (when temperatures can be read).
+    #[serde(default)]
+    pub thermal: Option<thermal::ThermalReport>,
 }
 
 impl Session {
@@ -485,6 +496,12 @@ struct Journal {
     reopen: bool,
     /// Programs set to "Below normal" for the session.
     lowered: Vec<String>,
+    /// Programs paused for the session.
+    #[serde(default)]
+    frozen: Vec<String>,
+    /// Core parking before: (power plan, plugged in %, on battery %).
+    #[serde(default)]
+    min_cores_before: Option<(String, u32, u32)>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -521,6 +538,13 @@ pub struct GameState {
     pub nvidia_profile: Option<bool>,
     pub on_wifi: Option<bool>,
     pub running: bool,
+    /// The game's NVIDIA driver frame cap, if set.
+    #[serde(default)]
+    pub fps_cap: Option<u32>,
+    /// The cap that suits the fastest monitor (see `nvidia::smart_cap`);
+    /// `None` without an NVIDIA driver.
+    #[serde(default)]
+    pub smart_cap: Option<u32>,
 }
 
 struct Inner {
@@ -546,6 +570,7 @@ pub struct GameHub {
     fps_marker: PathBuf,
     fps_installing: AtomicBool,
     live_fps: Mutex<Option<fps::Live>>,
+    thermal: Mutex<thermal::ThermalLog>,
     /// For tests: a stand-in PresentMon, allowed to run.
     fps_test_tool: Mutex<Option<PathBuf>>,
     events: EventBus,
@@ -615,6 +640,7 @@ impl GameHub {
             fps_marker: data_dir.join("fps-access.json"),
             fps_installing: AtomicBool::new(false),
             live_fps: Mutex::new(None),
+            thermal: Mutex::new(Default::default()),
             fps_test_tool: Mutex::new(None),
             store_path,
             events,
@@ -661,6 +687,13 @@ impl GameHub {
 
     pub fn profile(&self, id: &str) -> Option<GameProfile> {
         self.inner.lock().store.profiles.iter().find(|p| p.id == id).cloned()
+    }
+
+    /// A temperature reading while a game is boosted (from the core's watcher).
+    pub fn thermal_sample(&self, cpu: Option<f32>, gpu: Option<f32>) {
+        if self.inner.lock().session.as_ref().is_some_and(|s| s.phase == Phase::Boosted) {
+            self.thermal.lock().add(cpu, gpu);
+        }
     }
 
     pub fn session(&self) -> Option<Session> {
@@ -789,7 +822,18 @@ impl GameHub {
             nvidia_profile: nvidia_available().then(|| has && nvidia::state(&p.process).is_ok_and(|s| s.on)),
             on_wifi: tweaks::on_wifi(),
             running: has && !self.procs.pids_named(&p.process).is_empty(),
+            fps_cap: if has && nvidia_available() { nvidia::cap(&p.process).ok().flatten() } else { None },
+            smart_cap: nvidia_available().then(|| pc::displays().iter().map(|d| d.max_hz.max(d.hz)).max().filter(|hz| *hz >= 30).map(nvidia::smart_cap)).flatten(),
         })
+    }
+
+    /// Cap the game in its NVIDIA driver profile (0 removes the cap).
+    pub fn set_fps_cap(&self, id: &str, fps: u32) -> Result<(), String> {
+        let p = self.profile(id).ok_or("That game isn't there")?;
+        if p.process.is_empty() {
+            return Err("OmniHub needs to see the game run once first".into());
+        }
+        tweaks::run_admin(&[AdminOp::NvCap(p.process.clone(), fps)])
     }
 
     pub fn roblox_status(&self) -> roblox::RobloxInstall {
@@ -1183,7 +1227,8 @@ impl GameHub {
                 }
                 return Err(format!("{} is already boosted — stop that first.", s.name));
             }
-            inner.session = Some(Session { profile_id: p.id.clone(), name: p.name.clone(), mode: p.boost.mode, phase: Phase::Starting, started_at: crate::db::now(), ended_at: None, launched: false, steps: Vec::new(), restored: Vec::new(), message: None, fps: None });
+            inner.session = Some(Session { profile_id: p.id.clone(), name: p.name.clone(), mode: p.boost.mode, phase: Phase::Starting, started_at: crate::db::now(), ended_at: None, launched: false, steps: Vec::new(), restored: Vec::new(), message: None, fps: None, thermal: None });
+            self.thermal.lock().clear();
             inner.stop = Some(stop.clone());
         }
         self.emit();
@@ -1300,6 +1345,21 @@ impl GameHub {
             self.push(step("memory", "Free memory", r));
         }
 
+        // 1d. Pause the programs picked for it.
+        if !b.freeze_apps.is_empty() {
+            let mut paused = Vec::new();
+            for name in b.freeze_apps.iter().filter(|n| crate::system::freeze::allowed(n, &p.process) && !needed_by(&p.launch).iter().any(|k| k.eq_ignore_ascii_case(n))) {
+                let pids = self.procs.pids_named(name);
+                if !pids.is_empty() && crate::system::freeze::set(&pids, true) > 0 {
+                    paused.push(short(name).to_string());
+                    j.frozen.push(name.clone());
+                }
+            }
+            save_journal(&j);
+            let r = if !cfg!(windows) { Err("Windows only".into()) } else if paused.is_empty() { Ok("skip: none of them were running".to_string()) } else { Ok(format!("Paused {}", paused.join(", "))) };
+            self.push(step("freeze", "Paused apps", r));
+        }
+
         // 2. Power plan.
         if b.power_plan != PowerPlan::Keep {
             let before = tweaks::active_plan();
@@ -1317,6 +1377,21 @@ impl GameHub {
             });
             save_journal(&j);
             self.push(step("power", "Power plan", r));
+        }
+
+        // 2b. Every core awake (core parking off) in the plan now active.
+        if b.cores_awake {
+            let r = match tweaks::min_cores() {
+                Some((_, ac, dc)) if ac >= 100 && dc >= 100 => Ok("skip: the power plan already keeps every core awake".to_string()),
+                Some((scheme, ac, dc)) => tweaks::set_min_cores(&scheme, 100, 100).map(|_| {
+                    j.min_cores_before = Some((scheme, ac, dc));
+                    "Every core awake (core parking off)".to_string()
+                }),
+                None if cfg!(windows) => Ok("skip: the power plan doesn't show core parking".to_string()),
+                None => Err("Windows only".into()),
+            };
+            save_journal(&j);
+            self.push(step("cores", "Core parking", r));
         }
 
         // 3. Notifications.
@@ -1505,6 +1580,8 @@ impl GameHub {
             self.save_store(&inner.store);
         }
         self.update(|s| s.fps = summary);
+        let heat = self.thermal.lock().report();
+        self.update(|s| s.thermal = heat);
 
         // Put everything back.
         self.update(|s| s.phase = Phase::Restoring);
@@ -1651,6 +1728,15 @@ impl GameHub {
     /// Undo a session's changes. `reopen` starts closed apps again.
     fn restore(&self, j: &Journal, reopen: bool) -> Vec<Step> {
         let mut out = Vec::new();
+        if !j.frozen.is_empty() {
+            for name in &j.frozen {
+                crate::system::freeze::set(&self.procs.pids_named(name), false);
+            }
+            out.push(step("freeze", "Paused apps", Ok("Running again".into())));
+        }
+        if let Some((scheme, ac, dc)) = &j.min_cores_before {
+            out.push(step("cores", "Core parking", tweaks::set_min_cores(scheme, *ac, *dc).map(|_| "Back to the power plan's setting".into())));
+        }
         if let Some(plan) = &j.plan_before {
             out.push(step("power", "Power plan", tweaks::set_plan(plan).map(|_| "Back to the previous plan".into())));
         }

@@ -134,6 +134,7 @@ let watch: WatchStore = {
   freeAlerts: true,
   freeSeen: [],
   patchAlerts: true,
+  fortniteAlerts: false,
   patchSeen: {},
   streamers: [
     { id: 's1', platform: 'twitch', handle: 'shroud', live: true, title: 'Ranked grind' },

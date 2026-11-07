@@ -8,6 +8,7 @@ pub mod displays;
 pub mod dpapi;
 pub mod elevation;
 pub mod firewall;
+pub mod freeze;
 pub mod gpu;
 pub mod keys;
 pub mod layouts;

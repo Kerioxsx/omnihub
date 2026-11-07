@@ -156,6 +156,58 @@ pub struct WatchStore {
     pub shop_date: String,
     pub shop_now: Vec<String>,
     pub prices: Vec<PriceWatch>,
+    /// Tell me when Fortnite updates or its servers go down.
+    pub fortnite_alerts: bool,
+    /// The Fortnite version installed when last looked ("32.10").
+    pub fortnite_version: String,
+    /// Epic's status page said Fortnite was down when last looked.
+    pub fortnite_down: bool,
+}
+
+/// Epic's public status page (Statuspage's summary).
+pub const EPIC_STATUS: &str = "https://status.epicgames.com/api/v2/summary.json";
+
+/// The version in an Epic launcher manifest (`.item`), if it is Fortnite's:
+/// "++Fortnite+Release-32.10-CL-45678901-Windows" → "32.10".
+pub fn fortnite_version(item: &serde_json::Value) -> Option<String> {
+    if item.get("AppName")?.as_str()? != "Fortnite" {
+        return None;
+    }
+    let v = item.get("AppVersionString")?.as_str()?;
+    let rest = v.split("Release-").nth(1)?;
+    let ver: String = rest.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+    (!ver.is_empty()).then_some(ver)
+}
+
+/// Fortnite's state on Epic's status page, when it isn't running normally
+/// ("Under maintenance", "Partial outage").
+pub fn fortnite_trouble(summary: &serde_json::Value) -> Option<String> {
+    let comps = summary.get("components")?.as_array()?;
+    let fortnite = comps.iter().find(|c| c.get("name").and_then(|n| n.as_str()) == Some("Fortnite"))?;
+    let status = fortnite.get("status")?.as_str()?;
+    match status {
+        "operational" => None,
+        s => Some(match s {
+            "under_maintenance" => "Under maintenance".to_string(),
+            "degraded_performance" => "Running slowly".to_string(),
+            "partial_outage" => "Partly down".to_string(),
+            "major_outage" => "Down".to_string(),
+            other => other.replace('_', " "),
+        }),
+    }
+}
+
+/// Fortnite's installed version, from the Epic launcher's manifests.
+pub fn installed_fortnite_version() -> Option<String> {
+    let dir = std::path::Path::new(&std::env::var_os("ProgramData")?).join("Epic").join("EpicGamesLauncher").join("Data").join("Manifests");
+    std::fs::read_dir(dir).ok()?.flatten().filter(|e| e.path().extension().is_some_and(|x| x == "item")).find_map(|e| fortnite_version(&serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok()?))
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct FortniteNews {
+    pub title: String,
+    pub body: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -547,11 +599,38 @@ pub fn steam_patch(v: &serde_json::Value, game: &str) -> Option<PatchNote> {
 }
 
 impl Watchers {
-    pub fn set_game_alerts(&self, free: bool, patches: bool) -> WatchStore {
+    pub fn set_game_alerts(&self, free: bool, patches: bool, fortnite: Option<bool>) -> WatchStore {
         let mut s = self.get();
         s.free_alerts = free;
         s.patch_alerts = patches;
+        if let Some(f) = fortnite {
+            s.fortnite_alerts = f;
+        }
         self.put(s)
+    }
+
+    /// Fortnite updated (from the installed version) or its servers changed
+    /// state (from Epic's status page). The first look only remembers.
+    pub fn check_fortnite(&self, version: Option<String>, trouble: Option<Option<String>>) -> Vec<FortniteNews> {
+        let mut s = self.get();
+        let mut out = Vec::new();
+        if let Some(v) = version {
+            if !s.fortnite_version.is_empty() && s.fortnite_version != v {
+                out.push(FortniteNews { title: format!("Fortnite updated to {v}"), body: "The first match after an update can stutter while shaders are rebuilt.".into() });
+            }
+            s.fortnite_version = v;
+        }
+        // None: the status page couldn't be read, so nothing changes.
+        if let Some(t) = trouble {
+            match (&t, s.fortnite_down) {
+                (Some(what), false) => out.push(FortniteNews { title: format!("Fortnite: {what}"), body: "From Epic's status page.".into() }),
+                (None, true) => out.push(FortniteNews { title: "Fortnite is back up".into(), body: "Epic's status page says it's running normally.".into() }),
+                _ => {}
+            }
+            s.fortnite_down = t.is_some();
+        }
+        self.put(s);
+        out
     }
 
     /// Free games not told about before (marks them as told).
@@ -683,6 +762,24 @@ mod tests {
         assert!(w.recap_due("2026-11-07", 21 * 60 + 5));
         assert!(!w.recap_due("2026-11-07", 22 * 60), "once a day");
         assert!(w.recap_due("2026-11-08", 23 * 60));
+    }
+
+    #[test]
+    fn watches_fortnite() {
+        let item = serde_json::json!({"AppName":"Fortnite","AppVersionString":"++Fortnite+Release-32.10-CL-45678901-Windows"});
+        assert_eq!(fortnite_version(&item).as_deref(), Some("32.10"));
+        assert_eq!(fortnite_version(&serde_json::json!({"AppName":"Other","AppVersionString":"++X+Release-1.0"})), None);
+        let down = serde_json::json!({"components":[{"name":"Fortnite","status":"under_maintenance"},{"name":"Fall Guys","status":"operational"}]});
+        assert_eq!(fortnite_trouble(&down).as_deref(), Some("Under maintenance"));
+        assert_eq!(fortnite_trouble(&serde_json::json!({"components":[{"name":"Fortnite","status":"operational"}]})), None);
+        let t = tempfile::tempdir().unwrap();
+        let w = Watchers::new(t.path());
+        // The first look only remembers.
+        assert!(w.check_fortnite(Some("32.00".into()), Some(None)).is_empty());
+        let news = w.check_fortnite(Some("32.10".into()), Some(Some("Under maintenance".into())));
+        assert_eq!(news.iter().map(|n| n.title.as_str()).collect::<Vec<_>>(), vec!["Fortnite updated to 32.10", "Fortnite: Under maintenance"]);
+        assert!(w.check_fortnite(Some("32.10".into()), None).is_empty());
+        assert_eq!(w.check_fortnite(None, Some(None))[0].title, "Fortnite is back up");
     }
 
     #[test]
