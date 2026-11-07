@@ -445,3 +445,112 @@ pub async fn karaoke_lyrics(core: Core<'_>, song: Option<String>, lrc: Option<St
     let dir = core.media.lyrics_folder();
     blocking(move || omnihub_core::karaoke::lyrics_for(song.as_deref().map(std::path::Path::new), lrc.as_deref().map(std::path::Path::new), dir.as_deref(), &title, &artist, duration_ms)).await
 }
+
+// ---------- 0.31: microphones, screen modes, night light ----------
+
+#[tauri::command]
+pub async fn audio_inputs() -> Res<Vec<omnihub_core::media::outputs::Output>> {
+    blocking(omnihub_core::media::outputs::inputs).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenModes {
+    current: Option<omnihub_core::system::screenmode::Mode>,
+    modes: Vec<omnihub_core::system::screenmode::Mode>,
+    hdr: Option<bool>,
+}
+
+#[tauri::command]
+pub async fn screen_modes() -> Res<ScreenModes> {
+    use omnihub_core::system::screenmode;
+    blocking(|| Ok(ScreenModes { current: screenmode::current(), modes: screenmode::modes(), hdr: screenmode::hdr() })).await
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NightInfo {
+    settings: omnihub_core::nightlight::NightSettings,
+    status: omnihub_core::nightlight::NightStatus,
+}
+
+fn night_info(core: &omnihub_core::core::AppCore) -> NightInfo {
+    NightInfo { settings: core.nightlight.settings(), status: core.nightlight.status(omnihub_core::core::AppCore::local_minute()) }
+}
+
+#[tauri::command]
+pub async fn nightlight_get(core: Core<'_>) -> Res<NightInfo> {
+    Ok(night_info(&core))
+}
+
+#[tauri::command]
+pub async fn nightlight_save(core: Core<'_>, settings: omnihub_core::nightlight::NightSettings) -> Res<NightInfo> {
+    core.nightlight.save(settings)?;
+    let c = core.inner().clone();
+    blocking(move || {
+        c.nightlight_tick(true);
+        Ok(night_info(&c))
+    })
+    .await
+}
+
+/// On or off now (until the schedule next changes), or back to the schedule (null).
+#[tauri::command]
+pub async fn nightlight_now(core: Core<'_>, on: Option<bool>) -> Res<NightInfo> {
+    core.nightlight.set_manual(on, omnihub_core::core::AppCore::local_minute());
+    let c = core.inner().clone();
+    blocking(move || {
+        c.nightlight_tick(true);
+        Ok(night_info(&c))
+    })
+    .await
+}
+
+#[derive(Serialize)]
+pub struct LocalModels {
+    models: Vec<String>,
+    model: String,
+}
+
+/// Models Ollama has on this PC (an error if Ollama isn't running).
+#[tauri::command]
+pub async fn chats_local_models(core: Core<'_>) -> Res<LocalModels> {
+    let c = core.inner().clone();
+    blocking(move || Ok(LocalModels { models: c.chats.local.models()?, model: c.chats.local.settings().model })).await
+}
+
+#[tauri::command]
+pub async fn chats_local_set(core: Core<'_>, model: String) -> Res<()> {
+    core.chats.local.set_model(&model).map(|_| ())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AskReply {
+    answers: Vec<omnihub_core::askpc::Answer>,
+    /// The same, said in a sentence or two by a local model (when Ollama runs).
+    words: Option<String>,
+}
+
+/// "Ask your PC": answered from what OmniHub measures now.
+#[tauri::command]
+pub async fn ask_pc(core: Core<'_>, question: String, words: bool) -> Res<AskReply> {
+    let q: String = question.trim().chars().take(500).collect();
+    if q.is_empty() {
+        return Err("Ask something, like “why is my PC slow?”".into());
+    }
+    let c = core.inner().clone();
+    blocking(move || {
+        let answers = c.ask_pc(&q);
+        let words = words
+            .then(|| {
+                let model = c.chats.local.model().ok()?;
+                c.chats.local.chat(&model, "You explain a Windows PC's state to its owner in plain words.", &[("user".into(), omnihub_core::askpc::as_prompt(&q, &answers))], &std::sync::atomic::AtomicBool::new(false), &mut |_| {}).ok()
+            })
+            .flatten()
+            .map(|w| w.trim().to_string())
+            .filter(|w| !w.is_empty());
+        Ok(AskReply { answers, words })
+    })
+    .await
+}

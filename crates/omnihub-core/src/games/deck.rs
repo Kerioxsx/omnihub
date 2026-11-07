@@ -264,6 +264,8 @@ impl AppCore {
 
     pub fn library_play(&self, key: &str) -> Result<(), String> {
         let g = self.find_game(key)?;
+        // Its scenes first (the screen mode is set before the game opens).
+        self.scenes_game_started(key);
         match super::launch_target(&g.launch)? {
             Some((target, args)) => super::start(&target, &args).map_err(|e| e.to_string()),
             None => Err("OmniHub doesn't know how to start this one: open it from its launcher".into()),
@@ -321,6 +323,9 @@ impl AppCore {
                     let now = chrono::Utc::now().timestamp_millis();
                     for (key, name, exe) in &games {
                         if running.contains(exe) {
+                            if !active.contains_key(key) {
+                                core.scenes_game_started(key);
+                            }
                             let e = active.entry(key.clone()).or_insert_with(|| (name.clone(), now, 0));
                             e.2 = 0;
                         }
@@ -342,6 +347,7 @@ impl AppCore {
                     for s in ended {
                         active.remove(&s.key);
                         warned.remove(&s.key);
+                        core.scenes_game_ended(&s.key);
                         if core.shelf.record(s.clone()).is_err() || s.minutes() < 1 {
                             continue;
                         }

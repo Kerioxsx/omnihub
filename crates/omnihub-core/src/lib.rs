@@ -6,6 +6,7 @@
 
 pub mod app_updates;
 pub mod apps;
+pub mod askpc;
 pub mod audit;
 pub mod autoclick;
 pub mod backup;
@@ -29,6 +30,7 @@ pub mod health;
 pub mod heat;
 pub mod helper;
 pub mod karaoke;
+pub mod nightlight;
 pub mod images;
 pub mod mcserver;
 pub mod media;

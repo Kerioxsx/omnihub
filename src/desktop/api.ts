@@ -328,6 +328,16 @@ export const api = {
     open: (url: string, fullScreen: boolean) => call<void>('sites_open', { url, fullScreen }),
   },
   audioOutputs: () => call<T.AudioOutput[]>('audio_outputs'),
+  audioInputs: () => call<T.AudioOutput[]>('audio_inputs'),
+  /** "Ask your PC": answered from what OmniHub measures now (`words`: also in a sentence by a local model). */
+  askPc: (question: string, words: boolean) => call<T.AskReply>('ask_pc', { question, words }),
+  screenModes: () => call<T.ScreenModes>('screen_modes'),
+  /** Night light on a schedule (warmer, dimmer screens). */
+  nightLight: {
+    get: () => call<T.NightInfo>('nightlight_get'),
+    save: (settings: T.NightSettings) => call<T.NightInfo>('nightlight_save', { settings }),
+    now: (on: boolean | null) => call<T.NightInfo>('nightlight_now', { on }),
+  },
   setAudioOutput: (id: string) => call<T.AudioOutput[]>('audio_output_set', { id }),
   /** Karaoke Studio: your language, practice history, and songs from this PC with lyrics. */
   karaoke: {
@@ -785,6 +795,9 @@ export const api = {
     view: (source: T.ChatSource, id: string) => call<T.ChatView>('chats_view', { source, id }),
     send: (source: T.ChatSource, id: string, text: string, mode = '') => call<void>('chats_send', { source, id, text, mode }),
     create: (kind: T.NewChatKind, text: string, folder: string | null = null, mode = '') => call<T.ChatSummary>('chats_create', { kind, folder, text, mode }),
+    /** Models Ollama has on this PC, and the one new local chats use. */
+    localModels: () => call<{ models: string[]; model: string }>('chats_local_models'),
+    setLocalModel: (model: string) => call<void>('chats_local_set', { model }),
     stop: (source: T.ChatSource, id: string) => call<void>('chats_stop', { source, id }),
     rename: (id: string, title: string) => call<void>('chats_rename', { id, title }),
     remove: (id: string) => call<void>('chats_delete', { id }),

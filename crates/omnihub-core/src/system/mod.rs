@@ -18,6 +18,7 @@ pub mod power;
 pub mod privacy;
 pub mod procs;
 pub mod schedtask;
+pub mod screenmode;
 pub mod session_end;
 pub mod shell;
 pub mod wol;

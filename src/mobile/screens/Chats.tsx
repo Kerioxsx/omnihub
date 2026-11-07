@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, ArrowUp, Bot, Code2, Copy, FolderOpen, Gauge, Lightbulb, MessagesSquare, Plus, Search, Sparkles, Square, SquareTerminal, Wrench, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Bot, Code2, Copy, Cpu, FolderOpen, Gauge, Lightbulb, MessagesSquare, Plus, Search, Sparkles, Square, SquareTerminal, Wrench, X } from 'lucide-react';
 import type { AgentUsage, ChatDelta, ChatFolder, ChatMessage, ChatSource, ChatSummary, ChatTools, ChatView, ClaudeCodeMode, CodexSandbox, NewChatKind, Note, UsagePeriod, UsageReport } from '@shared/types';
 import { formatRelative } from '@shared/format';
 import { client } from '../client';
@@ -21,15 +21,16 @@ import { renderMarkdown } from './Notes';
 
 type Kind = { label: string; icon: React.ReactNode; tone: string };
 
-const KINDS: Record<'claude' | 'openai' | 'claudeCode' | 'codex', Kind> = {
+const KINDS: Record<'claude' | 'openai' | 'local' | 'claudeCode' | 'codex', Kind> = {
   claude: { label: 'Claude', icon: <Sparkles size={18} />, tone: 'bg-[#d97757]/15 text-[#e08a6c]' },
   openai: { label: 'ChatGPT', icon: <Bot size={18} />, tone: 'bg-emerald-500/15 text-emerald-400' },
+  local: { label: 'Local AI', icon: <Cpu size={18} />, tone: 'bg-violet-500/15 text-violet-300' },
   claudeCode: { label: 'Claude Code', icon: <SquareTerminal size={18} />, tone: 'bg-amber-500/15 text-amber-400' },
   codex: { label: 'Codex', icon: <Code2 size={18} />, tone: 'bg-sky-500/15 text-sky-400' },
 };
 
 function kindOf(c: Pick<ChatSummary, 'source' | 'provider'>): Kind {
-  if (c.source === 'omni') return c.provider === 'openai' ? KINDS.openai : KINDS.claude;
+  if (c.source === 'omni') return c.provider === 'openai' ? KINDS.openai : c.provider === 'ollama' ? KINDS.local : KINDS.claude;
   return KINDS[c.source];
 }
 
@@ -440,7 +441,7 @@ function NewChatSheet({ open, onClose, tools, agents, defaults, onCreated }: { o
     const fit = folders.find((f) => (kind === 'claudeCode' ? f.claudeCode : f.codex)) ?? folders[0];
     if (fit && !folders.some((f) => f.path === folder)) setFolder(fit.path);
   }, [kind, agent, folders, folder, defaults]);
-  const missing = kind === 'claude' ? !tools?.claudeKey : kind === 'openai' ? !tools?.openaiKey : kind === 'claudeCode' ? !tools?.claudeCode.installed : !tools?.codex.installed;
+  const missing = kind === 'local' ? false : kind === 'claude' ? !tools?.claudeKey : kind === 'openai' ? !tools?.openaiKey : kind === 'claudeCode' ? !tools?.claudeCode.installed : !tools?.codex.installed;
   const start = async () => {
     setBusy(true);
     try {
@@ -466,9 +467,9 @@ function NewChatSheet({ open, onClose, tools, agents, defaults, onCreated }: { o
     >
       <div className="space-y-3 pb-2">
         <div className="grid grid-cols-2 gap-2">
-          {(['claude', 'openai', 'claudeCode', 'codex'] as NewChatKind[]).map((k) => (
+          {(['claude', 'openai', 'local', 'claudeCode', 'codex'] as NewChatKind[]).map((k) => (
             <button key={k} onClick={() => setKind(k)} className={cx('press flex items-center gap-2.5 rounded-2xl border p-3 text-left', kind === k ? 'border-accent bg-accent-soft' : 'border-line bg-surface')}>
-              <KindBadge c={{ source: k === 'claudeCode' || k === 'codex' ? k : 'omni', provider: k === 'openai' ? 'openai' : k === 'claude' ? 'claude' : null }} size={34} />
+              <KindBadge c={{ source: k === 'claudeCode' || k === 'codex' ? k : 'omni', provider: k === 'openai' ? 'openai' : k === 'claude' ? 'claude' : k === 'local' ? 'ollama' : null }} size={34} />
               <span className="text-[15px] font-semibold">{KINDS[k].label}</span>
             </button>
           ))}

@@ -144,6 +144,7 @@ function ModePicker({ source, value, onChange }: { source: ChatSource; value: st
 const STARTERS: Record<NewChatKind, string[]> = {
   claude: ['Plan a cheap weekend trip for me', 'Explain how my PC’s RAM speed affects games', 'Help me write a message to my team'],
   openai: ['Summarize the news about GPUs this week', 'Give me 5 names for a gaming channel', 'Quiz me on Spanish verbs'],
+  local: ['Explain what a CPU bottleneck is', 'Write a short story about a robot', 'Help me plan my study week'],
   claudeCode: ['Find and fix the failing tests', 'Explain how this project is organized', 'Add a dark mode toggle'],
   codex: ['Review my last commit for bugs', 'Write tests for the checkout code', 'Make the build faster'],
 };
@@ -161,7 +162,15 @@ function NewChat({ tools, folders, settings, onCreated }: { tools: ChatTools | n
     const fit = folders.find((f) => (source === 'claudeCode' ? f.claudeCode : f.codex)) ?? folders[0];
     if (source !== 'omni' && !folder && fit) setFolder(fit.path);
   }, [source, settings, folders, folder]);
-  const missing = kind === 'claude' ? !tools?.claudeKey : kind === 'openai' ? !tools?.openaiKey : kind === 'claudeCode' ? !tools?.claudeCode.installed : !tools?.codex.installed;
+  const [local, setLocal] = useState<{ models: string[]; model: string; error: string | null } | null>(null);
+  useEffect(() => {
+    if (kind !== 'local') return;
+    void api.chats.localModels().then(
+      (r) => setLocal({ ...r, error: null }),
+      (e) => setLocal({ models: [], model: '', error: errorText(e) }),
+    );
+  }, [kind]);
+  const missing = kind === 'local' ? !local?.models.length : kind === 'claude' ? !tools?.claudeKey : kind === 'openai' ? !tools?.openaiKey : kind === 'claudeCode' ? !tools?.claudeCode.installed : !tools?.codex.installed;
   const pick = async () => {
     const dir = await api.app.pickFolder('The project folder');
     if (dir) setFolder(dir);
@@ -180,15 +189,15 @@ function NewChat({ tools, folders, settings, onCreated }: { tools: ChatTools | n
       setBusy(false);
     }
   };
-  const choices: NewChatKind[] = ['claude', 'openai', 'claudeCode', 'codex'];
+  const choices: NewChatKind[] = ['claude', 'openai', 'local', 'claudeCode', 'codex'];
   const folderList = folders.some((f) => f.path === folder) || !folder ? folders : [{ path: folder, name: folderName(folder), last: 0, claudeCode: false, codex: false }, ...folders];
   return (
     <div className="mx-auto max-w-2xl space-y-5 py-6">
       <div className="text-center">
         <div className="text-[16px] font-semibold text-fg">Start a chat</div>
-        <div className="mt-1 text-[12.5px] text-dim">Claude and ChatGPT use your own API keys. Claude Code and Codex run on this PC in a project folder, with your own sign-in.</div>
+        <div className="mt-1 text-[12.5px] text-dim">Claude and ChatGPT use your own API keys. Local AI runs free and offline on this PC through Ollama. Claude Code and Codex run in a project folder, with your own sign-in.</div>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
         {choices.map((c) => {
           const k = KINDS[c];
           const Icon = k.icon;
@@ -202,7 +211,36 @@ function NewChat({ tools, folders, settings, onCreated }: { tools: ChatTools | n
           );
         })}
       </div>
-      {missing && (
+      {kind === 'local' && local && local.models.length > 0 && (
+        <div className="flex items-center justify-center gap-2 text-[12.5px] text-dim">
+          Model
+          <Select
+            value={local.model || local.models[0]}
+            onChange={(e) => {
+              setLocal({ ...local, model: e.target.value });
+              void api.chats.setLocalModel(e.target.value).catch(() => undefined);
+            }}
+            className="h-8 w-auto py-0 text-[12.5px]"
+            aria-label="Local model"
+          >
+            {local.models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
+          <span className="text-faint">Nothing leaves your PC.</span>
+        </div>
+      )}
+      {missing && kind === 'local' && (
+        <Callout tone="warn" icon={KeyRound}>
+          {local?.error ?? 'Ollama has no models yet. In a terminal, get one: ollama pull llama3.2 (about 2 GB).'}{' '}
+          <button type="button" className="underline" onClick={() => void api.app.openUrl('https://ollama.com/download')}>
+            Get Ollama
+          </button>
+        </Callout>
+      )}
+      {missing && kind !== 'local' && (
         <Callout tone="warn" icon={KeyRound}>
           {kind === 'claude' ? 'Add your Anthropic API key under Keys first.' : kind === 'openai' ? 'Add your OpenAI API key under Keys first.' : `${KINDS[kind].label} isn’t installed on this PC (OmniHub looks for it on PATH).`}
         </Callout>

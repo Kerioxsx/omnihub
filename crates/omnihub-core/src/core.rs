@@ -79,6 +79,7 @@ pub struct AppCore {
     pub sites: crate::sites::Sites,
     /// Karaoke Studio: language, practice history.
     pub karaoke: crate::karaoke::Karaoke,
+    pub nightlight: crate::nightlight::NightLight,
     /// Game art addresses asked of Steam's store.
     pub store_art: Arc<crate::games::storeart::StoreArt>,
     pub emulators: crate::games::emulators::Emulators,
@@ -189,6 +190,7 @@ impl AppCore {
             theme_art: crate::theme_art::ThemeArt::new(&paths.data),
             sites: crate::sites::Sites::new(&paths.data),
             karaoke: crate::karaoke::Karaoke::new(&paths.data),
+            nightlight: crate::nightlight::NightLight::new(&paths.data),
             store_art: Arc::new(crate::games::storeart::StoreArt::new(&paths.cache)),
             emulators: crate::games::emulators::Emulators::new(&paths.data),
             counters_overlay: parking_lot::Mutex::new(None),
@@ -880,6 +882,9 @@ impl AppCore {
                             let _ = core.party_play_next();
                         }
                     }
+                    if n.is_multiple_of(12) {
+                        core.nightlight_tick(n.is_multiple_of(120));
+                    }
                     if n.is_multiple_of(6) {
                         let fg = crate::capture::screenshots::foreground_app();
                         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -948,6 +953,30 @@ impl AppCore {
                 }
             })
             .ok();
+    }
+
+    /// Minutes after midnight, here.
+    pub fn local_minute() -> u32 {
+        use chrono::Timelike;
+        let t = chrono::Local::now();
+        t.hour() * 60 + t.minute()
+    }
+
+    /// The night light's colours and the monitors' night brightness, now.
+    /// `refresh` sets the colours again (games and full-screen apps can reset them).
+    pub fn nightlight_tick(&self, refresh: bool) {
+        let now = Self::local_minute();
+        let level = self.nightlight.status(now).level;
+        if let Some((k, dim)) = self.nightlight.tick(now, refresh && level > 0.0) {
+            let _ = crate::system::screenmode::set_warmth(k, dim);
+            self.events.emit("nightlight:changed", self.nightlight.status(now));
+        }
+        let fake = self.media.is_fake();
+        let list = if fake { crate::system::displays::fake_list() } else { crate::system::displays::list() };
+        let cur: Vec<(String, Option<u8>)> = list.into_iter().map(|d| (d.id, d.brightness)).collect();
+        for (id, b) in self.nightlight.brightness_plan(now, &cur) {
+            let _ = if fake { crate::system::displays::fake_set(&id, crate::system::displays::Setting::Brightness, b) } else { crate::system::displays::set(&id, crate::system::displays::Setting::Brightness, b) };
+        }
     }
 
     /// Hand the next party song to the music app.

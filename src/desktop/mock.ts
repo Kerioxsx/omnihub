@@ -60,6 +60,7 @@ let mockOutputs = [
   { id: 'hp', name: 'Headphones (WH-1000XM5)', default: false },
   { id: 'tv', name: 'LG TV (NVIDIA High Definition Audio)', default: false },
 ];
+let mockNight = { settings: { enabled: false, from: '21:30', to: '07:00', kelvin: 3400, dim: 100, fade: 30, screenBrightness: null as number | null }, status: { level: 0, kelvin: 6500, manual: null as boolean | null } };
 let mockBt = [
   { address: 'B8:F6:53:CA:1B:2E', name: 'WH-1000XM5', connected: true, kind: 'audio' as const, audio: true },
   { address: '7C:96:D2:11:22:33', name: 'JBL Flip 6', connected: false, kind: 'audio' as const, audio: true },
@@ -558,6 +559,18 @@ const handlers: Record<string, Handler> = {
   sites_open: () => undefined,
   audio_outputs: () => mockOutputs,
   audio_output_set: (a) => (mockOutputs = mockOutputs.map((o) => ({ ...o, default: o.id === str(a, 'id') }))),
+  ask_pc: (a) => {
+    const q = str(a, 'question').toLowerCase();
+    const slow = { title: 'Something is keeping the PC busy', points: ['The processor is 78% busy right now.', 'chrome.exe is using 41% of the processor.', 'Steam.exe is using 12% of the processor.'], tips: ['Close chrome.exe if you don’t need it (Tasks page).'], route: 'tasks' };
+    const net = { title: 'Your internet is busy', points: ['Right now: 48.2 Mbit/s down, 1.1 Mbit/s up.', 'steam.exe has 14 connections open.', 'chrome.exe has 9 connections open.'], tips: ['Pause downloads and updates (Steam, Windows Update, cloud sync) while you play.'], route: 'tools?tab=network' };
+    const answers = /internet|network|wifi|download/.test(q) ? [net] : /slow|lag/.test(q) ? [slow] : [{ title: 'Health score: 86/100', points: ['Space on C:: 41 GB free of 512 GB (8%)'], tips: ['Free up space'], route: 'home' }];
+    return { answers, words: a?.words ? 'Chrome is the main thing keeping your PC busy right now. Closing a few tabs should make it feel faster.' : null };
+  },
+  audio_inputs: () => [{ id: 'mic1', name: 'Microphone (HyperX QuadCast)', default: true }, { id: 'mic2', name: 'Headset Microphone (WH-1000XM5)', default: false }],
+  screen_modes: () => ({ current: { width: 2560, height: 1440, hz: 165 }, modes: [{ width: 2560, height: 1440, hz: 165 }, { width: 2560, height: 1440, hz: 144 }, { width: 2560, height: 1440, hz: 60 }, { width: 1920, height: 1080, hz: 165 }, { width: 1920, height: 1080, hz: 144 }, { width: 1920, height: 1080, hz: 60 }, { width: 1280, height: 720, hz: 60 }], hdr: false }),
+  nightlight_get: () => mockNight,
+  nightlight_save: (a) => (mockNight = { ...mockNight, settings: a?.settings as typeof mockNight.settings }),
+  nightlight_now: (a) => (mockNight = { ...mockNight, status: { ...mockNight.status, manual: (a?.on as boolean | null) ?? null, level: a?.on ? 1 : 0, kelvin: a?.on ? mockNight.settings.kelvin : 6500 } }),
   karaoke_get: () => karaokeMock.get(),
   karaoke_profile: (a) => karaokeMock.profile(str(a, 'lang')),
   karaoke_session: (a) => karaokeMock.session(a?.session as never),
@@ -707,6 +720,8 @@ const handlers: Record<string, Handler> = {
   chats_delete: (a) => cm.remove(str(a, 'id')),
   chats_folders: () => cm.folders(),
   chats_tools: () => cm.tools(),
+  chats_local_models: () => ({ models: ['gemma3:4b', 'llama3.2:latest'], model: 'llama3.2:latest' }),
+  chats_local_set: () => undefined,
   chats_usage: () => cm.usage(),
   ideas_list: () => cm.ideas(),
   ideas_save: (a) => cm.saveIdea(str(a, 'text'), optStr(a, 'from')),

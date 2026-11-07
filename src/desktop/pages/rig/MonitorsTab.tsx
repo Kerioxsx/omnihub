@@ -10,6 +10,7 @@ import { Badge, Card, CardHeader } from '../../components/ui/Card';
 import { Callout } from '../../components/ui/States';
 import { toast } from '../../state/toasts';
 import { Slider } from './LightingTab';
+import { NightLightCard } from './NightLightCard';
 
 /** Monitors take a message about every 50 ms: send the newest value at most this often while dragging. */
 const EVERY_MS = 150;
@@ -126,6 +127,7 @@ export function MonitorsTab() {
           ))}
         </div>
       </Card>
+      <NightLightCard />
       <p className="flex items-start gap-2 px-1 text-[12px] text-faint">
         <Sun className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /> If Twinkle Tray’s time-of-day adjustments are on, it changes the brightness back at its set times.
       </p>

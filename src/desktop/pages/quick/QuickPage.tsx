@@ -1,7 +1,7 @@
 // Quick actions: the macro deck (here and on the phone), the quick-launch
 // wheel (a hotkey shows it at the mouse) and the clipboard history.
 
-import type { AudioOutput, ClipItem, ClipList, Counter, GoveePreset, LibraryGame, ObsInfo, QuickAction, QuickButton, QuickState, Scene } from '@shared/types';
+import type { AudioOutput, ClipItem, ClipList, Counter, GoveePreset, LibraryGame, ObsInfo, QuickAction, QuickButton, QuickState, Scene, ScreenModes } from '@shared/types';
 import { QUICK_COLORS, QUICK_ICONS } from '@shared/quickIcons';
 import { ArrowDown, ArrowUp, ClipboardList, Clapperboard, Copy, FolderOpen, Grid3x3, Image as ImageIcon, Pause, Pencil, Pin, PinOff, Play, Plus, Radio, Smartphone, Trash2, Disc3 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -168,6 +168,50 @@ function ActionFields({ action, onChange, games, counters, extra }: { action: Qu
           </Select>
         </Field>
       );
+    case 'input':
+      return (
+        <Field label="Microphone">
+          <Select value={action.input} onChange={(e) => onChange({ ...action, input: e.target.value })}>
+            <option value="">Pick a microphone…</option>
+            {(extra?.inputs ?? []).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      );
+    case 'screen': {
+      const key = `${action.width}x${action.height}@${action.hz}`;
+      return (
+        <Field label="Main screen" hint="Until the game closes (for a game's scene), or until Windows restarts.">
+          <Select
+            value={key}
+            onChange={(e) => {
+              const [w, rest] = e.target.value.split('x');
+              const [h, hz] = rest.split('@');
+              onChange({ ...action, width: Number(w), height: Number(h), hz: Number(hz) });
+            }}
+          >
+            {!(extra?.screen?.modes ?? []).some((m) => `${m.width}x${m.height}@${m.hz}` === key) && <option value={key}>{`${action.width}×${action.height} at ${action.hz} Hz`}</option>}
+            {(extra?.screen?.modes ?? []).map((m) => (
+              <option key={`${m.width}x${m.height}@${m.hz}`} value={`${m.width}x${m.height}@${m.hz}`}>
+                {`${m.width}×${m.height} at ${m.hz} Hz`}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      );
+    }
+    case 'hdr':
+      return (
+        <Field label="HDR" hint={extra?.screen && extra.screen.hdr === null ? 'None of your screens supports HDR.' : 'Goes back as it was when the game closes (for a game’s scene).'}>
+          <Select value={action.on ? 'on' : 'off'} onChange={(e) => onChange({ ...action, on: e.target.value === 'on' })}>
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </Select>
+        </Field>
+      );
     case 'sound':
       return (
         <Field label="Sound comes out of">
@@ -191,13 +235,15 @@ interface Extra {
   scenes: Scene[];
   presets: GoveePreset[];
   outputs: AudioOutput[];
+  inputs: AudioOutput[];
+  screen: ScreenModes | null;
 }
 
 function useExtra(open: boolean): Extra {
-  const [x, setX] = useState<Extra>({ scenes: [], presets: [], outputs: [] });
+  const [x, setX] = useState<Extra>({ scenes: [], presets: [], outputs: [], inputs: [], screen: null });
   useEffect(() => {
     if (!open) return;
-    void Promise.all([api.quick.state().then((s) => s.scenes, () => []), api.govee.presets().catch(() => []), api.audioOutputs().catch(() => [])]).then(([scenes, presets, outputs]) => setX({ scenes, presets, outputs }));
+    void Promise.all([api.quick.state().then((s) => s.scenes, () => []), api.govee.presets().catch(() => []), api.audioOutputs().catch(() => []), api.audioInputs().catch(() => []), api.screenModes().catch(() => null)]).then(([scenes, presets, outputs, inputs, screen]) => setX({ scenes, presets, outputs, inputs, screen }));
   }, [open]);
   return x;
 }
@@ -793,6 +839,30 @@ function SceneEditor({ open, initial, onClose, onSave }: { open: boolean; initia
             Add a step
           </Button>
         </div>
+        <div className="grid grid-cols-2 gap-3 rounded-xl border border-line p-3">
+          <Field label="Also runs by itself when this game starts" hint="Display profiles per game: a screen mode or HDR step goes back when the game closes.">
+            <Select value={sc.game ?? ''} onChange={(e) => setSc({ ...sc, game: e.target.value })}>
+              <option value="">Only when I tap it</option>
+              {games.map((g) => (
+                <option key={g.key} value={g.key}>
+                  {g.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="When the game closes, run">
+            <Select value={sc.after ?? ''} disabled={!sc.game} onChange={(e) => setSc({ ...sc, after: e.target.value })}>
+              <option value="">Nothing else</option>
+              {extra.scenes
+                .filter((x) => x.id !== sc.id)
+                .map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+        </div>
         <Field label="Icon">
           <div className="flex flex-wrap gap-1">
             {Object.entries(QUICK_ICONS).map(([name, Icon]) => (
@@ -857,7 +927,10 @@ function ScenesTab({ state, save }: { state: QuickState; save: (s: QuickState) =
                 <ButtonFace button={{ icon: sc.icon, color: sc.color, label: sc.name }} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[14.5px] font-semibold text-fg">{sc.name}</div>
-                  <div className="text-[12px] text-faint">{sc.steps.length} {sc.steps.length === 1 ? 'step' : 'steps'}</div>
+                  <div className="text-[12px] text-faint">
+                    {sc.steps.length} {sc.steps.length === 1 ? 'step' : 'steps'}
+                    {sc.game ? ' · runs with a game' : ''}
+                  </div>
                 </div>
                 <IconButton
                   icon={Pencil}

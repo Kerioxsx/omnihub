@@ -2453,7 +2453,7 @@ export type ChatSource = 'omni' | 'claudeCode' | 'codex';
 export type ChatRole = 'user' | 'assistant' | 'tools' | 'notice';
 export type ClaudeCodeMode = 'plan' | 'default' | 'acceptEdits' | 'auto';
 export type CodexSandbox = 'read-only' | 'workspace-write';
-export type NewChatKind = 'claude' | 'openai' | 'claudeCode' | 'codex';
+export type NewChatKind = 'claude' | 'openai' | 'local' | 'claudeCode' | 'codex';
 
 export interface ChatMessage {
   role: ChatRole;
@@ -2474,7 +2474,7 @@ export interface ChatSummary {
   folder: string | null;
   model: string | null;
   /** OmniHub's own chats: claude or openai. */
-  provider: 'claude' | 'openai' | null;
+  provider: 'claude' | 'openai' | 'ollama' | null;
   branch: string | null;
   running: boolean;
 }
@@ -3559,7 +3559,10 @@ export type QuickAction =
   | { kind: 'fans'; profile: 'lowest' | 'silent' | 'auto' | 'fast' }
   | { kind: 'notifications'; on: boolean }
   | { kind: 'discord'; on: boolean }
-  | { kind: 'sound'; output: string };
+  | { kind: 'sound'; output: string }
+  | { kind: 'input'; input: string }
+  | { kind: 'screen'; width: number; height: number; hz: number }
+  | { kind: 'hdr'; on: boolean };
 
 /** One tap, several things: lights, fans, notifications, Discord, sound… */
 export interface Scene {
@@ -3568,6 +3571,37 @@ export interface Scene {
   icon: string;
   color: string;
   steps: QuickAction[];
+  /** Runs by itself when this game (library key) starts. */
+  game?: string;
+  /** When that game closes: the screen goes back, and this scene runs. */
+  after?: string;
+}
+
+export interface ScreenMode {
+  width: number;
+  height: number;
+  hz: number;
+}
+
+export interface ScreenModes {
+  current: ScreenMode | null;
+  modes: ScreenMode[];
+  hdr: boolean | null;
+}
+
+export interface NightSettings {
+  enabled: boolean;
+  from: string;
+  to: string;
+  kelvin: number;
+  dim: number;
+  fade: number;
+  screenBrightness: number | null;
+}
+
+export interface NightInfo {
+  settings: NightSettings;
+  status: { level: number; kelvin: number; manual: boolean | null };
 }
 
 export interface QuickButton {
@@ -3924,4 +3958,16 @@ export interface KaraokeLyrics {
   plain: string | null;
   instrumental: boolean;
   source: string;
+}
+
+export interface AskAnswer {
+  title: string;
+  points: string[];
+  tips: string[];
+  route: string | null;
+}
+
+export interface AskReply {
+  answers: AskAnswer[];
+  words: string | null;
 }

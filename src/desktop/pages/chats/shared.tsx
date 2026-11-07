@@ -3,7 +3,7 @@
 
 import type { ChatSource, ChatSummary, ClaudeCodeMode, CodexSandbox, NewChatKind } from '@shared/types';
 import type { LucideIcon } from 'lucide-react';
-import { Bot, Code2, Sparkles, SquareTerminal } from 'lucide-react';
+import { Bot, Code2, Cpu, Sparkles, SquareTerminal } from 'lucide-react';
 import { cx } from '../../lib/cx';
 
 export interface Kind {
@@ -13,15 +13,16 @@ export interface Kind {
   tint: string;
 }
 
-export const KINDS: Record<'claude' | 'openai' | 'claudeCode' | 'codex', Kind> = {
+export const KINDS: Record<'claude' | 'openai' | 'local' | 'claudeCode' | 'codex', Kind> = {
   claude: { label: 'Claude', icon: Sparkles, tint: 'bg-[#d97757]/15 text-[#d97757]' },
   openai: { label: 'ChatGPT', icon: Bot, tint: 'bg-emerald-500/15 text-emerald-500' },
+  local: { label: 'Local AI', icon: Cpu, tint: 'bg-violet-500/15 text-violet-400' },
   claudeCode: { label: 'Claude Code', icon: SquareTerminal, tint: 'bg-amber-500/15 text-amber-500' },
   codex: { label: 'Codex', icon: Code2, tint: 'bg-sky-500/15 text-sky-500' },
 };
 
 export function kindOf(s: Pick<ChatSummary, 'source' | 'provider'>): Kind {
-  if (s.source === 'omni') return s.provider === 'openai' ? KINDS.openai : KINDS.claude;
+  if (s.source === 'omni') return s.provider === 'openai' ? KINDS.openai : s.provider === 'ollama' ? KINDS.local : KINDS.claude;
   return KINDS[s.source];
 }
 

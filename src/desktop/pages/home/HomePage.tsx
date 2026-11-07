@@ -23,6 +23,7 @@ import { connectedCount, useLive } from '../../state/live';
 import { useSettings } from '../../state/settings';
 import { jobFraction, rootKey, useStorage } from '../../state/storage';
 import { toast } from '../../state/toasts';
+import { AskPc } from './AskPc';
 import { Sparkline } from './Sparkline';
 
 const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
@@ -446,6 +447,7 @@ export function HomePage() {
       <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
         {power && <PowerBanner inline />}
         <LowSpaceBanner />
+        <AskPc />
         <NowPlayingCard />
         <div className="grid grid-cols-12 gap-3">
           <motion.div variants={stagger} className="col-span-12 grid grid-cols-3 gap-3 xl:col-span-8">

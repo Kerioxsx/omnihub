@@ -27,6 +27,9 @@ export const ACTION_KINDS: { value: QuickAction['kind']; label: string }[] = [
   { value: 'notifications', label: 'Windows notifications on / off' },
   { value: 'discord', label: 'Discord status on / off' },
   { value: 'sound', label: 'Where the sound comes out' },
+  { value: 'input', label: 'Which microphone' },
+  { value: 'screen', label: 'Screen resolution and refresh rate' },
+  { value: 'hdr', label: 'HDR on / off' },
 ];
 
 /** What a scene's steps can be (not another scene or the clipboard). */
@@ -66,6 +69,12 @@ export function blankAction(kind: QuickAction['kind']): QuickAction {
       return { kind, on: true };
     case 'sound':
       return { kind, output: '' };
+    case 'input':
+      return { kind, input: '' };
+    case 'screen':
+      return { kind, width: 1920, height: 1080, hz: 60 };
+    case 'hdr':
+      return { kind, on: true };
     default:
       return { kind } as QuickAction;
   }
@@ -113,6 +122,12 @@ export function describe(a: QuickAction | null): string {
       return a.on ? 'Discord status on' : 'Discord status off';
     case 'sound':
       return 'Changes where the sound comes out';
+    case 'input':
+      return 'Changes the microphone';
+    case 'screen':
+      return `Screen: ${a.width}×${a.height} at ${a.hz} Hz`;
+    case 'hdr':
+      return a.on ? 'HDR on' : 'HDR off';
   }
 }
 

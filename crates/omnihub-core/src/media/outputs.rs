@@ -15,7 +15,12 @@ pub struct Output {
 }
 
 pub fn list() -> Result<Vec<Output>, String> {
-    imp::list()
+    imp::list(false)
+}
+
+/// Microphones and other recording devices (set the same way).
+pub fn inputs() -> Result<Vec<Output>, String> {
+    imp::list(true)
 }
 
 pub fn set_default(id: &str) -> Result<(), String> {
@@ -31,7 +36,7 @@ mod imp {
 
     use windows::core::{Interface, GUID, HRESULT, IUnknown, PCWSTR, PWSTR};
     use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
-    use windows::Win32::Media::Audio::{eMultimedia, eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE};
+    use windows::Win32::Media::Audio::{eCapture, eMultimedia, eRender, IMMDeviceEnumerator, MMDeviceEnumerator, DEVICE_STATE_ACTIVE};
     use windows::Win32::System::Com::StructuredStorage::PropVariantToStringAlloc;
     use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_MULTITHREADED, STGM_READ};
 
@@ -57,11 +62,12 @@ mod imp {
         s
     }
 
-    pub fn list() -> Result<Vec<Output>, String> {
-        com(|| unsafe {
+    pub fn list(capture: bool) -> Result<Vec<Output>, String> {
+        let flow = if capture { eCapture } else { eRender };
+        com(move || unsafe {
             let en: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
-            let def = en.GetDefaultAudioEndpoint(eRender, eMultimedia).ok().and_then(|d| d.GetId().ok()).map(|p| take(p)).unwrap_or_default();
-            let col = en.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE).map_err(|e| e.to_string())?;
+            let def = en.GetDefaultAudioEndpoint(flow, eMultimedia).ok().and_then(|d| d.GetId().ok()).map(|p| take(p)).unwrap_or_default();
+            let col = en.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE).map_err(|e| e.to_string())?;
             let mut out = Vec::new();
             for i in 0..col.GetCount().map_err(|e| e.to_string())? {
                 let Ok(dev) = col.Item(i) else { continue };
@@ -73,7 +79,7 @@ mod imp {
                     .and_then(|v| PropVariantToStringAlloc(&v).ok())
                     .map(|p| take(p))
                     .filter(|n| !n.is_empty())
-                    .unwrap_or_else(|| "Speakers".into());
+                    .unwrap_or_else(|| if capture { "Microphone" } else { "Speakers" }.into());
                 out.push(Output { default: id == def, id, name });
             }
             out.sort_by(|a, b| b.default.cmp(&a.default).then(a.name.cmp(&b.name)));
@@ -110,7 +116,7 @@ mod imp {
 #[cfg(not(windows))]
 mod imp {
     use super::Output;
-    pub fn list() -> Result<Vec<Output>, String> {
+    pub fn list(_capture: bool) -> Result<Vec<Output>, String> {
         Ok(Vec::new())
     }
     pub fn set_default(_id: &str) -> Result<(), String> {

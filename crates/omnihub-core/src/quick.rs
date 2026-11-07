@@ -73,6 +73,13 @@ pub enum QuickAction {
     Discord { on: bool },
     /// Where the sound comes out (a playback device's id).
     Sound { output: String },
+    /// Which microphone is used (a recording device's id).
+    Input { input: String },
+    /// The main screen's resolution and refresh rate (until the game or
+    /// scene is over, or Windows restarts).
+    Screen { width: u32, height: u32, hz: u32 },
+    /// HDR on or off.
+    Hdr { on: bool },
 }
 
 /// A scene: one tap does several things (lights, fans, notifications…).
@@ -84,6 +91,11 @@ pub struct Scene {
     pub icon: String,
     pub color: String,
     pub steps: Vec<QuickAction>,
+    /// Runs by itself when this game (its library key) starts.
+    pub game: String,
+    /// When that game closes: the screen and HDR go back as they were, and
+    /// this scene runs (its id; empty for none).
+    pub after: String,
 }
 
 pub const MAX_SCENES: usize = 24;
@@ -91,7 +103,7 @@ pub const MAX_STEPS: usize = 20;
 pub const FAN_PROFILES: &[&str] = &["lowest", "silent", "auto", "fast"];
 
 fn scene(id: &str, name: &str, icon: &str, color: &str, steps: Vec<QuickAction>) -> Scene {
-    Scene { id: id.into(), name: name.into(), icon: icon.into(), color: color.into(), steps }
+    Scene { id: id.into(), name: name.into(), icon: icon.into(), color: color.into(), steps, game: String::new(), after: String::new() }
 }
 
 /// Ready-made scenes to start from (each one yours to change).
@@ -120,6 +132,8 @@ impl QuickAction {
             QuickAction::Lights { brightness: Some(b), .. } if !(1..=100).contains(b) => Err("Brightness goes from 1 to 100".into()),
             QuickAction::Fans { profile } if !FAN_PROFILES.contains(&profile.as_str()) => Err("Pick a fan profile".into()),
             QuickAction::Sound { output } if output.is_empty() => Err("Pick where the sound comes out".into()),
+            QuickAction::Input { input } if input.is_empty() => Err("Pick a microphone".into()),
+            QuickAction::Screen { width, height, hz } if *width < 640 || *height < 480 || *hz == 0 => Err("Pick a screen mode".into()),
             _ => Ok(()),
         }
     }
@@ -237,6 +251,11 @@ const MAX_PICTURES: usize = 25;
 const ENTROPY: &[u8] = b"omnihub-clipboard";
 
 pub struct Quick {
+    /// The screen mode and HDR before a scene changed them (put back when its game closes).
+    pub screen_before: Mutex<Option<Option<crate::system::screenmode::Mode>>>,
+    pub hdr_before: Mutex<Option<Option<bool>>>,
+    /// Games whose scene has run (so it runs once per session).
+    pub scene_games: Mutex<std::collections::HashSet<String>>,
     file: PathBuf,
     pinned_file: PathBuf,
     state: Mutex<QuickState>,
@@ -252,7 +271,7 @@ impl Quick {
         let pinned_file = data.join("clipboard-pinned.bin");
         let state = std::fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
         let items: VecDeque<ClipItem> = read_pinned(&pinned_file).into();
-        Quick { file, pinned_file, state: Mutex::new(state), items: Mutex::new(items), pixels: Mutex::new(VecDeque::new()), paused: AtomicBool::new(false), events }
+        Quick { file, pinned_file, state: Mutex::new(state), items: Mutex::new(items), pixels: Mutex::new(VecDeque::new()), paused: AtomicBool::new(false), events, screen_before: Mutex::new(None), hdr_before: Mutex::new(None), scene_games: Mutex::new(Default::default()) }
     }
 
     pub fn state(&self) -> QuickState {
@@ -777,6 +796,24 @@ impl crate::core::AppCore {
                 crate::media::outputs::set_default(output)?;
                 Ok("Sound output changed".into())
             }
+            QuickAction::Input { input } => {
+                crate::media::outputs::set_default(input)?;
+                Ok("Microphone changed".into())
+            }
+            QuickAction::Screen { width, height, hz } => {
+                use crate::system::screenmode;
+                let before = screenmode::current();
+                screenmode::set(screenmode::Mode { width: *width, height: *height, hz: *hz })?;
+                self.quick.screen_before.lock().get_or_insert(before);
+                Ok(format!("Screen: {width}×{height} at {hz} Hz"))
+            }
+            QuickAction::Hdr { on } => {
+                use crate::system::screenmode;
+                let before = screenmode::hdr();
+                screenmode::set_hdr(*on)?;
+                self.quick.hdr_before.lock().get_or_insert(before);
+                Ok(if *on { "HDR on".into() } else { "HDR off".into() })
+            }
             QuickAction::Quiet => {
                 if self.quiet_status().on {
                     self.quiet_off()?;
@@ -786,6 +823,46 @@ impl crate::core::AppCore {
                     Ok("Screens off, fans at their lowest".into())
                 }
             }
+        }
+    }
+}
+
+impl crate::core::AppCore {
+    /// A game started: run the scenes set to start with it (once per session).
+    pub fn scenes_game_started(&self, key: &str) {
+        if !self.quick.scene_games.lock().insert(key.to_string()) {
+            return;
+        }
+        for sc in self.quick.state().scenes.into_iter().filter(|s| s.game == key) {
+            if let Err(e) = self.run_quick(&QuickAction::Scene { id: sc.id.clone() }) {
+                tracing::warn!("scene {}: {e}", sc.name);
+            }
+        }
+    }
+
+    /// The game closed: the screen and HDR as they were, then the "after" scenes.
+    pub fn scenes_game_ended(&self, key: &str) {
+        if !self.quick.scene_games.lock().remove(key) {
+            return;
+        }
+        let scenes: Vec<Scene> = self.quick.state().scenes.into_iter().filter(|s| s.game == key).collect();
+        if scenes.is_empty() {
+            return;
+        }
+        self.scenes_undo_screen();
+        for sc in scenes.iter().filter(|s| !s.after.is_empty()) {
+            let _ = self.run_quick(&QuickAction::Scene { id: sc.after.clone() });
+        }
+    }
+
+    /// Put the screen mode and HDR back as they were before any scene changed them.
+    pub fn scenes_undo_screen(&self) {
+        use crate::system::screenmode;
+        if let Some(Some(m)) = self.quick.screen_before.lock().take() {
+            let _ = screenmode::set(m);
+        }
+        if let Some(Some(on)) = self.quick.hdr_before.lock().take() {
+            let _ = screenmode::set_hdr(on);
         }
     }
 }

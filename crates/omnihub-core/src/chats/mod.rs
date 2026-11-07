@@ -11,6 +11,7 @@
 pub mod agent;
 pub mod claude_code;
 pub mod codex;
+pub mod ollama;
 pub mod openai;
 pub mod usage;
 
@@ -219,6 +220,8 @@ struct OwnChat {
 pub enum NewKind {
     Claude,
     Openai,
+    /// A model on this PC through Ollama.
+    Local,
     ClaudeCode,
     Codex,
 }
@@ -296,6 +299,8 @@ pub struct ChatHub {
     /// `--version` answers by program file and its modified time.
     versions: Mutex<HashMap<PathBuf, (i64, Option<String>)>>,
     pub usage: usage::Usage,
+    /// Local models through Ollama.
+    pub local: ollama::Local,
 }
 
 fn modified(p: &Path) -> (u64, i64) {
@@ -322,7 +327,7 @@ impl ChatHub {
     pub fn with(data_dir: &Path, events: EventBus, claude: Arc<Claude>, openai: Arc<OpenAi>, places: Places) -> Arc<ChatHub> {
         let dir = data_dir.join("chats");
         let _ = std::fs::create_dir_all(dir.join("omni"));
-        Arc::new(ChatHub { usage: usage::Usage::new(&dir), dir, events, claude, openai, places: Mutex::new(places), runs: Mutex::new(HashMap::new()), ours: Mutex::new(HashMap::new()), infos: Mutex::new(HashMap::new()), versions: Mutex::new(HashMap::new()) })
+        Arc::new(ChatHub { usage: usage::Usage::new(&dir), local: ollama::Local::new(&dir), dir, events, claude, openai, places: Mutex::new(places), runs: Mutex::new(HashMap::new()), ours: Mutex::new(HashMap::new()), infos: Mutex::new(HashMap::new()), versions: Mutex::new(HashMap::new()) })
     }
 
     fn exe(&self, source: Source) -> Option<PathBuf> {
@@ -524,6 +529,11 @@ impl ChatHub {
     fn answer_own(&self, id: &str, key: &Key, cancel: &AtomicBool) -> Result<(), String> {
         let c = self.load_own(id)?;
         let turns = Self::turns(&c);
+        if c.provider == "ollama" {
+            let text = self.local.chat(&c.model, SYSTEM, &turns, cancel, &mut |t| self.delta(key, "text", t))?;
+            self.edit_own(id, |c| c.messages.push(Message { role: Role::Assistant, text: text.trim().to_string(), at: now(), tools: Vec::new(), tone: None }))?;
+            return Ok(());
+        }
         if c.provider == "openai" {
             let client = self.openai.client()?;
             let s = self.openai.settings();
@@ -794,8 +804,10 @@ impl ChatHub {
     pub fn create(self: &Arc<Self>, kind: NewKind, folder: Option<&str>, text: &str, mode: &str) -> Result<ChatSummary, String> {
         let text = check_text(text)?;
         match kind {
-            NewKind::Claude | NewKind::Openai => {
-                let (provider, model) = if kind == NewKind::Claude {
+            NewKind::Claude | NewKind::Openai | NewKind::Local => {
+                let (provider, model) = if kind == NewKind::Local {
+                    ("ollama", self.local.model()?)
+                } else if kind == NewKind::Claude {
                     if !self.claude.has_key() {
                         return Err("Add your Anthropic API key first (Chats → Keys).".into());
                     }
