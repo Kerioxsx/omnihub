@@ -3887,7 +3887,19 @@ export interface PriceWatch {
   error: string | null;
 }
 
+export interface Streamer {
+  id: string;
+  platform: 'twitch' | 'youtube';
+  handle: string;
+  live: boolean;
+  title: string;
+}
+
 export interface WatchStore {
+  streamers: Streamer[];
+  /** "21:00", or "" for off. */
+  recapTime: string;
+  recapDate: string;
   shopWanted: string[];
   shopAlerts: boolean;
   shopSeen: string[];
@@ -3970,4 +3982,17 @@ export interface AskAnswer {
 export interface AskReply {
   answers: AskAnswer[];
   words: string | null;
+}
+
+export interface SimilarPhoto {
+  path: string;
+  bytes: number;
+  width: number;
+  height: number;
+  modified: number;
+}
+
+export interface SimilarGroup {
+  photos: SimilarPhoto[];
+  keep: number;
 }

@@ -61,6 +61,8 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
                 n => Some(("Screen time".into(), format!("{n} min left for {name} today."))),
             }
         }
+        "watch:live" => Some((format!("{} is live", payload["handle"].as_str().unwrap_or("A creator")), payload["title"].as_str().filter(|t| !t.is_empty()).unwrap_or(if payload["platform"] == "youtube" { "On YouTube" } else { "On Twitch" }).to_string())),
+        "watch:recap" => Some((payload["title"].as_str().unwrap_or("Your day").to_string(), payload["body"].as_str().unwrap_or("").to_string())),
         "watch:shop" => Some(("In the item shop today".into(), payload["item"].as_str().unwrap_or("Something you wanted").to_string())),
         "watch:price" => Some((format!("Price drop: {}", payload["name"].as_str().unwrap_or("a part")), format!("Now {:.2}{}", payload["price"].as_f64().unwrap_or(0.0), payload["currency"].as_str().map(|c| format!(" {c}")).unwrap_or_default()))),
         "apps:auto-updated" => {
@@ -504,6 +506,14 @@ pub fn run(args: Vec<String>) {
             extras::chats_local_models,
             extras::chats_local_set,
             extras::ask_pc,
+            extras::watch_streamer_save,
+            extras::watch_streamer_delete,
+            extras::watch_streamers_check,
+            extras::watch_recap_set,
+            extras::watch_recap_now,
+            extras::photos_similar,
+            extras::photos_similar_stop,
+            extras::photos_trash,
             quick::clipboard_list,
             quick::clipboard_copy,
             quick::clipboard_paste,

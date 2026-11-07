@@ -7,6 +7,7 @@ pub mod engine;
 pub mod growth;
 pub mod ntfs;
 pub mod scan_task;
+pub mod similar;
 pub mod snapshot;
 pub mod tree;
 pub mod volume_scan;

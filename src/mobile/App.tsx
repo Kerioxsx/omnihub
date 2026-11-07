@@ -142,6 +142,21 @@ export function App() {
           if (payload?.reason !== 'replaced' && had && !power.cancelling) toast.info(`${had.label} cancelled`, 'Cancelled on the PC.');
           break;
         }
+        case 'alert:hot':
+          toast.error(`${payload?.part ?? 'The PC'} is hot`, `${Math.round(payload?.temp ?? 0)} °C. Check the fans and airflow.`);
+          break;
+        case 'watch:live':
+          toast.info(`${payload?.handle ?? 'A creator'} is live`, payload?.title || (payload?.platform === 'youtube' ? 'On YouTube' : 'On Twitch'), payload?.url ? { label: 'Watch', run: () => window.open(payload.url, '_blank', 'noopener') } : undefined);
+          break;
+        case 'watch:recap':
+          toast.info(payload?.title ?? 'Your day on the PC', payload?.body ?? '');
+          break;
+        case 'watch:shop':
+          toast.info('In the item shop today', payload?.item ?? '');
+          break;
+        case 'watch:price':
+          toast.info(`Price drop: ${payload?.name ?? 'a part'}`, payload?.price != null ? `Now ${Number(payload.price).toFixed(2)}${payload?.currency ? ` ${payload.currency}` : ''}` : undefined);
+          break;
         case 'mcserver:guard':
           toast.error(`${payload?.name ?? 'Someone'} wants in on ${payload?.server ?? 'your server'}`, 'That name is an operator and joined from a new place, so it was kept out. Allow it in More → Minecraft servers → Players if it’s really them.');
           break;

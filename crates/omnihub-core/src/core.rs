@@ -938,6 +938,14 @@ impl AppCore {
                             }
                         }
                     }
+                    // Creators going live, and the evening recap.
+                    for live in core.watchers.check_streamers() {
+                        core.events.emit("watch:live", &live);
+                    }
+                    if core.watchers.recap_due(&local.format("%Y-%m-%d").to_string(), minute) {
+                        let (title, body) = core.daily_recap();
+                        core.events.emit("watch:recap", serde_json::json!({ "title": title, "body": body }));
+                    }
                     // Prices every 6 hours.
                     if n.is_multiple_of(36) {
                         for p in core.watchers.get().prices {

@@ -3,7 +3,7 @@
 
 import { formatRelative } from '@shared/format';
 import type { PriceWatch, WatchStore } from '@shared/types';
-import { Bell, Crosshair, ExternalLink, Plus, RefreshCw, ShoppingBag, Tag, Trash } from 'lucide-react';
+import { Bell, CalendarClock, Crosshair, ExternalLink, Plus, Radio, RefreshCw, ShoppingBag, Tag, Trash } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -256,6 +256,96 @@ function PriceCard({ w, setW }: { w: WatchStore; setW: (w: WatchStore) => void }
   );
 }
 
+function StreamersCard({ w, setW }: { w: WatchStore; setW: (w: WatchStore) => void }) {
+  const [platform, setPlatform] = useState<'twitch' | 'youtube'>('twitch');
+  const [handle, setHandle] = useState('');
+  const [busy, setBusy] = useState(false);
+  const add = async () => {
+    try {
+      setW(await api.watch.saveStreamer({ platform, handle: handle.trim() }));
+      setHandle('');
+    } catch (e) {
+      toast.error('Couldn’t add them', errorText(e));
+    }
+  };
+  const check = async () => {
+    setBusy(true);
+    try {
+      setW(await api.watch.checkStreamers());
+    } catch (e) {
+      toast.error('Couldn’t check', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card className="p-5">
+      <CardHeader icon={Radio} title="When creators go live" subtitle="A notification here and on your phone when someone you follow starts streaming. Checked every 10 minutes." actions={w.streamers.length > 0 && <Button size="sm" variant="ghost" icon={RefreshCw} loading={busy} onClick={() => void check()}>Check now</Button>} />
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Select value={platform} onChange={(e) => setPlatform(e.target.value as 'twitch' | 'youtube')} className="w-auto" aria-label="Platform">
+          <option value="twitch">Twitch</option>
+          <option value="youtube">YouTube</option>
+        </Select>
+        <TextInput value={handle} onChange={(e) => setHandle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void add()} placeholder={platform === 'youtube' ? 'Channel handle, like @MrBeast' : 'Twitch name, like shroud'} className="min-w-[220px] flex-1" aria-label="Creator" />
+        <Button variant="primary" icon={Plus} disabled={!handle.trim()} onClick={() => void add()}>
+          Add
+        </Button>
+      </div>
+      {w.streamers.length > 0 && (
+        <div className="mt-3 divide-y divide-line rounded-xl border border-line">
+          {w.streamers.map((st) => (
+            <div key={st.id} className="flex items-center gap-3 px-3.5 py-2.5">
+              <span className={cx('h-2 w-2 shrink-0 rounded-full', st.live ? 'animate-pulse bg-bad' : 'bg-surface-3')} aria-hidden />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13.5px] font-medium text-fg">
+                  {st.handle} <span className="font-normal text-faint">· {st.platform === 'youtube' ? 'YouTube' : 'Twitch'}</span>
+                </div>
+                <div className="truncate text-[12px] text-dim">{st.live ? st.title || 'Live now' : 'Offline'}</div>
+              </div>
+              <IconButton icon={ExternalLink} label="Open their page" onClick={() => void api.app.openUrl(st.platform === 'youtube' ? `https://www.youtube.com/@${st.handle.replace(/^@/, '')}/live` : `https://www.twitch.tv/${st.handle.toLowerCase()}`)} />
+              <IconButton icon={Trash} label="Remove" onClick={() => void api.watch.removeStreamer(st.id).then(setW)} />
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="mt-3 text-[11.5px] text-faint">Read from their public pages (no account or key needed), so a page change on Twitch or YouTube can delay an alert.</p>
+    </Card>
+  );
+}
+
+function RecapCard({ w, setW }: { w: WatchStore; setW: (w: WatchStore) => void }) {
+  const save = async (time: string) => {
+    try {
+      setW(await api.watch.setRecap(time));
+    } catch (e) {
+      toast.error('Couldn’t save', errorText(e));
+    }
+  };
+  const preview = async () => {
+    try {
+      const r = await api.watch.recapNow();
+      toast.info(r.title, r.body);
+    } catch (e) {
+      toast.error('No recap', errorText(e));
+    }
+  };
+  return (
+    <Card className="p-5">
+      <CardHeader icon={CalendarClock} title="Daily recap" subtitle="An evening summary on your phone: what you played, internet used, and your PC’s health." actions={<Button size="sm" variant="ghost" onClick={() => void preview()}>Show today’s</Button>} />
+      <div className="mt-4 flex items-center gap-3 text-[13px] text-fg">
+        Every day
+        <Switch checked={!!w.recapTime} onChange={(v) => void save(v ? '21:00' : '')} label="Daily recap" />
+        {w.recapTime && (
+          <>
+            at
+            <TextInput type="time" value={w.recapTime} onChange={(e) => void save(e.target.value)} className="w-[136px]" aria-label="Recap time" />
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export function ExtrasTab() {
   const [w, setW] = useState<WatchStore | null>(null);
   useEffect(() => {
@@ -265,6 +355,8 @@ export function ExtrasTab() {
     () =>
       w && (
         <>
+          <StreamersCard w={w} setW={setW} />
+          <RecapCard w={w} setW={setW} />
           <ShopCard w={w} setW={setW} />
           <PriceCard w={w} setW={setW} />
         </>

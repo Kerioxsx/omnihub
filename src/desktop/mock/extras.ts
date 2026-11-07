@@ -131,6 +131,12 @@ export const screenTimeMock = {
 };
 
 let watch: WatchStore = {
+  streamers: [
+    { id: 's1', platform: 'twitch', handle: 'shroud', live: true, title: 'Ranked grind' },
+    { id: 's2', platform: 'youtube', handle: '@LinusTechTips', live: false, title: '' },
+  ],
+  recapTime: '21:00',
+  recapDate: '',
   shopWanted: ['Peely', 'Renegade Raider'],
   shopAlerts: true,
   shopSeen: [],
@@ -142,6 +148,12 @@ let watch: WatchStore = {
 };
 export const watchMock = {
   get: () => watch,
+  saveStreamer: (st: { platform: 'twitch' | 'youtube'; handle: string }) => {
+    if (!/^@?[A-Za-z0-9_.-]{2,40}$/.test(st.handle)) throw st.platform === 'youtube' ? 'Use the channel’s handle, like @MrBeast' : 'Use the Twitch name, like shroud';
+    return (watch = { ...watch, streamers: [...watch.streamers, { id: id(), platform: st.platform, handle: st.handle, live: false, title: '' }] });
+  },
+  removeStreamer: (sid: string) => (watch = { ...watch, streamers: watch.streamers.filter((x) => x.id !== sid) }),
+  setRecap: (time: string) => (watch = { ...watch, recapTime: time }),
   setShop: (wanted: string[], alerts: boolean) => (watch = { ...watch, shopWanted: wanted, shopAlerts: alerts }),
   checkShop: async () => {
     await wait(600);

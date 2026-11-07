@@ -137,6 +137,12 @@ pub struct PriceWatch {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WatchStore {
+    /// Creators to hear about when they go live.
+    pub streamers: Vec<Streamer>,
+    /// An evening summary on the phone at this time ("21:00"; empty: off).
+    pub recap_time: String,
+    /// The day it was last sent (local, "2026-11-07").
+    pub recap_date: String,
     pub shop_wanted: Vec<String>,
     pub shop_alerts: bool,
     pub shop_seen: Vec<String>,
@@ -272,6 +278,193 @@ pub fn fetch_price(url: &str) -> Result<(f64, Option<String>), String> {
     page_price(&html).ok_or_else(|| "No price found on that page (some shops, like Amazon, don't let programs read their prices)".to_string())
 }
 
+// ---------- creators going live (Twitch, YouTube) ----------
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Streamer {
+    pub id: String,
+    /// "twitch" or "youtube"
+    pub platform: String,
+    /// Twitch login ("shroud") or YouTube handle ("@MrBeast").
+    pub handle: String,
+    /// Live right now (as last checked).
+    pub live: bool,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WentLive {
+    pub handle: String,
+    pub platform: String,
+    pub title: String,
+    pub url: String,
+}
+
+/// A creator's page, where it's checked.
+pub fn live_url(platform: &str, handle: &str) -> String {
+    match platform {
+        "youtube" => format!("https://www.youtube.com/@{}/live", handle.trim_start_matches('@')),
+        _ => format!("https://www.twitch.tv/{}", handle.to_lowercase()),
+    }
+}
+
+/// Whether the page says it's live now, and the stream's title.
+pub fn page_live(platform: &str, html: &str) -> (bool, String) {
+    let title = || {
+        let t = html.split("<meta property=\"og:title\" content=\"").nth(1).or_else(|| html.split("<meta name=\"title\" content=\"").nth(1)).and_then(|r| r.split('"').next()).unwrap_or("");
+        t.replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", "\"").chars().take(140).collect::<String>()
+    };
+    let live = match platform {
+        // Twitch's page carries its own structured data while live.
+        "twitch" => html.contains("\"isLiveBroadcast\":true"),
+        // YouTube's /live page is the stream itself only while it's on.
+        _ => html.contains("\"isLiveNow\":true") || (html.contains("\"isLive\":true") && html.contains("watch?v=")),
+    };
+    (live, if live { title() } else { String::new() })
+}
+
+pub fn valid_handle(platform: &str, h: &str) -> bool {
+    let h = h.trim_start_matches('@');
+    let ok = |c: char| c.is_ascii_alphanumeric() || c == '_' || (platform == "youtube" && (c == '-' || c == '.'));
+    (platform == "twitch" || platform == "youtube") && (2..=40).contains(&h.len()) && h.chars().all(ok)
+}
+
+impl Watchers {
+    pub fn save_streamer(&self, mut st: Streamer) -> Result<WatchStore, String> {
+        st.handle = st.handle.trim().trim_start_matches("https://").trim_start_matches("www.").trim_start_matches("twitch.tv/").trim_start_matches("youtube.com/").trim_end_matches('/').to_string();
+        if !valid_handle(&st.platform, &st.handle) {
+            return Err(if st.platform == "youtube" { "Use the channel's handle, like @MrBeast".into() } else { "Use the Twitch name, like shroud".into() });
+        }
+        let mut s = self.get();
+        if s.streamers.len() >= 50 {
+            return Err("That's a lot of creators; keep it under 50".into());
+        }
+        if st.id.is_empty() {
+            st.id = uuid::Uuid::new_v4().simple().to_string()[..8].to_string();
+        }
+        st.live = false;
+        st.title.clear();
+        s.streamers.retain(|x| x.id != st.id);
+        s.streamers.push(st);
+        Ok(self.put(s))
+    }
+
+    pub fn delete_streamer(&self, id: &str) -> WatchStore {
+        let mut s = self.get();
+        s.streamers.retain(|x| x.id != id);
+        self.put(s)
+    }
+
+    /// Note who's live now; returns those who just went live.
+    pub fn record_live(&self, seen: &[(String, bool, String)]) -> Vec<WentLive> {
+        let mut s = self.get();
+        let mut out = Vec::new();
+        for st in s.streamers.iter_mut() {
+            let Some((_, live, title)) = seen.iter().find(|x| x.0 == st.id) else { continue };
+            if *live && !st.live {
+                out.push(WentLive { handle: st.handle.clone(), platform: st.platform.clone(), title: title.clone(), url: live_url(&st.platform, &st.handle) });
+            }
+            st.live = *live;
+            st.title = title.clone();
+        }
+        self.put(s);
+        out
+    }
+
+    /// Look at every creator's page (a few seconds each).
+    pub fn check_streamers(&self) -> Vec<WentLive> {
+        let seen: Vec<(String, bool, String)> = self
+            .get()
+            .streamers
+            .iter()
+            .filter_map(|st| {
+                let html = crate::web::get_text_as(&live_url(&st.platform, &st.handle), crate::web::BROWSER_UA, 20).ok()?;
+                let (live, title) = page_live(&st.platform, &html);
+                Some((st.id.clone(), live, title))
+            })
+            .collect();
+        self.record_live(&seen)
+    }
+}
+
+// ---------- the daily recap ----------
+
+/// The day's summary as (title, body) from today's play sessions (name,
+/// minutes), the data used and the health score.
+pub fn recap_text(games: &[(String, u64)], data_bytes: Option<u64>, health: Option<u8>) -> (String, String) {
+    let total: u64 = games.iter().map(|g| g.1).sum();
+    let mut lines = Vec::new();
+    if total > 0 {
+        let top: Vec<String> = games.iter().take(3).map(|(n, m)| format!("{n} {}", mins(*m))).collect();
+        lines.push(format!("Played {}: {}.", mins(total), top.join(", ")));
+    } else {
+        lines.push("No games today.".into());
+    }
+    if let Some(b) = data_bytes.filter(|b| *b > 0) {
+        lines.push(format!("{:.1} GB of internet used.", b as f64 / 1e9));
+    }
+    if let Some(h) = health {
+        lines.push(format!("PC health {h}/100."));
+    }
+    ("Your day on the PC".into(), lines.join(" "))
+}
+
+fn mins(m: u64) -> String {
+    if m >= 60 {
+        format!("{} h {} min", m / 60, m % 60)
+    } else {
+        format!("{m} min")
+    }
+}
+
+impl Watchers {
+    pub fn set_recap(&self, time: &str) -> Result<WatchStore, String> {
+        let t = time.trim();
+        if !t.is_empty() && crate::nightlight::minutes(t).is_none() {
+            return Err("Use a time like 21:00".into());
+        }
+        let mut s = self.get();
+        s.recap_time = t.to_string();
+        Ok(self.put(s))
+    }
+
+    /// Whether the recap is due now (once a day, at or after its time).
+    pub fn recap_due(&self, today: &str, minute: u32) -> bool {
+        let s = self.get();
+        let Some(at) = crate::nightlight::minutes(&s.recap_time) else { return false };
+        if minute < at || s.recap_date == today {
+            return false;
+        }
+        let mut s2 = s;
+        s2.recap_date = today.to_string();
+        self.put(s2);
+        true
+    }
+}
+
+impl crate::core::AppCore {
+    /// Today's summary: games played, internet used, PC health.
+    pub fn daily_recap(&self) -> (String, String) {
+        use chrono::TimeZone;
+        let start = chrono::Local::now().date_naive().and_hms_opt(0, 0, 0).and_then(|d| chrono::Local.from_local_datetime(&d).single()).map_or(0, |d| d.timestamp_millis());
+        let mut by: Vec<(String, u64)> = Vec::new();
+        for s in self.shelf.sessions(None, 200).into_iter().filter(|s| s.end >= start) {
+            let m = ((s.end - s.start.max(start)).max(0) / 60_000) as u64;
+            match by.iter_mut().find(|g| g.0 == s.name) {
+                Some(g) => g.1 += m,
+                None => by.push((s.name.clone(), m)),
+            }
+        }
+        by.retain(|g| g.1 > 0);
+        by.sort_by_key(|g| std::cmp::Reverse(g.1));
+        let data = self.netmon.status(Vec::new()).days.last().map(|d| d.down + d.up);
+        let health = crate::health::score(&crate::health::gather(), crate::db::now() * 1000).score;
+        recap_text(&by, data, Some(health))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,5 +509,39 @@ mod tests {
         assert!(w.record(&b.id, Ok((280.0, None)), 3).is_some());
         assert!(w.record(&b.id, Err("blocked".into()), 4).is_none());
         assert_eq!(Watchers::new(t.path()).get().prices.len(), 2);
+    }
+
+    #[test]
+    fn notices_creators_going_live() {
+        assert!(page_live("twitch", r#"<script type="application/ld+json">[{"@type":"VideoObject","publication":{"@type":"BroadcastEvent","isLiveBroadcast":true}}]</script><meta property="og:title" content="shroud - Twitch">"#).0);
+        assert!(!page_live("twitch", "<html>offline</html>").0);
+        let (live, title) = page_live("youtube", r#"<link rel="canonical" href="https://www.youtube.com/watch?v=abc"><meta name="title" content="Big &amp; live">"isLiveNow":true"#);
+        assert_eq!((live, title.as_str()), (true, "Big & live"));
+        assert!(valid_handle("youtube", "@MrBeast") && valid_handle("twitch", "shroud") && !valid_handle("twitch", "a b") && !valid_handle("kick", "x1"));
+        let t = tempfile::tempdir().unwrap();
+        let w = Watchers::new(t.path());
+        let s = w.save_streamer(Streamer { platform: "twitch".into(), handle: "https://www.twitch.tv/Shroud/".into(), ..Default::default() }).unwrap();
+        let id = s.streamers[0].id.clone();
+        assert_eq!(s.streamers[0].handle, "Shroud");
+        assert_eq!(w.record_live(&[(id.clone(), true, "Ranked".into())]).len(), 1, "went live");
+        assert!(w.record_live(&[(id.clone(), true, "Ranked".into())]).is_empty(), "still live: no second alert");
+        w.record_live(&[(id.clone(), false, String::new())]);
+        assert_eq!(w.record_live(&[(id, true, String::new())])[0].url, "https://www.twitch.tv/shroud");
+    }
+
+    #[test]
+    fn writes_the_day() {
+        let (t, b) = recap_text(&[("Fortnite".into(), 95), ("Minecraft".into(), 20)], Some(3_400_000_000), Some(88));
+        assert_eq!(t, "Your day on the PC");
+        assert_eq!(b, "Played 1 h 55 min: Fortnite 1 h 35 min, Minecraft 20 min. 3.4 GB of internet used. PC health 88/100.");
+        assert!(recap_text(&[], None, None).1.starts_with("No games today"));
+        let d = tempfile::tempdir().unwrap();
+        let w = Watchers::new(d.path());
+        assert!(w.set_recap("9pm").is_err());
+        w.set_recap("21:00").unwrap();
+        assert!(!w.recap_due("2026-11-07", 20 * 60));
+        assert!(w.recap_due("2026-11-07", 21 * 60 + 5));
+        assert!(!w.recap_due("2026-11-07", 22 * 60), "once a day");
+        assert!(w.recap_due("2026-11-08", 23 * 60));
     }
 }

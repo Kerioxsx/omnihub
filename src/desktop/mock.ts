@@ -547,6 +547,11 @@ const handlers: Record<string, Handler> = {
   screentime_save: (a) => screenTimeMock.save(obj(a, 'limit')),
   screentime_delete: (a) => screenTimeMock.remove(str(a, 'id')),
   watch_get: () => watchMock.get(),
+  watch_streamer_save: (a) => watchMock.saveStreamer(a?.streamer as { platform: 'twitch' | 'youtube'; handle: string }),
+  watch_streamer_delete: (a) => watchMock.removeStreamer(str(a, 'id')),
+  watch_streamers_check: () => watchMock.get(),
+  watch_recap_set: (a) => watchMock.setRecap(str(a, 'time')),
+  watch_recap_now: () => ({ title: 'Your day on the PC', body: 'Played 1 h 55 min: Fortnite 1 h 35 min, Minecraft 20 min. 3.4 GB of internet used. PC health 88/100.' }),
   watch_shop_set: (a) => watchMock.setShop((a?.wanted as string[]) ?? [], Boolean(a?.alerts)),
   watch_shop_check: () => watchMock.checkShop(),
   watch_price_save: (a) => watchMock.savePrice(obj(a, 'watch')),
@@ -566,6 +571,19 @@ const handlers: Record<string, Handler> = {
     const answers = /internet|network|wifi|download/.test(q) ? [net] : /slow|lag/.test(q) ? [slow] : [{ title: 'Health score: 86/100', points: ['Space on C:: 41 GB free of 512 GB (8%)'], tips: ['Free up space'], route: 'home' }];
     return { answers, words: a?.words ? 'Chrome is the main thing keeping your PC busy right now. Closing a few tabs should make it feel faster.' : null };
   },
+  photos_similar: async () => {
+    for (let n = 0; n <= 240; n += 40) {
+      emit('photos:progress', { done: n, total: 240 });
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    const p = (name: string, w: number, h: number, bytes: number) => ({ path: `C:\\Users\\Player\\Pictures\\Phone\\${name}`, bytes, width: w, height: h, modified: Date.now() - 86400000 });
+    return [
+      { photos: [p('IMG_2041.jpg', 4032, 3024, 3_900_000), p('IMG_2041 (1).jpg', 4032, 3024, 3_900_000), p('IMG_2041-small.jpg', 1280, 960, 410_000)], keep: 0 },
+      { photos: [p('Screenshot 2026-10-12 174203.png', 2560, 1440, 1_200_000), p('Screenshot 2026-10-12 174205.png', 2560, 1440, 1_190_000)], keep: 0 },
+    ];
+  },
+  photos_similar_stop: () => undefined,
+  photos_trash: (a) => ((a?.paths as string[]) ?? []).length,
   audio_inputs: () => [{ id: 'mic1', name: 'Microphone (HyperX QuadCast)', default: true }, { id: 'mic2', name: 'Headset Microphone (WH-1000XM5)', default: false }],
   screen_modes: () => ({ current: { width: 2560, height: 1440, hz: 165 }, modes: [{ width: 2560, height: 1440, hz: 165 }, { width: 2560, height: 1440, hz: 144 }, { width: 2560, height: 1440, hz: 60 }, { width: 1920, height: 1080, hz: 165 }, { width: 1920, height: 1080, hz: 144 }, { width: 1920, height: 1080, hz: 60 }, { width: 1280, height: 720, hz: 60 }], hdr: false }),
   nightlight_get: () => mockNight,

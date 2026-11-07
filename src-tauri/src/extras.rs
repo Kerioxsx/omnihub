@@ -554,3 +554,80 @@ pub async fn ask_pc(core: Core<'_>, question: String, words: bool) -> Res<AskRep
     })
     .await
 }
+
+// ---------- 0.31: creators going live, the daily recap ----------
+
+#[tauri::command]
+pub async fn watch_streamer_save(core: Core<'_>, streamer: omnihub_core::watchers::Streamer) -> Res<WatchStore> {
+    core.watchers.save_streamer(streamer)
+}
+
+#[tauri::command]
+pub async fn watch_streamer_delete(core: Core<'_>, id: String) -> Res<WatchStore> {
+    Ok(core.watchers.delete_streamer(&id))
+}
+
+/// Look at every creator's page now.
+#[tauri::command]
+pub async fn watch_streamers_check(core: Core<'_>) -> Res<WatchStore> {
+    let c = core.inner().clone();
+    blocking(move || {
+        for live in c.watchers.check_streamers() {
+            c.events.emit("watch:live", &live);
+        }
+        Ok(c.watchers.get())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn watch_recap_set(core: Core<'_>, time: String) -> Res<WatchStore> {
+    core.watchers.set_recap(&time)
+}
+
+/// Today's recap now (to preview it).
+#[tauri::command]
+pub async fn watch_recap_now(core: Core<'_>) -> Res<serde_json::Value> {
+    let c = core.inner().clone();
+    blocking(move || {
+        let (title, body) = c.daily_recap();
+        Ok(serde_json::json!({ "title": title, "body": body }))
+    })
+    .await
+}
+
+// ---------- 0.31: similar photos ----------
+
+static SIMILAR_STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Pictures the last scan found: only these can be sent to the Recycle Bin from here.
+static SIMILAR_FOUND: parking_lot::Mutex<Vec<String>> = parking_lot::Mutex::new(Vec::new());
+
+#[tauri::command]
+pub async fn photos_similar(core: Core<'_>, dir: String) -> Res<Vec<omnihub_core::storage::similar::SimilarGroup>> {
+    let c = core.inner().clone();
+    SIMILAR_STOP.store(false, std::sync::atomic::Ordering::SeqCst);
+    blocking(move || {
+        let events = c.events.clone();
+        let groups = omnihub_core::storage::similar::find(std::path::Path::new(&dir), &SIMILAR_STOP, &|done, total| events.emit("photos:progress", serde_json::json!({ "done": done, "total": total })))?;
+        *SIMILAR_FOUND.lock() = groups.iter().flat_map(|g| g.photos.iter().map(|p| p.path.clone())).collect();
+        Ok(groups)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn photos_similar_stop() -> Res<()> {
+    SIMILAR_STOP.store(true, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
+}
+
+/// Send pictures from the last scan to the Recycle Bin; says how many went.
+#[tauri::command]
+pub async fn photos_trash(paths: Vec<String>) -> Res<usize> {
+    blocking(move || {
+        let found = SIMILAR_FOUND.lock().clone();
+        let ok: Vec<String> = paths.into_iter().filter(|p| found.contains(p)).collect();
+        Ok(omnihub_core::storage::similar::recycle(&ok))
+    })
+    .await
+}

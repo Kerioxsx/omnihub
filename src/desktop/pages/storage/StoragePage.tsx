@@ -13,6 +13,7 @@ import { useSettings } from '../../state/settings';
 import { type StorageTab, rootKey, useStorage } from '../../state/storage';
 import { CleanupTab } from './CleanupTab';
 import { DuplicatesTab } from './DuplicatesTab';
+import { SimilarPhotos } from './SimilarPhotos';
 import { ExplorerTab } from './ExplorerTab';
 import { LargestTab } from './LargestTab';
 import { DrivePicker, ModeHint, ModeToggle, NeverScanned, ScanProgressView, SummaryCard } from './ScanParts';
@@ -105,7 +106,12 @@ export function StoragePage() {
           {tab === 'types' && <TypesTab scanId={summary.scanId} />}
           {tab === 'growth' && <GrowthTab scanId={summary.scanId} />}
           {tab === 'cleanup' && <CleanupTab scanId={summary.scanId} />}
-          {tab === 'duplicates' && <DuplicatesTab scanId={summary.scanId} />}
+          {tab === 'duplicates' && (
+            <div className="flex flex-1 flex-col gap-3">
+              <SimilarPhotos />
+              <DuplicatesTab scanId={summary.scanId} />
+            </div>
+          )}
           {tab === 'search' && <SearchTab scanId={summary.scanId} />}
         </div>
       </>

@@ -317,6 +317,11 @@ export const api = {
     savePrice: (watch: T.PriceWatch) => call<T.WatchStore>('watch_price_save', { watch }),
     removePrice: (id: string) => call<T.WatchStore>('watch_price_delete', { id }),
     checkPrices: () => call<T.WatchStore>('watch_prices_check'),
+    saveStreamer: (streamer: Partial<T.Streamer> & { platform: T.Streamer['platform']; handle: string }) => call<T.WatchStore>('watch_streamer_save', { streamer }),
+    removeStreamer: (id: string) => call<T.WatchStore>('watch_streamer_delete', { id }),
+    checkStreamers: () => call<T.WatchStore>('watch_streamers_check'),
+    setRecap: (time: string) => call<T.WatchStore>('watch_recap_set', { time }),
+    recapNow: () => call<{ title: string; body: string }>('watch_recap_now'),
   },
   voice: (text: string) => call<string>('voice_command', { text }),
   /** PlayStation controllers' light bar colour ("#ff6a00"); Bluetooth only when allowed. */
@@ -329,6 +334,12 @@ export const api = {
   },
   audioOutputs: () => call<T.AudioOutput[]>('audio_outputs'),
   audioInputs: () => call<T.AudioOutput[]>('audio_inputs'),
+  /** Look-alike photos in a folder (`photos:progress` events while it reads). */
+  similarPhotos: {
+    find: (dir: string) => call<T.SimilarGroup[]>('photos_similar', { dir }),
+    stop: () => call<void>('photos_similar_stop'),
+    recycle: (paths: string[]) => call<number>('photos_trash', { paths }),
+  },
   /** "Ask your PC": answered from what OmniHub measures now (`words`: also in a sentence by a local model). */
   askPc: (question: string, words: boolean) => call<T.AskReply>('ask_pc', { question, words }),
   screenModes: () => call<T.ScreenModes>('screen_modes'),
