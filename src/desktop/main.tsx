@@ -19,6 +19,7 @@ const SpeedrunPopout = lazy(() => import('./pages/floats/SpeedrunPopout').then((
 const CrosshairView = lazy(() => import('./pages/floats/CrosshairView').then((m) => ({ default: m.CrosshairView })));
 const WidgetView = lazy(() => import('./pages/floats/WidgetView').then((m) => ({ default: m.WidgetView })));
 const WallpaperView = lazy(() => import('./pages/floats/WallpaperView').then((m) => ({ default: m.WallpaperView })));
+const SoundboardPlayer = lazy(() => import('./pages/floats/SoundboardPlayer').then((m) => ({ default: m.SoundboardPlayer })));
 const RegionOverlay = lazy(() => import('./pages/overlay/RegionOverlay').then((m) => ({ default: m.RegionOverlay })));
 
 /**
@@ -58,7 +59,7 @@ function Root() {
   useEffect(() => {
     document.documentElement.classList.toggle('float-route', float);
   }, [float]);
-  const view = route.id === 'speedrun' ? <SpeedrunPopout /> : route.id === 'crosshair' ? <CrosshairView /> : route.id === 'widget' ? <WidgetView /> : route.id === 'wallpaper' ? <WallpaperView /> : route.id === 'pin' ? <PinView /> : route.id === 'counter' ? <CounterPopout /> : route.id === 'wheel' ? <WheelPopup /> : route.id === 'clipboard' ? <ClipboardPopup /> : route.id === 'casescreen' || overlayWindow === 'casescreen' ? <CaseScreen /> : ambient ? <AmbientOverlay /> : overlay ? <RegionOverlay /> : overlayWindow === null ? null : <App />;
+  const view = route.id === 'soundboard' ? <SoundboardPlayer /> : route.id === 'speedrun' ? <SpeedrunPopout /> : route.id === 'crosshair' ? <CrosshairView /> : route.id === 'widget' ? <WidgetView /> : route.id === 'wallpaper' ? <WallpaperView /> : route.id === 'pin' ? <PinView /> : route.id === 'counter' ? <CounterPopout /> : route.id === 'wheel' ? <WheelPopup /> : route.id === 'clipboard' ? <ClipboardPopup /> : route.id === 'casescreen' || overlayWindow === 'casescreen' ? <CaseScreen /> : ambient ? <AmbientOverlay /> : overlay ? <RegionOverlay /> : overlayWindow === null ? null : <App />;
   return <Suspense fallback={null}>{view}</Suspense>;
 }
 

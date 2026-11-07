@@ -12,7 +12,7 @@ import { Field, Select, TextInput } from '../../components/ui/Form';
 import { toast } from '../../state/toasts';
 import { runTime } from '../floats/SpeedrunPopout';
 
-const KEYS: [number, string][] = [
+export const KEYS: [number, string][] = [
   ...Array.from({ length: 10 }, (_, i) => [0x60 + i, `Numpad ${i}`] as [number, string]),
   ...Array.from({ length: 12 }, (_, i) => [0x70 + i, `F${i + 1}`] as [number, string]),
   [0x24, 'Home'],

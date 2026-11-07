@@ -48,7 +48,7 @@ const VaultPage = lazy(() => import('./pages/vault/VaultPage').then((m) => ({ de
 const Onboarding = lazy(() => import('./pages/onboarding/Onboarding').then((m) => ({ default: m.Onboarding })));
 const PlayerHost = lazy(() => import('./components/music/PlayerHost').then((m) => ({ default: m.PlayerHost })));
 
-const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen' | 'pin' | 'counter' | 'wheel' | 'clipboard' | 'speedrun' | 'crosshair' | 'widget' | 'wallpaper'>, ComponentType> = {
+const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen' | 'pin' | 'counter' | 'wheel' | 'clipboard' | 'speedrun' | 'crosshair' | 'widget' | 'wallpaper' | 'soundboard'>, ComponentType> = {
   home: HomePage,
   storage: StoragePage,
   apps: AppsPage,
@@ -151,7 +151,7 @@ export function App() {
 
   if (!settings) return <Splash error={error} onRetry={() => void load()} />;
 
-  const pageId = route.id === 'overlay' || route.id === 'ambient' || route.id === 'casescreen' || route.id === 'pin' || route.id === 'counter' || route.id === 'wheel' || route.id === 'clipboard' || route.id === 'speedrun' || route.id === 'crosshair' || route.id === 'widget' || route.id === 'wallpaper' ? 'home' : route.id;
+  const pageId = route.id === 'overlay' || route.id === 'ambient' || route.id === 'casescreen' || route.id === 'pin' || route.id === 'counter' || route.id === 'wheel' || route.id === 'clipboard' || route.id === 'speedrun' || route.id === 'crosshair' || route.id === 'widget' || route.id === 'wallpaper' || route.id === 'soundboard' ? 'home' : route.id;
   const PageComp = PAGES[pageId];
   const showOnboarding = onboardingForced || !settings.general.onboarded;
 

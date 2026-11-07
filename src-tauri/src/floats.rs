@@ -329,4 +329,47 @@ pub fn restore(app: &AppHandle, core: Arc<AppCore>) {
     if f.wallpaper {
         let _ = open_wallpaper(app);
     }
+    if !core.soundboard.get().sounds.is_empty() {
+        ensure_player(app);
+    }
+}
+
+// ---------- the soundboard's player ----------
+
+/// The hidden window that plays soundboard sounds (so keys work while
+/// OmniHub's own window is closed or resting).
+pub fn ensure_player(app: &AppHandle) {
+    if app.get_webview_window("soundboard").is_some() {
+        return;
+    }
+    let _ = WebviewWindowBuilder::new(app, "soundboard", WebviewUrl::App("index.html#/soundboard".into())).title("OmniHub soundboard").visible(false).skip_taskbar(true).decorations(false).inner_size(1.0, 1.0).focused(false).build();
+}
+
+#[tauri::command]
+pub async fn soundboard_get(core: Core<'_>) -> Res<omnihub_core::soundboard::SoundboardSettings> {
+    Ok(core.soundboard.get())
+}
+
+#[tauri::command]
+pub async fn soundboard_save(app: AppHandle, core: Core<'_>, settings: omnihub_core::soundboard::SoundboardSettings) -> Res<omnihub_core::soundboard::SoundboardSettings> {
+    let s = core.soundboard.save(settings)?;
+    core.refresh_keys();
+    if !s.sounds.is_empty() {
+        ensure_player(&app);
+    }
+    Ok(s)
+}
+
+#[tauri::command]
+pub async fn soundboard_play(app: AppHandle, core: Core<'_>, id: String) -> Res<()> {
+    let s = core.soundboard.find(&id).ok_or("That sound is gone")?;
+    ensure_player(&app);
+    core.play_sound(&s);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn soundboard_stop(core: Core<'_>) -> Res<()> {
+    core.events.emit("soundboard:stop", serde_json::json!({}));
+    Ok(())
 }

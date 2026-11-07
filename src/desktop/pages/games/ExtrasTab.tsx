@@ -12,6 +12,7 @@ import { Select, Switch, TextInput } from '../../components/ui/Form';
 import { EmptyState } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { toast } from '../../state/toasts';
+import { AimTrainerCard } from './AimTrainer';
 import { CrosshairCard } from './CrosshairCard';
 import { GameAlertsCard, ReadyCard } from './GameAlertsCard';
 
@@ -370,6 +371,7 @@ export function ExtrasTab() {
     <div className="space-y-4">
       <ReadyCard />
       <SensitivityCard />
+      <AimTrainerCard />
       <CrosshairCard />
       {content}
       <p className="flex items-center gap-1.5 px-1 text-[11.5px] text-faint">

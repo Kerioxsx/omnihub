@@ -336,6 +336,12 @@ export const api = {
   audioOutputs: () => call<T.AudioOutput[]>('audio_outputs'),
   audioInputs: () => call<T.AudioOutput[]>('audio_inputs'),
   wifiQr: () => call<T.WifiQr>('wifi_qr'),
+  soundboard: {
+    get: () => call<T.SoundboardSettings>('soundboard_get'),
+    save: (settings: T.SoundboardSettings) => call<T.SoundboardSettings>('soundboard_save', { settings }),
+    play: (id: string) => call<void>('soundboard_play', { id }),
+    stop: () => call<void>('soundboard_stop'),
+  },
   /** Timers, alarms and the bedtime lock (rings on the PC and the phone). */
   timers: {
     get: () => call<T.TimersState>('timers_get'),

@@ -3,7 +3,7 @@
 
 import type { AudioOutput, ClipItem, ClipList, Counter, GoveePreset, LibraryGame, ObsInfo, QuickAction, QuickButton, QuickState, Scene, ScreenModes } from '@shared/types';
 import { QUICK_COLORS, QUICK_ICONS } from '@shared/quickIcons';
-import { ArrowDown, ArrowUp, ClipboardList, Clapperboard, Copy, Monitor, FolderOpen, Grid3x3, Image as ImageIcon, Pause, Pencil, Pin, PinOff, Play, Plus, Radio, Smartphone, Trash2, Disc3 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ClipboardList, Clapperboard, Copy, Monitor, Volume2, FolderOpen, Grid3x3, Image as ImageIcon, Pause, Pencil, Pin, PinOff, Play, Plus, Radio, Smartphone, Trash2, Disc3 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -18,9 +18,10 @@ import { navigate, useRoute } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
 import { DesktopTab } from './DesktopTab';
+import { SoundboardTab } from './SoundboardTab';
 import { ACTION_KINDS, ButtonFace, ChordInput, FAN_LABEL, MEDIA_LABEL, OBS_LABEL, STEP_KINDS, ago, blankAction, describe } from './shared';
 
-type Tab = 'deck' | 'scenes' | 'desktop' | 'wheel' | 'clipboard';
+type Tab = 'deck' | 'scenes' | 'soundboard' | 'desktop' | 'wheel' | 'clipboard';
 
 // ---------- the button editor (deck and wheel) ----------
 
@@ -169,6 +170,19 @@ function ActionFields({ action, onChange, games, counters, extra }: { action: Qu
           </Select>
         </Field>
       );
+    case 'playSound':
+      return (
+        <Field label="Sound">
+          <Select value={action.id} onChange={(e) => onChange({ ...action, id: e.target.value })}>
+            <option value="">Pick a sound…</option>
+            {(extra?.sounds ?? []).map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      );
     case 'music':
       return (
         <Field label="Music to play" hint="In your music app (Spotify or Apple Music). Set a scene to run with a game for music per game.">
@@ -244,13 +258,14 @@ interface Extra {
   outputs: AudioOutput[];
   inputs: AudioOutput[];
   screen: ScreenModes | null;
+  sounds: { id: string; name: string }[];
 }
 
 function useExtra(open: boolean): Extra {
-  const [x, setX] = useState<Extra>({ scenes: [], presets: [], outputs: [], inputs: [], screen: null });
+  const [x, setX] = useState<Extra>({ scenes: [], presets: [], outputs: [], inputs: [], screen: null, sounds: [] });
   useEffect(() => {
     if (!open) return;
-    void Promise.all([api.quick.state().then((s) => s.scenes, () => []), api.govee.presets().catch(() => []), api.audioOutputs().catch(() => []), api.audioInputs().catch(() => []), api.screenModes().catch(() => null)]).then(([scenes, presets, outputs, inputs, screen]) => setX({ scenes, presets, outputs, inputs, screen }));
+    void Promise.all([api.quick.state().then((s) => s.scenes, () => []), api.govee.presets().catch(() => []), api.audioOutputs().catch(() => []), api.audioInputs().catch(() => []), api.screenModes().catch(() => null), api.soundboard.get().then((b) => b.sounds, () => [])]).then(([scenes, presets, outputs, inputs, screen, sounds]) => setX({ scenes, presets, outputs, inputs, screen, sounds }));
   }, [open]);
   return x;
 }
@@ -389,7 +404,7 @@ function ButtonEditor({ open, initial, onClose, onSave, forDeck }: { open: boole
             value={action.kind}
             onChange={(e) => {
               const kind = e.target.value as QuickAction['kind'];
-              const icon = ({ media: 'play', open: 'app-window', game: 'gamepad-2', keys: 'keyboard', text: 'message-square', mic: 'mic-off', counter: 'sparkles', screenshot: 'camera', lock: 'lock', clipboard: 'clipboard-list', obs: 'radio', quiet: 'moon', capriDesktop: 'bot', scene: 'zap', lights: 'lightbulb', fans: 'fan', notifications: 'bell-off', discord: 'message-circle', sound: 'headphones', pinWindow: 'monitor', music: 'music' } as Record<string, string>)[kind];
+              const icon = ({ media: 'play', open: 'app-window', game: 'gamepad-2', keys: 'keyboard', text: 'message-square', mic: 'mic-off', counter: 'sparkles', screenshot: 'camera', lock: 'lock', clipboard: 'clipboard-list', obs: 'radio', quiet: 'moon', capriDesktop: 'bot', scene: 'zap', lights: 'lightbulb', fans: 'fan', notifications: 'bell-off', discord: 'message-circle', sound: 'headphones', pinWindow: 'monitor', music: 'music', playSound: 'volume-2' } as Record<string, string>)[kind];
               setB({ ...b, action: blankAction(kind), icon: b.icon === 'zap' || !initial ? icon : b.icon });
             }}
           >
@@ -753,7 +768,7 @@ function ClipboardTab({ state, save }: { state: QuickState; save: (s: QuickState
 
 export function QuickPage() {
   const route = useRoute();
-  const tab = (['deck', 'scenes', 'desktop', 'wheel', 'clipboard'] as Tab[]).find((t) => t === route.params.get('tab')) ?? 'deck';
+  const tab = (['deck', 'scenes', 'soundboard', 'desktop', 'wheel', 'clipboard'] as Tab[]).find((t) => t === route.params.get('tab')) ?? 'deck';
   const { state, save } = useQuick();
   return (
     <Page title="Quick actions" subtitle="A macro deck for your PC and phone, scenes that set everything in one tap, a quick-launch wheel at your mouse, and clipboard history." actions={state && <Kbd>{tab === 'clipboard' ? state.clipHotkey : state.wheelHotkey}</Kbd>}>
@@ -764,12 +779,13 @@ export function QuickPage() {
         items={[
           { value: 'deck', label: 'Deck', icon: Grid3x3 },
           { value: 'scenes', label: 'Scenes', icon: Clapperboard },
+          { value: 'soundboard', label: 'Soundboard', icon: Volume2 },
           { value: 'desktop', label: 'Desktop', icon: Monitor },
           { value: 'wheel', label: 'Wheel', icon: Disc3 },
           { value: 'clipboard', label: 'Clipboard', icon: ClipboardList },
         ]}
       />
-      {!state ? null : tab === 'deck' ? <DeckTab state={state} save={save} /> : tab === 'scenes' ? <ScenesTab state={state} save={save} /> : tab === 'desktop' ? <DesktopTab /> : tab === 'wheel' ? <WheelTab state={state} save={save} /> : <ClipboardTab state={state} save={save} />}
+      {!state ? null : tab === 'deck' ? <DeckTab state={state} save={save} /> : tab === 'scenes' ? <ScenesTab state={state} save={save} /> : tab === 'desktop' ? <DesktopTab /> : tab === 'soundboard' ? <SoundboardTab /> : tab === 'wheel' ? <WheelTab state={state} save={save} /> : <ClipboardTab state={state} save={save} />}
     </Page>
   );
 }

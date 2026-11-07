@@ -55,6 +55,7 @@ pub mod scan;
 pub mod screentime;
 pub mod settings;
 pub mod sites;
+pub mod soundboard;
 pub mod speedrun;
 pub mod startup;
 pub mod storage;

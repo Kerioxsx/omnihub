@@ -13,6 +13,7 @@ import { toast } from '../../../state/toasts';
 import { confirmBack, padPrefs, usePadInput, useConnectedPads } from '../../../lib/pads';
 import { Cover, STATUS_LABEL, ago, hours } from './LibraryTab';
 import { Glyph, PadPanel, applyLight } from './PadPanel';
+import { OnScreenKeyboard } from './OnScreenKeyboard';
 
 const W = 176; // cover width, px
 const GAP = 22;
@@ -116,7 +117,14 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
   useEffect(() => {
     void api.sites.list().then(setSites, () => undefined);
   }, []);
+  const [query, setQuery] = useState('');
+  const [typing, setTyping] = useState(false);
   const rows = useMemo<Row[]>(() => {
+    const q = query.trim().toLowerCase();
+    if (q) {
+      const hits = [...games, ...sites.map(asTile)].filter((g) => g.name.toLowerCase().includes(q));
+      return [{ title: `Search: ${query.trim()}`, games: hits.length ? hits : [] }].filter((r) => r.games.length);
+    }
     const recent = games.filter((g) => g.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 15);
     const favs = games.filter((g) => g.favorite).sort((a, b) => a.name.localeCompare(b.name));
     const playing = games.filter((g) => g.status === 'playing' && !g.favorite);
@@ -128,7 +136,7 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
       { title: 'All games', games: all },
       { title: 'Watch', games: sites.map(asTile) },
     ].filter((r) => r.games.length);
-  }, [games, sites]);
+  }, [games, sites, query]);
   const [row, setRow] = useState(0);
   const [cols, setCols] = useState<number[]>(() => rows.map(() => 0));
   const [launching, setLaunching] = useState<LibraryGame | null>(null);
@@ -201,14 +209,15 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
   };
 
   const lastPad = usePadInput(
-    !panel,
+    !panel && !typing,
     {
       move,
       ok: () => play(),
-      back: () => (launching ? setLaunching(null) : close()),
+      back: () => (launching ? setLaunching(null) : query ? setQuery('') : close()),
       start: () => play(),
       menu: () => setPanel(true),
-      select: () => setPanel(true),
+      // View / Share / − : search with the on-screen keyboard.
+      select: () => setTyping(true),
       bumper: (d) => move(d * 5, 0),
     },
     { haptics: true },
@@ -217,8 +226,8 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
   const cb = confirmBack(family);
   const side = (i: number) => (i === 1 ? 'right' : 'bottom') as 'right' | 'bottom';
 
-  const ref = useRef({ move, play, close, panel });
-  ref.current = { move, play, close, panel };
+  const ref = useRef({ move, play, close, panel, typing });
+  ref.current = { move, play, close, panel, typing };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const map: Record<string, () => void> = {
@@ -229,7 +238,12 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
         Enter: () => ref.current.play(),
         Escape: () => ref.current.close(),
       };
-      if (ref.current.panel) return;
+      if (ref.current.panel || ref.current.typing) return;
+      if (e.key === '/' || e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        setTyping(true);
+        return;
+      }
       if (e.key === 'c' || e.key === 'C') {
         e.preventDefault();
         setPanel(true);
@@ -351,12 +365,24 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
         <span className="flex items-center gap-2">
           <Glyph family={family} which={side(cb.back)} /> Back
         </span>
+        <Hint k={family === 'playstation' ? 'Create' : family === 'nintendo' ? '−' : 'View'} label="Search" />
         <span className="flex items-center gap-2">
           <Glyph family={family} which="top" /> Controllers
         </span>
       </footer>
 
       {panel && <PadPanel lastPad={lastPad} onClose={() => setPanel(false)} />}
+      {typing && (
+        <OnScreenKeyboard
+          value={query}
+          onChange={(v) => {
+            setQuery(v);
+            setRow(0);
+            setCols((c) => setAt(c, 0, 0));
+          }}
+          onDone={() => setTyping(false)}
+        />
+      )}
 
       {launching && (
         <div className="bp-in absolute inset-0 z-20 grid place-items-center bg-black/75 backdrop-blur-md">

@@ -74,6 +74,7 @@ let mockWins = [
   { handle: 3, title: 'Notes.txt - Notepad', app: 'notepad.exe', pinned: true },
 ];
 let mockAfter = { action: '', quietSince: 0 };
+let mockBoard = { sounds: [{ id: 's1', name: 'Air horn', path: 'C:\\Sounds\\air horn.mp3', key: 0x61, volume: 80 }, { id: 's2', name: 'Bruh', path: 'C:\\Sounds\\bruh.wav', key: 0, volume: 100 }], output: '', keysOn: true };
 let mockBt = [
   { address: 'B8:F6:53:CA:1B:2E', name: 'WH-1000XM5', connected: true, kind: 'audio' as const, audio: true },
   { address: '7C:96:D2:11:22:33', name: 'JBL Flip 6', connected: false, kind: 'audio' as const, audio: true },
@@ -614,6 +615,10 @@ const handlers: Record<string, Handler> = {
     else delete mockLimits[d];
     return { areas: [], phones: mockLimits };
   },
+  soundboard_get: () => mockBoard,
+  soundboard_save: (a) => (mockBoard = a?.settings as typeof mockBoard),
+  soundboard_play: () => undefined,
+  soundboard_stop: () => undefined,
   wifi_qr: () => ({ ssid: 'Casa Lopez 5G', security: 'WPA', password: 'demo-password', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><rect width="29" height="29" fill="#fff"/><path d="M1 1h7v7H1zM21 1h7v7h-7zM1 21h7v7H1zM10 10h3v3h-3zM15 12h4v2h-4zM12 16h2v4h-2zM17 17h3v3h-3z" fill="#0b0b12"/></svg>' }),
   timers_get: () => mockTimers,
   timers_start: (a) => (mockTimers = { ...mockTimers, timers: [...mockTimers.timers, { id: String(Date.now()), label: str(a, 'label') || `${num(a, 'minutes')} min`, endsAt: Date.now() + num(a, 'minutes') * 60000, minutes: num(a, 'minutes') }] }),

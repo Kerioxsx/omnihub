@@ -32,6 +32,7 @@ export const ACTION_KINDS: { value: QuickAction['kind']; label: string }[] = [
   { value: 'hdr', label: 'HDR on / off' },
   { value: 'pinWindow', label: 'Pin the window in front on top (or unpin)' },
   { value: 'music', label: 'Play music (a song, album or playlist)' },
+  { value: 'playSound', label: 'Play a soundboard sound' },
 ];
 
 /** What a scene's steps can be (not another scene or the clipboard). */
@@ -79,6 +80,8 @@ export function blankAction(kind: QuickAction['kind']): QuickAction {
       return { kind, on: true };
     case 'music':
       return { kind, query: '' };
+    case 'playSound':
+      return { kind, id: '' };
     default:
       return { kind } as QuickAction;
   }
@@ -136,6 +139,8 @@ export function describe(a: QuickAction | null): string {
       return 'Pins the window in front';
     case 'music':
       return `Plays ${a.query || 'music'}`;
+    case 'playSound':
+      return 'Plays a sound';
   }
 }
 

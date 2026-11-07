@@ -84,6 +84,8 @@ pub enum QuickAction {
     PinWindow,
     /// Play music (a song, album or playlist name) in your music app.
     Music { query: String },
+    /// Play a soundboard sound (its id).
+    PlaySound { id: String },
 }
 
 /// A scene: one tap does several things (lights, fans, notifications…).
@@ -804,6 +806,11 @@ impl crate::core::AppCore {
             QuickAction::Input { input } => {
                 crate::media::outputs::set_default(input)?;
                 Ok("Microphone changed".into())
+            }
+            QuickAction::PlaySound { id } => {
+                let s = self.soundboard.find(id).ok_or("That sound is gone")?;
+                self.play_sound(&s);
+                Ok(format!("Playing {}", s.name))
             }
             QuickAction::PinWindow => {
                 let (title, on) = crate::system::winpin::toggle_front()?;

@@ -3564,7 +3564,8 @@ export type QuickAction =
   | { kind: 'screen'; width: number; height: number; hz: number }
   | { kind: 'hdr'; on: boolean }
   | { kind: 'pinWindow' }
-  | { kind: 'music'; query: string };
+  | { kind: 'music'; query: string }
+  | { kind: 'playSound'; id: string };
 
 /** One tap, several things: lights, fans, notifications, Discord, sound… */
 export interface Scene {
@@ -4107,4 +4108,18 @@ export interface PinWindow {
   title: string;
   app: string;
   pinned: boolean;
+}
+
+export interface SoundboardSound {
+  id: string;
+  name: string;
+  path: string;
+  key: number;
+  volume: number;
+}
+
+export interface SoundboardSettings {
+  sounds: SoundboardSound[];
+  output: string;
+  keysOn: boolean;
 }

@@ -81,6 +81,7 @@ pub struct AppCore {
     pub karaoke: crate::karaoke::Karaoke,
     pub nightlight: crate::nightlight::NightLight,
     pub timers: crate::timers::Timers,
+    pub soundboard: crate::soundboard::Soundboard,
     pub after_downloads: parking_lot::Mutex<crate::timers::AfterDownloads>,
     pub speedrun: crate::speedrun::Speedrun,
     /// Family and guest phones limited to some areas.
@@ -199,6 +200,7 @@ impl AppCore {
             karaoke: crate::karaoke::Karaoke::new(&paths.data),
             nightlight: crate::nightlight::NightLight::new(&paths.data),
             timers: crate::timers::Timers::new(&paths.data),
+            soundboard: crate::soundboard::Soundboard::new(&paths.data),
             after_downloads: parking_lot::Mutex::new(Default::default()),
             speedrun: crate::speedrun::Speedrun::new(&paths.data, events.clone()),
             speedrun_keys: std::sync::atomic::AtomicBool::new(false),
@@ -260,6 +262,7 @@ impl AppCore {
         if self.speedrun_keys.load(std::sync::atomic::Ordering::Relaxed) {
             keys.extend(self.speedrun.watched_keys());
         }
+        keys.extend(self.soundboard.watched_keys());
         keys.sort_unstable();
         keys.dedup();
         crate::system::keys::watch(&keys);
@@ -275,6 +278,9 @@ impl AppCore {
             core.counters.on_key(vk);
             if core.speedrun_keys.load(std::sync::atomic::Ordering::Relaxed) {
                 core.speedrun.on_key(vk);
+            }
+            for s in core.soundboard.for_key(vk) {
+                core.play_sound(&s);
             }
             if clicker {
                 core.refresh_keys();
@@ -1009,6 +1015,12 @@ impl AppCore {
                 }
             })
             .ok();
+    }
+
+    /// Play a soundboard sound (in the hidden player window).
+    pub fn play_sound(&self, s: &crate::soundboard::Sound) {
+        let url = crate::games::shelf::media_url(&self.shelf.media_token(std::path::Path::new(&s.path)));
+        self.events.emit("soundboard:play", serde_json::json!({ "id": s.id, "url": url, "volume": s.volume, "output": self.soundboard.get().output }));
     }
 
     /// Minutes after midnight, here.
