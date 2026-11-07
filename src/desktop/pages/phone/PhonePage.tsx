@@ -1,7 +1,7 @@
 import { formatBytes, formatDateTime, formatRelative } from '@shared/format';
 import type { AuditEntry, Device, InboxItem, WakeTarget } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowDownToLine, ArrowUpFromLine, Check, CircleCheck, CircleX, Copy, ExternalLink, Eye, FolderSearch, Globe, History, Lock, MonitorUp, Pencil, Power, QrCode, Send, ShieldCheck, Smartphone, Tablet, Trash, Type, Unlock, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, Check, CircleCheck, CircleX, Copy, ExternalLink, Eye, FolderSearch, Globe, History, Lock, MonitorUp, Pencil, Power, QrCode, Send, Shield, ShieldCheck, Smartphone, Tablet, Trash, Type, Unlock, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -24,6 +24,7 @@ import { ConnectionCheck } from './ConnectionCheck';
 import { GuestCard } from './GuestCard';
 import { PairDialog } from './PairDialog';
 import { Permissions } from './Permissions';
+import { PhoneLimitsDialog } from './PhoneLimits';
 
 function deviceIcon(ua: string) {
   return /iPad|Tablet|SM-T|Tab/i.test(ua) ? Tablet : Smartphone;
@@ -93,6 +94,7 @@ function Hero({ onPair, onSend }: { onPair: () => void; onSend: () => void }) {
 
 function DeviceRow({ d, running }: { d: Device; running: boolean }) {
   const [editing, setEditing] = useState(false);
+  const [limits, setLimits] = useState(false);
   const [name, setName] = useState(d.name);
   useEffect(() => setName(d.name), [d.name]);
   const Icon = deviceIcon(d.userAgent);
@@ -133,9 +135,13 @@ function DeviceRow({ d, running }: { d: Device; running: boolean }) {
           {online ? <span className="text-good">Online</span> : `Last seen ${formatRelative(d.lastSeen)}`} · {d.lastIp} · paired {formatRelative(d.created)}
         </div>
       </div>
+      <Button size="xs" variant="ghost" icon={Shield} onClick={() => setLimits(true)} className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100">
+        Limit
+      </Button>
       <Button size="xs" variant="ghost" icon={Trash} onClick={() => void revoke()} className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100">
         Revoke
       </Button>
+      <PhoneLimitsDialog device={d} open={limits} onClose={() => setLimits(false)} />
     </motion.div>
   );
 }

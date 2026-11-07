@@ -3,6 +3,7 @@
 
 mod commands;
 mod extras;
+mod floats;
 mod ambient;
 mod gamemedia;
 mod quick;
@@ -250,6 +251,7 @@ pub fn run(args: Vec<String>) {
             core.start_background();
             ambient::start(handle.clone());
             rig::start(handle.clone());
+            floats::restore(&handle, core.clone());
             rest::start(handle.clone());
             // Capri starts with OmniHub while she is switched on.
             if core.settings.get().chats.capri {
@@ -514,6 +516,17 @@ pub fn run(args: Vec<String>) {
             extras::photos_similar,
             extras::photos_similar_stop,
             extras::photos_trash,
+            floats::speedrun_state,
+            floats::speedrun_save,
+            floats::speedrun_press,
+            floats::speedrun_window,
+            floats::crosshair_set,
+            floats::floats_get,
+            floats::widget_add,
+            floats::widget_remove,
+            floats::wallpaper_set,
+            extras::phone_limits_get,
+            extras::phone_limits_set,
             quick::clipboard_list,
             quick::clipboard_copy,
             quick::clipboard_paste,

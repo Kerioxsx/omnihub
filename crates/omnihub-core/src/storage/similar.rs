@@ -107,7 +107,7 @@ pub fn find(dir: &Path, cancel: &AtomicBool, progress: &(dyn Fn(usize, usize) + 
             }
             let img = image::ImageReader::open(p).ok()?.with_guessed_format().ok()?.decode().ok();
             let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-            if n % 25 == 0 || n == total {
+            if n.is_multiple_of(25) || n == total {
                 progress(n, total);
             }
             let img = img?;

@@ -17,6 +17,7 @@ import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
 import { POKEMON, generationOf, spriteUrl } from './pokemon';
 import { CounterPicture, KeyPicker, elapsedMs, formatTimer, foundByNow, oddsLabel, shinyChance } from './shared';
+import { SpeedrunCard } from './SpeedrunCard';
 
 const GENERATIONS: [number, string][] = [
   [2, 'Gold, Silver, Crystal'],
@@ -552,7 +553,7 @@ export function CountersPage() {
   return (
     <Page
       title="Counters"
-      subtitle="Count with a click, a key or a controller button from anywhere, log events, time it, pop it out over your game, and hunt shinies."
+      subtitle="Count with a click, a key or a controller button from anywhere, log events, time it, pop it out over your game, hunt shinies, and time speedruns with splits."
       actions={
         <>
           <Switch checked={state?.keysOn ?? true} onChange={(v) => void api.counters.keysOn(v)} label="Keys count" />
@@ -583,6 +584,7 @@ export function CountersPage() {
       <HuntStats found={state?.found ?? []} />
       {state && counters.length > 0 && <StreamOverlay state={state} />}
       <History found={state?.found ?? []} />
+      <SpeedrunCard />
       <CounterEditor open={editor !== null} onClose={() => setEditor(null)} counter={editor?.counter ?? null} huntMode={editor?.hunt ?? false} />
       <Celebration shiny={party} onDone={() => setParty(null)} />
     </Page>

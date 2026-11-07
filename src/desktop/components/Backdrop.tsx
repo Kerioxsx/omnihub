@@ -501,7 +501,9 @@ function useHidden(): boolean {
       window.removeEventListener('blur', blur);
     };
   }, []);
-  return hidden || blurred;
+  // The live wallpaper is never the focused window: only hiding pauses it.
+  const wallpaper = window.location.hash.startsWith('#/wallpaper');
+  return hidden || (blurred && !wallpaper);
 }
 
 function Layers({ look, mini }: { look: Look; mini: boolean }) {

@@ -12,6 +12,7 @@ pub mod assets;
 pub mod auth;
 pub mod board;
 pub mod guest;
+pub mod limits;
 pub mod net;
 pub mod transfer;
 

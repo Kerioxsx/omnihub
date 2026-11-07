@@ -12,6 +12,7 @@ import { Select, Switch, TextInput } from '../../components/ui/Form';
 import { EmptyState } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { toast } from '../../state/toasts';
+import { CrosshairCard } from './CrosshairCard';
 
 /** Degrees the camera turns per mouse count at sensitivity 1 (Fortnite: per 1%). */
 const GAMES: { id: string; name: string; yaw: number; unit?: string; digits: number }[] = [
@@ -366,6 +367,7 @@ export function ExtrasTab() {
   return (
     <div className="space-y-4">
       <SensitivityCard />
+      <CrosshairCard />
       {content}
       <p className="flex items-center gap-1.5 px-1 text-[11.5px] text-faint">
         <Bell size={12} /> Alerts also reach your phone while OmniHub’s page is open on it.

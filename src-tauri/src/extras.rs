@@ -631,3 +631,24 @@ pub async fn photos_trash(paths: Vec<String>) -> Res<usize> {
     })
     .await
 }
+
+// ---------- 0.31: family and guest phones ----------
+
+#[derive(Serialize)]
+pub struct PhoneLimitsInfo {
+    areas: Vec<(&'static str, &'static str)>,
+    phones: std::collections::HashMap<String, Vec<String>>,
+}
+
+#[tauri::command]
+pub async fn phone_limits_get(core: Core<'_>) -> Res<PhoneLimitsInfo> {
+    Ok(PhoneLimitsInfo { areas: omnihub_core::remote::limits::AREAS.to_vec(), phones: core.phone_limits.get().phones })
+}
+
+/// Limit a paired phone to some areas (null: the whole app again).
+#[tauri::command]
+pub async fn phone_limits_set(core: Core<'_>, device: String, areas: Option<Vec<String>>) -> Res<PhoneLimitsInfo> {
+    let l = core.phone_limits.set(&device, areas)?;
+    core.audit.record("pc", "phone.limits", &device, true);
+    Ok(PhoneLimitsInfo { areas: omnihub_core::remote::limits::AREAS.to_vec(), phones: l.phones })
+}

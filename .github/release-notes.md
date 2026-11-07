@@ -1,16 +1,22 @@
 ## New in this version
 
-**Karaoke Studio: sing along and learn songs in any language.**
+**Scenes, every game store, night light, local AI, Ask your PC, a speedrun timer, a crosshair, desktop widgets, a live wallpaper, and more.**
 
-- **A new tab in Music** (Music → Karaoke Studio), with its own settings and history. The music player works exactly as before.
-- **Pronunciation written for you**: the first time, pick your first language and accent from a searchable list (Spanish (Mexico), English (UK), Portuguese (Brazil), Hindi (India), Japanese and many more). Under every word you see how to say it in your own spelling, its syllables, and tips for sounds your language doesn't have. Russian and Ukrainian, Japanese kana, Korean and Greek are re-spelled sound by sound; Spanish gets syllables with the stressed one marked. OmniHub says when it can't do more instead of guessing.
-- **Words light up as they're sung**, with the pronunciation following the same timing. Lyrics that only time whole lines are marked as approximate, and "Lyrics earlier / later" corrects them.
-- **Any song**: what your PC is playing (Spotify, Apple Music, YouTube…) or a song file from this PC. Lyrics come from an .lrc file beside the song, your lyrics folder, LRCLIB or NetEase, or an .lrc file you pick.
-- **Follow the song**: the music keeps its time and the microphone shows your note, how close you are to it, and a summary at the end (steadiness of held notes, entrances against the lyrics, your comfortable range). Only what was really measured is shown.
-- **Follow my voice** (song files from this PC): the song waits for you before each line, eases off and pauses when you stop, and goes on from the word you stopped on. A short breath changes nothing. Slower practice speeds keep the key. Headphones work best.
-- **Loop a line, practise the lines worth another go**, and see your history. The microphone is analysed on your PC and never recorded; only the summary numbers are saved, and you can delete them.
+- **Scenes** (Quick actions → Scenes, the deck and your phone): one tap sets everything: lights, fan profile, notifications, Discord status, where the sound comes out, the microphone, the screen resolution and HDR, a game, keys. Four ready-made ones: Gaming, Movie, Sleep and Back to normal.
+- **Display and audio per game**: a scene can run by itself when a game starts. When the game closes, the screen and HDR go back as they were, and an "after" scene can run.
+- **Every game store in the library**: GOG, Ubisoft Connect, EA, Battle.net and Xbox / Game Pass games now appear next to Steam and Epic.
+- **Night light** (My PC → Monitors): warmer, optionally dimmer screens from evening to morning, fading in and out, with your monitors' brightness for the night. You can turn it on or off for now.
+- **Local AI in Chats**: chat with models on your own PC through Ollama, free and offline, on the PC and on your phone.
+- **Ask your PC** (Home): ask "why is my PC slow?" or "what's using my internet?" and get an answer from what OmniHub measures right now. A local model can explain it in a sentence if you like.
+- **Speedrun timer** (Counters): splits, personal bests and best segments in a small window over the game, with keys that work inside games.
+- **Crosshair overlay** (Games → Extras): your own crosshair over any game; clicks go straight through it. Some games with strict anti-cheat dislike overlays, so it's off until you turn it on.
+- **Desktop widgets and a live wallpaper** (Quick actions → Desktop): temperatures, now playing, a counter, batteries, network speed or a clock on your desktop, and your OmniHub theme animated behind your icons.
+- **Creators going live and a daily recap** (Games → Extras): an alert when Twitch or YouTube creators you follow start streaming, and an evening summary on your phone.
+- **Similar photos** (Storage → Duplicates): finds look-alike photos and screenshots and keeps the best one.
+- **Family and guest phones** (Phone → Limit): limit a paired phone to a few areas, like only the deck and the music.
+- **Synced folder** on your phone (More → Synced folder): everything new in a PC folder downloads in one tap, and files you pick go straight into it.
 
-Also in 0.30.2: ZANGETSU v2 themes, the 3D button studio, quick sites, and Bluetooth and sound output from your phone.
+Also in 0.30.3: Karaoke Studio.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

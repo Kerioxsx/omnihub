@@ -1082,3 +1082,29 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   read from an `.lrc` you chose or one beside the song, your lyrics folder,
   then LRCLIB and NetEase (the same sources as the music player), with only
   the title, artist and duration sent.
+
+## 0.31.0
+
+- **Scenes** run the same actions as deck buttons, plus lights, fans, Windows
+  notifications (`NOC_GLOBAL_SETTING_TOASTS_ENABLED` for this user), Discord
+  status, sound devices, the screen mode (changed for the session only, never
+  saved by Windows) and HDR. From the phone a scene runs by its id only, and
+  each run is in the audit log.
+- **Other stores**: GOG and Ubisoft records and the EA and Battle.net
+  uninstall entries are read from the registry; Xbox games start through
+  `shell:AppsFolder\<family>!<app>`, which is the only `shell:` address a
+  game profile accepts (letters, digits, `.`, `_` and `-` only).
+- **Local AI** talks to Ollama on 127.0.0.1 only (no proxy); model names are
+  checked before they're saved. **Ask your PC** reads only what OmniHub
+  already measures; the optional local-model wording gets those facts only.
+- **Go-live alerts** read the creators' public Twitch and YouTube pages; no
+  account or key is used.
+- **Similar photos** only recycles pictures its last scan listed, and only to
+  the Recycle Bin.
+- **Limited phones**: every request from a limited phone is checked against
+  its areas on the PC; anything else (the vault and any area added later) is
+  refused, and its events are filtered the same way. Limits are kept in
+  `phone-limits.json`; changing them is in the audit log.
+- The **crosshair**, **widgets** and **wallpaper** are OmniHub windows; the
+  crosshair ignores the mouse, and the wallpaper is placed in the desktop's
+  WorkerW window. Nothing is injected into games.

@@ -788,3 +788,23 @@ has Capri speak through her local bridge (`companion::say`).
   hysteresis, note/syllable onsets, the practice summary), `follow.ts` (the
   Follow my voice state machine: wait before a line, ease off and hold on a
   stop, resume from the word, lead/lag by syllables with hysteresis).
+
+## 0.31.0
+
+- Scenes: `quick.rs` (`Scene`, new `QuickAction` steps, game triggers with
+  `scenes_game_started` / `scenes_game_ended` called from the game watcher in
+  `games/deck.rs` and from `library_play`). Screen mode, HDR and gamma ramps:
+  `system/screenmode.rs`. Microphones: `media/outputs.rs` (`inputs`).
+- `games/stores.rs`: GOG, Ubisoft, EA, Battle.net and Xbox games for
+  `games/library.rs`.
+- `nightlight.rs` (schedule, fade, monitors' night brightness), ticked each
+  minute from `core.rs`.
+- `chats/ollama.rs` (local models), `askpc.rs` (topics, facts, answers),
+  `watchers.rs` (creators going live, daily recap), `storage/similar.rs`
+  (difference hash and grouping), `speedrun.rs` (splits, PB, golds, keys via
+  the key hook), `remote/limits.rs` (limited phones, checked in
+  `require_device` and the event socket).
+- App windows: `src-tauri/src/floats.rs` (speedrun timer, crosshair,
+  desktop widgets, live wallpaper) and their views in `pages/floats/`.
+- Phone: Local AI in `Chats.tsx`, scenes in `Deck.tsx`, alerts in `App.tsx`,
+  `SyncFolder.tsx`.

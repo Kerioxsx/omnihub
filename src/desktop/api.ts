@@ -334,6 +334,26 @@ export const api = {
   },
   audioOutputs: () => call<T.AudioOutput[]>('audio_outputs'),
   audioInputs: () => call<T.AudioOutput[]>('audio_inputs'),
+  /** Family and guest phones limited to some areas. */
+  phoneLimits: {
+    get: () => call<{ areas: [string, string][]; phones: Record<string, string[]> }>('phone_limits_get'),
+    set: (device: string, areas: string[] | null) => call<{ areas: [string, string][]; phones: Record<string, string[]> }>('phone_limits_set', { device, areas }),
+  },
+  /** Speedrun timer: splits, personal bests, global keys while its window is open. */
+  speedrun: {
+    state: () => call<T.SpeedrunState>('speedrun_state'),
+    save: (settings: T.SpeedrunSettings) => call<T.SpeedrunState>('speedrun_save', { settings }),
+    press: (what: 'split' | 'reset' | 'pause' | 'undo') => call<T.SpeedrunState>('speedrun_press', { what }),
+    window: (open: boolean) => call<void>('speedrun_window', { open }),
+  },
+  /** Desktop widgets, the crosshair and the live wallpaper (their own windows). */
+  widgets: {
+    get: () => call<T.Floats>('floats_get'),
+    add: (kind: T.WidgetKind) => call<T.Floats>('widget_add', { kind }),
+    remove: (id: string) => call<T.Floats>('widget_remove', { id }),
+    crosshair: (on: boolean) => call<boolean>('crosshair_set', { on }),
+    wallpaper: (on: boolean) => call<boolean>('wallpaper_set', { on }),
+  },
   /** Look-alike photos in a folder (`photos:progress` events while it reads). */
   similarPhotos: {
     find: (dir: string) => call<T.SimilarGroup[]>('photos_similar', { dir }),

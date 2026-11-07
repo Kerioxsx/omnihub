@@ -61,6 +61,12 @@ let mockOutputs = [
   { id: 'tv', name: 'LG TV (NVIDIA High Definition Audio)', default: false },
 ];
 let mockNight = { settings: { enabled: false, from: '21:30', to: '07:00', kelvin: 3400, dim: 100, fade: 30, screenBrightness: null as number | null }, status: { level: 0, kelvin: 6500, manual: null as boolean | null } };
+let mockRun = {
+  settings: { game: 'Celeste', category: 'Any%', splits: [{ name: 'Forsaken City', pb: 132000, gold: 128500 }, { name: 'Old Site', pb: 301000, gold: 162000 }, { name: 'Celestial Resort', pb: 512000, gold: 199000 }, { name: 'Golden Ridge', pb: 703000, gold: 185000 }], keySplit: 0x61, keyReset: 0x63, keyPause: 0x62, keyUndo: 0x68, attempts: 41 },
+  run: { since: null as number | null, banked: 0, times: [] as number[], finished: false, newPb: false },
+};
+let mockFloats = { widgets: [] as { id: string; kind: 'clock' | 'temps' | 'music' | 'counter' | 'battery' | 'network'; x: number; y: number }[], crosshair: false, wallpaper: false };
+const mockLimits: Record<string, string[]> = {};
 let mockBt = [
   { address: 'B8:F6:53:CA:1B:2E', name: 'WH-1000XM5', connected: true, kind: 'audio' as const, audio: true },
   { address: '7C:96:D2:11:22:33', name: 'JBL Flip 6', connected: false, kind: 'audio' as const, audio: true },
@@ -584,6 +590,23 @@ const handlers: Record<string, Handler> = {
   },
   photos_similar_stop: () => undefined,
   photos_trash: (a) => ((a?.paths as string[]) ?? []).length,
+  speedrun_state: () => ({ ...mockRun, now: Date.now() }),
+  speedrun_save: (a) => ((mockRun = { ...mockRun, settings: a?.settings as typeof mockRun.settings }), { ...mockRun, now: Date.now() }),
+  speedrun_press: () => ({ ...mockRun, now: Date.now() }),
+  speedrun_window: () => undefined,
+  floats_get: () => mockFloats,
+  widget_add: (a) => (mockFloats = { ...mockFloats, widgets: [...mockFloats.widgets, { id: String(Date.now()), kind: str(a, 'kind') as 'clock', x: 0, y: 0 }] }),
+  widget_remove: (a) => (mockFloats = { ...mockFloats, widgets: mockFloats.widgets.filter((w) => w.id !== str(a, 'id')) }),
+  crosshair_set: (a) => ((mockFloats = { ...mockFloats, crosshair: Boolean(a?.on) }), Boolean(a?.on)),
+  wallpaper_set: (a) => ((mockFloats = { ...mockFloats, wallpaper: Boolean(a?.on) }), Boolean(a?.on)),
+  phone_limits_get: () => ({ areas: [['deck', 'Deck and scenes'], ['music', 'Music, volume and the party queue'], ['files', 'Files, photos and transfers'], ['games', 'Games and counters'], ['notes', 'Notes, ideas and tasks'], ['chats', 'Chats'], ['screen', 'Screen sharing and control'], ['power', 'Power and quiet mode']], phones: mockLimits }),
+  phone_limits_set: (a) => {
+    const d = str(a, 'device');
+    const areas = a?.areas as string[] | null;
+    if (areas) mockLimits[d] = areas;
+    else delete mockLimits[d];
+    return { areas: [], phones: mockLimits };
+  },
   audio_inputs: () => [{ id: 'mic1', name: 'Microphone (HyperX QuadCast)', default: true }, { id: 'mic2', name: 'Headset Microphone (WH-1000XM5)', default: false }],
   screen_modes: () => ({ current: { width: 2560, height: 1440, hz: 165 }, modes: [{ width: 2560, height: 1440, hz: 165 }, { width: 2560, height: 1440, hz: 144 }, { width: 2560, height: 1440, hz: 60 }, { width: 1920, height: 1080, hz: 165 }, { width: 1920, height: 1080, hz: 144 }, { width: 1920, height: 1080, hz: 60 }, { width: 1280, height: 720, hz: 60 }], hdr: false }),
   nightlight_get: () => mockNight,

@@ -3996,3 +3996,34 @@ export interface SimilarGroup {
   photos: SimilarPhoto[];
   keep: number;
 }
+
+export interface SpeedrunSplit {
+  name: string;
+  pb: number | null;
+  gold: number | null;
+}
+
+export interface SpeedrunSettings {
+  game: string;
+  category: string;
+  splits: SpeedrunSplit[];
+  keySplit: number;
+  keyReset: number;
+  keyPause: number;
+  keyUndo: number;
+  attempts: number;
+}
+
+export interface SpeedrunState {
+  settings: SpeedrunSettings;
+  run: { since: number | null; banked: number; times: number[]; finished: boolean; newPb: boolean };
+  now: number;
+}
+
+export type WidgetKind = 'temps' | 'music' | 'counter' | 'battery' | 'network' | 'clock';
+
+export interface Floats {
+  widgets: { id: string; kind: WidgetKind; x: number; y: number }[];
+  crosshair: boolean;
+  wallpaper: boolean;
+}

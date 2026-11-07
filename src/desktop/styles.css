@@ -421,3 +421,13 @@ select:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .bp-ease, .bp-in, .bp-out, .bp-fade, .bp-drift, .bp-rise, .bp-card, .bp-pulse, .bp-shine { animation: none !important; transition: none !important; }
 }
+
+/* Floating windows (speedrun timer, crosshair, desktop widgets) are see-through. */
+html.float-route,
+html.float-route body,
+html.float-route #root {
+  background: transparent !important;
+}
+html.float-route .app-backdrop {
+  display: none;
+}

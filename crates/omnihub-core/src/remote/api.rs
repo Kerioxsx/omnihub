@@ -215,6 +215,9 @@ async fn require_device(State(core): State<Ctx>, ConnectInfo(peer): ConnectInfo<
     };
     match core.remote.devices.authenticate_seen(token, &peer.ip().to_string()) {
         Some((dev, back)) => {
+            if !core.phone_limits.allows(&dev.id, req.uri().path()) {
+                return ApiError::new(StatusCode::FORBIDDEN, "this phone isn't allowed to do that (it's limited on the PC)").into_response();
+            }
             if back && core.settings.get().remote.connect_alerts {
                 core.events.emit("remote:connected", serde_json::json!({ "name": dev.name, "ip": peer.ip().to_string() }));
             }
@@ -1940,7 +1943,7 @@ async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws
             tokio::select! {
                 ev = events.recv() => {
                     let Ok(ev) = ev else { continue };
-                    if !for_phone(&ev, &device_id) || (ev.topic.starts_with("chats:") && !core.settings.get().chats.allow_phone) || (ev.topic.starts_with("mcserver:") && !core.settings.get().remote.allow_servers) {
+                    if !for_phone(&ev, &device_id) || !core.phone_limits.allows_event(&device_id, &ev.topic) || (ev.topic.starts_with("chats:") && !core.settings.get().chats.allow_phone) || (ev.topic.starts_with("mcserver:") && !core.settings.get().remote.allow_servers) {
                         continue;
                     }
                     let text = serde_json::to_string(&ev).unwrap_or_default();

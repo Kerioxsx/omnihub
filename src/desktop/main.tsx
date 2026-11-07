@@ -15,6 +15,10 @@ const CounterPopout = lazy(() => import('./pages/counters/CounterPopout').then((
 const WheelPopup = lazy(() => import('./pages/quick/Popups').then((m) => ({ default: m.WheelPopup })));
 const ClipboardPopup = lazy(() => import('./pages/quick/Popups').then((m) => ({ default: m.ClipboardPopup })));
 const PinView = lazy(() => import('./pages/shots/PinView').then((m) => ({ default: m.PinView })));
+const SpeedrunPopout = lazy(() => import('./pages/floats/SpeedrunPopout').then((m) => ({ default: m.SpeedrunPopout })));
+const CrosshairView = lazy(() => import('./pages/floats/CrosshairView').then((m) => ({ default: m.CrosshairView })));
+const WidgetView = lazy(() => import('./pages/floats/WidgetView').then((m) => ({ default: m.WidgetView })));
+const WallpaperView = lazy(() => import('./pages/floats/WallpaperView').then((m) => ({ default: m.WallpaperView })));
 const RegionOverlay = lazy(() => import('./pages/overlay/RegionOverlay').then((m) => ({ default: m.RegionOverlay })));
 
 /**
@@ -50,7 +54,11 @@ function Root() {
     document.documentElement.classList.toggle('overlay-route', overlay);
     document.documentElement.classList.toggle('ambient-route', ambient);
   }, [overlay, ambient]);
-  const view = route.id === 'pin' ? <PinView /> : route.id === 'counter' ? <CounterPopout /> : route.id === 'wheel' ? <WheelPopup /> : route.id === 'clipboard' ? <ClipboardPopup /> : route.id === 'casescreen' || overlayWindow === 'casescreen' ? <CaseScreen /> : ambient ? <AmbientOverlay /> : overlay ? <RegionOverlay /> : overlayWindow === null ? null : <App />;
+  const float = route.id === 'speedrun' || route.id === 'crosshair' || route.id === 'widget';
+  useEffect(() => {
+    document.documentElement.classList.toggle('float-route', float);
+  }, [float]);
+  const view = route.id === 'speedrun' ? <SpeedrunPopout /> : route.id === 'crosshair' ? <CrosshairView /> : route.id === 'widget' ? <WidgetView /> : route.id === 'wallpaper' ? <WallpaperView /> : route.id === 'pin' ? <PinView /> : route.id === 'counter' ? <CounterPopout /> : route.id === 'wheel' ? <WheelPopup /> : route.id === 'clipboard' ? <ClipboardPopup /> : route.id === 'casescreen' || overlayWindow === 'casescreen' ? <CaseScreen /> : ambient ? <AmbientOverlay /> : overlay ? <RegionOverlay /> : overlayWindow === null ? null : <App />;
   return <Suspense fallback={null}>{view}</Suspense>;
 }
 

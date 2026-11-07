@@ -80,6 +80,11 @@ pub struct AppCore {
     /// Karaoke Studio: language, practice history.
     pub karaoke: crate::karaoke::Karaoke,
     pub nightlight: crate::nightlight::NightLight,
+    pub speedrun: crate::speedrun::Speedrun,
+    /// Family and guest phones limited to some areas.
+    pub phone_limits: crate::remote::limits::PhoneLimits,
+    /// The speedrun keys work (while its window is open).
+    pub speedrun_keys: std::sync::atomic::AtomicBool,
     /// Game art addresses asked of Steam's store.
     pub store_art: Arc<crate::games::storeart::StoreArt>,
     pub emulators: crate::games::emulators::Emulators,
@@ -191,6 +196,9 @@ impl AppCore {
             sites: crate::sites::Sites::new(&paths.data),
             karaoke: crate::karaoke::Karaoke::new(&paths.data),
             nightlight: crate::nightlight::NightLight::new(&paths.data),
+            speedrun: crate::speedrun::Speedrun::new(&paths.data, events.clone()),
+            speedrun_keys: std::sync::atomic::AtomicBool::new(false),
+            phone_limits: crate::remote::limits::PhoneLimits::new(&paths.data),
             store_art: Arc::new(crate::games::storeart::StoreArt::new(&paths.cache)),
             emulators: crate::games::emulators::Emulators::new(&paths.data),
             counters_overlay: parking_lot::Mutex::new(None),
@@ -245,6 +253,9 @@ impl AppCore {
     pub fn refresh_keys(&self) {
         let mut keys = self.counters.watched_keys();
         keys.extend(self.autoclick.watched_keys());
+        if self.speedrun_keys.load(std::sync::atomic::Ordering::Relaxed) {
+            keys.extend(self.speedrun.watched_keys());
+        }
         keys.sort_unstable();
         keys.dedup();
         crate::system::keys::watch(&keys);
@@ -258,6 +269,9 @@ impl AppCore {
             let Some(core) = weak.upgrade() else { return };
             let clicker = core.autoclick.on_key(vk);
             core.counters.on_key(vk);
+            if core.speedrun_keys.load(std::sync::atomic::Ordering::Relaxed) {
+                core.speedrun.on_key(vk);
+            }
             if clicker {
                 core.refresh_keys();
             }

@@ -32,6 +32,14 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.31.0
+
+- **Scenes**: one tap for lights, fans, notifications, Discord, sound, microphone, screen mode and HDR, also run by themselves when a game starts (and undone when it closes).
+- **Every game store** in the library: GOG, Ubisoft Connect, EA, Battle.net and Xbox / Game Pass.
+- **Night light** on a schedule, **local AI** (Ollama) in Chats, **Ask your PC** on Home.
+- **Speedrun timer**, **crosshair overlay**, **desktop widgets** and a **live wallpaper**.
+- **Go-live alerts** for Twitch and YouTube creators, a **daily recap** on the phone, **similar photos**, **limited guest phones** and a **synced folder** on the phone.
+
 ## New in 0.30.3
 
 - **Karaoke Studio** (Music → Karaoke Studio): lyrics that light up word by word with pronunciation written for your first language and accent, Follow the song with pitch, steadiness, entrance and range feedback, and Follow my voice, where a song file from your PC waits for you and picks up where you stopped. Nothing you sing is recorded.
