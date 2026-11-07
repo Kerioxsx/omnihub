@@ -10,17 +10,21 @@ import { useApp, useInbox, usePower, toast, TAB_ORDER, type Tab } from './state'
 import { useUploads, isActive } from './uploads';
 import { emitEvent } from './lib/events';
 import { useBackHandler } from './lib/back';
-import { cx, errorMessage, useInterval } from './lib/util';
+import { copyToClipboard, cx, errorMessage, useInterval, vibrate } from './lib/util';
 import { TabBar } from './ui/TabBar';
 import { Toasts } from './ui/Toasts';
+import { ShareSheet, takeShared, type Shared } from './screens/ShareIn';
 import { Logo } from './ui/Logo';
 import { Button } from './ui/common';
 import { PairScreen } from './screens/Pair';
 import { HomeScreen } from './screens/Home';
 import { FilesScreen } from './screens/Files';
 import { ScreenScreen } from './screens/Screen';
-import { PowerScreen } from './screens/Power';
+import { PowerScreen, autoScreenshot } from './screens/Power';
+import { MusicScreen } from './screens/Music';
 import { MoreScreen, type MorePage } from './screens/More';
+import { ChatsScreen } from './screens/Chats';
+import { ApprovalSheet } from './screens/Approve';
 
 type Phase = 'boot' | 'pair' | 'ready' | 'unreachable';
 
@@ -40,6 +44,8 @@ export function App() {
   const { info, setInfo, setSocket, setOnline, tab, prevTab, setTab, refreshInfo } = useApp();
   const [visited, setVisited] = useState<Set<Tab>>(new Set(['home']));
   const [morePage, setMorePage] = useState<MorePage | null>(null);
+  // "Share → OmniHub" from another app.
+  const [shared, setShared] = useState<Shared | null>(() => takeShared());
 
   const boot = useCallback(async () => {
     try {
@@ -63,6 +69,22 @@ export function App() {
   useEffect(() => {
     boot();
   }, [boot]);
+
+  // Home-screen shortcuts (long-press the app icon): ?do=lock|screenshot|mute.
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    const q = new URLSearchParams(location.search);
+    const what = q.get('do');
+    if (!what) return;
+    q.delete('do');
+    history.replaceState(history.state, '', location.pathname + (q.toString() ? `?${q}` : ''));
+    if (what === 'lock') void client.requestPower('lock').then(() => toast.success('PC locked'), (e: unknown) => toast.error("Couldn't lock the PC", errorMessage(e)));
+    else if (what === 'mute') void client.soundMaster({ muted: true }).then(() => toast.success('PC muted'), (e: unknown) => toast.error("Couldn't mute the PC", errorMessage(e)));
+    else if (what === 'screenshot') {
+      autoScreenshot.pending = true;
+      setTab('power');
+    }
+  }, [phase, setTab]);
   useInterval(boot, phase === 'unreachable' ? 5000 : null);
 
   // Token rejected anywhere → back to pairing.
@@ -100,9 +122,17 @@ export function App() {
           const item = (payload?.item ?? payload) as InboxItem;
           if (!item?.id) break;
           useInbox.getState().add(item);
-          toast.info('Your PC sent a file', item.name, { label: 'Download', run: () => client.receive(item).catch((e) => toast.error("Couldn't download", errorMessage(e))) });
+          if (item.kind === 'text') {
+            const text = item.text ?? '';
+            toast.info('Your PC sent text', item.name, { label: 'Copy', run: () => void copyToClipboard(text).then((ok) => (ok ? toast.success('Copied') : toast.error("Couldn't copy"))) });
+          } else {
+            toast.info(item.folder ? 'Your PC sent a folder' : 'Your PC sent a file', item.name, { label: 'Download', run: () => client.receive(item).catch((e) => toast.error("Couldn't download", errorMessage(e))) });
+          }
           break;
         }
+        case 'inbox:removed':
+          if (payload?.id) useInbox.getState().remove(payload.id);
+          break;
         case 'power:pending':
           power.setPending(payload as PendingPower);
           break;
@@ -112,6 +142,60 @@ export function App() {
           if (payload?.reason !== 'replaced' && had && !power.cancelling) toast.info(`${had.label} cancelled`, 'Cancelled on the PC.');
           break;
         }
+        case 'timer:done':
+        case 'timer:alarm': {
+          vibrate([200, 100, 200, 100, 400]);
+          try {
+            const ac = new AudioContext();
+            [0, 0.35, 0.7].forEach((t) => {
+              const o = ac.createOscillator();
+              const g = ac.createGain();
+              o.frequency.value = 880;
+              g.gain.setValueAtTime(0.2, ac.currentTime + t);
+              g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t + 0.3);
+              o.connect(g).connect(ac.destination);
+              o.start(ac.currentTime + t);
+              o.stop(ac.currentTime + t + 0.3);
+            });
+          } catch {
+            /* no sound */
+          }
+          toast.info(topic === 'timer:done' ? 'Time’s up' : 'Alarm', payload?.label ?? '');
+          break;
+        }
+        case 'timer:bedtime':
+          toast.info('Bedtime soon', `The PC locks in ${payload?.minutes ?? 0} min.`);
+          break;
+        case 'watch:free':
+          toast.info(`Free to keep: ${payload?.title ?? 'a game'}`, payload?.store ?? '', payload?.url ? { label: 'Open', run: () => window.open(payload.url, '_blank', 'noopener') } : undefined);
+          break;
+        case 'watch:fortnite':
+          toast.info(payload?.title ?? 'Fortnite', payload?.body ?? '');
+          break;
+        case 'watch:patch':
+          toast.info(`${payload?.game ?? 'A game'} updated`, payload?.title ?? '');
+          break;
+        case 'alert:hot':
+          toast.error(`${payload?.part ?? 'The PC'} is hot`, `${Math.round(payload?.temp ?? 0)} °C. Check the fans and airflow.`);
+          break;
+        case 'watch:live':
+          toast.info(`${payload?.handle ?? 'A creator'} is live`, payload?.title || (payload?.platform === 'youtube' ? 'On YouTube' : 'On Twitch'), payload?.url ? { label: 'Watch', run: () => window.open(payload.url, '_blank', 'noopener') } : undefined);
+          break;
+        case 'watch:weekly':
+          toast.info(payload?.title ?? 'Your week on the PC', payload?.body ?? '');
+          break;
+        case 'watch:recap':
+          toast.info(payload?.title ?? 'Your day on the PC', payload?.body ?? '');
+          break;
+        case 'watch:shop':
+          toast.info('In the item shop today', payload?.item ?? '');
+          break;
+        case 'watch:price':
+          toast.info(`Price drop: ${payload?.name ?? 'a part'}`, payload?.price != null ? `Now ${Number(payload.price).toFixed(2)}${payload?.currency ? ` ${payload.currency}` : ''}` : undefined);
+          break;
+        case 'mcserver:guard':
+          toast.error(`${payload?.name ?? 'Someone'} wants in on ${payload?.server ?? 'your server'}`, 'That name is an operator and joined from a new place, so it was kept out. Allow it in More → Minecraft servers → Players if it’s really them.');
+          break;
         case 'power:executed': {
           power.setPending(null);
           const a = payload?.action as PowerAction;
@@ -135,6 +219,8 @@ export function App() {
   const hidden: Tab[] = [];
   if (info && !info.features.screen) hidden.push('screen');
   if (info && !info.features.power) hidden.push('power');
+  if (info && !info.features.media) hidden.push('music');
+  if (info && !info.features.chats) hidden.push('chats');
   useEffect(() => {
     if (hidden.includes(tab)) setTab('home');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,7 +294,9 @@ export function App() {
       <ConnectionBanner />
       <main className="absolute inset-0 overflow-hidden">
         {panel('home', <HomeScreen active={tab === 'home'} openMore={(p) => (setMorePage(p), setTab('more'))} />)}
+        {!hidden.includes('chats') && panel('chats', <ChatsScreen active={tab === 'chats'} />)}
         {panel('files', <FilesScreen active={tab === 'files'} />)}
+        {!hidden.includes('music') && panel('music', <MusicScreen active={tab === 'music'} />)}
         {!hidden.includes('screen') && panel('screen', <ScreenScreen active={tab === 'screen'} />)}
         {!hidden.includes('power') && panel('power', <PowerScreen active={tab === 'power'} />)}
         {panel(
@@ -229,6 +317,8 @@ export function App() {
       </main>
       <BackToHome active={tab !== 'home' && !(tab === 'more' && morePage)} onBack={() => setTab('home')} />
       <TabBar hidden={hidden} badges={{ files: activeUploads, home: inboxCount }} />
+      <ShareSheet shared={shared} onClose={() => setShared(null)} />
+      <ApprovalSheet />
       <Toasts aboveTabs />
     </div>
   );

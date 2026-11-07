@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-import { Plus, Search, X, Lightbulb, NotebookPen, Sparkles, Pin, Tag, Send } from 'lucide-react';
+import { Plus, Search, X, Lightbulb, LockKeyhole, NotebookPen, Sparkles, Pin, Tag, Send } from 'lucide-react';
 import type { Note, NoteKind } from '@shared/types';
 import { basename, formatDateTime, formatRelative } from '@shared/format';
 import { client } from '../client';
@@ -114,9 +114,10 @@ export function NotesPage({ active, onBack }: { active: boolean; onBack: () => v
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <div className="truncate text-[16px] font-semibold">{n.title || 'Untitled'}</div>
+                          {n.locked && <LockKeyhole size={13} className="shrink-0 text-accent" />}
                           {n.pinned && <Pin size={13} className="shrink-0 text-accent" />}
                         </div>
-                        {n.body && <div className="mt-0.5 line-clamp-2 text-sm text-dim">{excerpt(n.body)}</div>}
+                        {n.locked ? <div className="mt-0.5 text-sm text-dim">Locked</div> : n.body && <div className="mt-0.5 line-clamp-2 text-sm text-dim">{excerpt(n.body)}</div>}
                         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-faint">
                           <span>{formatRelative(n.updated)}</span>
                           {n.exportedPath && (
@@ -190,7 +191,16 @@ function NoteSheet({ note, onClose }: { note: Note | null; onClose: () => void }
               ))}
             </div>
           )}
-          {html ? <div className="md" dangerouslySetInnerHTML={{ __html: html }} /> : <div className="text-dim">This note is empty.</div>}
+          {n.locked ? (
+            <div className="flex items-start gap-3 rounded-2xl bg-surface-2 p-4 text-dim">
+              <LockKeyhole size={20} className="mt-0.5 shrink-0 text-accent" />
+              <span>This note is locked with the vault password. Open it in OmniHub on the PC.</span>
+            </div>
+          ) : html ? (
+            <div className="md" dangerouslySetInnerHTML={{ __html: html }} />
+          ) : (
+            <div className="text-dim">This note is empty.</div>
+          )}
           {n.exportedPath && <div className="selectable mt-5 break-all rounded-xl bg-surface px-3 py-2 font-mono text-xs text-faint">{n.exportedPath}</div>}
         </div>
       )}

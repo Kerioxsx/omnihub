@@ -3,7 +3,7 @@ name: Release
 # Publishes the Windows installers for the version in src-tauri/tauri.conf.json.
 # Either run this workflow from the Actions tab (it builds the chosen branch
 # and creates the tag v<version> on that commit), or push the tag yourself:
-#   git tag v0.1.0 && git push origin v0.1.0
+#   git tag v0.2.0 && git push origin v0.2.0
 # Running it again for a version that is already released rebuilds the same
 # commit and replaces the files; a new commit needs a new version.
 
@@ -24,11 +24,88 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
+  # UxPlay for iPhone mirroring, published next to the installer. Its
+  # SHA-256 is built into the app, which checks the download against it.
+  # Building it takes about six minutes and it rarely changes, so when its
+  # sources are the same as at the last release, that release's files are
+  # published again (checked against that release's SHA256SUMS.txt first).
+  previous-addon:
+    name: Reuse the AirPlay add-on if unchanged
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.reuse.outputs.sha256 }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compare with the last release
+        id: reuse
+        shell: bash
+        run: |
+          set -euo pipefail
+          last=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[0].tagName // ""')
+          if [ -z "$last" ] || ! git rev-parse -q --verify "refs/tags/$last" > /dev/null; then
+            echo "No earlier release to take the add-on from; building it"
+            exit 0
+          fi
+          if ! git diff --quiet "$last" HEAD -- scripts/airplay-addon .github/workflows/airplay-addon.yml; then
+            echo "The add-on changed since $last; building it"
+            exit 0
+          fi
+          mkdir addon
+          gh release download "$last" --repo "$GITHUB_REPOSITORY" --dir addon \
+            --pattern OmniHub-AirPlay-addon-x64.zip --pattern OmniHub-AirPlay-addon-sources.zip --pattern SHA256SUMS.txt || true
+          if [ ! -f addon/OmniHub-AirPlay-addon-x64.zip ] || [ ! -f addon/OmniHub-AirPlay-addon-sources.zip ] || [ ! -f addon/SHA256SUMS.txt ]; then
+            echo "$last does not have the add-on's files; building it"
+            exit 0
+          fi
+          # Written on Windows: "<hash> *<name>" (binary mode); both files must be listed.
+          sums=$(grep -E '^[0-9a-f]{64} [ *]OmniHub-AirPlay-addon-(x64|sources)\.zip$' addon/SHA256SUMS.txt || true)
+          if [ "$(printf '%s\n' "$sums" | grep -c .)" -ne 2 ]; then
+            echo "$last's SHA256SUMS.txt does not list both add-on files; building it"
+            exit 0
+          fi
+          (cd addon && printf '%s\n' "$sums" | sha256sum -c -)
+          rm addon/SHA256SUMS.txt
+          echo "sha256=$(sha256sum addon/OmniHub-AirPlay-addon-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "Publishing the add-on from $last again"
+      - if: steps.reuse.outputs.sha256 != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: omnihub-airplay-addon
+          path: addon/*.zip
+          if-no-files-found: error
+
+  airplay-addon:
+    needs: previous-addon
+    if: needs.previous-addon.outputs.sha256 == ''
+    uses: ./.github/workflows/airplay-addon.yml
+
+  # PresentMon for the FPS meter, the same way: published next to the
+  # installer, its SHA-256 built into the app.
+  presentmon:
+    uses: ./.github/workflows/presentmon.yml
+
+  # FFmpeg for instant replay, the same way.
+  ffmpeg:
+    uses: ./.github/workflows/ffmpeg.yml
+
   windows:
     name: Build and publish the Windows installer
+    needs: [previous-addon, airplay-addon, presentmon, ffmpeg]
+    # The add-on is either taken from the last release or built (one of the
+    # two is skipped).
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      OMNIHUB_AIRPLAY_ADDON_SHA256: ${{ needs.previous-addon.outputs.sha256 || needs.airplay-addon.outputs.sha256 }}
+      OMNIHUB_PRESENTMON_SHA256: ${{ needs.presentmon.outputs.sha256 }}
+      PRESENTMON_VERSION: ${{ needs.presentmon.outputs.version }}
+      OMNIHUB_FFMPEG_SHA256: ${{ needs.ffmpeg.outputs.sha256 }}
+      FFMPEG_VERSION: ${{ needs.ffmpeg.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -54,6 +131,10 @@ jobs:
             echo "::error::$tag already points to ${existing:0:7}; bump the version to release ${GITHUB_SHA:0:7}"
             exit 1
           fi
+          if [ ${#OMNIHUB_AIRPLAY_ADDON_SHA256} -ne 64 ] || [ ${#OMNIHUB_PRESENTMON_SHA256} -ne 64 ] || [ ${#OMNIHUB_FFMPEG_SHA256} -ne 64 ]; then
+            echo "::error::The add-on, PresentMon or FFmpeg checksum is missing"
+            exit 1
+          fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "TAG=$tag" >> "$GITHUB_ENV"
           echo "Releasing $tag from ${GITHUB_SHA:0:7}"
@@ -62,15 +143,36 @@ jobs:
       - name: Build installer
         run: npx tauri build
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: omnihub-airplay-addon
+          path: addon
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: omnihub-presentmon
+          path: presentmon
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: omnihub-ffmpeg
+          path: ffmpeg
+
       - name: Collect installer files and checksums
         shell: bash
         run: |
           mkdir release
           cp target/release/bundle/nsis/*.exe target/release/bundle/msi/*.msi release/
+          cp addon/OmniHub-AirPlay-addon-x64.zip addon/OmniHub-AirPlay-addon-sources.zip release/
+          cp presentmon/OmniHub-PresentMon-x64.exe presentmon/OmniHub-PresentMon-LICENSE.txt release/
+          cp ffmpeg/OmniHub-ffmpeg-x64.exe ffmpeg/OmniHub-ffmpeg-LICENSE.txt release/
+          (cd release && echo "$OMNIHUB_AIRPLAY_ADDON_SHA256  OmniHub-AirPlay-addon-x64.zip" | sha256sum -c -)
+          (cd release && echo "$OMNIHUB_PRESENTMON_SHA256  OmniHub-PresentMon-x64.exe" | sha256sum -c -)
+          (cd release && echo "$OMNIHUB_FFMPEG_SHA256  OmniHub-ffmpeg-x64.exe" | sha256sum -c -)
           (cd release && sha256sum * > SHA256SUMS.txt)
           ls -l release
           cat release/SHA256SUMS.txt
-          sed "s/{{VERSION}}/$VERSION/g" .github/release-notes.md > release-notes.md
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{PRESENTMON}}/$PRESENTMON_VERSION/g" -e "s/{{FFMPEG}}/$FFMPEG_VERSION/g" .github/release-notes.md > release-notes.md
 
       - name: Publish release
         shell: bash

@@ -52,7 +52,8 @@ export function Dot({ tone = 'good', pulse }: { tone?: Tone; pulse?: boolean }) 
   const color = { neutral: 'bg-faint', accent: 'bg-accent', good: 'bg-good', warn: 'bg-warn', bad: 'bg-bad', info: 'bg-info' }[tone];
   return (
     <span className="relative inline-flex h-2 w-2 shrink-0">
-      {pulse && <span className={cx('absolute inset-0 animate-ping rounded-full opacity-60', color)} />}
+      {/* A few pulses, not forever: an endless one keeps the window drawing every frame. */}
+      {pulse && <span className={cx('absolute inset-0 animate-ping rounded-full opacity-60', color)} style={{ animationIterationCount: 4, animationFillMode: 'forwards' }} />}
       <span className={cx('relative inline-flex h-2 w-2 rounded-full', color)} />
     </span>
   );

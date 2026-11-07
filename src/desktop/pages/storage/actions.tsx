@@ -2,12 +2,13 @@
 
 import { formatBytes, formatNumber, basename } from '@shared/format';
 import type { DeleteResult } from '@shared/types';
-import { Copy, ExternalLink, FolderOpen, FolderSearch, ScanSearch, Trash, TrashOff } from 'lucide-react';
+import { Copy, ExternalLink, FolderOpen, FolderSearch, ScanSearch, Smartphone, Trash, TrashOff } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { api, errorText } from '../../api';
 import { type MenuItem, openMenu } from '../../components/ui/Menu';
 import { copyText } from '../../lib/util';
 import { confirm } from '../../state/dialogs';
+import { useSend } from '../../state/send';
 import { useStorage } from '../../state/storage';
 import { toast } from '../../state/toasts';
 
@@ -98,6 +99,7 @@ export function itemMenuItems(item: ItemRef, extra: MenuItem[] = []): MenuItem[]
           else toast.error('Could not copy');
         }),
     },
+    { label: item.isDir ? 'Send to phone (zipped)' : 'Send to phone', icon: Smartphone, onSelect: () => useSend.getState().openFiles([item.path]) },
     ...extra,
     ...(item.isDir ? ([{ kind: 'separator' }, { label: 'Scan from here', icon: ScanSearch, onSelect: () => void useStorage.getState().scan(item.path, 'standard') }] as MenuItem[]) : []),
     { kind: 'separator' },
@@ -108,4 +110,17 @@ export function itemMenuItems(item: ItemRef, extra: MenuItem[] = []): MenuItem[]
 
 export function openItemMenu(e: MouseEvent, item: ItemRef, extra: MenuItem[] = []): void {
   openMenu(e, itemMenuItems(item, extra));
+}
+
+/** Save a folder's contents or its largest files as a CSV file (opens in Excel). */
+export async function exportCsv(scanId: string, node: number, kind: 'children' | 'largest', folderName: string): Promise<void> {
+  const safe = (folderName.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'drive').slice(0, 60);
+  const path = await api.app.saveFile('Export as CSV', `${kind === 'largest' ? 'Largest files' : 'Contents'} - ${safe}.csv`);
+  if (!path) return;
+  try {
+    const rows = await api.storage.exportCsv(scanId, node, kind, path);
+    toast.success(`Exported ${formatNumber(rows)} rows`, basename(path), { action: { label: 'Open', run: () => void api.app.openPath(path) } });
+  } catch (e) {
+    toast.error('Could not export', errorText(e));
+  }
 }

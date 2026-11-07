@@ -1,6 +1,6 @@
 import { formatBytes, formatDate, formatRelative } from '@shared/format';
 import type { AppInfo } from '@shared/types';
-import { Camera, Copy, FolderOpen, Play, Trash, X } from 'lucide-react';
+import { Camera, Copy, FolderOpen, Play, Star, Trash, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { AppIcon } from '../../components/AppIcon';
@@ -12,6 +12,7 @@ import { useAsync } from '../../lib/hooks';
 import { navigate } from '../../lib/router';
 import { copyText } from '../../lib/util';
 import { confirm } from '../../state/dialogs';
+import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
 import { SOURCE_LABEL } from './shared';
 
@@ -68,6 +69,7 @@ function Body({ app, onClose }: { app: AppInfo; onClose: () => void }) {
           <Button icon={FolderOpen} disabled={!app.installLocation} onClick={() => app.installLocation && void api.app.openPath(app.installLocation).catch((e: unknown) => toast.error('Could not open the folder', errorText(e)))}>
             Folder
           </Button>
+          <FavoriteButton id={app.id} />
           <Button variant="danger" icon={Trash} loading={busy === 'uninstall'} disabled={!app.uninstallable} onClick={uninstall}>
             Uninstall
           </Button>
@@ -144,4 +146,11 @@ export function AppDrawer({ app, onClose }: { app: AppInfo | null; onClose: () =
       {shown && <Body key={shown.id} app={shown} onClose={onClose} />}
     </Drawer>
   );
+}
+
+function FavoriteButton({ id }: { id: string }) {
+  const favorites = useSettings((s) => s.settings?.apps.favorites) ?? [];
+  const on = favorites.includes(id);
+  const toggle = () => void useSettings.getState().update({ apps: { favorites: on ? favorites.filter((f) => f !== id) : [...favorites, id] } }, { silent: true });
+  return <IconButton icon={Star} label={on ? 'Remove from favourites' : 'Add to favourites'} variant="secondary" onClick={toggle} className={on ? 'text-warn [&_svg]:fill-current' : undefined} />;
 }

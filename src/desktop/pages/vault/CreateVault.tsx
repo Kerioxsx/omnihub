@@ -8,6 +8,7 @@ import { Field, TextInput } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { useLive } from '../../state/live';
 import { toast } from '../../state/toasts';
+import { SetAsideList } from './ForgotPassword';
 import { StrengthMeter, useStrength } from './shared';
 
 const LAYERS = [
@@ -43,6 +44,7 @@ export function CreateVault() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mx-auto grid max-w-[1040px] grid-cols-1 items-start gap-4 pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <SetAsideList current={false} className="lg:col-span-2" />
       <Card className="relative overflow-hidden p-7">
         <div className="pointer-events-none absolute -left-20 -top-24 h-64 w-64 rounded-full bg-[radial-gradient(circle,var(--accent-soft),transparent_70%)]" />
         <div className="relative">
@@ -106,8 +108,8 @@ export function CreateVault() {
         <Callout tone="warn" icon={ShieldAlert} title="Don't keep your primary Google, Microsoft or Apple passwords here">
           Those accounts can reset every other password you own. Protect them with a <strong className="text-fg">passkey</strong> and <strong className="text-fg">two-factor authentication</strong> instead, and use <strong className="text-fg">app passwords</strong> for apps that need them. OmniHub flags entries that look like primary accounts.
         </Callout>
-        <Callout tone="bad" icon={KeyRound} title="There is no password reset">
-          If you forget the master password, the vault cannot be recovered. Export an encrypted backup from the vault settings once you've added entries.
+        <Callout tone="warn" icon={KeyRound} title="Turn on Windows Hello as a spare key">
+          Nobody can reset the master password for you. Once the vault is made, turn on Windows Hello in Vault settings: if you ever forget the password, your face, fingerprint or PIN can set a new one. An encrypted backup (Vault settings) is worth having too.
         </Callout>
       </div>
     </motion.div>

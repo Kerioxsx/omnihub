@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- OmniHub mark: an "O" orbit with three connected devices on a violet-to-cyan tile. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="0.55" stop-color="#5b5cf0"/>
+      <stop offset="1" stop-color="#06b6d4"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.28" cy="0.18" r="0.95">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.38"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e0f7ff"/>
+    </linearGradient>
+  </defs>
+  <rect x="48" y="48" width="928" height="928" rx="232" fill="url(#tile)"/>
+  <rect x="48" y="48" width="928" height="928" rx="232" fill="url(#sheen)"/>
+  <circle cx="512" cy="512" r="236" fill="none" stroke="url(#ring)" stroke-width="64"/>
+  <circle cx="512" cy="512" r="92" fill="#ffffff"/>
+  <g fill="#ffffff" stroke="#5b5cf0" stroke-width="22">
+    <circle cx="630" cy="308" r="64"/>
+    <circle cx="630" cy="716" r="64"/>
+    <circle cx="276" cy="512" r="64"/>
+  </g>
+</svg>

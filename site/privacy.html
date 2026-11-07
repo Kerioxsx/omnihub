@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Privacy policy · OmniHub</title>
+  <meta name="description" content="What OmniHub and this website collect (nothing), what the app sends to other services when you use a feature, and how to delete everything it saved." />
+  <meta name="theme-color" content="#ECEEF3" />
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+  <link rel="preload" href="assets/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skip" href="#content">Skip to the policy</a>
+
+  <header class="top is-scrolled">
+    <a class="brand" href="./" aria-label="OmniHub home">
+      <img src="assets/logo.svg" alt="" width="30" height="30" />
+      <span>OmniHub</span>
+    </a>
+    <nav class="top-links" aria-label="Pages">
+      <a href="./">Home</a>
+      <a href="privacy.html" aria-current="page">Privacy</a>
+      <a href="terms.html">Terms</a>
+    </nav>
+    <a class="btn btn-solid btn-small" href="https://github.com/Kerioxsx/omnihub/releases/latest">Download</a>
+  </header>
+
+  <main class="doc" id="content">
+    <header class="doc-head">
+      <h1>Privacy policy</h1>
+      <p class="doc-lead">Short version: this website and the OmniHub app collect nothing about you. There is no OmniHub account and no OmniHub server. When a feature needs the internet, the app talks straight to the service that feature is about, and this page lists every one.</p>
+      <p class="doc-date">Last updated on 1 November 2026. Changes are listed in the <a href="https://github.com/Kerioxsx/omnihub/commits/gh-pages/privacy.html">page's history</a>.</p>
+    </header>
+
+    <nav class="doc-toc" aria-label="On this page">
+      <a href="#website">This website</a>
+      <a href="#cookies">Cookies</a>
+      <a href="#app">The app</a>
+      <a href="#services">Services the app talks to</a>
+      <a href="#phone">Your phone</a>
+      <a href="#children">Children</a>
+      <a href="#delete">Deleting your data</a>
+      <a href="#contact">Questions and changes</a>
+    </nav>
+
+    <div class="doc-body">
+      <section id="website" aria-labelledby="website-title">
+        <h2 id="website-title">This website</h2>
+        <p>The site is hosted by GitHub Pages. Like any web host, GitHub receives your IP address and browser details when you open a page; <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a> covers that.</p>
+        <p>To link the newest installer, the page asks GitHub's public API which release is newest. That request goes from your browser to GitHub too. The download itself also comes from GitHub.</p>
+        <p>There are no analytics, no ads, no tracking pixels, no forms and no mailing list, and every font and picture is served from this site. Since there's no mailing list, there's nothing to unsubscribe from: OmniHub never emails you.</p>
+      </section>
+
+      <section id="cookies" aria-labelledby="cookies-title">
+        <h2 id="cookies-title">Cookies</h2>
+        <p>This website sets no cookies and stores nothing in your browser: no local storage, no session storage. Because nothing is stored and nothing tracks you, there's no cookie banner to accept. If that ever changes, a banner will ask first and this page will say what's stored and why.</p>
+        <p>The OmniHub app on your PC doesn't use cookies either. Videos in the music player come from YouTube's privacy-enhanced player (youtube-nocookie.com); YouTube's own policy applies to what it shows.</p>
+      </section>
+
+      <section id="app" aria-labelledby="app-title">
+        <h2 id="app-title">The app</h2>
+        <p>Everything OmniHub keeps stays on your PC, in <code>%LOCALAPPDATA%\OmniHub</code>: your settings, notes, the activity log, the time tracker (if you turn it on), caches and logs. Passwords, hidden files and your own API keys are encrypted and tied to your Windows account.</p>
+        <p>Some things are saved where you'd look for them: screenshots in Pictures, clips in Videos\OmniHub Clips, scans in Documents\OmniHub Scans, downloads and files from phones in Downloads\OmniHub, and whiteboard pictures in Pictures\OmniHub Whiteboard. You can change most of these folders in Settings.</p>
+        <p>Crash reports and logs are written to your PC only. Nothing is sent to the maker of OmniHub, automatically or otherwise.</p>
+      </section>
+
+      <section id="services" aria-labelledby="services-title">
+        <h2 id="services-title">Services the app talks to</h2>
+        <p>OmniHub connects to these only when you use the feature next to them, and sends only what that feature needs. Each service has its own privacy policy.</p>
+        <dl class="doc-list">
+          <div><dt>Updates</dt><dd>GitHub: checks for a newer version and downloads it. The helper tools (FFmpeg, PresentMon, the AirPlay receiver, yt-dlp and Deno) also come from GitHub.</dd></div>
+          <div><dt>Lyrics and covers</dt><dd>LRCLIB, NetEase Cloud Music and Apple's iTunes catalogue receive the title and artist of the song that's playing.</dd></div>
+          <div><dt>Music videos</dt><dd>YouTube receives the song's title and artist to find its video, which then plays in YouTube's player.</dd></div>
+          <div><dt>Music search</dt><dd>Deezer and Wikipedia receive what you type into Aurora's search.</dd></div>
+          <div><dt>Password check</dt><dd>Have I Been Pwned receives the first five characters of each password's SHA-1 hash, never the password, and only when you run the check.</dd></div>
+          <div><dt>AI chats and the mod maker</dt><dd>Anthropic (Claude) or OpenAI receive your messages, and the files you let them read, using your own API key. Those companies bill you for what you use.</dd></div>
+          <div><dt>Mixed covers</dt><dd>Pollinations receives the picture prompt, only if you add your own key.</dd></div>
+          <div><dt>Lights</dt><dd>Govee lights are controlled on your own network. Govee's cloud is used only if you add your Govee key.</dd></div>
+          <div><dt>Games and mods</dt><dd>Steam's store (game names and pictures), Thunderstore, Modrinth, and the mod loaders' own download sites receive the names of what you search for or install.</dd></div>
+          <div><dt>Minecraft servers</dt><dd>Mojang, Fabric, Quilt, Forge, NeoForge and Adoptium (for Java) provide the server files you choose to install.</dd></div>
+          <div><dt>Lag check</dt><dd>Cloudflare's speed test, only when you run it.</dd></div>
+          <div><dt>Downloads you ask for</dt><dd>The website of the link you send. Video pages are opened by yt-dlp.</dd></div>
+        </dl>
+      </section>
+
+      <section id="phone" aria-labelledby="phone-title">
+        <h2 id="phone-title">Your phone</h2>
+        <p>The phone connection is off until you turn it on, and then works only on your own network, over HTTPS. Data goes straight between your phone and your PC. Pairing saves a sign-in token in the phone's browser; removing the phone in OmniHub, or clearing that site's data on the phone, deletes it. Guests who send you files with a QR code send only those files, and see nothing on your PC.</p>
+      </section>
+
+      <section id="children" aria-labelledby="children-title">
+        <h2 id="children-title">Children</h2>
+        <p>OmniHub and this website collect no personal information from anyone, including children, so there's nothing that needs a parent's consent. Some optional services you can connect (such as AI providers, YouTube or Govee) set their own minimum ages. If you're younger than a service requires, don't connect it, or ask a parent first.</p>
+      </section>
+
+      <section id="delete" aria-labelledby="delete-title">
+        <h2 id="delete-title">Deleting your data</h2>
+        <p>Because everything is on your PC, deleting it is up to you, and nothing is kept anywhere else.</p>
+        <ul>
+          <li>Clear parts of it in the app: Settings has Clear for the activity log, Focus has Clear for the time tracker, Phone removes paired phones, and anything in Notes or the vault can be deleted there.</li>
+          <li>Remove everything: uninstall OmniHub in Windows Settings, then delete the <code>%LOCALAPPDATA%\OmniHub</code> folder, and the folders listed under <a href="#app">The app</a> if you want those files gone too.</li>
+          <li>Remove the browser extension from your browser's extensions page, if you added it.</li>
+          <li>On your phone, remove OmniHub from the home screen and clear the site's data in the browser's settings.</li>
+        </ul>
+      </section>
+
+      <section id="contact" aria-labelledby="contact-title">
+        <h2 id="contact-title">Questions and changes</h2>
+        <p>OmniHub is made by Kerioxsx, an independent developer, not a company. Ask anything about privacy by <a href="https://github.com/Kerioxsx/omnihub/issues">opening an issue on GitHub</a>; please don't put anything private in a public issue. If this policy changes, this page shows the new date, and the change is in the page's history.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="24" height="24" /><span>OmniHub</span></a>
+        <p>A free, open-source Windows app by Kerioxsx.</p>
+      </div>
+      <nav aria-labelledby="foot-get"><h2 id="foot-get">Get it</h2><a href="https://github.com/Kerioxsx/omnihub/releases/latest">Download</a><a href="https://github.com/Kerioxsx/omnihub/releases">All versions</a><a href="https://github.com/Kerioxsx/omnihub">Source code</a></nav>
+      <nav aria-labelledby="foot-policies"><h2 id="foot-policies">Policies</h2><a href="privacy.html">Privacy</a><a href="privacy.html#cookies">Cookies</a><a href="terms.html">Terms</a><a href="terms.html#refunds">Refunds</a></nav>
+      <nav aria-labelledby="foot-help"><h2 id="foot-help">Help</h2><a href="./#questions">Questions</a><a href="https://github.com/Kerioxsx/omnihub/issues">Report a problem</a><a href="https://github.com/Kerioxsx/omnihub/blob/main/docs/SECURITY.md">How it's secured</a></nav>
+    </div>
+    <p class="foot-note">OmniHub isn't affiliated with Microsoft or any game, music or hardware company named on this site; their names and logos belong to them. <a href="terms.html#credits">Credits</a></p>
+  </footer>
+</body>
+</html>

@@ -7,6 +7,8 @@ import { api } from '../api';
 import { useEvent } from '../lib/hooks';
 import { currentRoute, navigate } from '../lib/router';
 import { useLive } from '../state/live';
+import { useSend } from '../state/send';
+import { lookInfo } from '../lib/looks';
 import { useSettings } from '../state/settings';
 import { useStorage } from '../state/storage';
 import { toast } from '../state/toasts';
@@ -15,7 +17,24 @@ export function GlobalEvents() {
   useEffect(() => {
     const live = useLive.getState();
     void Promise.allSettled([live.refreshRemote(), live.refreshDevices(), live.refreshVault(), live.refreshPower(), useStorage.getState().loadVolumes()]);
+    // Started from Explorer's "Send to → OmniHub (phone)".
+    void api.app.takePendingSend().then((paths) => paths.length && useSend.getState().openFiles(paths), () => undefined);
+    // The previous run ended without a normal exit: offer what is known.
+    void api.app.lastCrash().then((report) => {
+      if (!report) return;
+      toast.warn('OmniHub closed unexpectedly last time', 'Copy the details and send them along with what you were doing, so it can be fixed.', {
+        key: 'last-crash',
+        duration: 60_000,
+        action: { label: 'Copy details', run: () => void navigator.clipboard?.writeText(report).then(() => toast.success('Details copied')) },
+      });
+    }, () => undefined);
   }, []);
+  useEvent<string[]>('send:files', () => void api.app.takePendingSend().then((paths) => paths.length && useSend.getState().openFiles(paths), () => undefined));
+  useEvent<{ message: string }>('counters:goal', (p) => toast.success('Counter goal', p.message));
+  useEvent<{ name: string; discount: number; price: string | null }>('games:sale', (p) => toast.info(`${p.name} is ${p.discount}% off`, p.price ? `Now ${p.price} on Steam` : 'On your Steam wishlist'));
+  useEvent<{ name: string; left: number; closing: boolean }>('games:limit', (p) => (p.closing ? toast.info(`Time's up for ${p.name}`, 'Today’s game time is used, so it was closed.') : toast.info(`${p.left} min left`, `${p.name} closes when today’s time is up.`)));
+  useEvent<{ device: string; chars: number }>('clipboard:from-phone', (p) => toast.success(`Text from ${p.device} copied`, `${p.chars} characters are on the clipboard — paste with Ctrl+V.`));
+  useEvent<{ name: string; percent: number }>('battery:low', (p) => toast.warn(`${p.name} battery at ${p.percent}%`, 'Charge it soon.', { key: `battery-${p.name}` }));
 
   // storage
   useEvent<JobProgress>('storage:progress', (p) => useStorage.getState().onProgress(p));
@@ -57,9 +76,24 @@ export function GlobalEvents() {
   // vault
   useEvent<{ reason: string }>('vault:locked', (p) => {
     void useLive.getState().refreshVault();
-    if (p.reason !== 'manual') toast.info('Vault locked', p.reason === 'idle' ? 'Locked automatically after inactivity.' : p.reason === 'session' ? 'Windows was locked.' : undefined);
+    if (!['manual', 'set-aside', 'put-back'].includes(String(p.reason))) toast.info('Vault locked', p.reason === 'idle' ? 'Locked automatically after inactivity.' : p.reason === 'session' ? 'Windows was locked.' : undefined);
   });
   useEvent('vault:unlocked', () => void useLive.getState().refreshVault());
+  // A Minecraft server kept an operator's name out (it joined from a new place).
+  useEvent<{ id: string; server: string; name: string; place: string }>('mcserver:guard', (p) =>
+    toast.warn(`${p.name} wants in on ${p.server}`, `That name is an operator and joined from a new place (${p.place}), so it was kept out. Allow it only if it’s really them.`, {
+      key: `guard:${p.id}:${p.name}`,
+      duration: 30_000,
+      action: { label: 'Open Players', run: () => navigate('servers', { id: p.id, tab: 'players' }) },
+    }),
+  );
+  useEvent<{ id: string; title: string; snippet: string }>('notes:reminder', (p) =>
+    toast.info(`Reminder: ${p.title || 'Untitled note'}`, p.snippet || undefined, { action: { label: 'Open', run: () => navigate('notes', { id: p.id }) } }),
+  );
+  useEvent<{ browser: string }>('browser:unlock-request', (p) => {
+    navigate('vault');
+    toast.info(`${p.browser} wants to fill a login`, 'Unlock the vault here, then go back to the browser.');
+  });
 
   // misc
   useEvent<Settings>('settings:changed', (s) => useSettings.getState().set(s));
@@ -73,27 +107,55 @@ export function GlobalEvents() {
 
 export function ThemeController() {
   const theme = useSettings((s) => s.settings?.general.theme);
+  const look = lookInfo(useSettings((s) => s.settings?.general.look)).id;
   const accent = useSettings((s) => s.settings?.general.accent);
   const reduced = useSettings((s) => s.settings?.general.reducedMotion);
+  const glass = useSettings((s) => s.settings?.general.glass ?? false);
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-glass', glass);
+  }, [glass]);
   useEffect(() => {
     if (!theme) return;
     const root = document.documentElement;
     const mq = window.matchMedia('(prefers-color-scheme: light)');
+    root.dataset.look = look;
     const apply = () => {
-      const light = theme === 'light' || (theme === 'system' && mq.matches);
+      // Animated themes bring their own light or dark palette.
+      const light = look !== 'classic' ? lookInfo(look).light : theme === 'light' || (theme === 'system' && mq.matches);
       root.classList.toggle('light', light);
       root.style.colorScheme = light ? 'light' : 'dark';
     };
     apply();
-    if (theme !== 'system') return;
+    if (theme !== 'system' || look !== 'classic') return;
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [theme]);
+  }, [theme, look]);
   useEffect(() => {
     if (accent) document.documentElement.dataset.accent = accent;
   }, [accent]);
   useEffect(() => {
     document.documentElement.classList.toggle('reduce-motion', !!reduced);
   }, [reduced]);
+  // Interface size: CSS zoom on the root scales layout like browser zoom.
+  const scale = useSettings((s) => s.settings?.general.uiScale ?? 100);
+  useEffect(() => {
+    const z = Math.min(150, Math.max(80, scale)) / 100;
+    document.documentElement.style.zoom = z === 1 ? '' : String(z);
+  }, [scale]);
+  // Ctrl+= / Ctrl+- / Ctrl+0 change it from anywhere.
+  useEffect(() => {
+    const steps = [80, 90, 100, 110, 125, 150];
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const cur = useSettings.getState().settings?.general.uiScale ?? 100;
+      const i = steps.indexOf(cur) < 0 ? 2 : steps.indexOf(cur);
+      const next = e.key === '=' || e.key === '+' ? steps[Math.min(steps.length - 1, i + 1)] : e.key === '-' ? steps[Math.max(0, i - 1)] : e.key === '0' ? 100 : null;
+      if (next == null) return;
+      e.preventDefault();
+      if (next !== cur) void useSettings.getState().update({ general: { uiScale: next } });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   return null;
 }

@@ -8,11 +8,14 @@
 │        │                                                                                     │
 │  omnihub-core (crates/omnihub-core) ── AppCore ─────────────────────────────────────────────┐ │
 │    storage   engine · MFT reader · USN · snapshot cache · walker · tree · cleanup · dupes   │ │
-│    vault     Argon2id/AES-GCM · DPAPI · Windows Hello · auto-lock · clipboard               │ │
+│    vault     Argon2id/AES-GCM · DPAPI · Hello · hidden files · locked notes · auto-lock     │ │
 │    notes     SQLite · Markdown export · Claude folder watcher                               │ │
 │    apps      registry · Get-StartApps · Appx · shell icons                                  │ │
 │    capture   screenshots library · DXGI/GDI capture · JPEG streamer · input · bridges       │ │
-│    system    elevation · power · clipboard · DPAPI · shell                                  │ │
+│    system    elevation · power · clipboard · DPAPI · shell · processes · GPU counters       │ │
+│    media     media sessions · lyrics (LRCLIB) · volume · Equalizer APO                      │ │
+│    games     profiles · boost/restore journal · Roblox flags · ping                         │ │
+│    browser   native-messaging host · pipe to the app · site matching · pairing              │ │
 │    remote    axum HTTPS/WS server for the phone ── serves dist-mobile (embedded)            │ │
 │    settings · db (SQLite) · audit · events (broadcast bus)                                  │ │
 │  └──────────────────────────────────────────────────────────────────────────────────────────┘ │
@@ -86,14 +89,285 @@ most two frames are in flight, so latency stays bounded on slow links (old
 frames are skipped, not queued). Quality and size adapt to the measured
 round trip.
 
+## Music, tasks and games
+
+`media/` polls Windows' media sessions (GSMTC) every 250 ms while music plays (750 ms otherwise, and quickly again for 3 s after a control) for the track,
+cover and position, and sends `media:state` with the PC's clock so the phone
+can line up time-synced lyrics (fetched from LRCLIB, cached per song) to
+within a frame. `system/procs.rs` groups processes by name; GPU figures come
+from the "GPU Engine" and "GPU Process Memory" performance counters (the
+busiest engine per program, like Task Manager) via `system/gpu.rs`.
+
+### My PC (`rig/`)
+
+`RigHub` owns `data/rig.json` and one worker thread that runs only while it
+is needed (lighting on, a fan profile other than Auto, or the page/case
+screen holding a lease) and otherwise exits. `specs.rs` parses SMBIOS and
+matches present USB ids; `openrgb.rs` is an OpenRGB SDK client (protocol 3:
+controller list, `SETCUSTOMMODE`, `UPDATELEDS`); `lighting.rs` holds the
+effects, which `src/desktop/lib/rig/effects.ts` repeats for the 3D preview
+(same values); `lhm.rs` reads LibreHardwareMonitor's `data.json` and sets
+controls; `fans.rs` holds the curves, floors and smoothing; `liquidctl.rs`
+runs liquidctl; `screens.rs` keeps the media library. The worker sends
+frames at 30 fps for moving effects (once a second otherwise), reads the
+sensors every 2 s, and pushes `rig:status` only while a view holds it. The
+shell adds the `casescreen` window (on the chosen monitor) and the
+`rigmedia://` protocol. The 3D view (`lib/rig/scene3d.ts`, three.js, loaded
+with the page) builds the PC from the specs and the user's description,
+draws every LED of a part in one instanced mesh, and pauses when hidden.
+
+### Aurora's music hub
+
+`media/catalog.rs` searches Deezer's public catalogue (tracks, albums,
+artists, an artist's top songs and albums, an album's songs) and takes bios
+from Wikipedia's page summaries, with a 15-minute in-memory cache and a host
+allowlist. `up_next` finds the playing song in the catalogue and returns the
+rest of its album and more by the artist. `play` resolves `Auto` (the app
+playing, else an installed app found by its registered link scheme, else
+YouTube Music) and opens a link: a YouTube Music watch link for the song
+(found with `video::parse_results`), an Apple Music page (from the iTunes
+Search API; `musics://` when the app is installed), or a search in Spotify,
+SoundCloud or Amazon Music. The UI is `components/aurora/AuroraHub.tsx` (clock,
+search panel, artist and album views, carousel, source picker, up next);
+`visuals.hub` holds its settings.
+
+### Tools
+
+`files.rs` (checksums, shredder, bulk rename with a two-phase apply and
+rollback, recent files from the Recent folder's shortcuts), `system/ports.rs`
+(`GetExtendedTcpTable`/`GetExtendedUdpTable` with owning processes),
+`system/layouts.rs` (`GetWindowPlacement`/`SetWindowPlacement`, matched by
+program and title, saved in `layouts.json`) and `system/privacy.rs` (the
+ConsentStore's last-used times). `AppCore::panic` locks the vault, stops and
+disables the phone server, emits `app:panic` (the window hides) and locks
+Windows. `remote::auth::authenticate_seen` reports a phone back after ten
+minutes away (`remote:connected`).
+
+### Guests, rules, focus and dev tools
+
+`remote/guest.rs` holds guest links (code, expiry, byte and file limits with
+reservations so parallel uploads can't overshoot) and the guest page; the
+routes `/guest/{code}`, `/guest/{code}/info` and `PUT /guest/{code}/file`
+(streamed to a temporary file, then renamed) sit outside the paired-phone
+middleware. `rules.rs` keeps `rules.json` and runs every 30 s from
+`AppCore::start_productivity`, acting only on files unchanged between two
+looks. `focus.rs` samples the foreground program every 5 s (when the tracker
+is on and you aren't away) into `app_time` (migration 6), runs the focus
+timer (`focus_sessions`) and closes blocked windows through
+`system::open_apps::close`; the desktop holds non-urgent notifications during
+focus rounds. `devtools.rs` finds Git repositories (`git status
+--porcelain=v2 --branch`, read-only) and edits `HKCU\Environment`,
+broadcasting `WM_SETTINGCHANGE`.
+
+### Phone sensors, approvals, downloads, images and video
+
+The scanner's picture work happens on the phone (`src/mobile/lib/scan.ts`):
+the page is the largest region above an Otsu threshold on a 320-px copy, its
+corners the extreme points; a homography (unit square → quad) straightens it
+with bilinear sampling, and the levels are stretched. `POST /api/scan` takes
+base64 JPEGs (route body limit 96 MB) to `AppCore::scan`: `scan.rs` writes a
+PDF by hand (DCTDecode, so the JPEGs aren't re-encoded) or the single JPEG,
+`capture::ocr::recognize_bytes` reads each page with Windows.Media.Ocr, and
+receipts and cards are parsed into fields (and a vCard). `POST /api/type`
+uses `capture::stream::input::text` (SendInput, Unicode) behind
+`allow_control`. `remote/board.rs` keeps the whiteboard's strokes in memory
+(normalised points, checked colour and width, capped counts) and emits
+`board:*` events. `remote/approvals.rs` parks a request with an `mpsc`
+channel; `AppCore::approve` emits `approval:request`, waits up to 60 s for a
+phone's `POST /api/approvals/{id}`, and remembers a yes for the same thing
+for two minutes; the Tauri commands for vault reveal/copy, restart as admin,
+shredding, the environment editor and loosening the setting call it.
+`downloads.rs` streams direct links with ureq to a temporary file (name from
+Content-Disposition or the URL, made safe), or hands HTML pages to
+`StreamTool::download` (yt-dlp with `--print after_move:filepath`, progress
+from `--newline`, FFmpeg for merging when instant replay downloaded it).
+`images.rs` strips metadata by rewriting JPEG segments (APP1/APP13/COM and
+anything after EOI go; an EXIF block with only the orientation is written
+back), PNG text/eXIf/tIME chunks and WebP EXIF/XMP chunks; resizing uses
+`fast_image_resize` (Lanczos3); HEIC and other formats `image` can't read are
+decoded by WinRT's BitmapDecoder. `videotools.rs` probes with `ffmpeg -i`,
+picks the first H.264 encoder that works (NVENC, AMF, QSV, Media Foundation,
+OpenH264, then MPEG-4 part 2) with a 15-frame test, sizes the bitrate from
+bits per pixel (or from the target size, lowering the picture's height when
+the budget is thin), and reads progress from `-progress pipe:1`.
+
+### Aurora
+
+The music visuals are split so nothing time-critical waits on the network
+or the UI:
+
+- **Capture** (`media/visual/source.rs`): WASAPI loopback of the default
+  output, mixed to mono; a synthesised beat stands in with the pretend
+  player. Device changes are noticed every 2 s and the stream reopened.
+- **Analysis** (`media/visual/analyzer.rs`, `fft.rs`): 2048-point Hann
+  windows, hop of one display frame; RMS, bass (25–160 Hz), mids, highs and
+  16 log bands, each normalised by an adaptive peak follower and smoothed
+  with separate attack and release; beats from bass-weighted spectral flux
+  above a running mean + k·σ, with hysteresis and a 250 ms refractory
+  period; tempo from the median gap. Silence switches to a cheap path.
+- **Hub** (`media/visual/mod.rs`): one thread at 60 Hz, started by a lease
+  and stopped when the last lease expires; emits `audio:frame` while there
+  is sound (a heartbeat, then nothing, when quiet) and `audio:status`.
+  Track changes (`media:state`) reset the analysis.
+- **Lyrics service** (`media/lyrics.rs`, `media/mod.rs`): the user's `.lrc`
+  folder first (matched on tags or "Artist - Title" names, length within
+  8 s, lines that fit the track), then the cache, then LRCLIB. Lyrics are
+  stored per track key, so a new track never gets the last one's lines.
+- **Covers** (`media/artwork.rs`): the player's thumbnail is replaced by
+  the original-size copy from the iTunes catalogue (asked for at
+  10000×10000, which returns the master, usually 3000×3000) or Deezer
+  (1900×1900). Candidates from both are ranked by title, artist, length
+  and version words (a remix is not the original; "Dame Amor 2" is another
+  song), and the first whose picture looks like the thumbnail (16×16
+  comparison) is kept; cached in `data/covers` (key prefix `v3`). The art
+  id changes, so views refetch.
+- **Music videos** (`media/video.rs`): asked for by the player
+  (`media_video`), looked up once per song on YouTube's results page
+  (`ytInitialData` parsed, like a browser would get it) and kept only when
+  the channel is the artist's own (official artist badge, VEVO, or named
+  after the artist), the title names the song, and the upload is not a
+  lyric, audio, live, cover, remix, sped-up or vertical version. Music
+  videos rank before visualizers, the most viewed first; each is marked
+  *synced* when its length is within a few seconds of the song's. Answers
+  are cached in `data/videos` and announced with `media:video`.
+- **Video streams** (`media/stream.rs`, `media_video_stream`): for videos
+  YouTube will not embed, yt-dlp (`-g`, best video-only stream up to the
+  quality cap, AV1 avoided) with Deno as its JavaScript runtime; both
+  downloaded on first use and checked against their releases' SHA-256
+  lists; the address is cached for three hours.
+- **Animated covers** (`media/motion.rs`, `media_motion`): the web player's
+  key from music.apple.com's script (an `AMPWebPlay` JWT, kept until it
+  expires, renewed on 401), a catalogue search matched like covers, then
+  the album's `editorialVideo.motionDetailSquare` HLS playlist; cached in
+  `data/motion` and announced with `media:motion`.
+- **Lyrics sources** (`media/lyrics.rs`): LRCLIB (exact, then search), then
+  NetEase Cloud Music (search, matched by title, artist, length and
+  version; its credit lines dropped). Misses are cached for three days.
+- **Word timing** (`lib/aurora/timing.ts`): for lyrics that only time
+  lines, words are spread over each line by syllables (opt-out); real word
+  timestamps always win.
+- **Frontend** (`src/desktop/lib/aurora`, `components/aurora`): one
+  animation loop per view drives two WebGL canvases — the scene (the cover
+  art with glitch slices, channel split, a fisheye lens, beat pulses and
+  spray-paint edges, or palette fields) and the edge light (a rounded-rect
+  distance field with edge, inner highlight, glow and bloom layers, which
+  skips pixels away from the edge). Audio frames land in a shared object
+  read per frame, so sound never re-renders React. Palettes are extracted
+  from the cover with k-means in OKLab and eased between songs in OKLab.
+  The lyrics overlay follows the player's clock (`useNowPlaying`), steps
+  word by word only with word timestamps, and renders only when the line or
+  word changes. Words leaving the stack fade where they stood, each on its
+  own timer and at most three at once (motion's AnimatePresence removes
+  leaving children only when all have finished, which never happens while
+  words keep coming).
+- **Cinema backdrop** (`components/aurora/AuroraBackdrop.tsx`,
+  `lib/aurora/cinema.ts`, `youtube.ts`, `motion.ts`, `coverLook.ts`):
+  behind the lyrics, in order, the music video, the album's animated cover
+  (hls.js, over the still one; it rests while a video shows), the
+  visualizer (only without an animated cover), the full-size cover, or the
+  light show above (which then draws the animated cover's frames as its
+  texture). The cover shows whole (a square as big as the screen's shorter
+  side, its edges feathered into a blurred, enlarged copy) or fills the
+  screen. The video plays in the youtube-nocookie embed inside OmniHub's
+  relay page (`site/player.html` on GitHub Pages: YouTube answers error 150
+  to local origins), muted, steered with the IFrame API's postMessage
+  protocol, or, when YouTube still refuses (error, or never starts), as its
+  own stream in a `<video>` driven through the same interface
+  (`DirectLink`); a sync loop compares
+  the player's reported time with the song's (plus a per-video offset the
+  user can nudge, kept in local storage), seeks beyond 1 s of drift and
+  sets the rate to 0.94/1.06 between 0.12 s and 1 s. The quality cap is the
+  iframe's device-pixel size. When YouTube refuses a video (embedding off,
+  removed) the next candidate is tried, then the cover. The cover is drawn
+  full size with a slow drift, cropped around its detail (`coverLook`:
+  per-row detail and brightness from a 48×48 copy); the same study picks
+  the calmest band for the lyrics and how bright it is there, which sets
+  the scrim, the frosted patch and the text's shadow. Lyric ink is a light
+  tone of the most colourful palette colour (OKLab), its shadow a deep one.
+  Corner light is four radial gradients in the palette's colours, scaled by
+  the bass.
+- **Emojis** (`lib/aurora/emoji.ts`): a word list (with simple lemmas and
+  phrases) maps lyric words to emojis; a planner picks at most one per line
+  and spaces them out (*Some*: any line with a picturable word, a common
+  one like "love" or "amor" every other line; *Lots*: every line that has
+  one), never the same twice running, and never two lines in a row
+  without one (a line with nothing to picture gets a sparkle, a note…).
+  English and Spanish (accents dropped, plurals and the commonest verb
+  forms). The pictures are Fluent Emoji: plain one-colour SVGs in
+  `public/emoji/plain`, drawn as a mask over the lyric ink (the default),
+  or 3D WebPs in `public/emoji/3d`; both rebuilt by `scripts/emoji-3d.py`.
+- **Video matching** (`media/align.rs`): onset envelopes (log-band spectral
+  flux, 50/s) of the video's soundtrack (yt-dlp + symphonia) and of the
+  live loopback (tapped from `VisualHub`, mapped to song time through
+  playback checkpoints) are cross-correlated (normalised, ±1 s exclusion for
+  the runner-up); a clear fit twice in a row is the offset, cached per video
+  and song length and announced with `media:videoSync`. The user's own
+  nudge wins over it.
+- **App mirror** (`media/mirror.rs`): the playing app's window (Spotify,
+  Apple Music) is captured at ~12 fps; a 160-px grey copy tracks per-pixel
+  change; the largest dense moving block (not text) is the picture, settled
+  over a few detections, cropped and JPEG-encoded; the window fetches it
+  with `media_mirror_frame` (binary). A picture that stops moving while the
+  song plays means the app stopped drawing ("hidden"). Its video beats
+  YouTube's; its Canvas beats Apple's cover.
+- **Your font & emoji pack** (`media/look.rs`, `lib/aurora/textures.ts`): the
+  user's font and emoji pack (a zip of pictures, or an emoji font) are copied
+  into `data/aurora-look` and read back as data URLs (fonts as `@font-face`).
+  Pictures are kept under a normalised name (lower case, words joined by
+  `_`, non-ASCII as code points: `🔥.png` and `1F525.png` are both `1f525`).
+  With *Your pack* as the emoji look, each emoji is drawn as the pack's
+  picture for the word ("apple" → `apple.png`), else for its code points
+  (`1f525`, `emoji_u1f525`), else for one of its names
+  (`lib/aurora/emojiNames.ts`, generated by `scripts/emoji-names.py`: CLDR
+  names and GitHub/Discord short codes; packs' usual prefixes and suffixes
+  like `_3d` are ignored), else for a Minecraft item (❤️ →
+  `heart_pottery_sherd`); an emoji font draws them all; else the plain emoji.
+  Pixel art (blocks of a 16/24/32-pixel icon) is drawn without smoothing.
+- **Screen glow** (`src-tauri/src/ambient.rs`, `pages/overlay/AmbientOverlay.tsx`):
+  a transparent, click-through, always-on-top window per chosen monitor,
+  placed in physical pixels on the monitor or its work area; a watcher
+  follows settings, monitors, full-screen apps (`SHQueryUserNotificationState`)
+  and game boosts once a second.
+
+`system/displays.rs` lists monitors (EnumDisplayMonitors, names from the
+display configuration) and reads or sets brightness (VCP 0x10) and contrast
+(0x12) over DDC/CI through dxva2, one message at a time behind a lock; a
+built-in laptop screen uses WMI's WmiMonitorBrightness. The UI sends the
+newest slider value at most every 150 ms.
+
+`games/` keeps profiles in `games.json`. `games/reshade.rs` handled Roblox shaders (ReShade as `dxgi.dll` with a
+marker); Roblox's anti-tamper now refuses to start with it, so the hub only
+takes OmniHub's copies out (at start and before each Roblox launch). Play runs a session on its own
+thread: each step (close apps, power plan, notifications, per-game registry
+settings, admin-only settings in one helper call, Wi-Fi low-latency handle,
+Roblox flags and shaders, launch) is recorded as it happens and in a journal on disk;
+the thread then follows the game's process and restores everything when it
+exits or on Stop. Boost modes (Competitive, Quality, Custom) decide which
+switches are on; Quality never touches the game's own settings. While the
+game runs, `games/fps.rs` runs PresentMon on its process and sends
+`games:fps` once a second (to the phone too); the session's summary is kept
+per profile. The ping helper uses `IcmpSendEcho` (no admin) and TCP connect
+timing for `host:port` targets; lag under load pings while saturating the
+line with downloads, then uploads.
+
 ## Desktop shell
 
-`src-tauri` registers about 100 commands (`commands.rs`) that call into `AppCore`,
+`src-tauri` registers about 160 commands (`commands.rs`) that call into `AppCore`,
 forwards every core event to the windows (and shows a notification for a
 few when the window is hidden), owns the tray menu and the global hotkeys,
 and manages the region-capture overlay window. Closing the window hides it
 to the tray by default so the phone server keeps running; autostart passes
 `--minimized`.
+
+Windows nobody can see rest (`rest.rs`): one hidden in the tray, minimised,
+or behind a full-screen game or video on its monitor (for three seconds) has
+its WebView2 marked invisible, set to the low memory target and suspended.
+Core events for a resting window are held (only the newest of each
+whole-state topic; audio, light and fps frames skipped) and replayed in order
+when it wakes — on focus, on show, or at the next 300 ms check; past 1,500 it
+reloads instead. The frontend listens with its own window label as the
+target, so Tauri can skip a resting window. Each window loads only its own
+code: pages, the full-screen player and onboarding are lazy chunks.
 
 ## Frontend
 
@@ -101,3 +375,469 @@ to the tray by default so the phone server keeps running; autostart passes
 command, `src/mobile/client.ts` speaks the phone API. Outside Tauri the
 desktop UI runs against an in-memory mock (`src/desktop/mock`), which is how
 it is developed and screenshotted on any OS.
+
+**Themes.** `general.look` picks Classic or an animated theme;
+`ThemeController` sets `<html data-look>` (and `.light` for Sakura), and
+`themes.css` gives each look its colours. `components/Backdrop.tsx` draws the
+moving layer behind the shell: only `transform` and `opacity` animate, every
+duration comes from a `--dur` variable, particle layouts come from a seeded
+generator (stable between renders), and the layer pauses while the window is
+hidden and holds one frame with Reduce motion, the Windows setting or
+`general.animateBackdrop` off. Settings shows the same component, contained,
+as each theme's preview.
+The themes: Aurora, Synthwave, Ocean, Galaxy, Sakura (light), Ember,
+Minecraft, Matrix, Rain, Snowfall, Fireflies, Lava lamp and Clouds (light).
+The backdrop's own class is `look-<id>`, so a look's id can never collide
+with a layer's class. **Minecraft** draws its hills, clouds and sky in code
+(seeded 16-px pixel art on a canvas, scaled up pixelated; no game textures
+are shipped), picks day, dusk or night from the local clock every few
+minutes, and floats items from the user's own picture pack: the same pack
+Aurora's lyrics use (`media/look.rs`, chosen on the PC, read with
+`aurora_texture`). Its heading font is "Minecraft" by Craftron Gaming (a free
+font, `src/desktop/fonts/`).
+
+## Mods
+
+`mods/` is the mod manager. `detect.rs` reads a game folder's names (never
+its contents) for its engine, mod loaders and anti-cheat. `thunderstore.rs`
+reads Thunderstore's ecosystem schema (games by Steam app id, their loaders
+and loader packages) and a community's package listing (gzip chunks, each
+reduced to the latest version as it arrives), searches it and resolves
+dependencies. `install.rs` unpacks (zip, 7z, folders), plans where each file
+goes for the loader (`Layout`: BepInEx's r2modman rules, MelonLoader,
+Lovely, GTA, Unreal, a loader's own package…), deploys with backups and
+rollback, and switches mods off and on. `workshop.rs` lists Steam Workshop
+items. `ModHub` ties these to the games from `games::library`, keeps the
+installed mods in `data/mods/state.json` and emits `mods:changed`,
+`mods:progress` and `mods:listing`.
+
+`mods/maker.rs` is the mod maker: a project per mod (a conversation kept
+append-only, exactly as the API returned it, and a folder of files),
+an agent loop over the Messages API (`claude/api.rs`: raw HTTPS, server-sent
+events reassembled into content blocks, retries, refusals, fallbacks) with
+client tools confined to the game (read-only) and the project folder
+(writable), plus web search and fetch. `claude/mod.rs` keeps the key (DPAPI),
+model and effort, and prices usage. Builds of C# projects go through a
+checked `dotnet build`, after the user approves. Installing a project hands
+its folder (or its built assembly) to `ModHub::install_made`.
+
+`mods/minecraft.rs` mixes Minecraft modpacks with Modrinth's API: packs come
+from Modrinth, .mrpack files or instance folders; mods are matched by SHA-1,
+moved to the chosen version with `version_files/update`, dependencies added,
+incompatibilities resolved by pack order, overrides merged; the result is
+written as a .mrpack or installed as a Minecraft Launcher profile (Fabric or
+Quilt version JSON from their meta services).
+
+`mods/launchers.rs` finds the modpacks other launchers installed: Prism
+Launcher, PolyMC and MultiMC (`instance.cfg` as a Qt settings file, the
+loader and version from `mmc-pack.json`'s components, the icon by `iconKey`
+in the icons folder its settings name), CurseForge (`minecraftinstance.json`:
+`baseModLoader`'s name, then its type) and the Modrinth App (`app.db`, read
+only: the `instances` table and the content set each uses since mid-2026, the
+`profiles` table before that, `profile.json` files before 2024; its folder
+moves with `settings.custom_dir`). Each gets a stable id (a hash of its game
+folder). `Mixer::add_launcher_pack` adds one as a pack with the launcher's
+version and loader; `FromPack::Launcher` makes a server from one (its jars
+read locally, `config`, `defaultconfigs`, `kubejs` and `global_packs` along).
+
+0.13: `launchers::worlds`/`world` read `level.dat` (`Data`: name, version,
+game type, difficulty, hardcore, commands, whether a `Player` is kept);
+`launchers::mods_in` reads each jar's `fabric.mod.json`, `quilt.mod.json` or
+`(neoforge.)mods.toml` (version from the manifest for `${file.jarVersion}`);
+the Minecraft Launcher's `.minecraft` is an instance too (version from the
+profile used last, `version_parts`). `Mixer::share_launcher_pack` and
+`export(…, server)` write the friends' file (`servers_dat` makes a one-server
+list with `nbt::write`); `import_shared` adds a friend's .mrpack and plans it
+as a mix with its `icon.png` as cover (`cover: "shared"`).
+`NewServer.world` (`WorldFrom`) makes `bring_world` copy the world in and
+`nbt::level_player` move the single player's compound, byte for byte, to the
+owner's player file.
+
+Mix covers (`mods/cover.rs`): each pack's icon (Modrinth's, or an instance
+folder's) becomes a square tile (pixel art enlarged block by block), then
+`blend` gives each pack its own part (a soft diagonal for two, wedges for
+three to six) filled with a blurred wash of its colours, with its icon whole
+as a rounded tile with a shadow. The cover is kept as the mix's
+`cover.png` and written into the launcher profile as a `data:` PNG.
+`Pollinations` is the optional painted version: the device sign-in
+(`/api/device/code`, `/api/device/token`) or a pasted `sk_` key under DPAPI,
+then `/v1/images/edits` with `black-forest-labs/flux.2-klein-4b` and the
+tiles as inline images.
+
+## Chats
+
+`chats/` brings conversations together. `ChatHub` lists OmniHub's own chats
+(`data/chats/omni/<id>.json`) with Claude (through `claude/api.rs`, the same
+client as the mod maker) or OpenAI (`openai.rs`: the Responses API streamed,
+`store: false`, the key under DPAPI), and the conversations Claude Code and
+Codex keep on the PC. `claude_code.rs` reads `projects/*/<session>.jsonl`
+(titles, the user's own prompts without reminders or tool output, answers,
+tool calls as one-line labels) and reads `claude -p --output-format
+stream-json --include-partial-messages`; `codex.rs` reads
+`sessions/**/rollout-*.jsonl` (and `.jsonl.zst`, with `ruzstd`), the
+`session_index.jsonl` names, and `codex exec --json` events. `agent.rs` runs
+either program (message on stdin, no window, the process tree stopped on
+Stop) and finds it on PATH, in the registry's PATH and the installers'
+folders. Long transcripts are read from their start and end for the list
+and from their last 24 MB for a conversation. Answers stream as
+`chats:delta` (`text`, `tool`, `note`, `notice`, then `done` or `error`);
+`chats:changed` says when to reload. `usage.rs` adds up Claude Code's token
+counts by hour (reading only new lines of each file, the scan state kept in
+`data/chats/usage-scan.json`), prices them at API rates, works out the
+current 5-hour window and the last limit Claude Code noted, and reads
+Codex's `token_count` events (its totals and the plan's rate limits).
+OmniHub's own use goes into a ledger per day. The phone reaches all of this
+through `/api/chats*` and `/api/ideas`.
+
+## Lights (Govee)
+
+`govee/` drives Govee lights: `lan.rs` (scan, JSON commands, `razer` frames
+and `ptReal` packets over UDP), `cloud.rs` (Govee's OpenAPI with the user's
+key: devices, capabilities, scenes, control), `look.rs` (pure colour maths:
+screen zones from a `capture::sampler::Grid`, music styles from the visual
+analysis and the cover palette, effects from `rig::lighting`, smoothing) and
+`schedule.rs` (timers). `GoveeHub` runs one `govee` thread while OmniHub
+controls the lights, a timer is set or the page is open: it scans now and
+then, reads states, streams live looks at up to 30 frames a second (a frame
+per light only when it changed, a keep-alive each second), sends still looks
+once, and fires timers on the local clock. A light's live colours go per
+segment (`razer`) or as one colour; `StreamKind::Auto` picks per segment
+only when Govee's account lists `dreamViewToggle` for it, or, without the
+account, for models known to stream (`STREAMERS`); one-colour lights get
+their colour from their whole zone (`n = 1`). A zone's colour is a
+chroma-weighted average that falls back to the zone's main hue when the
+mix comes out pale. `StreamKind::SegmentsLite` sends the segments that changed as
+Govee's BLE segment-colour packets (`33 05 15 01 RGB … mask`) in one
+`ptReal`, at most every 120 ms, for lights that ignore `razer`. Scans go out twice, plus a unicast sweep of the local /24 networks
+every five minutes for routers that drop multicast. Cloud calls run on a separate
+`govee-cloud` thread with a coalescing queue. `capture::sampler` shrinks the
+desktop on the GPU (Desktop Duplication → mipmapped copy → one small level
+read back), falling back to GDI capture.
+
+
+## Minecraft servers
+
+`mcserver/` hosts Minecraft servers. `install.rs` knows each server type's
+download site (Mojang's piston-meta, PaperMC's Fill API, Fabric and Quilt
+meta and Maven, Forge and NeoForge Maven, Adoptium for Java), checks every
+file against its published checksum, runs the loaders' installers, and
+works out how each server starts (`Launch`: a jar, or Forge/NeoForge's
+argument file) and which Java it needs (`Runtimes` keeps them in
+`data/mcserver/java`). `process.rs` runs the server with its console on
+pipes: each line is filed (`split`, `read` → `Said`: started, logged in from
+an address, joined, left, the player list, chat, a plain-words problem),
+and `Proc::ask` sends commands and collects their answers without showing
+them in the console. `props.rs` reads and writes `server.properties` the way
+Java does. `players.rs` keeps the whitelist, operators and bans, works out
+name-made UUIDs (MD5, as servers without account checks do), reads a
+player's saved file (`nbt.rs` reads NBT and the SNBT `data get entity`
+prints) into position, health and inventory, and asks Mojang's API for a
+name's UUID. `guard.rs` is for servers that let players without a paid
+account join: it holds the operators (`.omnihub/guard.json`) and the places
+each may join from, and moves lists and saved players between UUID kinds
+when the server switches. `map.rs` draws a region (512×512 blocks) from the
+Anvil files: chunk sections' palettes and packed block states, the
+`MOTION_BLOCKING` height map, a colour per block, height shading, water
+depth, a scan from below for the Nether; tiles are cached as PNGs in the
+server's `.omnihub/map`. `content.rs` adds mods, plugins and data packs
+(Modrinth, a file, a modpack's server-side files and overrides, or Claude's
+projects) and switches them off by moving them to `.omnihub/disabled`.
+`backup.rs` zips worlds (saving paused) and restores them. `net.rs` finds
+the PC's addresses, the public address, and talks UPnP (SSDP and SOAP) to
+the router.
+
+`ServerHub` keeps the servers in `data/mcserver/servers.json` and their live
+state in memory, ticks four times a second (crash restarts, a player list
+each minute, positions every two seconds while a window or phone looks,
+scheduled backups, the router lease, keeping the PC awake), and emits
+`mcserver:changed`, `mcserver:work`, `mcserver:console`, `mcserver:players`,
+`mcserver:content` and `mcserver:guard`. Servers that ran when OmniHub
+updated itself start again with it (`resume.json`), as do servers set to
+start with OmniHub, and ones left running by a crash are ended at start
+(`running.json`). The phone reaches
+it through `/api/servers*`.
+
+### Clips & Capri (`play/`)
+
+`PlayHub` checks every two seconds (names only) whether a known game runs,
+and only while one does starts what is switched on: the replay buffer
+(`clips.rs`: FFmpeg with `ddagrab` and a hardware encoder writing two-second
+MPEG-TS segments, game sound from WASAPI loopback on stdin, joined into an MP4
+with the concat demuxer), the voice listener (`voice.rs`: WinRT
+`SpeechRecognizer` with a list constraint of the "Capri …" sentences), CS2's
+game-state receiver (`cs2.rs`) and League's live-data poller (`lol.rs`).
+Everything that happens goes through one worker thread, which saves clips and
+has Capri speak through her local bridge (`companion::say`).
+
+## Counters, auto clicker and the Pokémon save editor
+
+- `counters.rs`: counters, hunts and finds in `counters.json` (pictures in
+  `counters/`), every change written at once and sent as `counters:changed`
+  to all windows. Hunt odds: 1/8192 (generations 2–5) or 1/4096 (6+), with
+  4 extra rolls for Masuda in generation 4 and 5 after, 2 for the Shiny
+  Charm, or the method's own odds.
+- `system/keys.rs`: the low-level keyboard hook (its own thread and message
+  loop, started and stopped with what's watched); watched keys go down a
+  channel to `AppCore::start_background`'s handler, which tells the auto
+  clicker and the counters. `AppCore::refresh_keys` sets what's watched.
+- `autoclick.rs`: a high-priority thread sending clicks with `SendInput`,
+  batching several per call below 50 µs, sleeping then spinning to each
+  deadline, checking the top-left corner every 20 ms, reporting
+  `autoclick:status` four times a second.
+- Pop-out: a borderless always-on-top window labelled `counter-<id>` at
+  `#/counter?id=…`.
+- `pkm/`: `gen3.rs` reads the save's two slots of 14 sections, picks the
+  newest, finds the game (and Emerald/FireRed's money key), and edits the
+  trainer (section 0), party and money (1) and PC (5–13 joined). Pokémon
+  are decrypted (PID ^ OT ID) and unshuffled (PID % 24) to edit and
+  shuffled, encrypted and checksummed back; stats come from the base
+  stats, IVs, EVs, nature and level. A new PID keeps the lowest byte
+  (gender) while giving the asked nature and shininess. `gen3.json` is
+  built by `scripts/gen3_data.py`.
+
+## Game library and emulators (`games/`)
+
+- `steam.rs`: Steam's VDF files (users, play time, library folders), the
+  art (local `librarycache` and `grid` first, else Steam's CDN), local
+  screenshots and soundtracks, and the Web API (players online without a
+  key; achievements, friends, wishlist and prices with the user's key).
+- `shelf.rs`: what the user adds to a game (status, favourite, notes, art,
+  save folders, daily limit), sessions, save backups and the encrypted
+  keys, in `library.json`; file tokens for the `gamemedia://` scheme
+  (`src-tauri/src/gamemedia.rs`, with range requests for audio).
+- `deck.rs`: the library the pages show (Steam + the app's own games), the
+  game page, and the tracking thread: it sees library games start and
+  stop, records sessions, sends `games:recap`, backs up saves, enforces
+  daily limits (`games:limit`) and checks wishlist sales every six hours
+  (`games:sale`).
+- `emulators.rs`: known emulators in common folders, ROMs by extension,
+  libretro-thumbnails box art, and the launch command (RetroArch with the
+  right core).
+
+## Counter events, goals and the overlay
+
+- Counters keep events (each with a key and an optional phase), a log of
+  the last 500, goals and odds alerts (`counters:goal`), and one step of
+  undo.
+- `counters_overlay.rs`: the OBS page server on 127.0.0.1, started and
+  stopped by `AppCore::apply_counters_overlay`.
+- `system/keys.rs` re-installs the hook every 15 seconds (Windows drops
+  slow hooks silently), forgets a held key after 600 ms without repeats,
+  and polls XInput pads for buttons (codes `0x1000 + n`).
+
+## Quick actions, batteries and health
+
+- `quick.rs`: the clipboard history (watch thread on the sequence number,
+  text and RGBA pictures with PNG previews, pins sealed with DPAPI), the
+  wheel and deck buttons (`QuickAction`), saved in `quick.json`, and
+  `AppCore::run_quick`, which the wheel, the deck page and the phone's
+  `POST /api/deck/{id}` all use.
+- `src-tauri/src/quick.rs`: commands, the two hotkeys (registered with the
+  screenshot ones in `shortcuts.rs`) and the pop-up windows `wheel`
+  (see-through, centred on the mouse, `#/wheel`) and `clipboard`
+  (`#/clipboard`); pasting puts the item back and presses Ctrl+V once the
+  list has hidden.
+- `system/battery.rs`: readings every two minutes (from
+  `start_background`), a 24-hour history per device, time left from the
+  current fall, and `battery:low` at 20% and 10%.
+- `health.rs`: `gather()` reads the PC, `score()` turns it into checks
+  (good / look at it / fix it; 6 and 15 points off) with the page that fixes
+  each.
+- `rules.rs`: `tidy_preset` and `Rules::tidy` for Tidy Downloads.
+- Focus sounds are made in the page with Web Audio (`lib/sounds.ts`):
+  looped noise buffers through filters and slow oscillators, plus random
+  short bursts for raindrops and crackles.
+
+## Bleach themes
+
+- `bankai`, `hollow` (light) and `mugetsu` are looks like the others
+  (`lib/looks.ts`, `themes.css`, `Backdrop.tsx`): tokens from the user's
+  ZANGETSU brief, Barlow Condensed headings (OFL, in `src/desktop/fonts`),
+  an angular sidebar selection (`.nav-bar`, `.nav-active`), a hover sheen on
+  main buttons, and backgrounds drawn in CSS and an inline SVG.
+- `components/BleachSwitcher.tsx` shows in the sidebar while one of them is
+  on and switches between them with one slash overlay (skipped with reduced
+  motion).
+
+## 0.28: Fortnite helpers and the general pack
+
+- `games/fortnite.rs`: replays (list, clean to the Recycle Bin), the
+  settings label stored with each `FpsRecord`, Wi-Fi power-saving parsing,
+  and graphics drivers (SetupAPI display class: name, version, date), with
+  `gpu-drivers.txt` remembering the drivers the shader caches were last
+  cleaned for. Presets fill `FortniteOptions` (now with `quality`).
+- `obs.rs`: a small blocking obs-websocket v5 client (hello → identify with
+  the SHA-256 challenge → request), used by `QuickAction::Obs`.
+- `presence.rs`: Discord IPC frames over `\\.\pipe\discord-ipc-N`; a thread in
+  `start_background` sends SET_ACTIVITY every 15 s when what to show
+  changes (game from the library tracker's `now_playing`, hunt from the
+  counters).
+- `system/netmon.rs`: GetIfTable2 totals (hardware, non-filter adapters)
+  every 2 s, per-day totals, and connections grouped by program from
+  `system/ports.rs`.
+- `backup.rs`: jobs in `backups.json`, an additive mirror (size and time
+  compare), and a scheduler thread every 5 minutes.
+- `ScreenshotLibrary::index_text`: a background thread reads up to 12
+  unread screenshots at a time.
+- `system/wol.rs`: MAC and broadcast addresses from `ipconfig /all`
+  (values, not the translated labels); `awake::wake_screen` for games
+  started from the phone.
+- Controller mode: `lib/padNav.ts` and `components/PadNavigator.tsx`
+  (spatial focus by direction); pages with their own gamepad handling call
+  `claimGamepad()`.
+
+## Quiet mode
+
+- `quiet.rs`: `AppCore::quiet_on` remembers the fan profile, sets
+  `FanProfile::Lowest` through `RigHub::update`, and turns the displays off;
+  `quiet_off` restores it and wakes the screen. A thread calls
+  `quiet_check` every 2 s, which ends quiet mode on new local input.
+- `rig/fans.rs`: Lowest's curves (case and pump at their floor until warm;
+  the GPU curve is None, so the card goes back to its own control).
+- Reached from `/api/quiet` (phone), `quiet_set` (desktop) and
+  `QuickAction::Quiet` (deck and wheel).
+
+## Game art and Big Picture (0.29.1)
+
+- `games/storeart.rs`: `StoreArt` keeps Steam store art addresses by game
+  key for a week. `library_games` merges them over the fixed addresses, then
+  local Steam art and custom art win over both. Missing games are looked up
+  on a background thread (`find_store_art`), at most 60 name searches a run,
+  and `library:changed` reloads the page when something new is found.
+- `games/steam.rs`: `local_art` also searches the hashed folders newer Steam
+  clients use inside `appcache/librarycache/<app>/`.
+- `games/shelf.rs`: `media_url` builds the address for the platform
+  (`http://gamemedia.localhost/` on Windows, `gamemedia://localhost/`
+  elsewhere).
+- `pages/games/library/BigPicture.tsx`: full-screen library. It puts the
+  window in full screen (`setWindowFullscreen`), drives itself with
+  `useGamepadNav` and the keyboard, and animates with the `bp-*` classes in
+  `styles.css` (off with reduced motion).
+
+## 0.30.0
+
+- Core modules: `capri_app.rs` (Capri Desktop releases, install, open,
+  Ollama), `heat.rs` (overheat alerts), `app_updates.rs` (nightly winget),
+  `party.rs` (queue and guest page), `screentime.rs` (daily limits),
+  `watchers.rs` (item shop, prices), `voicecmd.rs` (phone voice text),
+  `web.rs` (small HTTP helpers). `quiet.rs` gained the schedule and sleep
+  timer, checked by the existing quiet thread.
+- `AppCore::start_extras` runs two threads: every 5 s temperatures (only
+  while sensors answer; otherwise a look every 5 minutes), the party's
+  auto-advance and, every 30 s, screen time; every 10 minutes app updates,
+  the item shop (once a UTC day) and prices (every 6 hours). With nothing
+  set up they do no work and write nothing.
+- Phone routes live in `remote/api/extra.rs` (authed routes and the public
+  party pages), merged into the router in `remote/api.rs`. Topics `alert:`,
+  `quiet:`, `party:`, `watch:`, `screentime:` and `capri:` now reach the
+  phone; `lib.rs` maps the alerts to desktop notifications.
+- Desktop commands are in `src-tauri/src/extras.rs`; screens in
+  `pages/games/ExtrasTab.tsx`, `CapriDesktopCard.tsx`,
+  `pages/focus/LimitsTab.tsx`, `components/music/PartyModal.tsx`, and the
+  quiet and heat cards in `pages/rig/FansTab.tsx`. Phone screens:
+  `Live.tsx`, `Photos.tsx`, `Party.tsx`, `ui/VoiceButton.tsx`, a search box
+  in `Files.tsx` and the quiet card in `Power.tsx`.
+
+## Controllers (0.30.1)
+
+- `src/desktop/lib/pads.ts`: identifies controllers from the browser's
+  gamepad id (vendor and product, in Chromium's or Firefox's format), their
+  button symbols, preferences, vibration (`vibrationActuator`), and
+  `usePadInput`, the one input loop the library, the game page and Big
+  Picture share (D-pad, stick with dead zone, DirectInput hat on axes[9]
+  for non-standard pads, Nintendo confirm/back, buttons held when a view
+  opens ignored until released).
+- `pages/games/library/PadPanel.tsx`: Big Picture's controller panel;
+  `applyLight` colours PlayStation light bars through `pads_set_light`.
+- `crates/omnihub-core/src/pads.rs`: the DualShock 4 and DualSense output
+  reports (USB, and Bluetooth with its CRC-32), sent with
+  `HidD_SetOutputReport` or `WriteFile`.
+
+## 0.30.2
+
+- Themes: `lib/looks.ts` (four Bleach modes with colours), `themes.css`
+  (the ZANGETSU v2 block: per-mode panels, hover, sidebar slash, progress
+  sheen, the backgrounds, transitions), `components/Backdrop.tsx` (original
+  SVG/CSS layers per mode, `ThemeArt` with an SVG colour-matrix filter that
+  turns dark lines into the mode's colour, pointer parallax, pause when the
+  window is hidden or unfocused), `components/BleachSwitcher.tsx` (2×2
+  switcher, transitions, synthesized sounds, picture dialog).
+  `theme_art.rs` keeps one picture per mode.
+- Controllers: `lib/padScene.ts` (three.js model per family, live state,
+  picking), `PadStudio.tsx` (the studio), remapping in `lib/pads.ts`
+  (`actionFor`, used by `usePadInput`).
+- `sites.rs` (list and opening), `media/outputs.rs` (default playback
+  device), `system/bt.rs` (Bluetooth list, connect, forget); desktop
+  commands in `src-tauri/src/extras.rs`, phone routes in
+  `remote/api/extra.rs`, phone pages `Watch.tsx`, `Bluetooth.tsx` and the
+  outputs card in `Sound.tsx`.
+
+## Karaoke Studio (0.30.3)
+
+- Core: `karaoke.rs` (first language, practice summaries in `karaoke.json`,
+  `track()` for a song file, `lyrics_for()` using `media/lyrics.rs`).
+  Commands `karaoke_*` in `src-tauri/src/extras.rs`.
+- Page: `pages/music/karaoke/` (`KaraokeStudio.tsx`, `KaraokeLyrics.tsx`,
+  `LanguageSetup.tsx`), a tab of the Music page. It reuses Aurora's Now
+  Playing (`lib/nowPlaying.ts`) and lyric phases (`phaseAt`, `lineEnd`) and
+  copies its word fill, so Aurora is untouched.
+- `lib/karaoke/`: `pron.ts` (rule-based re-spelling per first language,
+  syllables and tips), `languages.ts` (searchable first languages),
+  `timing.ts` (Aurora's word estimate with syllables counted in any
+  script), `pitch.ts` (YIN pitch, voice activity with an adaptive floor and
+  hysteresis, note/syllable onsets, the practice summary), `follow.ts` (the
+  Follow my voice state machine: wait before a line, ease off and hold on a
+  stop, resume from the word, lead/lag by syllables with hysteresis).
+
+## 0.31.0
+
+- Scenes: `quick.rs` (`Scene`, new `QuickAction` steps, game triggers with
+  `scenes_game_started` / `scenes_game_ended` called from the game watcher in
+  `games/deck.rs` and from `library_play`). Screen mode, HDR and gamma ramps:
+  `system/screenmode.rs`. Microphones: `media/outputs.rs` (`inputs`).
+- `games/stores.rs`: GOG, Ubisoft, EA, Battle.net and Xbox games for
+  `games/library.rs`.
+- `nightlight.rs` (schedule, fade, monitors' night brightness), ticked each
+  minute from `core.rs`.
+- `chats/ollama.rs` (local models), `askpc.rs` (topics, facts, answers),
+  `watchers.rs` (creators going live, daily recap), `storage/similar.rs`
+  (difference hash and grouping), `speedrun.rs` (splits, PB, golds, keys via
+  the key hook), `remote/limits.rs` (limited phones, checked in
+  `require_device` and the event socket).
+- App windows: `src-tauri/src/floats.rs` (speedrun timer, crosshair,
+  desktop widgets, live wallpaper) and their views in `pages/floats/`.
+- Phone: Local AI in `Chats.tsx`, scenes in `Deck.tsx`, alerts in `App.tsx`,
+  `SyncFolder.tsx`.
+
+## 0.32.0
+
+- `timers.rs` (timers, alarms, bedtime, after-downloads), ticked by the fast
+  watcher loop in `core.rs`; free games and patch notes in `watchers.rs`.
+- `pccheck.rs` (drive health, stress test, ready to play), `games/mover.rs`
+  (copy, check, junction), `system/winpin.rs`, `system/wifi.rs`.
+- `soundboard.rs` (sounds; played by the hidden `soundboard` window,
+  `pages/floats/SoundboardPlayer.tsx`), `snippets.rs` (text shortcuts), both
+  on the key hook through `refresh_keys`.
+- `system/netlimit.rs` (app upload caps) through `games/tweaks.rs` `AdminOp`.
+- `play/elims.rs` (OCR elimination clips, a thread in `play::PlayHub::start`).
+- `translate.rs` (OCR + Ollama); the overlay window (`src-tauri/src/overlay.rs`)
+  now has modes: region capture, colour picker and ruler
+  (`pages/overlay/PickerOverlay.tsx`), translator (`TranslateOverlay.tsx`).
+
+## 0.33.0
+
+- Performance: `games/fps.rs` (display latency, present mode),
+  `games/nvidia.rs` (`smart_cap`, `set_cap`), `games/pc.rs`
+  (`VariableRefresh`), `games/thermal.rs` (heat log per session, sampled
+  from the fast watcher), `system/freeze.rs` (suspend/resume threads),
+  `pccheck.rs` (overlays, shader caches), `bench.rs`, Fortnite alerts in
+  `watchers.rs`. Boost steps for paused apps and core parking in
+  `games/mod.rs` (journalled like the others).
+- Emulators: `games/emuinstall.rs`, `games/bios.rs` (MD5), `games/romdat.rs`
+  (DAT parse, CRC32, rename), `games/emusaves.rs`, `games/padsetup.rs`,
+  per-game `RomOpts` and `Netplay` in `games/emulators.rs`,
+  `games/retroach.rs`, ROM entries (`rom:<id>`) in `games/deck.rs`,
+  `padremote.rs` + `/api/pad` for the phone controller.
+- `deals.rs` (CheapShark), `remote/peer.rs` (PC-to-PC client with a pinned
+  certificate and a small HTTP/1.1 client), weekly report in `watchers.rs`,
+  `home.rs` (Home Assistant, Shelly) with `QuickAction::Home`.

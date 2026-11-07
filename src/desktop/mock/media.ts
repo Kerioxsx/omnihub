@@ -14,7 +14,7 @@ type AppSeed = [name: string, publisher: string, version: string, source: AppInf
 
 const PF = 'C:\\Program Files';
 const PF86 = 'C:\\Program Files (x86)';
-const LOCAL = 'C:\\Users\\Alex\\AppData\\Local';
+const LOCAL = 'C:\\Users\\Player\\AppData\\Local';
 const GAMES = 'C:\\Games\\Steam\\steamapps\\common';
 const WA = 'C:\\Program Files\\WindowsApps';
 
@@ -55,7 +55,7 @@ const APPS: AppSeed[] = [
   ['JetBrains Toolbox', 'JetBrains s.r.o.', '2.4.2', 'desktop', `${LOCAL}\\JetBrains\\Toolbox`, 200, 300, 'jetbrains-toolbox.exe', ['#000000', '#fe2857']],
   ['Ollama', 'Ollama', '0.3.12', 'startMenu', `${LOCAL}\\Programs\\Ollama`, 60, null, 'ollama app.exe', ['#111827', '#e5e7eb']],
   ['Obsidian', 'Obsidian', '1.6.7', 'startMenu', `${LOCAL}\\Programs\\Obsidian`, 230, null, 'Obsidian.exe', ['#483699', '#a88bfa']],
-  ['Telegram Desktop', 'Telegram FZ-LLC', '5.5.5', 'startMenu', 'C:\\Users\\Alex\\AppData\\Roaming\\Telegram Desktop', 330, null, 'Telegram.exe', ['#229ed9', '#2aabee']],
+  ['Telegram Desktop', 'Telegram FZ-LLC', '5.5.5', 'startMenu', 'C:\\Users\\Player\\AppData\\Roaming\\Telegram Desktop', 330, null, 'Telegram.exe', ['#229ed9', '#2aabee']],
   ['Calculator', 'Microsoft Corporation', '11.2405.2.0', 'store', `${WA}\\Microsoft.WindowsCalculator_11.2405.2.0_x64__8wekyb3d8bbwe`, 120, null, null, ['#3b3b3b', '#6b6b6b']],
   ['Photos', 'Microsoft Corporation', '2024.11070.15005.0', 'store', `${WA}\\Microsoft.Windows.Photos_2024.11070.15005.0_x64__8wekyb3d8bbwe`, 120, null, null, ['#0078d4', '#50e6ff']],
   ['Windows Terminal', 'Microsoft Corporation', '1.21.2361.0', 'store', `${WA}\\Microsoft.WindowsTerminal_1.21.2361.0_x64__8wekyb3d8bbwe`, 300, null, 'WindowsTerminal.exe', ['#1f1f1f', '#4cc2ff']],
@@ -142,7 +142,7 @@ const SHOT_APPS: [exe: string, title: string, kind: SceneKind, tags: string[]][]
   ['firefox.exe', 'Linear – Roadmap — Mozilla Firefox', 'browser', ['inspiration', 'ui-idea']],
   ['chrome.exe', 'Order confirmation – Google Chrome', 'browser', ['receipt']],
   ['Discord.exe', '#general | Game Night - Discord', 'chat', ['meme']],
-  ['blender.exe', 'Blender [C:\\Users\\Alex\\Documents\\scene_v4.blend]', 'blender', ['3d', 'wip']],
+  ['blender.exe', 'Blender [C:\\Users\\Player\\Documents\\scene_v4.blend]', 'blender', ['3d', 'wip']],
 ];
 
 const NOTES = ['', '', '', 'Photo mode — use for wallpaper', 'Repro: crash when zooming out twice quickly', 'Love this sidebar density', 'Return window ends Oct 30', 'Boss phase 2 positioning', 'Lighting pass v2'];
@@ -166,7 +166,7 @@ for (let i = 0; i < 46; i++) {
   const tags = r.chance(0.55) ? [...tagPool].slice(0, r.int(1, tagPool.length)) : [];
   shots.push({
     id,
-    path: `C:\\Users\\Alex\\Pictures\\OmniHub\\${name}`,
+    path: `C:\\Users\\Player\\Pictures\\OmniHub\\${name}`,
     created,
     width,
     height,
@@ -177,6 +177,7 @@ for (let i = 0; i < 46; i++) {
     note: r.chance(0.2) ? r.pick(NOTES) : '',
     favorite: r.chance(0.14),
     exists: true,
+    hasText: false,
   });
 }
 shots.sort((a, b) => b.created - a.created);
@@ -187,7 +188,7 @@ export function shotsList(f: ShotFilter): Screenshot[] {
     if (f.favorites && !s.favorite) return false;
     if (f.tag && !s.tags.includes(f.tag)) return false;
     if (f.app && s.appExe !== f.app) return false;
-    if (q && !`${s.appTitle ?? ''} ${s.appExe ?? ''} ${s.note} ${s.tags.join(' ')} ${s.path}`.toLowerCase().includes(q)) return false;
+    if (q && !`${s.appTitle ?? ''} ${s.appExe ?? ''} ${s.note} ${s.tags.join(' ')} ${s.path} ${texts.get(s.id) ?? ''}`.toLowerCase().includes(q)) return false;
     return true;
   });
   if (f.limit) out = out.slice(0, f.limit);
@@ -207,11 +208,16 @@ function find(id: string): Screenshot {
 
 export async function shotThumb(id: string): Promise<string> {
   await sleep(20 + Math.random() * 180);
+  if (edited.has(id)) return edited.get(id) as string;
   const s = find(id);
   return scene(id, kinds.get(id) ?? 'desktop', 320, Math.round((320 * s.height) / s.width));
 }
 
+const edited = new Map<string, string>();
+const texts = new Map<string, string>();
+
 export function shotImage(id: string): string {
+  if (edited.has(id)) return edited.get(id) as string;
   const s = find(id);
   return scene(id, kinds.get(id) ?? 'desktop', 1600, Math.round((1600 * s.height) / s.width), true);
 }
@@ -224,7 +230,7 @@ function addShot(kind: SceneKind, width: number, height: number, exe: string | n
   kinds.set(id, kind);
   const shot: Screenshot = {
     id,
-    path: `C:\\Users\\Alex\\Pictures\\OmniHub\\${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}.png`,
+    path: `C:\\Users\\Player\\Pictures\\OmniHub\\${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}.png`,
     created,
     width,
     height,
@@ -235,6 +241,7 @@ function addShot(kind: SceneKind, width: number, height: number, exe: string | n
     note: '',
     favorite: false,
     exists: true,
+    hasText: false,
   };
   shots.unshift(shot);
   emit('screenshots:new', shot);
@@ -290,4 +297,28 @@ export function shotDelete(id: string): void {
 export function shotsSync(): number {
   emit('screenshots:synced', { added: 0 });
   return 0;
+}
+
+const SAMPLE_TEXT: Record<string, string> = {
+  code: 'export function TreemapView({ scanId }: Props) {\n  const [focus, setFocus] = useState<number | null>(null);\n  const items = useTreemap(scanId, focus);\n  return <Canvas items={items} onPick={setFocus} />;\n}',
+  desktop: 'Recycle Bin\nThis PC\nOmniHub\nSteam\nDiscord\n12:41\n04/10/2026',
+};
+
+export async function shotText(id: string): Promise<string> {
+  await sleep(600);
+  const s = find(id);
+  const text = texts.get(id) ?? SAMPLE_TEXT[kinds.get(id) ?? 'desktop'] ?? `${s.appTitle ?? 'Screenshot'}\nNothing else readable.`;
+  texts.set(id, text);
+  s.hasText = true;
+  return text;
+}
+
+export function shotSaveEdit(id: string, png: string): Screenshot {
+  const orig = find(id);
+  const shot = addShot(kinds.get(id) ?? 'desktop', orig.width, orig.height, orig.appExe, orig.appTitle);
+  edited.set(shot.id, png);
+  shot.tags = [...orig.tags];
+  shot.note = orig.note ? `${orig.note} (edited copy)` : 'Edited copy';
+  audit('desktop', 'screenshot.edit', shot.path);
+  return { ...shot };
 }

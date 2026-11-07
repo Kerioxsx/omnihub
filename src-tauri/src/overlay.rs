@@ -13,6 +13,12 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 /// The frozen screen waiting for a selection, and whether the main window
 /// was hidden for the capture (so it can come back afterwards).
 static PENDING: Mutex<Option<(PendingRegion, bool)>> = Mutex::new(None);
+/// "region" (screenshot), "pick" (colour picker and ruler) or "translate".
+static MODE: Mutex<&'static str> = Mutex::new("region");
+
+pub fn mode() -> &'static str {
+    *MODE.lock()
+}
 
 pub fn pending(_core: &AppCore) -> Option<PendingRegion> {
     PENDING.lock().as_ref().map(|p| p.0.clone())
@@ -21,6 +27,12 @@ pub fn pending(_core: &AppCore) -> Option<PendingRegion> {
 /// Freeze the screen and open the overlay. `from_app` hides the main window
 /// first so it does not end up in the capture.
 pub async fn begin(app: AppHandle, from_app: bool) -> Result<(), String> {
+    begin_mode(app, from_app, "region").await
+}
+
+/// The same frozen screen, for the colour picker and ruler.
+pub async fn begin_mode(app: AppHandle, from_app: bool, mode: &'static str) -> Result<(), String> {
+    *MODE.lock() = mode;
     let core = app.state::<Arc<AppCore>>().inner().clone();
     let main = app.get_webview_window("main");
     let hide_main = from_app && main.as_ref().and_then(|w| w.is_visible().ok()).unwrap_or(false);
@@ -39,7 +51,7 @@ pub async fn begin(app: AppHandle, from_app: bool) -> Result<(), String> {
         Err(e) => {
             if hide_main {
                 if let Some(w) = &main {
-                    let _ = w.show();
+                    crate::rest::show(w);
                 }
             }
             return Err(e);
@@ -82,7 +94,7 @@ pub fn finish(app: &AppHandle) {
     }
     if restore {
         if let Some(w) = app.get_webview_window("main") {
-            let _ = w.show();
+            crate::rest::show(&w);
             let _ = w.set_focus();
         }
     }

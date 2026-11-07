@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OmniHub Passwords</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icons/icon-32.png" alt="" />
+      <div>
+        <h1>OmniHub Passwords</h1>
+        <p id="site"></p>
+      </div>
+      <button id="lock" class="icon" type="button" title="Lock the vault" hidden>
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 1 1 6 0v3H9Z" /></svg>
+      </button>
+    </header>
+    <main id="view"><p class="muted center">Connecting to OmniHub…</p></main>
+    <script src="popup.js" type="module"></script>
+  </body>
+</html>

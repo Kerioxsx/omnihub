@@ -25,6 +25,8 @@ use crate::core::AppCore;
 use crate::settings::BrowseScope;
 use crate::system::power::PowerAction;
 
+mod extra;
+
 type Ctx = Arc<AppCore>;
 
 #[derive(Debug)]
@@ -76,17 +78,84 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/inbox", get(inbox_list))
         .route("/api/inbox/{id}/ticket", post(inbox_ticket))
         .route("/api/inbox/{id}", axum::routing::delete(inbox_dismiss))
+        .route("/api/clipboard", post(clipboard_set).get(clipboard_get))
+        .route("/api/media", get(media_get))
+        .route("/api/media/art", get(media_art))
+        .route("/api/media/control", post(media_control))
+        .route("/api/media/lyrics", get(media_lyrics))
+        .route("/api/media/audio", post(media_audio))
+        .route("/api/sound", get(sound_get))
+        .route("/api/sound/master", post(sound_master))
+        .route("/api/sound/app", post(sound_app))
+        .route("/api/sound/mic", post(sound_mic))
+        .route("/api/displays", get(displays_get))
+        .route("/api/displays/set", post(displays_set))
+        .route("/api/counters", get(counters_list))
+        .route("/api/counters/{id}/bump", post(counters_bump))
+        .route("/api/counters/{id}/event", post(counters_event))
+        .route("/api/counters/{id}/timer", post(counters_timer))
+        .route("/api/deck", get(deck_list))
+        .route("/api/deck/{id}", post(deck_run))
+        .route("/api/scenes/{id}", post(scene_run))
+        .route("/api/games", get(games_list))
+        .route("/api/games/stop", post(games_stop))
+        .route("/api/games/ping", post(games_ping))
+        .route("/api/games/{id}/play", post(games_play))
+        .route("/api/tasks", get(tasks_list))
+        .route("/api/tasks/end", post(tasks_end))
+        .route("/api/tasks/priority", post(tasks_priority))
+        .route("/api/open-apps", get(open_apps_list))
+        .route("/api/open-apps/close", post(open_apps_close))
+        .route("/api/open-apps/icon", get(open_apps_icon))
         .route("/api/power", get(power_info).post(power_request))
         .route("/api/power/cancel", post(power_cancel))
+        .route("/api/quiet", get(quiet_get).post(quiet_set))
+        .route("/api/panic", post(panic))
+        .route("/api/screenshot", post(screenshot))
+        .route("/api/print", post(print_file))
+        .route("/api/approvals", get(approvals_list))
+        .route("/api/approvals/{id}", post(approvals_answer))
+        .route("/api/scan", post(scan_pages).layer(DefaultBodyLimit::max(SCAN_MAX)))
+        .route("/api/type", post(type_text))
+        .route("/api/board", get(board_get).post(board_add).delete(board_clear))
+        .route("/api/board/undo", post(board_undo))
+        .route("/api/downloads", get(downloads_list).post(downloads_start))
+        .route("/api/downloads/{id}/cancel", post(downloads_cancel))
+        .route("/api/video", get(video_list).post(video_start))
+        .route("/api/video/{id}/cancel", post(video_cancel))
         .route("/api/apps", get(apps_list))
         .route("/api/apps/{id}/icon", get(app_icon))
         .route("/api/apps/{id}/launch", post(app_launch))
+        .route("/api/open-link", post(open_link))
         .route("/api/notes", get(notes_list).post(notes_create))
         .route("/api/notes/{id}", get(notes_get))
+        .route("/api/chats", get(chats_list))
+        .route("/api/chats/new", post(chats_new))
+        .route("/api/chats/folders", get(chats_folders))
+        .route("/api/chats/usage", get(chats_usage))
+        .route("/api/chats/{source}/{id}", get(chats_view))
+        .route("/api/chats/{source}/{id}/send", post(chats_send))
+        .route("/api/chats/{source}/{id}/stop", post(chats_stop))
+        .route("/api/ideas", get(ideas_list).post(ideas_save))
+        .route("/api/servers", get(servers_list))
+        .route("/api/servers/{id}/start", post(servers_start))
+        .route("/api/servers/{id}/stop", post(servers_stop))
+        .route("/api/servers/{id}/restart", post(servers_restart))
+        .route("/api/servers/{id}/players", get(servers_players))
+        .route("/api/servers/{id}/player/{name}", get(servers_player))
+        .route("/api/servers/{id}/act", post(servers_act))
+        .route("/api/servers/{id}/whitelist", post(servers_whitelist))
+        .route("/api/servers/{id}/max-players", post(servers_max))
+        .route("/api/servers/{id}/join", post(servers_join))
+        .route("/api/servers/{id}/console", get(servers_console))
+        .route("/api/servers/{id}/command", post(servers_command))
+        .route("/api/servers/{id}/map", get(servers_map))
+        .route("/api/servers/{id}/map/tile", get(servers_tile))
         .route("/api/screen/info", get(screen_info))
         .route("/api/vault/session", post(vault_session).delete(vault_end))
         .route("/api/vault/entries", get(vault_entries))
         .route("/api/vault/reveal", post(vault_reveal))
+        .merge(extra::authed())
         .route_layer(middleware::from_fn_with_state(core.clone(), require_device));
 
     Router::new()
@@ -95,6 +164,11 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/ws", get(events_socket))
         .route("/api/screen/ws", get(screen_socket))
         .route("/dl/{ticket}", get(download))
+        .route("/guest.js", get(guest_js))
+        .route("/guest/{code}", get(guest_page))
+        .route("/guest/{code}/info", get(guest_info))
+        .route("/guest/{code}/file", put(guest_file))
+        .merge(extra::public())
         .merge(authed)
         .fallback(super::assets::serve)
         .layer(DefaultBodyLimit::max(1 << 20))
@@ -106,7 +180,12 @@ pub fn router(core: Ctx) -> Router {
 /// security headers on the way out.
 async fn guard(State(core): State<Ctx>, ConnectInfo(peer): ConnectInfo<SocketAddr>, req: Request, next: Next) -> Response {
     let s = core.settings.get().remote;
-    if !net::is_allowed_peer(peer.ip(), s.allow_tailscale) {
+    let allowed = net::is_allowed_peer(peer.ip(), s.allow_tailscale);
+    if !peer.ip().is_loopback() {
+        let ua = req.headers().get(header::USER_AGENT).and_then(|h| h.to_str().ok()).unwrap_or("");
+        core.remote.record_visit(&peer.ip().to_canonical().to_string(), ua, allowed);
+    }
+    if !allowed {
         return ApiError::forbidden("only devices on your local network can connect").into_response();
     }
     let host = req.headers().get(header::HOST).and_then(|h| h.to_str().ok()).unwrap_or("");
@@ -134,8 +213,14 @@ async fn require_device(State(core): State<Ctx>, ConnectInfo(peer): ConnectInfo<
     let Some(token) = bearer(req.headers()) else {
         return ApiError::new(StatusCode::UNAUTHORIZED, "pair this phone first").into_response();
     };
-    match core.remote.devices.authenticate(token, &peer.ip().to_string()) {
-        Some(dev) => {
+    match core.remote.devices.authenticate_seen(token, &peer.ip().to_string()) {
+        Some((dev, back)) => {
+            if !core.phone_limits.allows(&dev.id, req.uri().path()) {
+                return ApiError::new(StatusCode::FORBIDDEN, "this phone isn't allowed to do that (it's limited on the PC)").into_response();
+            }
+            if back && core.settings.get().remote.connect_alerts {
+                core.events.emit("remote:connected", serde_json::json!({ "name": dev.name, "ip": peer.ip().to_string() }));
+            }
             req.extensions_mut().insert(dev);
             next.run(req).await
         }
@@ -157,6 +242,15 @@ struct Features {
     apps: bool,
     notes: bool,
     vault: bool,
+    clipboard: bool,
+    media: bool,
+    tasks: bool,
+    games: bool,
+    chats: bool,
+    chat_agents: bool,
+    servers: bool,
+    counters: bool,
+    deck: bool,
 }
 
 fn features(core: &AppCore, tls: bool) -> Features {
@@ -169,6 +263,15 @@ fn features(core: &AppCore, tls: bool) -> Features {
         apps: s.remote.allow_app_launch,
         notes: s.remote.allow_notes,
         vault: s.vault.allow_phone && tls && core.vault.exists(),
+        clipboard: s.remote.allow_clipboard,
+        tasks: s.remote.allow_tasks,
+        games: s.remote.allow_app_launch,
+        media: s.media.allow_phone,
+        chats: s.chats.allow_phone,
+        chat_agents: s.chats.allow_phone && s.chats.phone_agents,
+        servers: s.remote.allow_servers,
+        counters: true,
+        deck: !core.quick.state().deck.is_empty(),
     }
 }
 
@@ -375,19 +478,13 @@ async fn fs_list(State(core): State<Ctx>, Query(q): Query<PathQuery>) -> ApiResu
 
 async fn fs_thumb(State(core): State<Ctx>, Query(q): Query<PathQuery>) -> ApiResult<Response> {
     let p = allowed_path(&core, &q.path)?;
-    if kind_of(&p.to_string_lossy()) != "image" || std::fs::metadata(&p)?.len() > 60 << 20 {
+    if !crate::thumbs::is_previewable(&p) {
         return Err(ApiError::bad("not a previewable image"));
     }
     let size = q.size.unwrap_or(256).clamp(64, 1024);
-    let bytes = tokio::task::spawn_blocking(move || -> ApiResult<Vec<u8>> {
-        let img = image::open(&p).map_err(|e| ApiError::bad(e.to_string()))?;
-        let t = img.thumbnail(size, size).to_rgb8();
-        let mut out = std::io::Cursor::new(Vec::new());
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 78).encode_image(&t)?;
-        Ok(out.into_inner())
-    })
-    .await??;
-    Ok(([(header::CONTENT_TYPE, "image/jpeg"), (header::CACHE_CONTROL, "private, max-age=600")], bytes).into_response())
+    let c = core.clone();
+    let bytes = tokio::task::spawn_blocking(move || c.thumbs.jpeg(&p, size)).await?.map_err(|e| ApiError::bad(e.to_string()))?;
+    Ok(([(header::CONTENT_TYPE, "image/jpeg"), (header::CACHE_CONTROL, "private, max-age=600")], (*bytes).clone()).into_response())
 }
 
 #[derive(Deserialize)]
@@ -431,6 +528,103 @@ async fn download(State(core): State<Ctx>, UrlPath(ticket): UrlPath<String>, Que
     Ok(res)
 }
 
+// ---------- guest uploads (no pairing; see remote/guest.rs) ----------
+
+/// A code that doesn't work counts against the address (guessing is slow).
+fn guest_link(core: &AppCore, code: &str, peer: &SocketAddr) -> ApiResult<super::guest::GuestLink> {
+    if let Some(l) = core.remote.guests.get(code) {
+        return Ok(l);
+    }
+    if !core.remote.guest_limiter.allow(peer.ip()) {
+        return Err(ApiError::new(StatusCode::TOO_MANY_REQUESTS, "too many tries; wait a minute"));
+    }
+    Err(ApiError::new(StatusCode::GONE, "This link has ended. Ask for a new QR code."))
+}
+
+async fn guest_js() -> Response {
+    ([(header::CONTENT_TYPE, "text/javascript; charset=utf-8"), (header::CACHE_CONTROL, "no-store")], super::guest::PAGE_JS).into_response()
+}
+
+async fn guest_page() -> Response {
+    // The page asks for the link's details itself (an ended link says so there).
+    ([(header::CONTENT_TYPE, "text/html; charset=utf-8"), (header::CACHE_CONTROL, "no-store")], super::guest::PAGE_HTML).into_response()
+}
+
+async fn guest_info(State(core): State<Ctx>, ConnectInfo(peer): ConnectInfo<SocketAddr>, UrlPath(code): UrlPath<String>) -> ApiResult<Json<serde_json::Value>> {
+    let l = guest_link(&core, &code, &peer)?;
+    Ok(Json(json!({ "pc": core.settings.get().remote.device_name, "label": l.label, "maxBytes": l.max_bytes, "usedBytes": l.used_bytes, "expiresAt": l.expires_at })))
+}
+
+#[derive(Deserialize)]
+struct GuestFileQuery {
+    name: String,
+    size: u64,
+}
+
+async fn guest_file(State(core): State<Ctx>, ConnectInfo(peer): ConnectInfo<SocketAddr>, UrlPath(code): UrlPath<String>, Query(q): Query<GuestFileQuery>, body: Body) -> ApiResult<Json<serde_json::Value>> {
+    use tokio::io::AsyncWriteExt;
+    let link = guest_link(&core, &code, &peer)?;
+    if !core.settings.get().remote.allow_uploads {
+        return Err(ApiError::forbidden("This PC isn't taking files right now."));
+    }
+    core.remote.guests.reserve(&code, q.size).map_err(|e| ApiError::new(StatusCode::PAYLOAD_TOO_LARGE, e))?;
+    let dir = super::guest::folder(&core.incoming_dir());
+    let name = super::guest::safe_name(&q.name);
+    let result: Result<(PathBuf, u64), ApiError> = async {
+        tokio::fs::create_dir_all(&dir).await.map_err(|e| ApiError::from(format!("couldn't make the folder: {e}")))?;
+        let tmp = dir.join(format!(".{}.omnihub-part", uuid::Uuid::new_v4()));
+        let mut file = tokio::fs::File::create(&tmp).await.map_err(ApiError::from)?;
+        let mut stream = body.into_data_stream();
+        let mut written: u64 = 0;
+        let fail = |tmp: &PathBuf, e: ApiError| {
+            let _ = std::fs::remove_file(tmp);
+            e
+        };
+        while let Some(chunk) = stream.next().await {
+            let chunk = match chunk {
+                Ok(c) => c,
+                Err(_) => {
+                    drop(file);
+                    return Err(fail(&tmp, ApiError::bad("the upload stopped")));
+                }
+            };
+            written += chunk.len() as u64;
+            if written > q.size {
+                drop(file);
+                return Err(fail(&tmp, ApiError::bad("the file is bigger than it said")));
+            }
+            if let Err(e) = file.write_all(&chunk).await {
+                drop(file);
+                return Err(fail(&tmp, ApiError::from(e)));
+            }
+        }
+        if let Err(e) = file.flush().await {
+            drop(file);
+            return Err(fail(&tmp, ApiError::from(e)));
+        }
+        drop(file);
+        if written != q.size {
+            return Err(fail(&tmp, ApiError::bad("the upload stopped")));
+        }
+        let dest = super::guest::unique_path(&dir, &name);
+        tokio::fs::rename(&tmp, &dest).await.map_err(|e| fail(&tmp, ApiError::from(e)))?;
+        Ok((dest, written))
+    }
+    .await;
+    match result {
+        Ok((dest, written)) => {
+            core.remote.guests.finish(&code, q.size, written);
+            core.audit.record(&format!("guest:{}", link.label), "files.upload", &format!("{} ({written} bytes)", display_path(&dest)), true);
+            core.events.emit("guest:received", json!({ "label": link.label, "name": name, "size": written, "path": display_path(&dest) }));
+            Ok(Json(json!({ "name": dest.file_name().map(|n| n.to_string_lossy().to_string()), "size": written })))
+        }
+        Err(e) => {
+            core.remote.guests.finish(&code, q.size, 0);
+            Err(e)
+        }
+    }
+}
+
 // ---------- uploads ----------
 
 #[derive(Deserialize)]
@@ -438,6 +632,9 @@ struct UploadReq {
     name: String,
     size: u64,
     dir: Option<String>,
+    /// A photo from the phone's camera roll: goes to Pictures\Phone\<month>.
+    #[serde(default)]
+    photos: bool,
 }
 
 async fn upload_start(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<UploadReq>) -> ApiResult<Json<transfer::UploadStatus>> {
@@ -445,6 +642,11 @@ async fn upload_start(State(core): State<Ctx>, Extension(dev): Extension<Device>
         return Err(ApiError::forbidden("sending files to this PC is turned off"));
     }
     let dest = match req.dir.as_deref().filter(|d| !d.is_empty()) {
+        _ if req.photos => {
+            let d = extra::photos_dir();
+            std::fs::create_dir_all(&d).map_err(|e| ApiError::bad(format!("couldn't make the Pictures\\Phone folder: {e}")))?;
+            d
+        }
         Some(d) => allowed_path(&core, d)?,
         None => core.incoming_dir(),
     };
@@ -505,12 +707,200 @@ async fn inbox_list(State(core): State<Ctx>, Extension(dev): Extension<Device>) 
 
 async fn inbox_ticket(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<serde_json::Value>> {
     let item = core.remote.inbox.get(&id, &dev.id).ok_or_else(|| ApiError::not_found("no longer offered"))?;
+    if item.kind == transfer::InboxKind::Text {
+        return Err(ApiError::bad("text items have nothing to download"));
+    }
     if !item.path.is_file() {
         return Err(ApiError::not_found("the file was moved or deleted on the PC"));
     }
     let t = core.remote.tickets.issue(&dev.id, TicketPurpose::Download(item.path.clone()), Duration::from_secs(15 * 60));
     core.audit.record(&actor(&dev), "files.receive", &display_path(&item.path), true);
     Ok(Json(json!({ "url": format!("/dl/{t}"), "name": item.name, "size": item.size })))
+}
+
+#[derive(Deserialize)]
+struct ClipboardText {
+    text: String,
+}
+
+// ---------- music: what's playing, lyrics, volume, bass ----------
+
+fn media_allowed(core: &AppCore) -> ApiResult<()> {
+    if core.settings.get().media.allow_phone {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("music control from the phone is turned off on the PC"))
+    }
+}
+
+/// Volume and equaliser state (blocking: Core Audio and the registry).
+fn audio_json(core: &AppCore) -> serde_json::Value {
+    let m = core.settings.get().media;
+    json!({
+        "volume": crate::media::audio::get(),
+        "eq": { "status": crate::media::eq::status(), "enabled": m.eq_enabled, "bass": m.bass_db, "treble": m.treble_db, "maxDb": crate::media::eq::MAX_DB },
+    })
+}
+
+async fn media_get(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    media_allowed(&core)?;
+    let c = core.clone();
+    let audio = tokio::task::spawn_blocking(move || audio_json(&c)).await?;
+    Ok(Json(json!({ "state": core.media.state(), "nowMs": crate::media::now_ms(), "audio": audio })))
+}
+
+#[derive(Deserialize)]
+struct ArtQuery {
+    id: String,
+}
+
+async fn media_art(State(core): State<Ctx>, Query(q): Query<ArtQuery>) -> ApiResult<Response> {
+    media_allowed(&core)?;
+    let (bytes, mime) = core.media.art(&q.id).ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "no artwork"))?;
+    Ok(([(header::CONTENT_TYPE, mime), (header::CACHE_CONTROL, "private, max-age=3600".to_string())], (*bytes).clone()).into_response())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MediaControl {
+    action: crate::media::Action,
+    #[serde(default)]
+    position_ms: u64,
+}
+
+async fn media_control(State(core): State<Ctx>, Json(c): Json<MediaControl>) -> ApiResult<Json<serde_json::Value>> {
+    media_allowed(&core)?;
+    let c2 = core.clone();
+    tokio::task::spawn_blocking(move || c2.media.control(c.action, c.position_ms)).await?.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn media_lyrics(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    media_allowed(&core)?;
+    Ok(Json(json!({ "key": core.media.state().map(|s| s.key), "lyrics": core.media.lyrics() })))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MediaAudio {
+    level: Option<f32>,
+    muted: Option<bool>,
+    bass: Option<f32>,
+    treble: Option<f32>,
+    eq_enabled: Option<bool>,
+}
+
+async fn media_audio(State(core): State<Ctx>, Json(a): Json<MediaAudio>) -> ApiResult<Json<serde_json::Value>> {
+    media_allowed(&core)?;
+    let c = core.clone();
+    let out = tokio::task::spawn_blocking(move || -> Result<serde_json::Value, String> {
+        if a.level.is_some() || a.muted.is_some() {
+            crate::media::audio::set(a.level, a.muted)?;
+        }
+        let mut patch = serde_json::Map::new();
+        let clamp = |v: f32| v.clamp(-crate::media::eq::MAX_DB, crate::media::eq::MAX_DB);
+        if let Some(b) = a.bass.filter(|v| v.is_finite()) {
+            patch.insert("bassDb".into(), json!(clamp(b)));
+        }
+        if let Some(t) = a.treble.filter(|v| v.is_finite()) {
+            patch.insert("trebleDb".into(), json!(clamp(t)));
+        }
+        if let Some(e) = a.eq_enabled {
+            patch.insert("eqEnabled".into(), json!(e));
+        }
+        if !patch.is_empty() {
+            c.update_settings(&json!({ "media": patch })).map_err(|e| e.to_string())?;
+        }
+        Ok(audio_json(&c))
+    })
+    .await?
+    .map_err(ApiError::bad)?;
+    Ok(Json(out))
+}
+
+// ---------- sound: volume mixer, microphone and calls ----------
+
+async fn sound_get(State(core): State<Ctx>) -> ApiResult<Json<crate::media::mixer::Mixer>> {
+    media_allowed(&core)?;
+    let fake = core.media.is_fake();
+    Ok(Json(tokio::task::spawn_blocking(move || crate::media::mixer::get(fake)).await?))
+}
+
+#[derive(Deserialize)]
+struct SoundReq {
+    #[serde(default)]
+    key: String,
+    level: Option<f32>,
+    muted: Option<bool>,
+}
+
+async fn sound_master(State(core): State<Ctx>, Json(req): Json<SoundReq>) -> ApiResult<Json<crate::media::mixer::Mixer>> {
+    media_allowed(&core)?;
+    let fake = core.media.is_fake();
+    Ok(Json(tokio::task::spawn_blocking(move || crate::media::mixer::set_master(fake, req.level, req.muted)).await?.map_err(ApiError::bad)?))
+}
+
+async fn sound_app(State(core): State<Ctx>, Json(req): Json<SoundReq>) -> ApiResult<Json<crate::media::mixer::Mixer>> {
+    media_allowed(&core)?;
+    let fake = core.media.is_fake();
+    Ok(Json(tokio::task::spawn_blocking(move || crate::media::mixer::set_app(fake, &req.key, req.level, req.muted)).await?.map_err(ApiError::bad)?))
+}
+
+async fn sound_mic(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<SoundReq>) -> ApiResult<Json<crate::media::mixer::Mixer>> {
+    media_allowed(&core)?;
+    let muted = req.muted.ok_or_else(|| ApiError::bad("say whether to mute"))?;
+    let fake = core.media.is_fake();
+    let r = tokio::task::spawn_blocking(move || crate::media::mixer::set_mic(fake, muted)).await?;
+    core.audit.record(&actor(&dev), if muted { "microphone.mute" } else { "microphone.unmute" }, "all recording devices", r.is_ok());
+    Ok(Json(r.map_err(ApiError::bad)?))
+}
+
+// ---------- monitor brightness ----------
+
+async fn displays_get(State(core): State<Ctx>) -> ApiResult<Json<Vec<crate::system::displays::Display>>> {
+    media_allowed(&core)?;
+    let fake = core.media.is_fake();
+    Ok(Json(tokio::task::spawn_blocking(move || if fake { crate::system::displays::fake_list() } else { crate::system::displays::list() }).await?))
+}
+
+#[derive(Deserialize)]
+struct DisplayReq {
+    id: String,
+    setting: crate::system::displays::Setting,
+    value: u8,
+}
+
+async fn displays_set(State(core): State<Ctx>, Json(req): Json<DisplayReq>) -> ApiResult<StatusCode> {
+    media_allowed(&core)?;
+    let fake = core.media.is_fake();
+    tokio::task::spawn_blocking(move || if fake { crate::system::displays::fake_set(&req.id, req.setting, req.value) } else { crate::system::displays::set(&req.id, req.setting, req.value) }).await?.map_err(ApiError::bad)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// The PC's clipboard text, for the phone (never a password OmniHub copied from the vault).
+async fn clipboard_get(State(core): State<Ctx>, Extension(dev): Extension<Device>) -> ApiResult<Json<serde_json::Value>> {
+    if !core.settings.get().remote.allow_clipboard {
+        return Err(ApiError::forbidden("the PC does not share its clipboard with phones"));
+    }
+    let text = tokio::task::spawn_blocking(crate::system::clipboard::get_text).await?.filter(|t| !t.is_empty() && t.len() <= transfer::MAX_TEXT);
+    core.audit.record(&actor(&dev), "clipboard.to-phone", &text.as_ref().map(|t| format!("{} characters", t.chars().count())).unwrap_or_else(|| "nothing".into()), true);
+    Ok(Json(json!({ "text": text })))
+}
+
+/// Put text from the phone on this PC's clipboard.
+async fn clipboard_set(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(c): Json<ClipboardText>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_clipboard {
+        return Err(ApiError::forbidden("the PC does not accept clipboard text from phones"));
+    }
+    let text = c.text;
+    if text.is_empty() || text.len() > transfer::MAX_TEXT {
+        return Err(ApiError::bad("send between 1 character and 100 KB of text"));
+    }
+    let chars = text.chars().count();
+    tokio::task::spawn_blocking(move || crate::system::clipboard::copy_text(&text)).await??;
+    core.audit.record(&actor(&dev), "clipboard.from-phone", &format!("{chars} characters"), true);
+    core.events.emit("clipboard:from-phone", json!({ "device": dev.name, "chars": chars }));
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn inbox_dismiss(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<StatusCode> {
@@ -526,6 +916,30 @@ async fn power_info(State(core): State<Ctx>) -> Json<serde_json::Value> {
     let s = core.settings.get().remote;
     let actions: Vec<_> = PowerAction::all().iter().map(|a| json!({ "action": a, "label": a.label(), "destructive": a.destructive() })).collect();
     Json(json!({ "enabled": s.allow_power, "actions": actions, "pending": core.power.pending(), "delaySeconds": s.power_delay_seconds }))
+}
+
+// ---------- quiet mode: screens off, fans lowest, PC still on ----------
+
+async fn quiet_get(State(core): State<Ctx>) -> ApiResult<Json<crate::quiet::QuietStatus>> {
+    if !core.settings.get().remote.allow_power {
+        return Err(ApiError::forbidden("Power actions are off on the PC (OmniHub → Phone → Permissions)"));
+    }
+    Ok(Json(core.quiet_status()))
+}
+
+#[derive(Deserialize)]
+struct QuietReq {
+    on: bool,
+}
+
+async fn quiet_set(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<QuietReq>) -> ApiResult<Json<crate::quiet::QuietStatus>> {
+    if !core.settings.get().remote.allow_power {
+        return Err(ApiError::forbidden("Power actions are off on the PC (OmniHub → Phone → Permissions)"));
+    }
+    let c = core.clone();
+    let r = tokio::task::spawn_blocking(move || if req.on { c.quiet_on() } else { c.quiet_off() }).await?;
+    core.audit.record(&actor(&dev), if req.on { "quiet.on" } else { "quiet.off" }, "screens and fans", r.is_ok());
+    Ok(Json(r.map_err(ApiError::bad)?))
 }
 
 #[derive(Deserialize)]
@@ -550,6 +964,443 @@ async fn power_request(State(core): State<Ctx>, Extension(dev): Extension<Device
 
 async fn power_cancel(State(core): State<Ctx>, Extension(dev): Extension<Device>) -> Json<serde_json::Value> {
     Json(json!({ "cancelled": core.power.cancel(&actor(&dev)) }))
+}
+
+/// The panic button from the phone: everything locks and the phone is cut off too.
+async fn panic(State(core): State<Ctx>, Extension(dev): Extension<Device>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_power {
+        return Err(ApiError::forbidden("power control from the phone is turned off"));
+    }
+    let by = actor(&dev);
+    // After the reply: stopping the server ends this request too.
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let _ = tokio::task::spawn_blocking(move || core.panic(&by)).await;
+    });
+    Ok(StatusCode::ACCEPTED)
+}
+
+/// A screenshot of the PC's screen, saved on the PC like any other, and a link to get it.
+async fn screenshot(State(core): State<Ctx>, Extension(dev): Extension<Device>) -> ApiResult<Json<serde_json::Value>> {
+    if !core.settings.get().remote.allow_screen {
+        return Err(ApiError::forbidden("screen sharing is turned off on the PC"));
+    }
+    let c = core.clone();
+    let shot = tokio::task::spawn_blocking(move || c.screenshots.capture(crate::capture::screenshots::CaptureKind::Screen, &c.screenshot_dir(), c.settings.get().screenshots.format))
+        .await?
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let path = PathBuf::from(&shot.path);
+    let t = core.remote.tickets.issue(&dev.id, TicketPurpose::Download(path.clone()), Duration::from_secs(15 * 60));
+    core.audit.record(&actor(&dev), "screenshot", &display_path(&path), true);
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    Ok(Json(json!({ "url": format!("/dl/{t}"), "name": name, "width": shot.width, "height": shot.height })))
+}
+
+#[derive(Deserialize)]
+struct PrintReq {
+    path: String,
+}
+
+/// Print a file the phone sent (or one it can browse) on the PC's printer.
+async fn print_file(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<PrintReq>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_uploads {
+        return Err(ApiError::forbidden("sending files to this PC is turned off"));
+    }
+    let p = std::fs::canonicalize(&req.path).map_err(|_| ApiError::not_found("no such file"))?;
+    let incoming = std::fs::canonicalize(core.incoming_dir()).ok();
+    let path = if incoming.is_some_and(|i| p.starts_with(i)) { p } else { allowed_path(&core, &req.path)? };
+    let shown = display_path(&path);
+    tokio::task::spawn_blocking(move || crate::system::shell::print(&path)).await?.map_err(|e| ApiError::bad(e.to_string()))?;
+    core.audit.record(&actor(&dev), "print", &shown, true);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------- approve on your phone ----------
+
+async fn approvals_list(State(core): State<Ctx>) -> Json<Vec<super::approvals::Request>> {
+    Json(core.remote.approvals.pending())
+}
+
+#[derive(Deserialize)]
+struct ApproveReq {
+    approve: bool,
+}
+
+async fn approvals_answer(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ApproveReq>) -> ApiResult<StatusCode> {
+    if !core.remote.approvals.answer(&id, req.approve, &dev.name) {
+        return Err(ApiError::not_found("that request has ended (each one waits 60 seconds)"));
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------- the phone as a scanner ----------
+
+/// Pages arrive as base64 JPEGs in one JSON body.
+const SCAN_MAX: usize = 96 << 20;
+
+#[derive(Deserialize)]
+struct ScanReq {
+    #[serde(default)]
+    kind: crate::scan::Kind,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    target: crate::scan::Target,
+    pages: Vec<String>,
+}
+
+async fn scan_pages(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<ScanReq>) -> ApiResult<Json<crate::scan::Scanned>> {
+    let s = core.settings.get().remote;
+    if !s.allow_uploads {
+        return Err(ApiError::forbidden("sending files to this PC is turned off"));
+    }
+    if req.target == crate::scan::Target::Notes && !s.allow_notes {
+        return Err(ApiError::forbidden("notes from the phone are turned off on the PC"));
+    }
+    use base64::Engine;
+    let pages = req
+        .pages
+        .iter()
+        .map(|p| base64::engine::general_purpose::STANDARD.decode(p.rsplit(',').next().unwrap_or("").trim()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| ApiError::bad("a page isn't a picture"))?;
+    let c = core.clone();
+    let who = actor(&dev);
+    let done = tokio::task::spawn_blocking(move || c.scan(req.kind, &req.title, req.target, pages, &who)).await?.map_err(ApiError::bad)?;
+    Ok(Json(done))
+}
+
+// ---------- type on the PC (barcodes, text) ----------
+
+#[derive(Deserialize)]
+struct TypeReq {
+    text: String,
+    #[serde(default)]
+    enter: bool,
+}
+
+async fn type_text(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<TypeReq>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_control {
+        return Err(ApiError::forbidden("typing from the phone is off on the PC (Settings → Phone → let phones use the mouse and keyboard)"));
+    }
+    let n = req.text.chars().count();
+    if n == 0 || n > 4000 {
+        return Err(ApiError::bad("send between 1 and 4000 characters"));
+    }
+    tokio::task::spawn_blocking(move || {
+        stream::input::text(&req.text);
+        if req.enter {
+            stream::input::chord("Enter");
+        }
+    })
+    .await?;
+    // How much, not what (it could be a password).
+    core.audit.record(&actor(&dev), "type", &format!("{n} characters"), true);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------- the phone as a whiteboard ----------
+
+async fn board_get(State(core): State<Ctx>) -> Json<Vec<super::board::Stroke>> {
+    Json(core.remote.board.strokes())
+}
+
+#[derive(Deserialize)]
+struct BoardAdd {
+    strokes: Vec<super::board::Stroke>,
+}
+
+async fn board_add(State(core): State<Ctx>, Json(req): Json<BoardAdd>) -> ApiResult<StatusCode> {
+    if req.strokes.len() > 200 {
+        return Err(ApiError::bad("too many strokes at once"));
+    }
+    let added = core.remote.board.add(req.strokes);
+    if !added.is_empty() {
+        core.events.emit("board:strokes", json!({ "strokes": added }));
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn board_undo(State(core): State<Ctx>) -> StatusCode {
+    if core.remote.board.undo() {
+        core.events.emit("board:undo", json!({}));
+    }
+    StatusCode::NO_CONTENT
+}
+
+async fn board_clear(State(core): State<Ctx>) -> StatusCode {
+    core.remote.board.clear();
+    core.events.emit("board:clear", json!({}));
+    StatusCode::NO_CONTENT
+}
+
+// ---------- download a link on the PC ----------
+
+#[derive(Deserialize)]
+struct DownloadReq {
+    url: String,
+    #[serde(default)]
+    mode: crate::downloads::Mode,
+}
+
+async fn downloads_start(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<DownloadReq>) -> ApiResult<Json<serde_json::Value>> {
+    if !core.settings.get().remote.allow_uploads {
+        return Err(ApiError::forbidden("sending files to this PC is turned off"));
+    }
+    let id = core.downloads.start(&req.url, req.mode, &dev.name).map_err(ApiError::bad)?;
+    core.audit.record(&actor(&dev), "download", &req.url.chars().take(200).collect::<String>(), true);
+    Ok(Json(json!({ "id": id })))
+}
+
+async fn downloads_list(State(core): State<Ctx>) -> Json<Vec<crate::downloads::Download>> {
+    Json(core.downloads.list().into_iter().take(30).collect())
+}
+
+async fn downloads_cancel(State(core): State<Ctx>, UrlPath(id): UrlPath<String>) -> StatusCode {
+    core.downloads.cancel(&id);
+    StatusCode::NO_CONTENT
+}
+
+// ---------- video tools on the PC's files ----------
+
+#[derive(Deserialize)]
+struct VideoReq {
+    path: String,
+    job: crate::videotools::Job,
+}
+
+async fn video_start(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<VideoReq>) -> ApiResult<Json<serde_json::Value>> {
+    if !core.settings.get().remote.allow_uploads {
+        return Err(ApiError::forbidden("sending files to this PC is turned off"));
+    }
+    let p = std::fs::canonicalize(&req.path).map_err(|_| ApiError::not_found("no such file"))?;
+    let incoming = std::fs::canonicalize(core.incoming_dir()).ok();
+    let path = if incoming.is_some_and(|i| p.starts_with(i)) { p } else { allowed_path(&core, &req.path)? };
+    let shown = display_path(&path);
+    let c = core.clone();
+    let id = tokio::task::spawn_blocking(move || c.video.start(&path, req.job)).await?.map_err(ApiError::bad)?;
+    core.audit.record(&actor(&dev), "video", &shown, true);
+    Ok(Json(json!({ "id": id })))
+}
+
+async fn video_list(State(core): State<Ctx>) -> Json<serde_json::Value> {
+    Json(json!({ "ready": core.video.ready(), "tasks": core.video.tasks().into_iter().take(20).collect::<Vec<_>>() }))
+}
+
+async fn video_cancel(State(core): State<Ctx>, UrlPath(id): UrlPath<String>) -> StatusCode {
+    core.video.cancel(&id);
+    StatusCode::NO_CONTENT
+}
+
+// ---------- tasks: what's using the PC ----------
+
+fn tasks_allowed(core: &AppCore) -> ApiResult<()> {
+    if core.settings.get().remote.allow_tasks {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("tasks from the phone are turned off on the PC"))
+    }
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct TasksQuery {
+    sort: crate::system::procs::ProcessSort,
+    limit: Option<usize>,
+}
+
+async fn tasks_list(State(core): State<Ctx>, Query(q): Query<TasksQuery>) -> ApiResult<Json<crate::system::procs::Usage>> {
+    tasks_allowed(&core)?;
+    let c = core.clone();
+    Ok(Json(tokio::task::spawn_blocking(move || c.procs.usage(q.sort, q.limit.unwrap_or(60).clamp(1, 500), true)).await?))
+}
+
+#[derive(Deserialize)]
+struct TaskReq {
+    name: String,
+    priority: Option<crate::system::procs::Priority>,
+}
+
+async fn tasks_end(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<TaskReq>) -> ApiResult<Json<serde_json::Value>> {
+    tasks_allowed(&core)?;
+    let c = core.clone();
+    let name = req.name.clone();
+    let r = tokio::task::spawn_blocking(move || c.procs.end(&name)).await?;
+    core.audit.record(&actor(&dev), "process.end", &req.name, r.is_ok());
+    let ended = r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "ended": ended })))
+}
+
+async fn tasks_priority(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<TaskReq>) -> ApiResult<Json<serde_json::Value>> {
+    tasks_allowed(&core)?;
+    let priority = req.priority.ok_or_else(|| ApiError::bad("missing priority"))?;
+    let c = core.clone();
+    let name = req.name.clone();
+    let r = tokio::task::spawn_blocking(move || c.procs.set_priority(&name, priority)).await?;
+    core.audit.record(&actor(&dev), "process.priority", &format!("{} → {priority:?}", req.name), r.is_ok());
+    let changed = r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "changed": changed })))
+}
+
+// ---------- open apps: close them from the phone ----------
+
+async fn open_apps_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    tasks_allowed(&core)?;
+    let fake = core.media.is_fake();
+    let apps = tokio::task::spawn_blocking(move || crate::system::open_apps::list(fake)).await?;
+    Ok(Json(json!({ "apps": apps })))
+}
+
+#[derive(Deserialize)]
+struct OpenAppReq {
+    key: String,
+}
+
+/// Ask an app's windows to close, like clicking ×.
+async fn open_apps_close(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<OpenAppReq>) -> ApiResult<Json<serde_json::Value>> {
+    tasks_allowed(&core)?;
+    let fake = core.media.is_fake();
+    let key = req.key.clone();
+    let r = tokio::task::spawn_blocking(move || crate::system::open_apps::close(fake, &key)).await?;
+    core.audit.record(&actor(&dev), "app.close", &req.key, r.is_ok());
+    let windows = r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "windows": windows })))
+}
+
+async fn open_apps_icon(State(core): State<Ctx>, Query(req): Query<OpenAppReq>) -> ApiResult<Json<serde_json::Value>> {
+    tasks_allowed(&core)?;
+    let fake = core.media.is_fake();
+    let icon = tokio::task::spawn_blocking(move || crate::system::open_apps::path_of(fake, &req.key.to_ascii_lowercase()).and_then(|p| crate::apps::exe_icon_data_url(&p))).await?;
+    Ok(Json(json!({ "icon": icon })))
+}
+
+// ---------- games: boost and launch from the phone ----------
+
+fn games_allowed(core: &AppCore) -> ApiResult<()> {
+    if core.settings.get().remote.allow_app_launch {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("launching apps from the phone is turned off"))
+    }
+}
+
+// ---------- counters (tap the phone to count) ----------
+
+async fn counters_list(State(core): State<Ctx>) -> Json<serde_json::Value> {
+    let now = chrono::Utc::now().timestamp_millis();
+    let list: Vec<_> = core
+        .counters
+        .state()
+        .counters
+        .iter()
+        .map(|c| {
+            let mut j = crate::counters_overlay::counter_json(c, now);
+            j["id"] = json!(c.id);
+            j["events"] = json!(c.events.iter().map(|e| json!({ "id": e.id, "name": e.name, "phase": e.phase })).collect::<Vec<_>>());
+            j
+        })
+        .collect();
+    Json(json!({ "counters": list }))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct BumpBody {
+    times: i64,
+    event: String,
+    run: bool,
+}
+
+async fn counters_bump(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Json(b): Json<BumpBody>) -> ApiResult<Json<serde_json::Value>> {
+    let c = core.counters.bump(&id, b.times.clamp(-100, 100)).map_err(ApiError::bad)?;
+    Ok(Json(json!({ "count": c.count })))
+}
+
+async fn counters_event(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Json(b): Json<BumpBody>) -> ApiResult<Json<serde_json::Value>> {
+    let c = core.counters.event(&id, &b.event).map_err(ApiError::bad)?;
+    Ok(Json(json!({ "count": c.count, "phases": c.phases })))
+}
+
+async fn counters_timer(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Json(b): Json<BumpBody>) -> ApiResult<Json<serde_json::Value>> {
+    let c = core.counters.timer(&id, b.run, false).map_err(ApiError::bad)?;
+    Ok(Json(json!({ "running": c.timer_since.is_some() })))
+}
+
+// ---------- macro deck (buttons set up on the PC) ----------
+
+async fn deck_list(State(core): State<Ctx>) -> Json<serde_json::Value> {
+    let s = core.quick.state();
+    // The phone gets names, icons and colours, not what the buttons type or open.
+    let buttons: Vec<_> = s.deck.iter().map(|b| json!({ "id": b.id, "label": b.label, "icon": b.icon, "color": b.color })).collect();
+    let scenes: Vec<_> = s.scenes.iter().map(|b| json!({ "id": b.id, "label": b.name, "icon": b.icon, "color": b.color })).collect();
+    Json(json!({ "columns": s.deck_columns, "buttons": buttons, "scenes": scenes }))
+}
+
+async fn scene_run(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<serde_json::Value>> {
+    let sc = core.quick.state().scenes.into_iter().find(|b| b.id == id).ok_or_else(|| ApiError::bad("That scene is gone: pull to refresh"))?;
+    let c = core.clone();
+    let action = crate::quick::QuickAction::Scene { id: sc.id.clone() };
+    let r = tokio::task::spawn_blocking(move || c.run_quick(&action)).await?;
+    core.audit.record(&actor(&dev), "scene.run", &sc.name, r.is_ok());
+    Ok(Json(json!({ "said": r.map_err(ApiError::bad)? })))
+}
+
+async fn deck_run(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<serde_json::Value>> {
+    let b = core.quick.state().deck.into_iter().find(|b| b.id == id).ok_or_else(|| ApiError::bad("That button is gone: pull to refresh"))?;
+    let action = b.action.clone().ok_or_else(|| ApiError::bad("That button doesn't do anything yet"))?;
+    let c = core.clone();
+    let r = tokio::task::spawn_blocking(move || c.run_quick(&action)).await?;
+    core.audit.record(&actor(&dev), "deck.run", &b.label, r.is_ok());
+    Ok(Json(json!({ "said": r.map_err(ApiError::bad)? })))
+}
+
+async fn games_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    games_allowed(&core)?;
+    let profiles: Vec<_> = core
+        .games
+        .profiles()
+        .into_iter()
+        .map(|p| json!({ "id": p.id, "name": p.name, "kind": p.kind, "lastPlayed": p.last_played, "canLaunch": !matches!(p.launch, crate::games::Launch::None), "process": p.process }))
+        .collect();
+    Ok(Json(json!({ "profiles": profiles, "session": core.games.session(), "fps": core.games.fps_live() })))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct PlayReq {
+    /// false: boost only.
+    launch: Option<bool>,
+}
+
+async fn games_play(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, body: Option<Json<PlayReq>>) -> ApiResult<Json<serde_json::Value>> {
+    games_allowed(&core)?;
+    let launch = body.and_then(|b| b.0.launch).unwrap_or(true);
+    if launch {
+        // Started from the couch: turn the screen on for it.
+        crate::system::awake::wake_screen();
+    }
+    let r = core.games.play(&id, launch);
+    core.audit.record(&actor(&dev), if launch { "game.play" } else { "game.boost" }, &id, r.is_ok());
+    let session = r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "session": session })))
+}
+
+async fn games_stop(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    games_allowed(&core)?;
+    Ok(Json(json!({ "stopped": core.games.stop() })))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct PingReq {
+    id: Option<String>,
+}
+
+async fn games_ping(State(core): State<Ctx>, Json(req): Json<PingReq>) -> ApiResult<Json<serde_json::Value>> {
+    games_allowed(&core)?;
+    let c = core.clone();
+    let results = tokio::task::spawn_blocking(move || c.games.ping(req.id.as_deref(), None)).await?;
+    Ok(Json(json!({ "results": results })))
 }
 
 // ---------- apps ----------
@@ -577,6 +1428,26 @@ async fn app_launch(State(core): State<Ctx>, Extension(dev): Extension<Device>, 
     let name = core.apps.launch(&id).map_err(|e| ApiError::bad(e.to_string()))?;
     core.audit.record(&actor(&dev), "apps.launch", &name, true);
     Ok(Json(json!({ "launched": name })))
+}
+
+#[derive(Deserialize)]
+struct LinkReq {
+    url: String,
+}
+
+/// Open a web link from the phone in the PC's browser ("Share → OmniHub").
+async fn open_link(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<LinkReq>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_app_launch {
+        return Err(ApiError::forbidden("opening things on the PC from the phone is turned off"));
+    }
+    let url = req.url.trim().to_string();
+    if !(url.starts_with("https://") || url.starts_with("http://")) || url.len() > 4096 || url.chars().any(char::is_whitespace) {
+        return Err(ApiError::bad("only web links (http or https) can be opened"));
+    }
+    let host = url.split('/').nth(2).unwrap_or_default().to_string();
+    tokio::task::spawn_blocking(move || crate::system::shell::open_url(&url)).await?.map_err(|e| ApiError::bad(e.to_string()))?;
+    core.audit.record(&actor(&dev), "link.open", &host, true);
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ---------- notes ----------
@@ -629,7 +1500,7 @@ async fn notes_create(State(core): State<Ctx>, Extension(dev): Extension<Device>
     if !tags.iter().any(|t| t == "from-phone") {
         tags.push("from-phone".into());
     }
-    let note = core.notes.save(crate::notes::NoteInput { id: None, kind: n.kind, title: n.title, body: n.body, tags, pinned: false, color: None })?;
+    let note = core.notes.save(crate::notes::NoteInput { id: None, kind: n.kind, title: n.title, body: n.body, tags, pinned: false, color: None, locked: false })?;
     let s = core.settings.get().notes;
     let export = n.send_to_claude || (note.kind == crate::notes::NoteKind::Idea && s.auto_export_ideas);
     let note = match (export, s.claude_folder) {
@@ -638,6 +1509,310 @@ async fn notes_create(State(core): State<Ctx>, Extension(dev): Extension<Device>
     };
     core.audit.record(&actor(&dev), "notes.create", &note.title, true);
     Ok(Json(note))
+}
+
+// ---------- Minecraft servers ----------
+
+fn servers_allowed(core: &AppCore) -> ApiResult<()> {
+    if core.settings.get().remote.allow_servers {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("Minecraft servers aren't shared with the phone (Phone → Permissions on the PC)"))
+    }
+}
+
+async fn servers_list(State(core): State<Ctx>) -> ApiResult<Json<Vec<crate::mcserver::View>>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    Ok(Json(tokio::task::spawn_blocking(move || c.mcserver.list()).await?))
+}
+
+async fn servers_run(core: Ctx, dev: &Device, id: String, what: &'static str) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let sid = id.clone();
+    let r = tokio::task::spawn_blocking(move || match what {
+        "start" => c.mcserver.start(&sid),
+        "stop" => c.mcserver.stop(&sid),
+        _ => c.mcserver.restart(&sid),
+    })
+    .await?;
+    core.audit.record(&actor(dev), &format!("mcserver.{what}"), &id, r.is_ok());
+    r.map(Json).map_err(ApiError::bad)
+}
+
+async fn servers_start(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_run(core, &dev, id, "start").await
+}
+
+async fn servers_stop(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_run(core, &dev, id, "stop").await
+}
+
+async fn servers_restart(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_run(core, &dev, id, "restart").await
+}
+
+async fn servers_players(State(core): State<Ctx>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<crate::mcserver::PlayersView>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    // A phone looking at the players keeps their positions coming.
+    tokio::task::spawn_blocking(move || {
+        let r = c.mcserver.players(&id);
+        if r.is_ok() {
+            c.mcserver.watch(&id);
+        }
+        r
+    })
+    .await?
+    .map(Json)
+    .map_err(ApiError::not_found)
+}
+
+async fn servers_player(State(core): State<Ctx>, UrlPath((id, name)): UrlPath<(String, String)>) -> ApiResult<Json<crate::mcserver::PlayerView>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    tokio::task::spawn_blocking(move || c.mcserver.player(&id, &name)).await?.map(Json).map_err(ApiError::bad)
+}
+
+#[derive(Deserialize)]
+struct ServerAct {
+    name: String,
+    action: crate::mcserver::Action,
+}
+
+async fn servers_act(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ServerAct>) -> ApiResult<Json<serde_json::Value>> {
+    servers_allowed(&core)?;
+    let what: String = format!("{}: {:?}", req.name, req.action).chars().take(160).collect();
+    let c = core.clone();
+    let r = tokio::task::spawn_blocking(move || c.mcserver.act(&id, &req.name, req.action)).await?;
+    core.audit.record(&actor(&dev), "mcserver.player", &what, r.is_ok());
+    Ok(Json(json!({ "reply": r.map_err(ApiError::bad)? })))
+}
+
+#[derive(Deserialize)]
+struct ServerFlag {
+    on: bool,
+}
+
+async fn servers_whitelist(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ServerFlag>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let sid = id.clone();
+    let r = tokio::task::spawn_blocking(move || c.mcserver.set_whitelist(&sid, req.on)).await?;
+    core.audit.record(&actor(&dev), "mcserver.whitelist", &format!("{id}: {}", if req.on { "on" } else { "off" }), r.is_ok());
+    r.map(Json).map_err(ApiError::bad)
+}
+
+#[derive(Deserialize)]
+struct ServerMax {
+    players: u32,
+}
+
+async fn servers_max(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ServerMax>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let sid = id.clone();
+    let r = tokio::task::spawn_blocking(move || c.mcserver.set_properties(&sid, &[("max-players".into(), req.players.to_string())])).await?;
+    core.audit.record(&actor(&dev), "mcserver.settings", &format!("{id}: max-players {}", req.players), r.is_ok());
+    r.map(Json).map_err(ApiError::bad)
+}
+
+#[derive(Deserialize)]
+struct ServerJoin {
+    /// Players without a paid Minecraft account can join too.
+    everyone: bool,
+}
+
+async fn servers_join(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ServerJoin>) -> ApiResult<Json<crate::mcserver::View>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let sid = id.clone();
+    let r = tokio::task::spawn_blocking(move || c.mcserver.set_properties(&sid, &[("online-mode".into(), (!req.everyone).to_string())])).await?;
+    core.audit.record(&actor(&dev), "mcserver.settings", &format!("{id}: {}", if req.everyone { "everyone can join" } else { "paid accounts only" }), r.is_ok());
+    r.map(Json).map_err(ApiError::bad)
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct ConsoleQuery {
+    after: Option<u64>,
+}
+
+async fn servers_console(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Query(q): Query<ConsoleQuery>) -> ApiResult<Json<Vec<crate::mcserver::process::Line>>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let lines = tokio::task::spawn_blocking(move || c.mcserver.console(&id, q.after)).await?;
+    // The newest 400 at most (phones only show the end).
+    let skip = lines.len().saturating_sub(400);
+    Ok(Json(lines.into_iter().skip(skip).collect()))
+}
+
+#[derive(Deserialize)]
+struct ServerCommand {
+    text: String,
+}
+
+async fn servers_command(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath(id): UrlPath<String>, Json(req): Json<ServerCommand>) -> ApiResult<Json<serde_json::Value>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let text = req.text.clone();
+    let r = tokio::task::spawn_blocking(move || c.mcserver.command_line(&id, &text)).await?;
+    core.audit.record(&actor(&dev), "mcserver.command", &req.text.chars().take(120).collect::<String>(), r.is_ok());
+    r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct MapQuery {
+    dim: Option<String>,
+    x: i32,
+    z: i32,
+}
+
+async fn servers_map(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Query(q): Query<MapQuery>) -> ApiResult<Json<crate::mcserver::MapInfo>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    tokio::task::spawn_blocking(move || c.mcserver.map_info(&id, q.dim.as_deref().unwrap_or("overworld"))).await?.map(Json).map_err(ApiError::bad)
+}
+
+async fn servers_tile(State(core): State<Ctx>, UrlPath(id): UrlPath<String>, Query(q): Query<MapQuery>) -> ApiResult<Json<serde_json::Value>> {
+    servers_allowed(&core)?;
+    let c = core.clone();
+    let url = tokio::task::spawn_blocking(move || c.mcserver.map_tile(&id, q.dim.as_deref().unwrap_or("overworld"), q.x, q.z)).await?.map_err(ApiError::not_found)?;
+    Ok(Json(json!({ "url": url })))
+}
+
+// ---------- chats ----------
+
+fn chats_allowed(core: &AppCore) -> ApiResult<()> {
+    if !core.settings.get().chats.allow_phone {
+        return Err(ApiError::forbidden("chats are not shared with the phone (Settings → Chats)"));
+    }
+    Ok(())
+}
+
+fn chat_source(s: &str) -> ApiResult<crate::chats::Source> {
+    crate::chats::Source::parse(s).ok_or_else(|| ApiError::not_found("no such chat"))
+}
+
+/// Running Claude Code or Codex from a phone: allowed in Settings, and
+/// only in folders they already work in.
+fn agents_allowed(core: &AppCore) -> ApiResult<()> {
+    let s = core.settings.get().chats;
+    if !s.phone_agents {
+        return Err(ApiError::forbidden("running Claude Code and Codex from the phone is turned off (Settings → Chats)"));
+    }
+    Ok(())
+}
+
+async fn chats_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    chats_allowed(&core)?;
+    let c = core.clone();
+    let (list, tools) = tokio::task::spawn_blocking(move || (c.chats.list(), c.chats.tools())).await?;
+    let s = core.settings.get().chats;
+    Ok(Json(json!({ "chats": list, "tools": tools, "agents": s.phone_agents, "claudeMode": s.claude_mode, "codexSandbox": s.codex_sandbox })))
+}
+
+async fn chats_view(State(core): State<Ctx>, UrlPath((source, id)): UrlPath<(String, String)>) -> ApiResult<Json<crate::chats::ChatView>> {
+    chats_allowed(&core)?;
+    let source = chat_source(&source)?;
+    let c = core.clone();
+    tokio::task::spawn_blocking(move || c.chats.view(source, &id)).await?.map(Json).map_err(ApiError::not_found)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatSend {
+    text: String,
+    #[serde(default)]
+    mode: String,
+}
+
+async fn chats_send(State(core): State<Ctx>, Extension(dev): Extension<Device>, UrlPath((source, id)): UrlPath<(String, String)>, Json(m): Json<ChatSend>) -> ApiResult<Json<serde_json::Value>> {
+    chats_allowed(&core)?;
+    let source = chat_source(&source)?;
+    if source != crate::chats::Source::Omni {
+        agents_allowed(&core)?;
+    }
+    let c = core.clone();
+    let mode = m.mode.clone();
+    let r = tokio::task::spawn_blocking(move || c.chats.send(source, &id, &m.text, &m.mode)).await?;
+    if source != crate::chats::Source::Omni {
+        core.audit.record(&actor(&dev), "chats.agent", &format!("{} {mode}", source.label()), r.is_ok());
+    }
+    r.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn chats_stop(State(core): State<Ctx>, UrlPath((source, id)): UrlPath<(String, String)>) -> ApiResult<Json<serde_json::Value>> {
+    chats_allowed(&core)?;
+    core.chats.stop(chat_source(&source)?, &id);
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChatNew {
+    kind: crate::chats::NewKind,
+    #[serde(default)]
+    folder: Option<String>,
+    text: String,
+    #[serde(default)]
+    mode: String,
+}
+
+async fn chats_new(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(n): Json<ChatNew>) -> ApiResult<Json<crate::chats::ChatSummary>> {
+    chats_allowed(&core)?;
+    let agent = matches!(n.kind, crate::chats::NewKind::ClaudeCode | crate::chats::NewKind::Codex);
+    if agent {
+        agents_allowed(&core)?;
+    }
+    let c = core.clone();
+    let folder = n.folder.clone();
+    let r = tokio::task::spawn_blocking(move || {
+        if agent && !n.folder.as_deref().is_some_and(|f| c.chats.known_folder(f)) {
+            return Err("From the phone, pick one of the folders Claude Code or Codex already work in.".to_string());
+        }
+        c.chats.create(n.kind, n.folder.as_deref(), &n.text, &n.mode)
+    })
+    .await?;
+    if agent {
+        core.audit.record(&actor(&dev), "chats.agent", &format!("new in {}", folder.unwrap_or_default()), r.is_ok());
+    }
+    r.map(Json).map_err(ApiError::bad)
+}
+
+async fn chats_folders(State(core): State<Ctx>) -> ApiResult<Json<Vec<crate::chats::Folder>>> {
+    chats_allowed(&core)?;
+    let c = core.clone();
+    Ok(Json(tokio::task::spawn_blocking(move || c.chats.folders()).await?))
+}
+
+async fn chats_usage(State(core): State<Ctx>) -> ApiResult<Json<crate::chats::usage::Report>> {
+    chats_allowed(&core)?;
+    let c = core.clone();
+    Ok(Json(tokio::task::spawn_blocking(move || c.chats.usage_report(crate::chats::ChatHub::maker_tokens(&c.mods.maker.projects(None)))).await?))
+}
+
+async fn ideas_list(State(core): State<Ctx>) -> ApiResult<Json<Vec<crate::notes::Note>>> {
+    chats_allowed(&core)?;
+    Ok(Json(core.notes.list(&crate::notes::NoteFilter { kind: Some(crate::notes::NoteKind::Idea), limit: Some(300), ..Default::default() })?))
+}
+
+#[derive(Deserialize)]
+struct IdeaNew {
+    text: String,
+    #[serde(default)]
+    from: Option<String>,
+}
+
+async fn ideas_save(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(i): Json<IdeaNew>) -> ApiResult<Json<crate::notes::Note>> {
+    chats_allowed(&core)?;
+    let n = crate::chats::save_idea(&core, &i.text, i.from.as_deref()).map_err(ApiError::bad)?;
+    core.audit.record(&actor(&dev), "ideas.save", &n.title, true);
+    Ok(Json(n))
 }
 
 // ---------- vault ----------
@@ -747,7 +1922,10 @@ fn for_phone(ev: &crate::events::Event, device_id: &str) -> bool {
     if ev.topic == "inbox:new" {
         return owner().is_none_or(|d| d == device_id);
     }
-    ["power:", "notes:"].iter().any(|p| ev.topic.starts_with(p))
+    if ev.topic == "inbox:removed" {
+        return true;
+    }
+    ["power:", "notes:", "media:", "games:", "chats:", "approval:", "board:", "download:", "video:", "scan:", "alert:", "quiet:", "party:", "watch:", "screentime:", "capri:", "timer:"].iter().any(|p| ev.topic.starts_with(p)) || matches!(ev.topic.as_str(), "mcserver:changed" | "mcserver:players" | "mcserver:guard")
 }
 
 async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws: WebSocketUpgrade) -> ApiResult<Response> {
@@ -765,7 +1943,7 @@ async fn events_socket(State(core): State<Ctx>, Query(q): Query<SocketQuery>, ws
             tokio::select! {
                 ev = events.recv() => {
                     let Ok(ev) = ev else { continue };
-                    if !for_phone(&ev, &device_id) {
+                    if !for_phone(&ev, &device_id) || !core.phone_limits.allows_event(&device_id, &ev.topic) || (ev.topic.starts_with("chats:") && !core.settings.get().chats.allow_phone) || (ev.topic.starts_with("mcserver:") && !core.settings.get().remote.allow_servers) {
                         continue;
                     }
                     let text = serde_json::to_string(&ev).unwrap_or_default();
@@ -860,7 +2038,7 @@ async fn screen_session(core: Ctx, dev: Device, monitor: usize, preset: stream::
                         *ctl.params.lock() = (&p).into();
                     }
                     other => {
-                        if !core.settings.get().remote.allow_control {
+                        if !core.settings.get().remote.allow_control || stream::paused() {
                             continue;
                         }
                         if !controlled {
@@ -911,6 +2089,8 @@ async fn screen_session(core: Ctx, dev: Device, monitor: usize, preset: stream::
                     "maxWidth": p.max_width,
                     "monitor": monitor,
                     "control": core.settings.get().remote.allow_control,
+                    "paused": stream::paused(),
+                    "window": stream::shared_window().is_some(),
                 });
                 last_frames = frames;
                 last_bytes = bytes;

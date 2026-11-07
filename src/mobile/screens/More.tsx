@@ -1,8 +1,8 @@
-// More: menu of secondary pages (Notes, Apps, Vault, Settings) with a
-// slide-in sub-page stack.
+// More: menu of secondary pages (Tasks, Games, Minecraft servers, Notes, Apps,
+// Vault, Settings) with a slide-in sub-page stack.
 
 import { AnimatePresence, motion } from 'motion/react';
-import { NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { Activity, Gamepad2, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft, SlidersVertical, SquareX, Server, ScanText, ScanBarcode, PenTool, CloudDownload, Grid3x3, Sparkles, Gauge, Images, PartyPopper, Tv, Bluetooth as BluetoothIcon, FolderSync, AlarmClock } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useApp } from '../state';
 import { Logo } from '../ui/Logo';
@@ -13,8 +13,27 @@ import { NotesPage } from './Notes';
 import { AppsPage } from './Apps';
 import { VaultPage } from './Vault';
 import { SettingsPage } from './Settings';
+import { TasksPage } from './Tasks';
+import { GamesPage } from './Games';
+import { ServersPage } from './Servers';
+import { SoundPage } from './Sound';
+import { OpenAppsPage } from './OpenApps';
+import { ScanPage } from './Scan';
+import { BarcodePage } from './Barcode';
+import { CountersPage } from './Counters';
+import { DeckPage } from './Deck';
+import { BoardPage } from './Board';
+import { DownloadsPage } from './Downloads';
+import { LivePage } from './Live';
+import { PartyPage } from './Party';
+import { PhotosPage } from './Photos';
+import { WatchPage } from './Watch';
+import { BluetoothPage } from './Bluetooth';
+import { SyncFolderPage } from './SyncFolder';
+import { ControllerPage } from './Controller';
+import { TimersPage } from './Timers';
 
-export type MorePage = 'notes' | 'apps' | 'vault' | 'settings';
+export type MorePage = 'live' | 'timers' | 'controller' | 'sync' | 'photos' | 'party' | 'watch' | 'bluetooth' | 'deck' | 'counters' | 'sound' | 'open' | 'tasks' | 'games' | 'servers' | 'notes' | 'apps' | 'vault' | 'scan' | 'barcode' | 'board' | 'downloads' | 'settings';
 
 export function MoreScreen({ active, page, setPage, onUnpaired }: { active: boolean; page: MorePage | null; setPage: (p: MorePage | null) => void; onUnpaired: () => void }) {
   const info = useApp((s) => s.info);
@@ -22,12 +41,31 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
   useBackHandler(active && page !== null, () => setPage(null));
 
   const items: { id: MorePage; title: string; sub: string; icon: ReactNode; tone: string; show: boolean }[] = [
+    { id: 'sound', title: 'Volume & brightness', sub: 'Monitor brightness, each app’s volume, your mic, calls', icon: <SlidersVertical size={21} />, tone: 'bg-indigo-500/15 text-indigo-400', show: !!f?.media },
+    { id: 'open', title: 'Open apps', sub: 'Close any program on the PC', icon: <SquareX size={21} />, tone: 'bg-rose-500/15 text-rose-400', show: !!f?.tasks },
+    { id: 'tasks', title: 'Tasks', sub: 'CPU, memory and GPU of every program', icon: <Activity size={21} />, tone: 'bg-emerald-500/15 text-emerald-400', show: !!f?.tasks },
+    { id: 'games', title: 'Games', sub: 'Boost the PC and start a game', icon: <Gamepad2 size={21} />, tone: 'bg-fuchsia-500/15 text-fuchsia-400', show: !!f?.games },
+    { id: 'live', title: 'Gaming dashboard', sub: 'FPS, temperatures and ping, live', icon: <Gauge size={21} />, tone: 'bg-red-500/15 text-red-400', show: true },
+    { id: 'servers', title: 'Minecraft servers', sub: 'Start them, players, map and console', icon: <Server size={21} />, tone: 'bg-lime-500/15 text-lime-400', show: !!f?.servers },
     { id: 'notes', title: 'Notes & ideas', sub: 'Read, search and capture ideas for Claude', icon: <NotebookPen size={21} />, tone: 'bg-violet-500/15 text-violet-400', show: !!f?.notes },
     { id: 'apps', title: 'Apps', sub: 'Launch programs on the PC', icon: <AppWindow size={21} />, tone: 'bg-cyan-500/15 text-cyan-400', show: !!f?.apps },
+    { id: 'watch', title: 'Watch on the PC', sub: 'Netflix, YouTube, Crunchyroll, Disney+ and more, full screen', icon: <Tv size={21} />, tone: 'bg-red-500/15 text-red-300', show: !!f?.apps },
+    { id: 'controller', title: 'Controller', sub: 'Play emulators on the PC with this phone as the pad', icon: <Gamepad2 size={21} />, tone: 'bg-indigo-500/15 text-indigo-400', show: !!f?.control },
+    { id: 'timers', title: 'Timers and alarms', sub: 'They ring on the PC and here', icon: <AlarmClock size={21} />, tone: 'bg-orange-500/15 text-orange-400', show: true },
+    { id: 'sync', title: 'Synced folder', sub: 'Get what’s new in a PC folder in one tap, send files into it', icon: <FolderSync size={21} />, tone: 'bg-teal-500/15 text-teal-400', show: !!f?.uploads },
+    { id: 'bluetooth', title: 'Bluetooth', sub: 'Connect headphones and speakers, forget devices', icon: <BluetoothIcon size={21} />, tone: 'bg-blue-500/15 text-blue-400', show: !!f?.media },
+    { id: 'photos', title: 'Import photos', sub: 'New camera-roll photos to Pictures on the PC', icon: <Images size={21} />, tone: 'bg-pink-500/15 text-pink-400', show: !!f?.uploads },
+    { id: 'party', title: 'Party queue', sub: 'What’s playing, and add songs', icon: <PartyPopper size={21} />, tone: 'bg-amber-500/15 text-amber-300', show: !!f?.media },
+    { id: 'scan', title: 'Scan', sub: 'Documents, receipts and cards to the PC, with their text', icon: <ScanText size={21} />, tone: 'bg-sky-500/15 text-sky-400', show: !!f?.uploads },
+    { id: 'deck', title: 'Deck', sub: 'Your macro buttons: media, apps, games, keys and more on the PC', icon: <Grid3x3 size={21} />, tone: 'bg-violet-500/15 text-violet-300', show: true },
+    { id: 'counters', title: 'Counters', sub: 'Tap to count: shiny hunts and anything else on the PC', icon: <Sparkles size={21} />, tone: 'bg-yellow-500/15 text-yellow-400', show: true },
+    { id: 'barcode', title: 'Barcode to PC', sub: 'Scan a code and type it where the PC’s cursor is', icon: <ScanBarcode size={21} />, tone: 'bg-orange-500/15 text-orange-400', show: true },
+    { id: 'board', title: 'Whiteboard', sub: 'Draw here, see it on the PC', icon: <PenTool size={21} />, tone: 'bg-pink-500/15 text-pink-400', show: true },
+    { id: 'downloads', title: 'Download on the PC', sub: 'A link or a video page, into Downloads', icon: <CloudDownload size={21} />, tone: 'bg-teal-500/15 text-teal-400', show: !!f?.uploads },
     { id: 'vault', title: 'Vault', sub: 'Look up a password (secure connection)', icon: <KeyRound size={21} />, tone: 'bg-amber-500/15 text-amber-400', show: !!f?.vault },
     { id: 'settings', title: 'Settings', sub: 'Theme, PC info, unpair', icon: <SettingsIcon size={21} />, tone: 'bg-slate-400/15 text-slate-400', show: true },
   ];
-  const off = [!f?.notes && 'Notes', !f?.apps && 'Apps', !f?.vault && 'Vault'].filter(Boolean) as string[];
+  const off = [!f?.tasks && 'Tasks', !f?.notes && 'Notes', !f?.apps && 'Apps', !f?.vault && 'Vault'].filter(Boolean) as string[];
 
   return (
     <div className="relative h-full overflow-hidden">
@@ -76,9 +114,28 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 34, stiffness: 340 }}
           >
+            {page === 'sound' && <SoundPage active={active} onBack={() => setPage(null)} />}
+            {page === 'open' && <OpenAppsPage active={active} onBack={() => setPage(null)} />}
+            {page === 'tasks' && <TasksPage active={active} onBack={() => setPage(null)} />}
+            {page === 'games' && <GamesPage onBack={() => setPage(null)} />}
+            {page === 'servers' && <ServersPage active={active} onBack={() => setPage(null)} />}
             {page === 'notes' && <NotesPage active={active} onBack={() => setPage(null)} />}
             {page === 'apps' && <AppsPage onBack={() => setPage(null)} />}
             {page === 'vault' && <VaultPage active={active} onBack={() => setPage(null)} />}
+            {page === 'scan' && <ScanPage onBack={() => setPage(null)} />}
+            {page === 'deck' && <DeckPage active={active} onBack={() => setPage(null)} />}
+            {page === 'live' && <LivePage active={active} onBack={() => setPage(null)} />}
+            {page === 'photos' && <PhotosPage onBack={() => setPage(null)} />}
+            {page === 'party' && <PartyPage active={active} onBack={() => setPage(null)} />}
+            {page === 'watch' && <WatchPage active={active} onBack={() => setPage(null)} />}
+            {page === 'timers' && <TimersPage active={active} onBack={() => setPage(null)} />}
+            {page === 'controller' && <ControllerPage active={active} onBack={() => setPage(null)} />}
+            {page === 'sync' && <SyncFolderPage active={active} onBack={() => setPage(null)} />}
+            {page === 'bluetooth' && <BluetoothPage active={active} onBack={() => setPage(null)} />}
+            {page === 'counters' && <CountersPage active={active} onBack={() => setPage(null)} />}
+            {page === 'barcode' && <BarcodePage active={active} onBack={() => setPage(null)} />}
+            {page === 'board' && <BoardPage active={active} onBack={() => setPage(null)} />}
+            {page === 'downloads' && <DownloadsPage active={active} onBack={() => setPage(null)} />}
             {page === 'settings' && <SettingsPage onBack={() => setPage(null)} onUnpaired={onUnpaired} />}
           </motion.div>
         )}
