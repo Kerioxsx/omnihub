@@ -63,6 +63,11 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
             }
         }
         "watch:live" => Some((format!("{} is live", payload["handle"].as_str().unwrap_or("A creator")), payload["title"].as_str().filter(|t| !t.is_empty()).unwrap_or(if payload["platform"] == "youtube" { "On YouTube" } else { "On Twitch" }).to_string())),
+        "timer:done" => Some(("Time's up".into(), payload["label"].as_str().unwrap_or("Timer").to_string())),
+        "timer:alarm" => Some(("Alarm".into(), payload["label"].as_str().unwrap_or("Alarm").to_string())),
+        "timer:bedtime" => Some(("Bedtime soon".into(), format!("The PC locks in {} min. Save your work.", payload["minutes"].as_u64().unwrap_or(0)))),
+        "watch:free" => Some((format!("Free to keep: {}", payload["title"].as_str().unwrap_or("a game")), format!("On {}{}", payload["store"].as_str().unwrap_or("a store"), payload["until"].as_str().filter(|u| !u.is_empty()).map(|u| format!(" until {u}")).unwrap_or_default()))),
+        "watch:patch" => Some((format!("{} updated", payload["game"].as_str().unwrap_or("A game")), payload["title"].as_str().unwrap_or("New patch notes").to_string())),
         "watch:recap" => Some((payload["title"].as_str().unwrap_or("Your day").to_string(), payload["body"].as_str().unwrap_or("").to_string())),
         "watch:shop" => Some(("In the item shop today".into(), payload["item"].as_str().unwrap_or("Something you wanted").to_string())),
         "watch:price" => Some((format!("Price drop: {}", payload["name"].as_str().unwrap_or("a part")), format!("Now {:.2}{}", payload["price"].as_f64().unwrap_or(0.0), payload["currency"].as_str().map(|c| format!(" {c}")).unwrap_or_default()))),
@@ -213,7 +218,7 @@ pub fn run(args: Vec<String>) {
                             // knowing about: always a Windows notification.
                             // During a focus round only what matters gets through.
                             let focusing = h.state::<std::sync::Arc<omnihub_core::core::AppCore>>().focus.state().is_some_and(|f| f.phase == omnihub_core::focus::Phase::Focus);
-                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request" | "counters:goal" | "games:limit" | "games:sale" | "battery:low" | "alert:hot" | "screentime:limit");
+                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request" | "counters:goal" | "games:limit" | "games:sale" | "battery:low" | "alert:hot" | "screentime:limit" | "timer:done" | "timer:alarm" | "timer:bedtime");
                             if (hidden || important) && (!focusing || important) {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
                                     shortcuts::notify(&h, &title, &body);
@@ -527,6 +532,25 @@ pub fn run(args: Vec<String>) {
             floats::wallpaper_set,
             extras::phone_limits_get,
             extras::phone_limits_set,
+            extras::wifi_qr,
+            extras::timers_get,
+            extras::timers_start,
+            extras::timers_cancel,
+            extras::alarm_save,
+            extras::alarm_delete,
+            extras::bedtime_save,
+            extras::bedtime_snooze,
+            extras::watch_game_alerts,
+            extras::drives_health,
+            extras::stress_start,
+            extras::stress_stop,
+            extras::game_ready,
+            extras::windows_list,
+            extras::window_pin,
+            extras::after_downloads_get,
+            extras::after_downloads_set,
+            extras::game_move,
+            extras::game_move_stop,
             quick::clipboard_list,
             quick::clipboard_copy,
             quick::clipboard_paste,

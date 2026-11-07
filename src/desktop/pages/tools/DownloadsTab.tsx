@@ -15,6 +15,34 @@ import { useEvent } from '../../lib/hooks';
 import { toast } from '../../state/toasts';
 
 export function DownloadsTab() {
+  return (
+    <div className="space-y-4">
+      <AfterDownloads />
+      <DownloadsCard />
+    </div>
+  );
+}
+
+/** Shut down or sleep once every download (OmniHub's, Steam's, Epic's, a browser's) is done. */
+function AfterDownloads() {
+  const [action, setAction] = useState<'' | 'shutdown' | 'sleep'>('');
+  useEffect(() => {
+    void api.afterDownloads.get().then((a) => setAction(a.action as '' | 'shutdown' | 'sleep'), () => undefined);
+  }, []);
+  useEvent('downloads:after', () => setAction(''));
+  const set = (v: '' | 'shutdown' | 'sleep') => void api.afterDownloads.set(v).then((a) => setAction(a.action as '' | 'shutdown' | 'sleep'), (e: unknown) => toast.error('Couldn’t set it', errorText(e)));
+  return (
+    <Card className="flex flex-wrap items-center gap-4 p-5">
+      <div className="min-w-0 flex-1">
+        <div className="text-[14.5px] font-semibold text-fg">When downloads finish</div>
+        <div className="text-[12.5px] text-dim">Once nothing has been downloading for 5 minutes (Steam, Epic, browsers and OmniHub), the PC shuts down or sleeps, with a minute to cancel.</div>
+      </div>
+      <Segmented label="When downloads finish" value={action} onChange={set} options={[{ value: '', label: 'Do nothing' }, { value: 'sleep', label: 'Sleep' }, { value: 'shutdown', label: 'Shut down' }]} />
+    </Card>
+  );
+}
+
+function DownloadsCard() {
   const [url, setUrl] = useState('');
   const [mode, setMode] = useState<DownloadMode>('auto');
   const [list, setList] = useState<DownloadItem[]>([]);

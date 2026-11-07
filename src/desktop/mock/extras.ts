@@ -131,6 +131,10 @@ export const screenTimeMock = {
 };
 
 let watch: WatchStore = {
+  freeAlerts: true,
+  freeSeen: [],
+  patchAlerts: true,
+  patchSeen: {},
   streamers: [
     { id: 's1', platform: 'twitch', handle: 'shroud', live: true, title: 'Ranked grind' },
     { id: 's2', platform: 'youtube', handle: '@LinusTechTips', live: false, title: '' },

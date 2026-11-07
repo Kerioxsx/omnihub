@@ -322,6 +322,7 @@ export const api = {
     checkStreamers: () => call<T.WatchStore>('watch_streamers_check'),
     setRecap: (time: string) => call<T.WatchStore>('watch_recap_set', { time }),
     recapNow: () => call<{ title: string; body: string }>('watch_recap_now'),
+    setGameAlerts: (free: boolean, patches: boolean) => call<T.WatchStore>('watch_game_alerts', { free, patches }),
   },
   voice: (text: string) => call<string>('voice_command', { text }),
   /** PlayStation controllers' light bar colour ("#ff6a00"); Bluetooth only when allowed. */
@@ -334,6 +335,33 @@ export const api = {
   },
   audioOutputs: () => call<T.AudioOutput[]>('audio_outputs'),
   audioInputs: () => call<T.AudioOutput[]>('audio_inputs'),
+  wifiQr: () => call<T.WifiQr>('wifi_qr'),
+  /** Timers, alarms and the bedtime lock (rings on the PC and the phone). */
+  timers: {
+    get: () => call<T.TimersState>('timers_get'),
+    start: (minutes: number, label: string) => call<T.TimersState>('timers_start', { minutes, label }),
+    cancel: (id: string) => call<T.TimersState>('timers_cancel', { id }),
+    saveAlarm: (alarm: T.Alarm) => call<T.TimersState>('alarm_save', { alarm }),
+    deleteAlarm: (id: string) => call<T.TimersState>('alarm_delete', { id }),
+    saveBedtime: (bedtime: T.Bedtime) => call<T.TimersState>('bedtime_save', { bedtime }),
+    snooze: (minutes: number) => call<T.TimersState>('bedtime_snooze', { minutes }),
+  },
+  pcCheck: {
+    drives: () => call<T.DriveHealth[]>('drives_health'),
+    stress: (seconds: number) => call<void>('stress_start', { seconds }),
+    stopStress: () => call<void>('stress_stop'),
+    ready: () => call<T.ReadyItem[]>('game_ready'),
+  },
+  pin: {
+    windows: () => call<T.PinWindow[]>('windows_list'),
+    set: (handle: number, on: boolean) => call<boolean>('window_pin', { handle, on }),
+  },
+  afterDownloads: {
+    get: () => call<{ action: string; quietSince: number }>('after_downloads_get'),
+    set: (action: '' | 'shutdown' | 'sleep') => call<{ action: string; quietSince: number }>('after_downloads_set', { action }),
+  },
+  moveGame: (key: string, dest: string) => call<string>('game_move', { key, dest }),
+  stopMove: () => call<void>('game_move_stop'),
   /** Family and guest phones limited to some areas. */
   phoneLimits: {
     get: () => call<{ areas: [string, string][]; phones: Record<string, string[]> }>('phone_limits_get'),

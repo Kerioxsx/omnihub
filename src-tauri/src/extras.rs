@@ -652,3 +652,152 @@ pub async fn phone_limits_set(core: Core<'_>, device: String, areas: Option<Vec<
     core.audit.record("pc", "phone.limits", &device, true);
     Ok(PhoneLimitsInfo { areas: omnihub_core::remote::limits::AREAS.to_vec(), phones: l.phones })
 }
+
+// ---------- 0.32 ----------
+
+#[tauri::command]
+pub async fn wifi_qr() -> Res<omnihub_core::system::wifi::WifiQr> {
+    blocking(omnihub_core::system::wifi::current).await
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+}
+
+#[tauri::command]
+pub async fn timers_get(core: Core<'_>) -> Res<omnihub_core::timers::TimersState> {
+    Ok(core.timers.get())
+}
+
+#[tauri::command]
+pub async fn timers_start(core: Core<'_>, minutes: u32, label: String) -> Res<omnihub_core::timers::TimersState> {
+    core.timers.start(minutes, &label, now_ms())
+}
+
+#[tauri::command]
+pub async fn timers_cancel(core: Core<'_>, id: String) -> Res<omnihub_core::timers::TimersState> {
+    Ok(core.timers.cancel(&id))
+}
+
+#[tauri::command]
+pub async fn alarm_save(core: Core<'_>, alarm: omnihub_core::timers::Alarm) -> Res<omnihub_core::timers::TimersState> {
+    core.timers.save_alarm(alarm)
+}
+
+#[tauri::command]
+pub async fn alarm_delete(core: Core<'_>, id: String) -> Res<omnihub_core::timers::TimersState> {
+    Ok(core.timers.delete_alarm(&id))
+}
+
+#[tauri::command]
+pub async fn bedtime_save(core: Core<'_>, bedtime: omnihub_core::timers::Bedtime) -> Res<omnihub_core::timers::TimersState> {
+    core.timers.save_bedtime(bedtime)
+}
+
+#[tauri::command]
+pub async fn bedtime_snooze(core: Core<'_>, minutes: u32) -> Res<omnihub_core::timers::TimersState> {
+    Ok(core.timers.snooze(minutes, now_ms()))
+}
+
+#[tauri::command]
+pub async fn watch_game_alerts(core: Core<'_>, free: bool, patches: bool) -> Res<WatchStore> {
+    Ok(core.watchers.set_game_alerts(free, patches))
+}
+
+#[tauri::command]
+pub async fn drives_health() -> Res<Vec<omnihub_core::pccheck::DriveHealth>> {
+    blocking(omnihub_core::pccheck::drives).await
+}
+
+static STRESS_STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static STRESS_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Every core busy for a few minutes; `stress:progress` and `stress:done` events.
+#[tauri::command]
+pub async fn stress_start(core: Core<'_>, seconds: u32) -> Res<()> {
+    use std::sync::atomic::Ordering;
+    if STRESS_ON.swap(true, Ordering::SeqCst) {
+        return Err("A test is already running".into());
+    }
+    STRESS_STOP.store(false, Ordering::SeqCst);
+    let c = core.inner().clone();
+    std::thread::spawn(move || {
+        let temp = || {
+            c.rig.hold();
+            c.rig.status().cpu_temp
+        };
+        let ev = c.events.clone();
+        let r = omnihub_core::pccheck::stress(seconds, &STRESS_STOP, &temp, &|s, t| ev.emit("stress:progress", serde_json::json!({ "seconds": s, "temp": t })));
+        c.events.emit("stress:done", &r);
+        STRESS_ON.store(false, Ordering::SeqCst);
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stress_stop() -> Res<()> {
+    STRESS_STOP.store(true, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn game_ready(core: Core<'_>) -> Res<Vec<omnihub_core::pccheck::ReadyItem>> {
+    let c = core.inner().clone();
+    blocking(move || Ok(c.game_ready())).await
+}
+
+#[tauri::command]
+pub async fn windows_list() -> Res<Vec<omnihub_core::system::winpin::PinWindow>> {
+    blocking(|| Ok(omnihub_core::system::winpin::list())).await
+}
+
+#[tauri::command]
+pub async fn window_pin(handle: i64, on: bool) -> Res<bool> {
+    blocking(move || omnihub_core::system::winpin::set(handle, on)).await
+}
+
+#[tauri::command]
+pub async fn after_downloads_get(core: Core<'_>) -> Res<omnihub_core::timers::AfterDownloads> {
+    Ok(core.after_downloads.lock().clone())
+}
+
+/// "shutdown", "sleep" or "" (off).
+#[tauri::command]
+pub async fn after_downloads_set(core: Core<'_>, action: String) -> Res<omnihub_core::timers::AfterDownloads> {
+    if !["", "shutdown", "sleep"].contains(&action.as_str()) {
+        return Err("Pick shut down or sleep".into());
+    }
+    let mut a = core.after_downloads.lock();
+    *a = omnihub_core::timers::AfterDownloads { action, quiet_since: 0 };
+    Ok(a.clone())
+}
+
+static MOVE_STOP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Move a library game's folder to another drive (`games:move` progress).
+#[tauri::command]
+pub async fn game_move(core: Core<'_>, key: String, dest: String) -> Res<String> {
+    let c = core.inner().clone();
+    MOVE_STOP.store(false, std::sync::atomic::Ordering::SeqCst);
+    blocking(move || {
+        let g = c.games.library().into_iter().find(|g| g.key == key).ok_or("That game isn't in the library")?;
+        let dir = g.install_dir.ok_or("OmniHub doesn't know where this game is installed")?;
+        if !g.process.is_empty() && !c.procs.pids_named(&g.process).is_empty() {
+            return Err("Close the game first".into());
+        }
+        let dest = std::path::PathBuf::from(&dest);
+        let drive = dest.components().next().map(|p| p.as_os_str().to_string_lossy().to_uppercase()).unwrap_or_default();
+        let free = omnihub_core::health::gather().disks.into_iter().find(|(d, _, _)| d.to_uppercase().starts_with(drive.trim_end_matches('\\'))).map_or(0, |d| d.1);
+        let ev = c.events.clone();
+        let name = g.name.clone();
+        let to = omnihub_core::games::mover::move_game(std::path::Path::new(&dir), &dest, free, &MOVE_STOP, &|done, total| ev.emit("games:move", serde_json::json!({ "name": name, "done": done, "total": total })), &omnihub_core::games::mover::junction)?;
+        Ok(to.to_string_lossy().into_owned())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn game_move_stop() -> Res<()> {
+    MOVE_STOP.store(true, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
+}

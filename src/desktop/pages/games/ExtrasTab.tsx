@@ -13,6 +13,7 @@ import { EmptyState } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { toast } from '../../state/toasts';
 import { CrosshairCard } from './CrosshairCard';
+import { GameAlertsCard, ReadyCard } from './GameAlertsCard';
 
 /** Degrees the camera turns per mouse count at sensitivity 1 (Fortnite: per 1%). */
 const GAMES: { id: string; name: string; yaw: number; unit?: string; digits: number }[] = [
@@ -356,6 +357,7 @@ export function ExtrasTab() {
     () =>
       w && (
         <>
+          <GameAlertsCard w={w} setW={setW} />
           <StreamersCard w={w} setW={setW} />
           <RecapCard w={w} setW={setW} />
           <ShopCard w={w} setW={setW} />
@@ -366,6 +368,7 @@ export function ExtrasTab() {
   );
   return (
     <div className="space-y-4">
+      <ReadyCard />
       <SensitivityCard />
       <CrosshairCard />
       {content}

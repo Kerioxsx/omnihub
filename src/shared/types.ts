@@ -3562,7 +3562,9 @@ export type QuickAction =
   | { kind: 'sound'; output: string }
   | { kind: 'input'; input: string }
   | { kind: 'screen'; width: number; height: number; hz: number }
-  | { kind: 'hdr'; on: boolean };
+  | { kind: 'hdr'; on: boolean }
+  | { kind: 'pinWindow' }
+  | { kind: 'music'; query: string };
 
 /** One tap, several things: lights, fans, notifications, Discord, sound… */
 export interface Scene {
@@ -3896,6 +3898,10 @@ export interface Streamer {
 }
 
 export interface WatchStore {
+  freeAlerts: boolean;
+  freeSeen: string[];
+  patchAlerts: boolean;
+  patchSeen: Record<string, string>;
   streamers: Streamer[];
   /** "21:00", or "" for off. */
   recapTime: string;
@@ -4026,4 +4032,79 @@ export interface Floats {
   widgets: { id: string; kind: WidgetKind; x: number; y: number }[];
   crosshair: boolean;
   wallpaper: boolean;
+}
+
+export interface WifiQr {
+  ssid: string;
+  security: string;
+  password: string | null;
+  svg: string;
+}
+
+export interface CountdownTimer {
+  id: string;
+  label: string;
+  endsAt: number;
+  minutes: number;
+}
+
+export interface Alarm {
+  id: string;
+  label: string;
+  time: string;
+  days: number[];
+  enabled: boolean;
+  fired: string;
+}
+
+export interface Bedtime {
+  enabled: boolean;
+  from: string;
+  to: string;
+  warnMinutes: number;
+  days: number[];
+}
+
+export interface TimersState {
+  timers: CountdownTimer[];
+  alarms: Alarm[];
+  bedtime: Bedtime;
+  snoozedUntil: number;
+}
+
+export interface DriveHealth {
+  name: string;
+  media: string;
+  bus: string;
+  health: 'Healthy' | 'Warning' | 'Unhealthy' | 'Unknown';
+  size: number;
+  temperature: number | null;
+  wear: number | null;
+  powerOnHours: number | null;
+  readErrors: number | null;
+  writeErrors: number | null;
+  verdict: string;
+}
+
+export interface StressResult {
+  seconds: number;
+  startTemp: number | null;
+  maxTemp: number | null;
+  endTemp: number | null;
+  throttled: boolean;
+  verdict: string;
+}
+
+export interface ReadyItem {
+  title: string;
+  status: 'ok' | 'warn' | 'bad';
+  detail: string;
+  route: string | null;
+}
+
+export interface PinWindow {
+  handle: number;
+  title: string;
+  app: string;
+  pinned: boolean;
 }

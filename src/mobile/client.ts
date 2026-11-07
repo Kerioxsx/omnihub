@@ -119,6 +119,20 @@ export interface ServerInfo {
   features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean; games?: boolean; chats?: boolean; chatAgents?: boolean; servers?: boolean };
 }
 
+export interface PhoneAlarm {
+  id: string;
+  label: string;
+  time: string;
+  days: number[];
+  enabled: boolean;
+  fired: string;
+}
+
+export interface PhoneTimers {
+  timers: { id: string; label: string; endsAt: number; minutes: number }[];
+  alarms: PhoneAlarm[];
+}
+
 export interface FsEntry {
   name: string;
   path: string;
@@ -329,6 +343,11 @@ export const client = {
   counterEvent: (id: string, event: string) => request<{ count: number }>('POST', `/api/counters/${encodeURIComponent(id)}/event`, { event }),
   counterTimer: (id: string, run: boolean) => request<{ running: boolean }>('POST', `/api/counters/${encodeURIComponent(id)}/timer`, { run }),
   deck: () => request<{ columns: number; buttons: DeckButton[]; scenes?: DeckButton[] }>('GET', '/api/deck'),
+  timers: () => request<PhoneTimers>('GET', '/api/timers'),
+  startTimer: (minutes: number, label = '') => request<PhoneTimers>('POST', '/api/timers', { minutes, label }),
+  cancelTimer: (id: string) => request<PhoneTimers>('DELETE', `/api/timers/${encodeURIComponent(id)}`),
+  saveAlarm: (alarm: PhoneAlarm) => request<PhoneTimers>('POST', '/api/alarms', alarm),
+  deleteAlarm: (id: string) => request<PhoneTimers>('DELETE', `/api/alarms/${encodeURIComponent(id)}`),
   runScene: (id: string) => request<{ said: string }>('POST', `/api/scenes/${encodeURIComponent(id)}`),
   runDeck: (id: string) => request<{ said: string }>('POST', `/api/deck/${encodeURIComponent(id)}`),
   games: () => request<{ profiles: PhoneGame[]; session: GameSession | null; fps?: FpsLive | null }>('GET', '/api/games'),

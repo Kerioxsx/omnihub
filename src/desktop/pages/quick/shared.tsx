@@ -30,6 +30,8 @@ export const ACTION_KINDS: { value: QuickAction['kind']; label: string }[] = [
   { value: 'input', label: 'Which microphone' },
   { value: 'screen', label: 'Screen resolution and refresh rate' },
   { value: 'hdr', label: 'HDR on / off' },
+  { value: 'pinWindow', label: 'Pin the window in front on top (or unpin)' },
+  { value: 'music', label: 'Play music (a song, album or playlist)' },
 ];
 
 /** What a scene's steps can be (not another scene or the clipboard). */
@@ -75,6 +77,8 @@ export function blankAction(kind: QuickAction['kind']): QuickAction {
       return { kind, width: 1920, height: 1080, hz: 60 };
     case 'hdr':
       return { kind, on: true };
+    case 'music':
+      return { kind, query: '' };
     default:
       return { kind } as QuickAction;
   }
@@ -128,6 +132,10 @@ export function describe(a: QuickAction | null): string {
       return `Screen: ${a.width}×${a.height} at ${a.hz} Hz`;
     case 'hdr':
       return a.on ? 'HDR on' : 'HDR off';
+    case 'pinWindow':
+      return 'Pins the window in front';
+    case 'music':
+      return `Plays ${a.query || 'music'}`;
   }
 }
 

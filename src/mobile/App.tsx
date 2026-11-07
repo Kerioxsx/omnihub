@@ -10,7 +10,7 @@ import { useApp, useInbox, usePower, toast, TAB_ORDER, type Tab } from './state'
 import { useUploads, isActive } from './uploads';
 import { emitEvent } from './lib/events';
 import { useBackHandler } from './lib/back';
-import { copyToClipboard, cx, errorMessage, useInterval } from './lib/util';
+import { copyToClipboard, cx, errorMessage, useInterval, vibrate } from './lib/util';
 import { TabBar } from './ui/TabBar';
 import { Toasts } from './ui/Toasts';
 import { ShareSheet, takeShared, type Shared } from './screens/ShareIn';
@@ -142,6 +142,36 @@ export function App() {
           if (payload?.reason !== 'replaced' && had && !power.cancelling) toast.info(`${had.label} cancelled`, 'Cancelled on the PC.');
           break;
         }
+        case 'timer:done':
+        case 'timer:alarm': {
+          vibrate([200, 100, 200, 100, 400]);
+          try {
+            const ac = new AudioContext();
+            [0, 0.35, 0.7].forEach((t) => {
+              const o = ac.createOscillator();
+              const g = ac.createGain();
+              o.frequency.value = 880;
+              g.gain.setValueAtTime(0.2, ac.currentTime + t);
+              g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + t + 0.3);
+              o.connect(g).connect(ac.destination);
+              o.start(ac.currentTime + t);
+              o.stop(ac.currentTime + t + 0.3);
+            });
+          } catch {
+            /* no sound */
+          }
+          toast.info(topic === 'timer:done' ? 'Time’s up' : 'Alarm', payload?.label ?? '');
+          break;
+        }
+        case 'timer:bedtime':
+          toast.info('Bedtime soon', `The PC locks in ${payload?.minutes ?? 0} min.`);
+          break;
+        case 'watch:free':
+          toast.info(`Free to keep: ${payload?.title ?? 'a game'}`, payload?.store ?? '', payload?.url ? { label: 'Open', run: () => window.open(payload.url, '_blank', 'noopener') } : undefined);
+          break;
+        case 'watch:patch':
+          toast.info(`${payload?.game ?? 'A game'} updated`, payload?.title ?? '');
+          break;
         case 'alert:hot':
           toast.error(`${payload?.part ?? 'The PC'} is hot`, `${Math.round(payload?.temp ?? 0)} °C. Check the fans and airflow.`);
           break;

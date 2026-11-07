@@ -67,6 +67,13 @@ let mockRun = {
 };
 let mockFloats = { widgets: [] as { id: string; kind: 'clock' | 'temps' | 'music' | 'counter' | 'battery' | 'network'; x: number; y: number }[], crosshair: false, wallpaper: false };
 const mockLimits: Record<string, string[]> = {};
+let mockTimers = { timers: [] as { id: string; label: string; endsAt: number; minutes: number }[], alarms: [{ id: 'a1', label: 'School', time: '07:00', days: [0, 1, 2, 3, 4], enabled: true, fired: '' }], bedtime: { enabled: false, from: '23:30', to: '06:30', warnMinutes: 10, days: [] as number[] }, snoozedUntil: 0 };
+let mockWins = [
+  { handle: 1, title: 'Hollow Knight speedrun guide - YouTube', app: 'chrome.exe', pinned: false },
+  { handle: 2, title: 'Discord', app: 'discord.exe', pinned: false },
+  { handle: 3, title: 'Notes.txt - Notepad', app: 'notepad.exe', pinned: true },
+];
+let mockAfter = { action: '', quietSince: 0 };
 let mockBt = [
   { address: 'B8:F6:53:CA:1B:2E', name: 'WH-1000XM5', connected: true, kind: 'audio' as const, audio: true },
   { address: '7C:96:D2:11:22:33', name: 'JBL Flip 6', connected: false, kind: 'audio' as const, audio: true },
@@ -607,6 +614,54 @@ const handlers: Record<string, Handler> = {
     else delete mockLimits[d];
     return { areas: [], phones: mockLimits };
   },
+  wifi_qr: () => ({ ssid: 'Casa Lopez 5G', security: 'WPA', password: 'demo-password', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><rect width="29" height="29" fill="#fff"/><path d="M1 1h7v7H1zM21 1h7v7h-7zM1 21h7v7H1zM10 10h3v3h-3zM15 12h4v2h-4zM12 16h2v4h-2zM17 17h3v3h-3z" fill="#0b0b12"/></svg>' }),
+  timers_get: () => mockTimers,
+  timers_start: (a) => (mockTimers = { ...mockTimers, timers: [...mockTimers.timers, { id: String(Date.now()), label: str(a, 'label') || `${num(a, 'minutes')} min`, endsAt: Date.now() + num(a, 'minutes') * 60000, minutes: num(a, 'minutes') }] }),
+  timers_cancel: (a) => (mockTimers = { ...mockTimers, timers: mockTimers.timers.filter((t) => t.id !== str(a, 'id')) }),
+  alarm_save: (a) => {
+    const al = a?.alarm as (typeof mockTimers.alarms)[number];
+    const withId = { ...al, id: al.id || String(Date.now()) };
+    return (mockTimers = { ...mockTimers, alarms: [...mockTimers.alarms.filter((x) => x.id !== withId.id), withId] });
+  },
+  alarm_delete: (a) => (mockTimers = { ...mockTimers, alarms: mockTimers.alarms.filter((x) => x.id !== str(a, 'id')) }),
+  bedtime_save: (a) => (mockTimers = { ...mockTimers, bedtime: a?.bedtime as typeof mockTimers.bedtime }),
+  bedtime_snooze: () => mockTimers,
+  watch_game_alerts: (a) => ({ ...watchMock.get(), freeAlerts: Boolean(a?.free), patchAlerts: Boolean(a?.patches) }),
+  drives_health: () => [
+    { name: 'Samsung SSD 990 PRO 2TB', media: 'SSD', bus: 'NVMe', health: 'Healthy', size: 2_000_398_934_016, temperature: 41, wear: 3, powerOnHours: 1520, readErrors: 0, writeErrors: 0, verdict: 'Healthy.' },
+    { name: 'WDC WD40EZAZ', media: 'HDD', bus: 'SATA', health: 'Healthy', size: 4_000_787_030_016, temperature: 36, wear: null, powerOnHours: 21980, readErrors: 4, writeErrors: 0, verdict: 'Worth watching: back up what matters on it.' },
+  ],
+  stress_start: async (a) => {
+    const total = num(a, 'seconds');
+    for (let s = 1; s <= Math.min(total, 6); s++) {
+      await new Promise((r) => setTimeout(r, 300));
+      emit('stress:progress', { seconds: s, temp: 48 + s * 6 });
+    }
+    emit('stress:done', { seconds: total, startTemp: 54, maxTemp: 84, endTemp: 83, throttled: false, verdict: 'It reached 84 °C: warm but fine for most processors under full load.' });
+  },
+  stress_stop: () => undefined,
+  game_ready: () => [
+    { title: 'Windows updates', status: 'ok', detail: 'No restart waiting.', route: null },
+    { title: 'Free space', status: 'ok', detail: 'Enough room for updates and shaders.', route: null },
+    { title: 'Background programs', status: 'warn', detail: 'Busy: chrome.exe (22%). Close them or use the game’s boost.', route: 'tasks' },
+    { title: 'Memory', status: 'ok', detail: '46% in use.', route: null },
+    { title: 'Temperatures', status: 'ok', detail: '52 °C.', route: null },
+  ],
+  windows_list: () => mockWins,
+  window_pin: (a) => {
+    mockWins = mockWins.map((w) => (w.handle === num(a, 'handle') ? { ...w, pinned: Boolean(a?.on) } : w));
+    return Boolean(a?.on);
+  },
+  after_downloads_get: () => mockAfter,
+  after_downloads_set: (a) => (mockAfter = { action: str(a, 'action'), quietSince: 0 }),
+  game_move: async () => {
+    for (let n = 0; n <= 10; n++) {
+      emit('games:move', { name: 'Hollow Knight', done: n * 1e8, total: 1e9 });
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    return 'D:\\Games\\Hollow Knight';
+  },
+  game_move_stop: () => undefined,
   audio_inputs: () => [{ id: 'mic1', name: 'Microphone (HyperX QuadCast)', default: true }, { id: 'mic2', name: 'Headset Microphone (WH-1000XM5)', default: false }],
   screen_modes: () => ({ current: { width: 2560, height: 1440, hz: 165 }, modes: [{ width: 2560, height: 1440, hz: 165 }, { width: 2560, height: 1440, hz: 144 }, { width: 2560, height: 1440, hz: 60 }, { width: 1920, height: 1080, hz: 165 }, { width: 1920, height: 1080, hz: 144 }, { width: 1920, height: 1080, hz: 60 }, { width: 1280, height: 720, hz: 60 }], hdr: false }),
   nightlight_get: () => mockNight,

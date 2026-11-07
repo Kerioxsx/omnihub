@@ -5,7 +5,7 @@
 
 import type { GameDetail, LibraryGame, SaveBackup, ShelfStatus, SteamAchievement } from '@shared/types';
 import { motion } from 'motion/react';
-import { ArrowLeft, Clock, Download, FolderPlus, Heart, Image as ImageIcon, Lock, Music, Pause, Play, Puzzle, RotateCcw, Save, Search, Trophy, Users, Wand2, X } from 'lucide-react';
+import { ArrowLeft, Clock, Download, FolderPlus, Heart, Image as ImageIcon, Lock, Music, Pause, Play, Puzzle, RotateCcw, Save, Search, Trophy, Users, Wand2, X, HardDriveDownload } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../../api';
 import { Button, IconButton } from '../../../components/ui/Button';
@@ -14,6 +14,7 @@ import { Select, Switch, Textarea, TextInput } from '../../../components/ui/Form
 import { Callout } from '../../../components/ui/States';
 import { cx } from '../../../lib/cx';
 import { navigate } from '../../../lib/router';
+import { useEvent } from '../../../lib/hooks';
 import { confirm } from '../../../state/dialogs';
 import { toast } from '../../../state/toasts';
 import { Cover, STATUS_LABEL, ago, hours, useGamepadNav } from './LibraryTab';
@@ -311,6 +312,7 @@ export function GameView({ game, onClose, onChanged }: { game: LibraryGame; onCl
                   Mods
                 </Button>
               )}
+              <MoveButton gameKey={game.key} name={game.name} />
             </div>
           </div>
         </div>
@@ -398,5 +400,38 @@ export function GameView({ game, onClose, onChanged }: { game: LibraryGame; onCl
         </button>
       )}
     </motion.div>
+  );
+}
+
+/** Move the game to another drive (a link is left so launchers still find it). */
+function MoveButton({ gameKey, name }: { gameKey: string; name: string }) {
+  const [p, setP] = useState<{ done: number; total: number } | null>(null);
+  useEvent<{ done: number; total: number }>('games:move', (e) => setP(e));
+  const move = async () => {
+    const dest = await api.app.pickFolder(`Where to move ${name} (pick a folder on another drive)`);
+    if (!dest) return;
+    const ok = await confirm({ title: `Move ${name}?`, description: `It's copied to ${dest}, checked, and then the old folder is deleted. A link is left in its place, so the launcher still finds it. Close the game first.`, confirmLabel: 'Move' });
+    if (!ok) return;
+    setP({ done: 0, total: 1 });
+    try {
+      const to = await api.moveGame(gameKey, dest);
+      toast.success(`${name} moved`, to);
+    } catch (e) {
+      toast.error('Not moved', errorText(e));
+    } finally {
+      setP(null);
+    }
+  };
+  return p ? (
+    <div className="flex items-center gap-2 rounded-xl bg-black/40 px-3 py-2 text-[12.5px]">
+      Moving… {Math.round((p.done / Math.max(1, p.total)) * 100)}%
+      <Button size="xs" variant="ghost" onClick={() => void api.stopMove()}>
+        Stop
+      </Button>
+    </div>
+  ) : (
+    <Button icon={HardDriveDownload} onClick={() => void move()}>
+      Move to another drive
+    </Button>
   );
 }
