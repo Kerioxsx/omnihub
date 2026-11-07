@@ -1066,3 +1066,19 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   and disconnected with the one-shot KS request Windows' sound settings use;
   "Forget" calls `BluetoothRemoveDevice` after a confirmation. Nothing can be
   paired from the phone.
+
+## Karaoke Studio (0.30.3)
+
+- The microphone is opened only when you press **Start singing**, through
+  WebView2's own permission prompt, and closed by **Finish**, by leaving the
+  tab or when the device goes away. A "Listening" badge shows while it's on.
+  The audio is analysed in the page (pitch, voice activity) and never
+  recorded, stored or sent.
+- `karaoke.json` in OmniHub's data folder keeps your first language and up
+  to 300 practice summaries (numbers and up to five line texts each);
+  **Delete history** empties it. It's separate from Aurora's settings.
+- Song files are opened only after you pick them, checked by extension and
+  existence, and played through the `gamemedia` protocol by token. Lyrics are
+  read from an `.lrc` you chose or one beside the song, your lyrics folder,
+  then LRCLIB and NetEase (the same sources as the music player), with only
+  the title, artist and duration sent.

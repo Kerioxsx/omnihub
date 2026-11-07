@@ -400,3 +400,48 @@ pub async fn bt_forget(core: Core<'_>, address: String, name: String) -> Res<Vec
     })
     .await
 }
+
+// ---------- Karaoke Studio ----------
+
+#[tauri::command]
+pub async fn karaoke_get(core: Core<'_>) -> Res<omnihub_core::karaoke::KaraokeData> {
+    Ok(core.karaoke.get())
+}
+
+#[tauri::command]
+pub async fn karaoke_profile(core: Core<'_>, lang: String) -> Res<omnihub_core::karaoke::KaraokeData> {
+    core.karaoke.set_profile(&lang)
+}
+
+#[tauri::command]
+pub async fn karaoke_session(core: Core<'_>, session: omnihub_core::karaoke::Session) -> Res<omnihub_core::karaoke::KaraokeData> {
+    core.karaoke.add_session(session)
+}
+
+#[tauri::command]
+pub async fn karaoke_clear(core: Core<'_>) -> Res<omnihub_core::karaoke::KaraokeData> {
+    core.karaoke.clear()
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KaraokeTrack {
+    #[serde(flatten)]
+    track: omnihub_core::karaoke::Track,
+    url: String,
+}
+
+/// A song file from this PC, with the address the page plays it from.
+#[tauri::command]
+pub async fn karaoke_track(core: Core<'_>, path: String) -> Res<KaraokeTrack> {
+    let p = std::path::PathBuf::from(&path);
+    let track = omnihub_core::karaoke::track(&p)?;
+    let url = omnihub_core::games::shelf::media_url(&core.shelf.media_token(&p));
+    Ok(KaraokeTrack { track, url })
+}
+
+#[tauri::command]
+pub async fn karaoke_lyrics(core: Core<'_>, song: Option<String>, lrc: Option<String>, title: String, artist: String, duration_ms: u64) -> Res<Option<omnihub_core::media::lyrics::Lyrics>> {
+    let dir = core.media.lyrics_folder();
+    blocking(move || omnihub_core::karaoke::lyrics_for(song.as_deref().map(std::path::Path::new), lrc.as_deref().map(std::path::Path::new), dir.as_deref(), &title, &artist, duration_ms)).await
+}

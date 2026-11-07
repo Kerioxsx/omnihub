@@ -3872,3 +3872,40 @@ export interface BtDevice {
   kind: 'audio' | 'keyboard' | 'mouse' | 'gamepad' | 'phone' | 'computer' | 'other';
   audio: boolean;
 }
+
+// ---------- Karaoke Studio ----------
+
+export interface KaraokeSession {
+  at: number;
+  title: string;
+  artist: string;
+  /** 'song' (follow the song) or 'voice' (follow my voice). */
+  mode: 'song' | 'voice';
+  seconds: number;
+  lines: number;
+  steadinessCents: number | null;
+  timingMs: number | null;
+  lowNote: number | null;
+  highNote: number | null;
+  retry: string[];
+}
+
+export interface KaraokeData {
+  profile: { lang: string } | null;
+  sessions: KaraokeSession[];
+}
+
+export interface KaraokeTrack {
+  path: string;
+  title: string;
+  artist: string;
+  /** Where the page plays it from. */
+  url: string;
+}
+
+export interface KaraokeLyrics {
+  lines: LyricLine[];
+  plain: string | null;
+  instrumental: boolean;
+  source: string;
+}

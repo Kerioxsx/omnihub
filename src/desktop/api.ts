@@ -329,6 +329,15 @@ export const api = {
   },
   audioOutputs: () => call<T.AudioOutput[]>('audio_outputs'),
   setAudioOutput: (id: string) => call<T.AudioOutput[]>('audio_output_set', { id }),
+  /** Karaoke Studio: your language, practice history, and songs from this PC with lyrics. */
+  karaoke: {
+    get: () => call<T.KaraokeData>('karaoke_get'),
+    setLanguage: (lang: string) => call<T.KaraokeData>('karaoke_profile', { lang }),
+    addSession: (session: T.KaraokeSession) => call<T.KaraokeData>('karaoke_session', { session }),
+    clear: () => call<T.KaraokeData>('karaoke_clear'),
+    track: (path: string) => call<T.KaraokeTrack>('karaoke_track', { path }),
+    lyrics: (q: { song?: string; lrc?: string; title: string; artist: string; durationMs: number }) => call<T.KaraokeLyrics | null>('karaoke_lyrics', { song: q.song ?? null, lrc: q.lrc ?? null, title: q.title, artist: q.artist, durationMs: Math.round(q.durationMs) }),
+  },
   bluetooth: {
     list: () => call<T.BtDevice[]>('bt_list'),
     connect: (address: string, name: string, on: boolean) => call<T.BtDevice[]>('bt_connect', { address, name, on }),

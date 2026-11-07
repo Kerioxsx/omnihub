@@ -1,18 +1,16 @@
 ## New in this version
 
-**ZANGETSU v2: four Bleach transformations, a 3D button studio, quick sites, and Bluetooth and sound output from your phone.**
+**Karaoke Studio: sing along and learn songs in any language.**
 
-- **Four Bleach modes that feel different**: Bankai now has ember-orange glass panels, Getsuga energy trails, sword-cut lines and embers. Hollow has black ink splatter, torn manga panels and red eyes flickering in the dark. Mugetsu has slow dark fog, violet ripples and a background that swallows the light.
-- **New: Hakka no Togame 白霞罸**: a frozen night with falling snow, floating ice crystals, frost in the corners, drifting frost ribbons and frosted-glass panels.
-- **Each switch is its own transformation**: an orange slash, a black-and-white ink flash, a dark fade with a violet ring, or the screen freezing over. Each has its own soft sound, which you can turn off.
-- **Livelier, still readable**: cards answer hover in each mode's style, the selected page gets a slash and a pulse, progress bars shimmer, and the switcher shows each mode's colours. Everything holds still with reduced motion and pauses while OmniHub is minimized or in the background.
-- **Your own picture behind each mode** (the Picture button under the switcher): pick a character picture of your own. Manga pages can be recoloured to the mode's colour (Bankai's black ink turns orange) or kept as dark ink, faded behind the cards and drifting gently. It stays on your PC; OmniHub ships no artwork from the series.
-- **Button studio in 3D** (Big Picture → Controllers → Button studio): your controller as a 3D model, live, with buttons lighting up, sticks tilting and triggers pulling. Press or click any button and change what it does in OmniHub's controller screens, colour the model, and set the PlayStation light bar.
-- **Quick sites**: Netflix, YouTube, Crunchyroll, Disney+, HBO Max, Prime Video, Apple TV, Paramount+, Twitch, YouTube Music and Spotify, as a Watch row in Big Picture and on the phone (More → Watch on the PC). They open full screen in their own window, with no browser bars. Add your own under Library → Sites.
-- **Bluetooth from your phone** (More → Bluetooth): see the PC's Bluetooth devices, connect or disconnect headphones and speakers, and forget any device.
-- **Choose where the sound comes out from your phone** (Volume & brightness → Sound comes from): speakers, headphones, a TV or a Bluetooth headset.
+- **A new tab in Music** (Music → Karaoke Studio), with its own settings and history. The music player works exactly as before.
+- **Pronunciation written for you**: the first time, pick your first language and accent from a searchable list (Spanish (Mexico), English (UK), Portuguese (Brazil), Hindi (India), Japanese and many more). Under every word you see how to say it in your own spelling, its syllables, and tips for sounds your language doesn't have. Russian and Ukrainian, Japanese kana, Korean and Greek are re-spelled sound by sound; Spanish gets syllables with the stressed one marked. OmniHub says when it can't do more instead of guessing.
+- **Words light up as they're sung**, with the pronunciation following the same timing. Lyrics that only time whole lines are marked as approximate, and "Lyrics earlier / later" corrects them.
+- **Any song**: what your PC is playing (Spotify, Apple Music, YouTube…) or a song file from this PC. Lyrics come from an .lrc file beside the song, your lyrics folder, LRCLIB or NetEase, or an .lrc file you pick.
+- **Follow the song**: the music keeps its time and the microphone shows your note, how close you are to it, and a summary at the end (steadiness of held notes, entrances against the lyrics, your comfortable range). Only what was really measured is shown.
+- **Follow my voice** (song files from this PC): the song waits for you before each line, eases off and pauses when you stop, and goes on from the word you stopped on. A short breath changes nothing. Slower practice speeds keep the key. Headphones work best.
+- **Loop a line, practise the lines worth another go**, and see your history. The microphone is analysed on your PC and never recorded; only the summary numbers are saved, and you can delete them.
 
-Also in 0.30.1: Big Picture works with every kind of controller.
+Also in 0.30.2: ZANGETSU v2 themes, the 3D button studio, quick sites, and Bluetooth and sound output from your phone.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

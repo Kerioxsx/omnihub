@@ -844,6 +844,11 @@ impl MediaHub {
         self.events.emit("media:lyrics", serde_json::json!({ "key": key }));
     }
 
+    /// The folder of your own .lrc files, if set.
+    pub fn lyrics_folder(&self) -> Option<std::path::PathBuf> {
+        self.lrc_folder.lock().clone()
+    }
+
     fn fetch_lyrics(self: &Arc<Self>, s: MediaState, online: bool) {
         if self.lyrics.lock().contains_key(&s.key) {
             return;

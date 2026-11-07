@@ -28,6 +28,7 @@ pub mod govee;
 pub mod health;
 pub mod heat;
 pub mod helper;
+pub mod karaoke;
 pub mod images;
 pub mod mcserver;
 pub mod media;

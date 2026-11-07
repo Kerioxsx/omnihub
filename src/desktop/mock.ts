@@ -42,6 +42,7 @@ import * as vault from './mock/vault';
 import { autoclick, counters as ctr, pkm } from './mock/counters';
 import { emulators as emus, library as lib } from './mock/library';
 import { quiet as quietMock } from './mock/quiet';
+import { karaoke as karaokeMock } from './mock/karaoke';
 // A plain original shape standing in for a picture you'd pick (black ink on white).
 const SAMPLE_ART = `data:image/svg+xml;utf8,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 500'><rect width='300' height='500' fill='white'/><path d='M150 40 l26 60 -10 4 22 120 40 260 h-156 l40 -260 22 -120 -10 -4z' fill='black'/><path d='M60 470 L250 120' stroke='black' stroke-width='6'/></svg>")}`;
 const mockArt: Record<string, string | null> = {};
@@ -557,6 +558,12 @@ const handlers: Record<string, Handler> = {
   sites_open: () => undefined,
   audio_outputs: () => mockOutputs,
   audio_output_set: (a) => (mockOutputs = mockOutputs.map((o) => ({ ...o, default: o.id === str(a, 'id') }))),
+  karaoke_get: () => karaokeMock.get(),
+  karaoke_profile: (a) => karaokeMock.profile(str(a, 'lang')),
+  karaoke_session: (a) => karaokeMock.session(a?.session as never),
+  karaoke_clear: () => karaokeMock.clear(),
+  karaoke_track: (a) => karaokeMock.track(str(a, 'path')),
+  karaoke_lyrics: () => karaokeMock.lyrics(),
   bt_list: () => mockBt,
   bt_connect: (a) => (mockBt = mockBt.map((d) => (d.address === str(a, 'address') ? { ...d, connected: bool(a, 'on') } : d))),
   bt_forget: (a) => (mockBt = mockBt.filter((d) => d.address !== str(a, 'address'))),

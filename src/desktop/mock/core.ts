@@ -148,6 +148,8 @@ export function pickFolder(title: string | null): string | null {
 }
 
 export function pickFiles(title?: string | null): string[] {
+  if (title && /lrc|lyrics/i.test(title)) return ['C:\\Users\\Player\\Music\\Тихий вечер.lrc'];
+  if (title && /song/i.test(title)) return ['C:\\Users\\Player\\Music\\OmniHub - Тихий вечер (demo).mp3'];
   if (title && /picture/i.test(title)) return ['C:\\Users\\Player\\Pictures\\Phone\\IMG_2041.HEIC', 'C:\\Users\\Player\\Pictures\\Phone\\PXL_20261012_174203.jpg', 'C:\\Users\\Player\\Pictures\\Phone\\beach day.jpg'];
   return ['C:\\Users\\Player\\Videos\\Edits\\Phoenix Trailer\\Phoenix Trailer v3 final.mp4', 'C:\\Users\\Player\\Documents\\Work\\Roadmap 2026-10.pdf'];
 }

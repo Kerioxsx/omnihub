@@ -771,3 +771,20 @@ has Capri speak through her local bridge (`companion::say`).
   commands in `src-tauri/src/extras.rs`, phone routes in
   `remote/api/extra.rs`, phone pages `Watch.tsx`, `Bluetooth.tsx` and the
   outputs card in `Sound.tsx`.
+
+## Karaoke Studio (0.30.3)
+
+- Core: `karaoke.rs` (first language, practice summaries in `karaoke.json`,
+  `track()` for a song file, `lyrics_for()` using `media/lyrics.rs`).
+  Commands `karaoke_*` in `src-tauri/src/extras.rs`.
+- Page: `pages/music/karaoke/` (`KaraokeStudio.tsx`, `KaraokeLyrics.tsx`,
+  `LanguageSetup.tsx`), a tab of the Music page. It reuses Aurora's Now
+  Playing (`lib/nowPlaying.ts`) and lyric phases (`phaseAt`, `lineEnd`) and
+  copies its word fill, so Aurora is untouched.
+- `lib/karaoke/`: `pron.ts` (rule-based re-spelling per first language,
+  syllables and tips), `languages.ts` (searchable first languages),
+  `timing.ts` (Aurora's word estimate with syllables counted in any
+  script), `pitch.ts` (YIN pitch, voice activity with an adaptive floor and
+  hysteresis, note/syllable onsets, the practice summary), `follow.ts` (the
+  Follow my voice state machine: wait before a line, ease off and hold on a
+  stop, resume from the word, lead/lag by syllables with hysteresis).
