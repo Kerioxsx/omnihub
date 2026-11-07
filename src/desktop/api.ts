@@ -320,6 +320,25 @@ export const api = {
   },
   voice: (text: string) => call<string>('voice_command', { text }),
   /** PlayStation controllers' light bar colour ("#ff6a00"); Bluetooth only when allowed. */
+  /** Quick sites (Netflix, YouTube…): full screen opens an Edge window with no browser bars. */
+  sites: {
+    list: () => call<T.Site[]>('sites_list'),
+    save: (list: T.Site[]) => call<T.Site[]>('sites_save', { list }),
+    reset: () => call<T.Site[]>('sites_reset'),
+    open: (url: string, fullScreen: boolean) => call<void>('sites_open', { url, fullScreen }),
+  },
+  audioOutputs: () => call<T.AudioOutput[]>('audio_outputs'),
+  setAudioOutput: (id: string) => call<T.AudioOutput[]>('audio_output_set', { id }),
+  bluetooth: {
+    list: () => call<T.BtDevice[]>('bt_list'),
+    connect: (address: string, name: string, on: boolean) => call<T.BtDevice[]>('bt_connect', { address, name, on }),
+    forget: (address: string, name: string) => call<T.BtDevice[]>('bt_forget', { address, name }),
+  },
+  /** Your own picture behind a Bleach theme (kept on this PC). */
+  themeArt: {
+    get: (theme: string) => call<string | null>('theme_art_get', { theme }),
+    set: (theme: string, path: string | null) => call<string | null>('theme_art_set', { theme, path }),
+  },
   padsSetLight: (color: string, bluetooth: boolean) => call<T.LightResult>('pads_set_light', { color, bluetooth }),
   openDeviceManager: () => call<void>('open_device_manager'),
 

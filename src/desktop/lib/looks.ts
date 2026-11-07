@@ -28,16 +28,20 @@ export const LOOKS: LookInfo[] = [
   { id: 'fireflies', name: 'Fireflies', blurb: 'Glowing fireflies over a dark forest.', light: false },
   { id: 'lava', name: 'Lava lamp', blurb: 'Warm blobs rising and sinking.', light: false },
   { id: 'clouds', name: 'Clouds', blurb: 'A bright sky with clouds sailing by.', light: true },
-  { id: 'bankai', name: 'Bleach: Bankai', blurb: 'Black and orange, a Getsuga crescent and rising reiatsu.', light: false },
-  { id: 'hollow', name: 'Bleach: Hollow', blurb: 'Bone white, manga ink and crimson mask stripes.', light: true },
-  { id: 'mugetsu', name: 'Bleach: Mugetsu', blurb: 'Ink black with a purple spiritual glow.', light: false },
+  { id: 'bankai', name: 'Bleach: Bankai', blurb: 'Ember-orange glass, Getsuga energy trails, sword cuts and rising embers.', light: false },
+  { id: 'hollow', name: 'Bleach: Hollow', blurb: 'Bone white, black ink splatter, torn manga panels and red eyes in the dark.', light: true },
+  { id: 'mugetsu', name: 'Bleach: Mugetsu', blurb: 'Near-black, slow dark fog and violet distortion that swallows the light.', light: false },
+  { id: 'hakka', name: 'Bleach: Hakka no Togame', blurb: 'A frozen night: snowfall, floating ice crystals, frost ribbons and frosted glass.', light: false },
 ];
 
-/** The three Bleach modes, switched from the sidebar while one is on. */
-export const BLEACH: { id: Look; kanji: string; name: string }[] = [
-  { id: 'bankai', kanji: '卍解', name: 'Bankai' },
-  { id: 'hollow', kanji: '虚', name: 'Hollow' },
-  { id: 'mugetsu', kanji: '無月', name: 'Mugetsu' },
+/** The Bleach modes, switched from the sidebar while one is on. */
+export const BLEACH: { id: Look; kanji: string; name: string; sub: string; color: string; tint: string }[] = [
+  { id: 'bankai', kanji: '卍解', name: 'Bankai', sub: 'Tensa Zangetsu', color: '#ff6500', tint: '#ff7a1f' },
+  { id: 'hollow', kanji: '虚', name: 'Hollow', sub: 'Inner Hollow', color: '#d11f30', tint: '#17171c' },
+  { id: 'mugetsu', kanji: '無月', name: 'Mugetsu', sub: 'Final Getsuga Tenshō', color: '#8e4ac9', tint: '#a066e0' },
+  { id: 'hakka', kanji: '白霞罸', name: 'Hakka no Togame', sub: 'Frozen elegance', color: '#8fd3ff', tint: '#bfe6ff' },
 ];
+
+export const isBleach = (id: string | undefined) => BLEACH.some((m) => m.id === id);
 
 export const lookInfo = (id: string | undefined): LookInfo => LOOKS.find((l) => l.id === id) ?? LOOKS[0];

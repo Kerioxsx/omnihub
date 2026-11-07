@@ -315,3 +315,88 @@ pub async fn pads_set_light(color: String, bluetooth: bool) -> Res<omnihub_core:
     let rgb = omnihub_core::pads::parse_color(&color).ok_or("Pick a colour")?;
     blocking(move || Ok(omnihub_core::pads::set_light(rgb, bluetooth))).await
 }
+
+// ---------- theme pictures ----------
+
+fn art_url(core: &AppCore, p: Option<std::path::PathBuf>) -> Option<String> {
+    p.map(|p| omnihub_core::games::shelf::media_url(&core.shelf.media_token(&p)))
+}
+
+/// The address of your picture behind a Bleach theme, if you set one.
+#[tauri::command]
+pub async fn theme_art_get(core: Core<'_>, theme: String) -> Res<Option<String>> {
+    Ok(art_url(&core, core.theme_art.path(&theme)))
+}
+
+/// Use a picture (copied into OmniHub's data folder) behind a theme, or none.
+#[tauri::command]
+pub async fn theme_art_set(core: Core<'_>, theme: String, path: Option<String>) -> Res<Option<String>> {
+    let p = core.theme_art.set(&theme, path.as_deref().map(std::path::Path::new))?;
+    Ok(art_url(&core, p))
+}
+
+// ---------- quick sites, sound output, Bluetooth ----------
+
+#[tauri::command]
+pub async fn sites_list(core: Core<'_>) -> Res<Vec<omnihub_core::sites::Site>> {
+    Ok(core.sites.list())
+}
+
+#[tauri::command]
+pub async fn sites_save(core: Core<'_>, list: Vec<omnihub_core::sites::Site>) -> Res<Vec<omnihub_core::sites::Site>> {
+    core.sites.save(list)
+}
+
+#[tauri::command]
+pub async fn sites_reset(core: Core<'_>) -> Res<Vec<omnihub_core::sites::Site>> {
+    core.sites.reset()
+}
+
+#[tauri::command]
+pub async fn sites_open(url: String, full_screen: bool) -> Res<()> {
+    blocking(move || omnihub_core::sites::open(&url, full_screen)).await
+}
+
+#[tauri::command]
+pub async fn audio_outputs() -> Res<Vec<omnihub_core::media::outputs::Output>> {
+    blocking(omnihub_core::media::outputs::list).await
+}
+
+#[tauri::command]
+pub async fn audio_output_set(id: String) -> Res<Vec<omnihub_core::media::outputs::Output>> {
+    blocking(move || {
+        omnihub_core::media::outputs::set_default(&id)?;
+        omnihub_core::media::outputs::list()
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn bt_list() -> Res<Vec<omnihub_core::system::bt::BtDevice>> {
+    blocking(omnihub_core::system::bt::list).await
+}
+
+#[tauri::command]
+pub async fn bt_connect(core: Core<'_>, address: String, name: String, on: bool) -> Res<Vec<omnihub_core::system::bt::BtDevice>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = omnihub_core::system::bt::connect(&address, &name, on);
+        core.audit.record("desktop", if on { "bluetooth.connect" } else { "bluetooth.disconnect" }, &name, r.is_ok());
+        r?;
+        std::thread::sleep(std::time::Duration::from_millis(1200));
+        omnihub_core::system::bt::list()
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn bt_forget(core: Core<'_>, address: String, name: String) -> Res<Vec<omnihub_core::system::bt::BtDevice>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let r = omnihub_core::system::bt::forget(&address);
+        core.audit.record("desktop", "bluetooth.forget", &name, r.is_ok());
+        r?;
+        omnihub_core::system::bt::list()
+    })
+    .await
+}

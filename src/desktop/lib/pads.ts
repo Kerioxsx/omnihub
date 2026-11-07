@@ -134,6 +134,25 @@ export const GLYPHS: Record<PadFamily, { bottom: string; right: string; left: st
 
 // ---------- preferences ----------
 
+/** What a button does in OmniHub's controller screens. */
+export type PadAction = 'ok' | 'back' | 'menu' | 'start' | 'select' | 'lb' | 'rb' | 'up' | 'down' | 'left' | 'right' | 'none';
+
+export const ACTION_LABEL: Record<PadAction, string> = {
+  ok: 'Confirm / play',
+  back: 'Back',
+  menu: 'Controllers menu',
+  start: 'Play',
+  select: 'Controllers menu (2)',
+  lb: 'Jump left',
+  rb: 'Jump right',
+  up: 'Up',
+  down: 'Down',
+  left: 'Left',
+  right: 'Right',
+  none: 'Nothing',
+};
+export const ACTIONS = Object.keys(ACTION_LABEL) as PadAction[];
+
 export interface PadPrefs {
   /** Nintendo controllers confirm with A (the right button), like on a Switch. */
   nintendoConfirmRight: boolean;
@@ -149,14 +168,19 @@ export interface PadPrefs {
   lightBluetooth: boolean;
   /** Soft sounds when moving in Big Picture. */
   sounds: boolean;
+  /** Your button changes, by family and button (standard layout index). */
+  remap: Partial<Record<PadFamily, Record<number, PadAction>>>;
+  /** The 3D model's colours. */
+  model: { body: string; trim: string };
 }
 
 const PREFS_KEY = 'omnihub.pads';
-export const DEFAULT_PREFS: PadPrefs = { nintendoConfirmRight: true, deadzone: 0.35, vibration: 0.6, light: '#ff6a00', lightMatchTheme: true, lightBluetooth: false, sounds: true };
+export const DEFAULT_PREFS: PadPrefs = { nintendoConfirmRight: true, deadzone: 0.35, vibration: 0.6, light: '#ff6a00', lightMatchTheme: true, lightBluetooth: false, sounds: true, remap: {}, model: { body: '#24242c', trim: '#3a3a46' } };
 
 let prefs: PadPrefs = (() => {
   try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };
+    const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}');
+    return { ...DEFAULT_PREFS, ...saved, remap: saved.remap ?? {}, model: { ...DEFAULT_PREFS.model, ...(saved.model ?? {}) } };
   } catch {
     return DEFAULT_PREFS;
   }
@@ -188,6 +212,26 @@ export function usePadPrefs(): PadPrefs {
 /** The buttons (standard layout) that confirm and go back for this family. */
 export function confirmBack(family: PadFamily, p: PadPrefs = prefs): { ok: number; back: number } {
   return family === 'nintendo' && p.nintendoConfirmRight ? { ok: 1, back: 0 } : { ok: 0, back: 1 };
+}
+
+/** What a button does before any change of yours. */
+export function defaultAction(i: number, family: PadFamily, p: PadPrefs = prefs): PadAction {
+  const { ok, back } = confirmBack(family, p);
+  if (i === ok) return 'ok';
+  if (i === back) return 'back';
+  return ({ 3: 'menu', 4: 'lb', 5: 'rb', 8: 'select', 9: 'start', 12: 'up', 13: 'down', 14: 'left', 15: 'right' } as Record<number, PadAction>)[i] ?? 'none';
+}
+
+/** What a button does now (your change, else the default). */
+export function actionFor(i: number, family: PadFamily, p: PadPrefs = prefs): PadAction {
+  return p.remap[family]?.[i] ?? defaultAction(i, family, p);
+}
+
+export function setButtonAction(family: PadFamily, i: number, action: PadAction) {
+  const fam = { ...(prefs.remap[family] ?? {}) };
+  if (action === defaultAction(i, family)) delete fam[i];
+  else fam[i] = action;
+  setPadPrefs({ remap: { ...prefs.remap, [family]: fam } });
 }
 
 // ---------- vibration ----------
@@ -275,19 +319,23 @@ export function usePadInput(active: boolean, handlers: PadHandlers, opts: { hapt
         const ay = pad.axes[1] ?? 0;
         const dz = Math.max(0.2, Math.min(0.8, p.deadzone)) + 0.15;
         const [hx, hy] = info.standard ? [0, 0] : hatDirection(pad.axes[9]);
-        const { ok, back } = confirmBack(info.family, p);
+        // Each action is on when any button mapped to it is down.
+        const on: Partial<Record<PadAction, boolean>> = {};
+        for (let i = 0; i < Math.min(17, pad.buttons.length); i++) {
+          if (b(i)) on[actionFor(i, info.family, p)] = true;
+        }
         const acts: [string, boolean, () => void][] = [
-          ['l', b(14) || ax < -dz || hx < 0, () => ref.current.move(-1, 0)],
-          ['r', b(15) || ax > dz || hx > 0, () => ref.current.move(1, 0)],
-          ['u', b(12) || ay < -dz || hy < 0, () => ref.current.move(0, -1)],
-          ['d', b(13) || ay > dz || hy > 0, () => ref.current.move(0, 1)],
-          ['a', b(ok), () => ref.current.ok()],
-          ['b', b(back), () => ref.current.back()],
-          ['s', b(9), () => ref.current.start?.()],
-          ['y', b(3), () => ref.current.menu?.()],
-          ['v', b(8), () => ref.current.select?.()],
-          ['lb', b(4), () => ref.current.bumper?.(-1)],
-          ['rb', b(5), () => ref.current.bumper?.(1)],
+          ['l', !!on.left || ax < -dz || hx < 0, () => ref.current.move(-1, 0)],
+          ['r', !!on.right || ax > dz || hx > 0, () => ref.current.move(1, 0)],
+          ['u', !!on.up || ay < -dz || hy < 0, () => ref.current.move(0, -1)],
+          ['d', !!on.down || ay > dz || hy > 0, () => ref.current.move(0, 1)],
+          ['a', !!on.ok, () => ref.current.ok()],
+          ['b', !!on.back, () => ref.current.back()],
+          ['s', !!on.start, () => ref.current.start?.()],
+          ['y', !!on.menu, () => ref.current.menu?.()],
+          ['v', !!on.select, () => ref.current.select?.()],
+          ['lb', !!on.lb, () => ref.current.bumper?.(-1)],
+          ['rb', !!on.rb, () => ref.current.bumper?.(1)],
         ];
         for (const [k0, on, act] of acts) {
           const k = `${pad.index}:${k0}`;

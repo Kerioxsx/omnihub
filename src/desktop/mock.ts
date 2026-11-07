@@ -42,6 +42,29 @@ import * as vault from './mock/vault';
 import { autoclick, counters as ctr, pkm } from './mock/counters';
 import { emulators as emus, library as lib } from './mock/library';
 import { quiet as quietMock } from './mock/quiet';
+// A plain original shape standing in for a picture you'd pick (black ink on white).
+const SAMPLE_ART = `data:image/svg+xml;utf8,${encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 500'><rect width='300' height='500' fill='white'/><path d='M150 40 l26 60 -10 4 22 120 40 260 h-156 l40 -260 22 -120 -10 -4z' fill='black'/><path d='M60 470 L250 120' stroke='black' stroke-width='6'/></svg>")}`;
+const mockArt: Record<string, string | null> = {};
+let mockSites = [
+  { id: 'netflix', name: 'Netflix', url: 'https://www.netflix.com/browse', color: '#e50914' },
+  { id: 'youtube', name: 'YouTube', url: 'https://www.youtube.com', color: '#ff0033' },
+  { id: 'crunchyroll', name: 'Crunchyroll', url: 'https://www.crunchyroll.com', color: '#f47521' },
+  { id: 'disney', name: 'Disney+', url: 'https://www.disneyplus.com', color: '#113ccf' },
+  { id: 'hbomax', name: 'HBO Max', url: 'https://play.hbomax.com', color: '#5b2ee5' },
+  { id: 'prime', name: 'Prime Video', url: 'https://www.primevideo.com', color: '#1399ff' },
+  { id: 'twitch', name: 'Twitch', url: 'https://www.twitch.tv', color: '#9146ff' },
+];
+let mockOutputs = [
+  { id: 'spk', name: 'Speakers (Realtek(R) Audio)', default: true },
+  { id: 'hp', name: 'Headphones (WH-1000XM5)', default: false },
+  { id: 'tv', name: 'LG TV (NVIDIA High Definition Audio)', default: false },
+];
+let mockBt = [
+  { address: 'B8:F6:53:CA:1B:2E', name: 'WH-1000XM5', connected: true, kind: 'audio' as const, audio: true },
+  { address: '7C:96:D2:11:22:33', name: 'JBL Flip 6', connected: false, kind: 'audio' as const, audio: true },
+  { address: 'E4:17:D8:44:55:66', name: 'DualSense Wireless Controller', connected: false, kind: 'gamepad' as const, audio: false },
+  { address: 'C8:3F:26:77:88:99', name: 'MX Master 3S', connected: true, kind: 'mouse' as const, audio: false },
+];
 import { appUpdatesMock, capriDesktop, heatMock, partyMock, screenTimeMock, voiceMock, watchMock } from './mock/extras';
 import { backups as bk, batteries as bats, clipboard as clip, discord, health as pcHealth, network, obs, quick as qk } from './mock/quick';
 
@@ -528,6 +551,21 @@ const handlers: Record<string, Handler> = {
   watch_price_delete: (a) => watchMock.removePrice(str(a, 'id')),
   watch_prices_check: () => watchMock.checkPrices(),
   voice_command: (a) => voiceMock(str(a, 'text')),
+  sites_list: () => mockSites,
+  sites_save: (a) => (mockSites = (a?.list as typeof mockSites) ?? mockSites),
+  sites_reset: () => mockSites,
+  sites_open: () => undefined,
+  audio_outputs: () => mockOutputs,
+  audio_output_set: (a) => (mockOutputs = mockOutputs.map((o) => ({ ...o, default: o.id === str(a, 'id') }))),
+  bt_list: () => mockBt,
+  bt_connect: (a) => (mockBt = mockBt.map((d) => (d.address === str(a, 'address') ? { ...d, connected: bool(a, 'on') } : d))),
+  bt_forget: (a) => (mockBt = mockBt.filter((d) => d.address !== str(a, 'address'))),
+  theme_art_get: (a) => mockArt[str(a, 'theme')] ?? null,
+  theme_art_set: (a) => {
+    const t = str(a, 'theme');
+    mockArt[t] = a?.path ? SAMPLE_ART : null;
+    return mockArt[t];
+  },
   pads_set_light: (a) => ({ set: 1, skippedBluetooth: bool(a, 'bluetooth') ? 0 : 1, failed: 0 }),
   backups_list: () => bk.list(),
   backups_save: (a) => bk.save(obj(a, 'job')),

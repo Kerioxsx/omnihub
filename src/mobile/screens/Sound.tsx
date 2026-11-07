@@ -2,9 +2,9 @@
 // microphone, and the apps in a call right now (Discord, WhatsApp, Nyxen,
 // Teams…) with "mute my mic" and "deafen".
 
-import { Headphones, HeadphoneOff, Mic, MicOff, PhoneCall, Volume1, Volume2, VolumeX } from 'lucide-react';
+import { Check, Headphones, HeadphoneOff, Mic, MicOff, PhoneCall, Speaker, Volume1, Volume2, VolumeX } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { client, type AppVolume, type Call, type Mixer } from '../client';
+import { client, type AppVolume, type AudioOutput, type Call, type Mixer } from '../client';
 import { toast, useApp } from '../state';
 import { PullToRefresh } from '../ui/PullToRefresh';
 import { Empty, ErrorState, ListSkeleton, SectionTitle } from '../ui/common';
@@ -267,9 +267,47 @@ export function SoundPage({ active, onBack }: { active: boolean; onBack: () => v
           <div className="mb-4">
             <BrightnessCard api={screens} />
           </div>
+          {api.enabled && <OutputsCard active={active} />}
           {api.enabled ? <SoundPanel api={api} /> : <Empty icon={<VolumeX size={28} />} title="Turned off on the PC" body="Music and sound from the phone are off in OmniHub → Settings → Music." />}
         </div>
       </PullToRefresh>
+    </div>
+  );
+}
+
+/** Where the PC's sound comes out: tap a device to make it the default. */
+function OutputsCard({ active }: { active: boolean }) {
+  const [list, setList] = useState<AudioOutput[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => {
+    if (active) client.outputs().then((r) => setList(r.outputs), () => setList(null));
+  }, [active]);
+  if (!list || list.length < 2) return null;
+  const pick = async (o: AudioOutput) => {
+    if (o.default) return;
+    setBusy(o.id);
+    vibrate(15);
+    try {
+      setList((await client.setOutput(o.id)).outputs);
+      toast.success(`Sound now comes from ${o.name.replace(/\s*\(.*\)$/, '')}`);
+    } catch (e) {
+      toast.error("Couldn't switch the sound", errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="mb-4">
+      <SectionTitle>Sound comes from</SectionTitle>
+      <div className="card overflow-hidden">
+        {list.map((o, i) => (
+          <button key={o.id} type="button" disabled={!!busy} onClick={() => void pick(o)} className={cx('press flex w-full items-center gap-3 px-4 py-3 text-left', i > 0 && 'border-t border-line', o.default && 'bg-accent-soft')}>
+            <Speaker size={18} className={o.default ? 'text-accent' : 'text-dim'} />
+            <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{o.name}</span>
+            {busy === o.id ? <span className="text-xs text-faint">…</span> : o.default && <Check size={18} className="text-accent" />}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -32,6 +32,13 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.30.2
+
+- **ZANGETSU v2**: Bankai, Hollow and Mugetsu reworked, plus the new **Hakka no Togame**: their own panels, backgrounds, transitions and sounds, and your own picture behind each mode (kept on your PC).
+- **Button studio in 3D** in Big Picture: a live controller model, button remapping and colours.
+- **Quick sites** (Netflix, YouTube, Crunchyroll, Disney+, HBO Max and more) in Big Picture and on the phone.
+- **Phone**: Bluetooth (connect, disconnect, forget) and choosing where the sound comes out.
+
 ## New in 0.30.1
 
 - **Controllers in Big Picture**: Xbox, Elite, PlayStation 4/5 and Edge, Switch Pro, Joy-Con, Switch 2, GameCube and any other gamepad, with their own button symbols, Nintendo layout, vibration, PlayStation light bar colours and a controllers panel.

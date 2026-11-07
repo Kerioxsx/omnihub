@@ -2,7 +2,7 @@
 // Vault, Settings) with a slide-in sub-page stack.
 
 import { AnimatePresence, motion } from 'motion/react';
-import { Activity, Gamepad2, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft, SlidersVertical, SquareX, Server, ScanText, ScanBarcode, PenTool, CloudDownload, Grid3x3, Sparkles, Gauge, Images, PartyPopper } from 'lucide-react';
+import { Activity, Gamepad2, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft, SlidersVertical, SquareX, Server, ScanText, ScanBarcode, PenTool, CloudDownload, Grid3x3, Sparkles, Gauge, Images, PartyPopper, Tv, Bluetooth as BluetoothIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useApp } from '../state';
 import { Logo } from '../ui/Logo';
@@ -27,8 +27,10 @@ import { DownloadsPage } from './Downloads';
 import { LivePage } from './Live';
 import { PartyPage } from './Party';
 import { PhotosPage } from './Photos';
+import { WatchPage } from './Watch';
+import { BluetoothPage } from './Bluetooth';
 
-export type MorePage = 'live' | 'photos' | 'party' | 'deck' | 'counters' | 'sound' | 'open' | 'tasks' | 'games' | 'servers' | 'notes' | 'apps' | 'vault' | 'scan' | 'barcode' | 'board' | 'downloads' | 'settings';
+export type MorePage = 'live' | 'photos' | 'party' | 'watch' | 'bluetooth' | 'deck' | 'counters' | 'sound' | 'open' | 'tasks' | 'games' | 'servers' | 'notes' | 'apps' | 'vault' | 'scan' | 'barcode' | 'board' | 'downloads' | 'settings';
 
 export function MoreScreen({ active, page, setPage, onUnpaired }: { active: boolean; page: MorePage | null; setPage: (p: MorePage | null) => void; onUnpaired: () => void }) {
   const info = useApp((s) => s.info);
@@ -44,6 +46,8 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
     { id: 'servers', title: 'Minecraft servers', sub: 'Start them, players, map and console', icon: <Server size={21} />, tone: 'bg-lime-500/15 text-lime-400', show: !!f?.servers },
     { id: 'notes', title: 'Notes & ideas', sub: 'Read, search and capture ideas for Claude', icon: <NotebookPen size={21} />, tone: 'bg-violet-500/15 text-violet-400', show: !!f?.notes },
     { id: 'apps', title: 'Apps', sub: 'Launch programs on the PC', icon: <AppWindow size={21} />, tone: 'bg-cyan-500/15 text-cyan-400', show: !!f?.apps },
+    { id: 'watch', title: 'Watch on the PC', sub: 'Netflix, YouTube, Crunchyroll, Disney+ and more, full screen', icon: <Tv size={21} />, tone: 'bg-red-500/15 text-red-300', show: !!f?.apps },
+    { id: 'bluetooth', title: 'Bluetooth', sub: 'Connect headphones and speakers, forget devices', icon: <BluetoothIcon size={21} />, tone: 'bg-blue-500/15 text-blue-400', show: !!f?.media },
     { id: 'photos', title: 'Import photos', sub: 'New camera-roll photos to Pictures on the PC', icon: <Images size={21} />, tone: 'bg-pink-500/15 text-pink-400', show: !!f?.uploads },
     { id: 'party', title: 'Party queue', sub: 'What’s playing, and add songs', icon: <PartyPopper size={21} />, tone: 'bg-amber-500/15 text-amber-300', show: !!f?.media },
     { id: 'scan', title: 'Scan', sub: 'Documents, receipts and cards to the PC, with their text', icon: <ScanText size={21} />, tone: 'bg-sky-500/15 text-sky-400', show: !!f?.uploads },
@@ -117,6 +121,8 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
             {page === 'live' && <LivePage active={active} onBack={() => setPage(null)} />}
             {page === 'photos' && <PhotosPage onBack={() => setPage(null)} />}
             {page === 'party' && <PartyPage active={active} onBack={() => setPage(null)} />}
+            {page === 'watch' && <WatchPage active={active} onBack={() => setPage(null)} />}
+            {page === 'bluetooth' && <BluetoothPage active={active} onBack={() => setPage(null)} />}
             {page === 'counters' && <CountersPage active={active} onBack={() => setPage(null)} />}
             {page === 'barcode' && <BarcodePage active={active} onBack={() => setPage(null)} />}
             {page === 'board' && <BoardPage active={active} onBack={() => setPage(null)} />}

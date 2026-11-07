@@ -1,17 +1,18 @@
 ## New in this version
 
-**Big Picture works with every kind of controller.**
+**ZANGETSU v2: four Bleach transformations, a 3D button studio, quick sites, and Bluetooth and sound output from your phone.**
 
-- **Every controller is recognised**: Xbox (including Elite), PlayStation 4, PlayStation 5 and DualSense Edge, Switch Pro, Joy-Con (single or a pair), Switch 2 Pro and Joy-Con 2, GameCube and Switch Online controllers, Steam controllers, and any other gamepad Windows sees (8BitDo, PowerA, HORI, Logitech and more), even ones without a standard layout.
-- **The right button symbols**: Big Picture shows A/B/Y on Xbox controllers, ✕/○/△ on PlayStation ones and the Nintendo letters on Nintendo ones, for whichever controller you last pressed.
-- **Nintendo layout**: on Nintendo controllers, A (the right button) confirms and B goes back, like on a Switch (can be turned off).
-- **Vibration**: a light buzz when you move and a stronger one when you pick a game, at the strength you choose (off, light, medium, strong), on controllers that report vibration to Windows apps.
-- **PlayStation light bar colour**: DualShock 4, DualSense and DualSense Edge light up in your theme's colour or one you pick. Over a cable by default; Bluetooth is optional, because over Bluetooth it puts the controller in the mode Steam uses and some older games then don't see it until it's turned off and on.
-- **Controllers panel** (Y / △ / X, View, or the button at the top of Big Picture): the controllers connected with a live button test, a vibration test, stick dead zone, vibration strength, light colour and navigation sounds, all usable with the controller.
-- The shoulder buttons jump five games at a time. A button held while a screen opens no longer presses something on the new screen.
-- Honest limits: Switch 2 controllers' HD rumble has no public way in for Windows apps, and Elite paddles work as whatever buttons the Xbox Accessories app gives them.
+- **Four Bleach modes that feel different**: Bankai now has ember-orange glass panels, Getsuga energy trails, sword-cut lines and embers. Hollow has black ink splatter, torn manga panels and red eyes flickering in the dark. Mugetsu has slow dark fog, violet ripples and a background that swallows the light.
+- **New: Hakka no Togame 白霞罸**: a frozen night with falling snow, floating ice crystals, frost in the corners, drifting frost ribbons and frosted-glass panels.
+- **Each switch is its own transformation**: an orange slash, a black-and-white ink flash, a dark fade with a violet ring, or the screen freezing over. Each has its own soft sound, which you can turn off.
+- **Livelier, still readable**: cards answer hover in each mode's style, the selected page gets a slash and a pulse, progress bars shimmer, and the switcher shows each mode's colours. Everything holds still with reduced motion and pauses while OmniHub is minimized or in the background.
+- **Your own picture behind each mode** (the Picture button under the switcher): pick a character picture of your own. Manga pages can be recoloured to the mode's colour (Bankai's black ink turns orange) or kept as dark ink, faded behind the cards and drifting gently. It stays on your PC; OmniHub ships no artwork from the series.
+- **Button studio in 3D** (Big Picture → Controllers → Button studio): your controller as a 3D model, live, with buttons lighting up, sticks tilting and triggers pulling. Press or click any button and change what it does in OmniHub's controller screens, colour the model, and set the PlayStation light bar.
+- **Quick sites**: Netflix, YouTube, Crunchyroll, Disney+, HBO Max, Prime Video, Apple TV, Paramount+, Twitch, YouTube Music and Spotify, as a Watch row in Big Picture and on the phone (More → Watch on the PC). They open full screen in their own window, with no browser bars. Add your own under Library → Sites.
+- **Bluetooth from your phone** (More → Bluetooth): see the PC's Bluetooth devices, connect or disconnect headphones and speakers, and forget any device.
+- **Choose where the sound comes out from your phone** (Volume & brightness → Sound comes from): speakers, headphones, a TV or a Bluetooth headset.
 
-Also in 0.30.0: Capri Desktop, nightly quiet mode, overheat alerts, a gaming dashboard on your phone, a party queue, screen-time limits and more.
+Also in 0.30.1: Big Picture works with every kind of controller.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

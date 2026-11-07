@@ -73,6 +73,10 @@ pub struct AppCore {
     pub counters: crate::counters::Counters,
     /// The game library's notes, sessions and save backups.
     pub shelf: crate::games::shelf::Shelf,
+    /// Your own pictures behind the Bleach themes.
+    pub theme_art: crate::theme_art::ThemeArt,
+    /// Quick sites (Netflix, YouTube…) for Big Picture and the phone.
+    pub sites: crate::sites::Sites,
     /// Game art addresses asked of Steam's store.
     pub store_art: Arc<crate::games::storeart::StoreArt>,
     pub emulators: crate::games::emulators::Emulators,
@@ -180,6 +184,8 @@ impl AppCore {
             pkm: crate::pkm::Editor::default(),
             counters: crate::counters::Counters::new(&paths.data, events.clone()),
             shelf: crate::games::shelf::Shelf::new(&paths.data, events.clone()),
+            theme_art: crate::theme_art::ThemeArt::new(&paths.data),
+            sites: crate::sites::Sites::new(&paths.data),
             store_art: Arc::new(crate::games::storeart::StoreArt::new(&paths.cache)),
             emulators: crate::games::emulators::Emulators::new(&paths.data),
             counters_overlay: parking_lot::Mutex::new(None),

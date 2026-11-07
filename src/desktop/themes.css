@@ -105,10 +105,10 @@
 }
 
 /* Cards sit a little more solid over moving backgrounds, so text stays easy to read. */
-:root[data-look]:not([data-look='classic']):not(.light) .card {
+:root[data-look]:not([data-look='classic'], [data-look='bankai'], [data-look='mugetsu'], [data-look='hakka']):not(.light) .card {
   background: color-mix(in oklab, var(--bg-elev) 88%, transparent);
 }
-:root.light[data-look]:not([data-look='classic']) .card {
+:root.light[data-look]:not([data-look='classic'], [data-look='hollow']) .card {
   background: color-mix(in oklab, var(--bg-elev) 92%, transparent);
 }
 
@@ -1049,16 +1049,16 @@
 }
 
 :root[data-look='bankai'] {
-  --bg: #09090b;
-  --bg-elev: #17171c;
-  --surface: rgba(255, 255, 255, 0.035);
-  --surface-2: rgba(255, 255, 255, 0.065);
-  --surface-3: rgba(255, 255, 255, 0.1);
-  --border: #2a2a32;
-  --border-strong: #3d3d47;
-  --text: #f4f4f5;
-  --text-dim: #a1a1aa;
-  --text-faint: #75757e;
+  --bg: #0b0604;
+  --bg-elev: #1d0f07;
+  --surface: rgba(255, 140, 60, 0.05);
+  --surface-2: rgba(255, 140, 60, 0.085);
+  --surface-3: rgba(255, 140, 60, 0.13);
+  --border: #3a1f10;
+  --border-strong: #5c3017;
+  --text: #fff4ec;
+  --text-dim: #d1a98e;
+  --text-faint: #9a7660;
   --accent: #ff6500;
   --accent-2: #ff9a3c;
 }
@@ -1090,19 +1090,19 @@
   --accent: #8e4ac9;
   --accent-2: #b27ae6;
 }
-:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) {
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) {
   --radius: 12px;
   --font-display: 'OmniHub Barlow Condensed', 'Inter Display', 'Segoe UI', system-ui, sans-serif;
   --card-hi: rgba(255, 255, 255, 0.05);
 }
 
 /* Sharp condensed titles. */
-:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) header h1 {
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) header h1 {
   font-weight: 700;
   letter-spacing: 0.035em;
   text-transform: uppercase;
 }
-:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) .font-display {
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) .font-display {
   letter-spacing: 0.02em;
 }
 
@@ -1112,28 +1112,42 @@
   box-shadow: none;
   transition: border-color 150ms ease;
 }
+:root[data-look='hakka'] {
+  --bg: #070d1d;
+  --bg-elev: #111b34;
+  --surface: rgba(190, 225, 255, 0.05);
+  --surface-2: rgba(190, 225, 255, 0.085);
+  --surface-3: rgba(190, 225, 255, 0.13);
+  --border: #24365c;
+  --border-strong: #3b5487;
+  --text: #f1f8ff;
+  --text-dim: #aec1df;
+  --text-faint: #7a8eb1;
+  --accent: #8fd3ff;
+  --accent-2: #c7b8ff;
+}
 :root.light[data-look='hollow'] .card {
   background: #ffffff;
   box-shadow: none;
   transition: border-color 150ms ease;
 }
-:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) .card:hover {
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) .card:hover {
   border-color: var(--border-strong);
 }
 
 /* The sidebar's selection: an angular blade instead of a rounded bar. */
-:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) .nav-bar {
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) .nav-bar {
   width: 4px;
   border-radius: 0;
   clip-path: polygon(0 0, 100% 20%, 100% 80%, 0 100%);
 }
-:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) .nav-active {
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) .nav-active {
   background: linear-gradient(100deg, var(--accent-soft), transparent 75%);
   border-color: color-mix(in oklab, var(--accent) 28%, transparent);
 }
 
 /* Main buttons: medium-weight capitals, a soft glow and a quick diagonal sheen on hover. */
-:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) button.accent-gradient {
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) button.accent-gradient {
   position: relative;
   overflow: hidden;
   text-transform: uppercase;
@@ -1141,7 +1155,7 @@
   font-weight: 600;
   transition: box-shadow 150ms ease, filter 150ms ease;
 }
-:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) button.accent-gradient::after {
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) button.accent-gradient::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -1149,15 +1163,15 @@
   transform: translateX(-130%);
   pointer-events: none;
 }
-:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) button.accent-gradient:hover:not(:disabled)::after {
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) button.accent-gradient:hover:not(:disabled)::after {
   transform: translateX(130%);
   transition: transform 420ms cubic-bezier(0.3, 0.7, 0.2, 1);
 }
-:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) button.accent-gradient:hover:not(:disabled) {
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) button.accent-gradient:hover:not(:disabled) {
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 55%, transparent), 0 10px 26px -12px var(--accent-glow);
 }
 @media (prefers-reduced-motion: reduce) {
-  :root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu']) button.accent-gradient::after {
+  :root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) button.accent-gradient::after {
     display: none;
   }
 }
@@ -1379,4 +1393,715 @@
   100% {
     background: transparent;
   }
+}
+
+
+/* ===================== ZANGETSU v2 ===================== */
+
+/* ---- Panels in each mode's own material ---- */
+:root[data-look='bankai'] .card {
+  background:
+    linear-gradient(155deg, rgba(255, 110, 20, 0.14), rgba(255, 110, 20, 0.03) 42%, rgba(0, 0, 0, 0) 70%),
+    color-mix(in oklab, #1d0f07 90%, transparent);
+  border-color: rgba(255, 120, 40, 0.2);
+}
+:root.light[data-look='hollow'] .card {
+  border-radius: 4px 16px 4px 16px;
+  border-color: #c9c5bd;
+  box-shadow: 3px 3px 0 rgba(23, 23, 28, 0.08);
+}
+:root[data-look='mugetsu'] .card {
+  background:
+    radial-gradient(120% 90% at 100% 0%, rgba(142, 74, 201, 0.08), transparent 55%),
+    color-mix(in oklab, #0d0a12 94%, transparent);
+  border-color: rgba(142, 74, 201, 0.16);
+}
+:root[data-look='hakka'] .card {
+  background:
+    linear-gradient(160deg, rgba(220, 240, 255, 0.1), rgba(160, 200, 255, 0.03) 45%, rgba(200, 185, 255, 0.05)),
+    color-mix(in oklab, #111b34 72%, transparent);
+  border-color: rgba(190, 225, 255, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 12px 36px -22px rgba(120, 190, 255, 0.45);
+  backdrop-filter: blur(12px) saturate(1.15);
+}
+
+/* ---- Hover: each mode answers in its own way ---- */
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) .card {
+  transition: border-color 180ms ease, box-shadow 220ms ease, transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+:root[data-look='bankai'] .card:hover {
+  border-color: rgba(255, 130, 50, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 101, 0, 0.18), 0 14px 40px -18px rgba(255, 101, 0, 0.55);
+}
+:root.light[data-look='hollow'] .card:hover {
+  border-color: #17171c;
+  box-shadow: 4px 4px 0 rgba(181, 31, 44, 0.35);
+}
+:root[data-look='mugetsu'] .card:hover {
+  border-color: rgba(142, 74, 201, 0.4);
+  box-shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.9), 0 0 30px -12px rgba(142, 74, 201, 0.45);
+}
+:root[data-look='hakka'] .card:hover {
+  border-color: rgba(215, 240, 255, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 0 0 1px rgba(170, 220, 255, 0.18), 0 16px 44px -18px rgba(140, 205, 255, 0.6);
+}
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) .card-interactive:hover {
+  transform: translateY(-2px);
+  animation: zg-trace 2.4s ease-in-out infinite;
+}
+@keyframes zg-trace {
+  0%,
+  100% {
+    border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
+  }
+  50% {
+    border-color: color-mix(in oklab, var(--accent) 80%, transparent);
+  }
+}
+
+/* ---- The selected page in the sidebar ---- */
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) .nav-bar {
+  animation: zg-pulse 2.8s ease-in-out infinite;
+}
+@keyframes zg-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 6px 0 var(--accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 14px 2px var(--accent-glow);
+  }
+}
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) .nav-active {
+  overflow: hidden;
+}
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='hakka']) .nav-active::after {
+  content: '';
+  position: absolute;
+  inset: -40% auto -40% -30%;
+  width: 26%;
+  transform: skewX(-28deg) translateX(-120%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 60%, #fff) 50%, transparent);
+  opacity: 0.55;
+  animation: zg-slash 520ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+:root[data-look='hakka'] .nav-active::after {
+  background: linear-gradient(90deg, transparent, rgba(230, 248, 255, 0.85) 50%, transparent);
+  animation-duration: 900ms;
+}
+@keyframes zg-slash {
+  to {
+    transform: skewX(-28deg) translateX(560%);
+    opacity: 0;
+  }
+}
+
+/* ---- Progress bars: a moving sheen (a cold sweep in Hakka) ---- */
+:root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) [role='progressbar'] > .accent-gradient {
+  background-image: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%), linear-gradient(90deg, var(--accent), var(--accent-2));
+  background-size: 220% 100%, 100% 100%;
+  animation: zg-sheen 2.2s linear infinite;
+  box-shadow: 0 0 10px -1px var(--accent-glow);
+}
+:root[data-look='hakka'] [role='progressbar'] > .accent-gradient {
+  background-image: linear-gradient(100deg, transparent 25%, rgba(240, 252, 255, 0.8) 50%, transparent 75%), linear-gradient(90deg, #8fd3ff, #c7b8ff);
+  animation-duration: 3s;
+}
+@keyframes zg-sheen {
+  from {
+    background-position: 160% 0, 0 0;
+  }
+  to {
+    background-position: -60% 0, 0 0;
+  }
+}
+
+/* ---- Bankai: layered heat, Getsuga energy trails ---- */
+.bd-bk-glow {
+  background:
+    radial-gradient(65% 60% at 92% 105%, rgba(255, 101, 0, 0.34), transparent 70%),
+    radial-gradient(45% 40% at 0% 0%, rgba(255, 101, 0, 0.1), transparent 70%),
+    radial-gradient(80% 50% at 40% 120%, rgba(120, 30, 0, 0.35), transparent 70%),
+    linear-gradient(180deg, #0d0705, #0b0604);
+}
+.bd-bk-layer {
+  --dur: 26s;
+  inset: -10%;
+  background:
+    repeating-linear-gradient(-24deg, transparent 0 46px, rgba(255, 120, 40, 0.035) 46px 47px),
+    radial-gradient(40% 30% at 70% 40%, rgba(255, 101, 0, 0.06), transparent 70%);
+  animation: zg-drift var(--dur) ease-in-out infinite alternate;
+}
+@keyframes zg-drift {
+  from {
+    transform: translate3d(-1.5%, 0.5%, 0);
+  }
+  to {
+    transform: translate3d(1.5%, -1%, 0);
+  }
+}
+.bd-bk-trail {
+  --dur: 11s;
+  height: 2px;
+  width: 36%;
+  left: 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 120, 30, 0.75) 70%, #ffe3c7);
+  filter: blur(0.6px) drop-shadow(0 0 6px rgba(255, 101, 0, 0.8));
+  transform: rotate(-24deg) translateX(-120%);
+  opacity: 0;
+  animation: zg-trail var(--dur) cubic-bezier(0.4, 0, 0.2, 1) var(--delay, 0s) infinite;
+}
+.bd-bk-trail.t1 {
+  top: 58%;
+}
+.bd-bk-trail.t2 {
+  --dur: 15s;
+  --delay: -5s;
+  top: 36%;
+  height: 1px;
+}
+.bd-bk-trail.t3 {
+  --dur: 13s;
+  --delay: -9s;
+  top: 78%;
+}
+.bd-bk-trail.t4 {
+  --dur: 19s;
+  --delay: -2s;
+  top: 20%;
+  height: 1px;
+  width: 24%;
+}
+@keyframes zg-trail {
+  0% {
+    transform: rotate(-24deg) translateX(-140%);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.9;
+  }
+  30% {
+    transform: rotate(-24deg) translateX(330%);
+    opacity: 0;
+  }
+  100% {
+    transform: rotate(-24deg) translateX(330%);
+    opacity: 0;
+  }
+}
+.bd-bk-crescent {
+  animation: bd-bk-breathe var(--dur) ease-in-out infinite, zg-sway 22s ease-in-out infinite alternate;
+}
+@keyframes zg-sway {
+  from {
+    rotate: -2deg;
+  }
+  to {
+    rotate: 3deg;
+  }
+}
+
+/* ---- Hollow: ink that spreads, torn panels, red eyes in the dark ---- */
+.bd-ho-torn {
+  inset: 0;
+  background-size: 100% 100%;
+}
+.bd-ho-splat {
+  --dur: 30s;
+  inset: -4%;
+  background-size: cover;
+  opacity: 0.3;
+  mask-image: radial-gradient(75% 70% at 50% 50%, transparent 50%, #000 92%);
+  animation: zg-spread var(--dur) ease-in-out infinite alternate;
+}
+@keyframes zg-spread {
+  from {
+    transform: scale(1);
+    filter: blur(0);
+  }
+  to {
+    transform: scale(1.04);
+    filter: blur(0.6px);
+  }
+}
+.bd-ho-crack {
+  --dur: 5.5s;
+  right: 22%;
+  top: 0;
+  width: 3px;
+  height: 46%;
+  background: linear-gradient(to bottom, rgba(181, 31, 44, 0), rgba(181, 31, 44, 0.75) 40%, rgba(181, 31, 44, 0));
+  clip-path: polygon(40% 0, 100% 18%, 0 34%, 100% 52%, 10% 70%, 90% 86%, 50% 100%, 0 100%, 60% 86%, 0 70%, 70% 52%, 0 34%, 60% 18%, 0 0);
+  transform: scaleX(3);
+  animation: zg-flicker var(--dur) steps(1) infinite;
+}
+.bd-ho-eyes {
+  --dur: 7s;
+  right: 6%;
+  top: 14%;
+  width: 150px;
+  height: 70px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(23, 23, 28, 0.22), transparent);
+}
+.bd-ho-eyes > i {
+  position: absolute;
+  top: 30px;
+  width: 26px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e02233;
+  box-shadow: 0 0 10px 3px rgba(224, 34, 51, 0.7), 0 0 26px 8px rgba(224, 34, 51, 0.25);
+  animation: zg-eyes var(--dur) ease-in-out infinite;
+}
+.bd-ho-eyes > i:first-child {
+  left: 36px;
+  transform: rotate(12deg);
+}
+.bd-ho-eyes > i:last-child {
+  right: 36px;
+  transform: rotate(-12deg);
+}
+@keyframes zg-eyes {
+  0%,
+  44%,
+  100% {
+    opacity: 0.15;
+  }
+  46%,
+  60% {
+    opacity: 0.95;
+  }
+  62% {
+    opacity: 0.3;
+  }
+  64%,
+  80% {
+    opacity: 0.85;
+  }
+}
+@keyframes zg-flicker {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  22% {
+    opacity: 0.2;
+  }
+  60% {
+    opacity: 0.6;
+  }
+}
+
+/* ---- Mugetsu: dark fog and violet distortion that swallow the light ---- */
+.bd-mg-fog {
+  left: calc(var(--x) - 20%);
+  top: calc(var(--y) - 30%);
+  width: 60%;
+  height: 60%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.75), rgba(40, 12, 64, 0.25) 60%, transparent);
+  filter: blur(30px);
+  animation: zg-fog var(--dur) ease-in-out var(--delay) infinite alternate;
+}
+@keyframes zg-fog {
+  from {
+    transform: translate3d(-6%, 2%, 0) scale(var(--s));
+  }
+  to {
+    transform: translate3d(8%, -4%, 0) scale(calc(var(--s) * 1.25));
+  }
+}
+.bd-mg-ripple {
+  --dur: 14s;
+  right: 8%;
+  top: 9%;
+  width: min(34vh, 300px);
+  height: min(34vh, 300px);
+  border-radius: 50%;
+  border: 1px solid rgba(142, 74, 201, 0.4);
+  box-shadow: 0 0 20px rgba(115, 20, 184, 0.25);
+  opacity: 0;
+  animation: zg-ripple var(--dur) ease-out var(--delay, 0s) infinite;
+}
+.bd-mg-ripple.r2 {
+  --delay: -7s;
+}
+@keyframes zg-ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.bd-mg-absorb {
+  --dur: 18s;
+  inset: 0;
+  background: radial-gradient(60% 55% at 50% 45%, transparent 30%, rgba(0, 0, 0, 0.55) 100%);
+  animation: zg-absorb var(--dur) ease-in-out infinite alternate;
+}
+@keyframes zg-absorb {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- Hakka no Togame: a frozen night ---- */
+.bd-hk-sky {
+  inset: 0;
+  background:
+    radial-gradient(70% 55% at 30% -5%, rgba(170, 210, 255, 0.28), transparent 70%),
+    radial-gradient(50% 40% at 90% 10%, rgba(200, 185, 255, 0.12), transparent 70%),
+    linear-gradient(180deg, #0c1734 0%, #0a1430 45%, #0b1838 70%, #12224a 100%);
+}
+.bd-hk-mist {
+  --dur: 60s;
+  left: -30%;
+  right: -30%;
+  height: 40%;
+  bottom: 4%;
+  background: radial-gradient(50% 50% at 50% 50%, rgba(210, 235, 255, 0.16), transparent 70%);
+  filter: blur(18px);
+  animation: zg-mist var(--dur) ease-in-out infinite alternate;
+}
+.bd-hk-mist.m2 {
+  --dur: 84s;
+  bottom: 30%;
+  height: 30%;
+  opacity: 0.6;
+  animation-direction: alternate-reverse;
+}
+@keyframes zg-mist {
+  from {
+    transform: translate3d(-8%, 0, 0);
+  }
+  to {
+    transform: translate3d(8%, -2%, 0);
+  }
+}
+.bd-hk-ribbons {
+  --dur: 30s;
+  inset: -6%;
+  background-size: cover;
+  animation: zg-ribbon var(--dur) ease-in-out infinite alternate;
+}
+@keyframes zg-ribbon {
+  from {
+    transform: translate3d(-1.5%, 1%, 0) rotate(-1deg);
+  }
+  to {
+    transform: translate3d(1.5%, -1.5%, 0) rotate(1.2deg);
+  }
+}
+.bd-hk-frost {
+  --dur: 9s;
+  width: min(38vh, 360px);
+  height: min(38vh, 360px);
+  background-size: contain;
+  background-repeat: no-repeat;
+  opacity: 0.55;
+  animation: zg-glint var(--dur) ease-in-out infinite;
+}
+.bd-hk-frost.tl {
+  left: 0;
+  top: 0;
+}
+.bd-hk-frost.br {
+  right: 0;
+  bottom: 0;
+  transform: rotate(180deg);
+  animation-delay: -4s;
+}
+@keyframes zg-glint {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+.bd-hk-snow {
+  width: 5px;
+  height: 5px;
+  opacity: 0.75;
+  background: radial-gradient(circle, #fff 35%, rgba(220, 240, 255, 0.5) 60%, transparent 72%);
+}
+.bd-hk-shard {
+  left: var(--x);
+  top: var(--y);
+  width: 10px;
+  height: 34px;
+  clip-path: polygon(50% 0, 100% 30%, 70% 100%, 30% 100%, 0 30%);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(160, 215, 255, 0.45) 55%, rgba(200, 185, 255, 0.3));
+  filter: drop-shadow(0 0 6px rgba(170, 220, 255, 0.7));
+  opacity: 0.55;
+  animation: zg-shard var(--dur) ease-in-out var(--delay) infinite alternate;
+}
+@keyframes zg-shard {
+  from {
+    transform: translate3d(0, 0, 0) rotate(-18deg) scale(var(--s));
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+  to {
+    transform: translate3d(var(--sway), -40px, 0) rotate(22deg) scale(var(--s));
+    opacity: 0.45;
+  }
+}
+.bd-hk-floor {
+  left: -10%;
+  right: -10%;
+  bottom: -8%;
+  height: 22%;
+  border-radius: 50% 50% 0 0;
+  background: radial-gradient(60% 100% at 50% 100%, rgba(225, 242, 255, 0.22), rgba(150, 200, 255, 0.06) 60%, transparent);
+  filter: blur(6px);
+}
+.look-hakka .bd-kanji {
+  color: #dff3ff;
+  opacity: 0.08;
+}
+.app-backdrop.is-contained .bd-hk-shard {
+  width: 5px;
+  height: 16px;
+}
+.app-backdrop.is-contained .bd-hk-snow {
+  animation-name: bd-fall-mini;
+}
+
+/* ---- Your picture behind the theme ---- */
+.bd-art {
+  top: 3%;
+  bottom: -1%;
+  right: 1%;
+  width: min(48vw, 860px);
+  opacity: var(--art-opacity, 0.3);
+  transform: translate3d(var(--px, 0), var(--py, 0), 0);
+  transition: transform 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  mask-image: linear-gradient(to left, #000 50%, transparent 98%), linear-gradient(to top, transparent 0, #000 16%);
+  mask-composite: intersect;
+}
+.bd-art.at-left {
+  right: auto;
+  left: 1%;
+  mask-image: linear-gradient(to right, #000 50%, transparent 98%), linear-gradient(to top, transparent 0, #000 16%);
+}
+.bd-art.at-center {
+  right: auto;
+  left: 50%;
+  translate: -50% 0;
+  mask-image: radial-gradient(60% 70% at 50% 45%, #000 45%, transparent 85%);
+}
+.bd-art > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: bottom right;
+  animation: zg-float 18s ease-in-out infinite alternate;
+}
+.bd-art.at-left > img {
+  object-position: bottom left;
+}
+.bd-art.at-center > img {
+  object-position: bottom center;
+}
+.bd-art.is-tint > img {
+  filter: drop-shadow(0 0 18px var(--art-glow));
+}
+@keyframes zg-float {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(0, -10px, 0) scale(1.012);
+  }
+}
+.look-hakka .bd-art > img {
+  animation: zg-float 18s ease-in-out infinite alternate, zg-shimmer 7s ease-in-out infinite;
+}
+.look-bankai .bd-art > img {
+  animation: zg-float 16s ease-in-out infinite alternate, zg-heat 5s ease-in-out infinite;
+}
+.look-mugetsu .bd-art > img {
+  animation: zg-float 22s ease-in-out infinite alternate, zg-heat 9s ease-in-out infinite;
+}
+@keyframes zg-shimmer {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes zg-heat {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ---- Switching modes: each its own transformation (under 900 ms) ---- */
+.bleach-flash[data-mode='hakka'] {
+  --flash: #bfe6ff;
+  animation: none;
+}
+.bleach-flash[data-mode='hakka']::before {
+  inset: 0;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  filter: none;
+  opacity: 0;
+  background: radial-gradient(75% 75% at 50% 50%, transparent 35%, rgba(215, 240, 255, 0.75) 100%);
+  backdrop-filter: blur(6px) saturate(0.6);
+  animation: zg-freeze 820ms ease-in-out forwards;
+}
+@keyframes zg-freeze {
+  0% {
+    opacity: 0;
+  }
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.bleach-flash[data-mode='hollow'] {
+  animation: zg-invert 520ms steps(1) forwards;
+}
+.bleach-flash[data-mode='hollow']::before {
+  height: 6vh;
+  top: 38%;
+  transform: translateX(-60%);
+  background: linear-gradient(90deg, transparent, #b51f2c 30%, #ff3344 50%, #b51f2c 70%, transparent);
+  filter: none;
+  animation: zg-glitch 460ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@keyframes zg-invert {
+  0% {
+    background: rgba(255, 255, 255, 0.9);
+  }
+  18% {
+    background: rgba(10, 10, 12, 0.92);
+  }
+  36% {
+    background: rgba(255, 255, 255, 0.6);
+  }
+  52% {
+    background: transparent;
+  }
+}
+@keyframes zg-glitch {
+  0% {
+    transform: translateX(-60%) skewX(-20deg);
+  }
+  40% {
+    transform: translateX(10%) skewX(10deg);
+  }
+  100% {
+    transform: translateX(80%) skewX(-10deg);
+    opacity: 0;
+  }
+}
+.bleach-flash[data-mode='mugetsu'] {
+  animation: zg-dark 820ms ease-in-out forwards;
+}
+.bleach-flash[data-mode='mugetsu']::before {
+  left: 50%;
+  top: 50%;
+  width: 40vmin;
+  height: 40vmin;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0.2);
+  background: radial-gradient(closest-side, transparent 60%, rgba(142, 74, 201, 0.8) 72%, transparent 76%);
+  filter: blur(2px);
+  animation: zg-ring 820ms ease-out forwards;
+}
+@keyframes zg-dark {
+  0% {
+    background: transparent;
+  }
+  40% {
+    background: rgba(2, 1, 4, 0.92);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@keyframes zg-ring {
+  to {
+    transform: translate(-50%, -50%) scale(4);
+    opacity: 0;
+  }
+}
+
+/* ---- The switcher ---- */
+.bleach-opt {
+  position: relative;
+  transition: transform 160ms ease, box-shadow 200ms ease, background-color 160ms ease;
+}
+.bleach-opt:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px -10px var(--opt);
+}
+.bleach-opt.is-on {
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--opt) 70%, transparent), 0 0 16px -4px var(--opt);
+  animation: zg-opt 2.6s ease-in-out infinite;
+}
+@keyframes zg-opt {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--opt) 60%, transparent), 0 0 10px -4px var(--opt);
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--opt), 0 0 20px -2px var(--opt);
+  }
+}
+.bleach-chip {
+  height: 6px;
+  border-radius: 3px;
+}
+.bleach-chip.c-bankai {
+  background: linear-gradient(110deg, #0b0604 20%, #ff6500 55%, #ffb27a);
+}
+.bleach-chip.c-hollow {
+  background: linear-gradient(110deg, #f4f3ee 30%, #17171c 55%, #d11f30 80%);
+}
+.bleach-chip.c-mugetsu {
+  background: linear-gradient(110deg, #050507 40%, #3b1660 70%, #8e4ac9);
+}
+.bleach-chip.c-hakka {
+  background: linear-gradient(110deg, #0c1734 15%, #8fd3ff 55%, #f1f8ff 75%, #c7b8ff);
+}
+
+/* Still: decorations stop (reduced motion, or the app's setting). */
+@media (prefers-reduced-motion: reduce) {
+  :root:is([data-look='bankai'], [data-look='hollow'], [data-look='mugetsu'], [data-look='hakka']) :is(.card-interactive:hover, .nav-bar, .nav-active::after, [role='progressbar'] > .accent-gradient, .bleach-opt.is-on) {
+    animation: none !important;
+  }
+}
+:root.reduce-motion :is(.card-interactive:hover, .nav-bar, .nav-active::after, [role='progressbar'] > .accent-gradient, .bleach-opt.is-on) {
+  animation: none !important;
 }

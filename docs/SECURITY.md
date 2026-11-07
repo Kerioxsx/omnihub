@@ -1046,3 +1046,23 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   unless "Light also over Bluetooth" is on.
 - Controller preferences are kept in the window's local storage
   (`omnihub.pads`); nothing about controllers leaves the PC.
+
+## 0.30.2
+
+- **Theme pictures** are files you pick. They are checked by their first
+  bytes (PNG, JPEG, GIF or WebP), limited to 25 MB, copied into
+  `theme-art/` in OmniHub's data folder and shown through the `gamemedia`
+  protocol by token. Nothing is uploaded; the repository and the installer
+  contain no artwork from the series.
+- **Quick sites** open only `http(s)` addresses. From the phone, only a site
+  already on the list can be opened (by its id, never an address the phone
+  sends), with "Launch apps" allowed, and each open is in the audit log.
+  Full screen starts Microsoft Edge (found through Windows' App Paths) with
+  `--app=<url> --start-fullscreen`.
+- **Sound output and Bluetooth from the phone** need music control allowed
+  on the PC (Settings → Music), like the volume controls, and every change
+  is in the audit log. The default device is set through Windows' own
+  `IPolicyConfig` interface. Bluetooth headphones and speakers are connected
+  and disconnected with the one-shot KS request Windows' sound settings use;
+  "Forget" calls `BluetoothRemoveDevice` after a confirmation. Nothing can be
+  paired from the phone.

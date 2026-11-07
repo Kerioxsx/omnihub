@@ -2,6 +2,7 @@
 
 pub mod awake;
 pub mod battery;
+pub mod bt;
 pub mod clipboard;
 pub mod displays;
 pub mod dpapi;

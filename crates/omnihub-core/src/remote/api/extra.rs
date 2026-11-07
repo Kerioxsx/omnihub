@@ -28,6 +28,12 @@ pub(super) fn authed() -> Router<Ctx> {
         .route("/api/photos/check", post(photos_check))
         .route("/api/capri-desktop", get(capri_get).post(capri_set))
         .route("/api/party", get(party_get))
+        .route("/api/sites", get(sites_list))
+        .route("/api/sites/open", post(sites_open))
+        .route("/api/sound/outputs", get(outputs_list).post(outputs_set))
+        .route("/api/bluetooth", get(bt_list))
+        .route("/api/bluetooth/connect", post(bt_connect))
+        .route("/api/bluetooth/forget", post(bt_forget))
 }
 
 pub(super) fn public() -> Router<Ctx> {
@@ -247,6 +253,113 @@ async fn capri_set(State(core): State<Ctx>, Extension(dev): Extension<Device>, J
     core.audit.record(&actor(&dev), if req.open { "capri.open" } else { "capri.close" }, "Capri Desktop", r.is_ok());
     r.map_err(ApiError::bad)?;
     Ok(Json(json!({ "running": req.open })))
+}
+
+// ---------- quick sites ----------
+
+async fn sites_list(State(core): State<Ctx>) -> Json<serde_json::Value> {
+    Json(json!({ "sites": core.sites.list() }))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SiteReq {
+    id: String,
+    #[serde(default = "yes")]
+    full_screen: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+async fn sites_open(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<SiteReq>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_app_launch {
+        return Err(ApiError::forbidden("opening things on the PC from the phone is turned off"));
+    }
+    // Only sites on the list (not any address the phone sends).
+    let site = core.sites.list().into_iter().find(|s| s.id == req.id).ok_or_else(|| ApiError::not_found("that site isn't on the list any more"))?;
+    let (url, full) = (site.url.clone(), req.full_screen);
+    crate::system::awake::wake_screen();
+    let r = tokio::task::spawn_blocking(move || crate::sites::open(&url, full)).await?;
+    core.audit.record(&actor(&dev), "site.open", &site.name, r.is_ok());
+    r.map_err(ApiError::bad)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ---------- where the sound comes out ----------
+
+fn sound_ok(core: &crate::core::AppCore) -> ApiResult<()> {
+    if core.settings.get().media.allow_phone {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("music control from the phone is turned off on the PC"))
+    }
+}
+
+async fn outputs_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    sound_ok(&core)?;
+    let list = tokio::task::spawn_blocking(crate::media::outputs::list).await?.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "outputs": list })))
+}
+
+#[derive(Deserialize)]
+struct OutputReq {
+    id: String,
+}
+
+async fn outputs_set(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<OutputReq>) -> ApiResult<Json<serde_json::Value>> {
+    sound_ok(&core)?;
+    let id = req.id.clone();
+    let list = tokio::task::spawn_blocking(move || {
+        crate::media::outputs::set_default(&id)?;
+        crate::media::outputs::list()
+    })
+    .await?;
+    core.audit.record(&actor(&dev), "sound.output", &req.id.chars().take(60).collect::<String>(), list.is_ok());
+    Ok(Json(json!({ "outputs": list.map_err(ApiError::bad)? })))
+}
+
+// ---------- Bluetooth ----------
+
+async fn bt_list(State(core): State<Ctx>) -> ApiResult<Json<serde_json::Value>> {
+    sound_ok(&core)?;
+    let list = tokio::task::spawn_blocking(crate::system::bt::list).await?.map_err(ApiError::bad)?;
+    Ok(Json(json!({ "devices": list })))
+}
+
+#[derive(Deserialize)]
+struct BtReq {
+    address: String,
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    on: bool,
+}
+
+async fn bt_connect(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<BtReq>) -> ApiResult<Json<serde_json::Value>> {
+    sound_ok(&core)?;
+    let (a, n, on) = (req.address.clone(), req.name.clone(), req.on);
+    let r = tokio::task::spawn_blocking(move || {
+        crate::system::bt::connect(&a, &n, on)?;
+        std::thread::sleep(Duration::from_millis(1200));
+        crate::system::bt::list()
+    })
+    .await?;
+    core.audit.record(&actor(&dev), if req.on { "bluetooth.connect" } else { "bluetooth.disconnect" }, &req.name, r.is_ok());
+    Ok(Json(json!({ "devices": r.map_err(ApiError::bad)? })))
+}
+
+async fn bt_forget(State(core): State<Ctx>, Extension(dev): Extension<Device>, Json(req): Json<BtReq>) -> ApiResult<Json<serde_json::Value>> {
+    sound_ok(&core)?;
+    let a = req.address.clone();
+    let r = tokio::task::spawn_blocking(move || {
+        crate::system::bt::forget(&a)?;
+        crate::system::bt::list()
+    })
+    .await?;
+    core.audit.record(&actor(&dev), "bluetooth.forget", &req.name, r.is_ok());
+    Ok(Json(json!({ "devices": r.map_err(ApiError::bad)? })))
 }
 
 // ---------- party queue ----------

@@ -752,3 +752,22 @@ has Capri speak through her local bridge (`companion::say`).
 - `crates/omnihub-core/src/pads.rs`: the DualShock 4 and DualSense output
   reports (USB, and Bluetooth with its CRC-32), sent with
   `HidD_SetOutputReport` or `WriteFile`.
+
+## 0.30.2
+
+- Themes: `lib/looks.ts` (four Bleach modes with colours), `themes.css`
+  (the ZANGETSU v2 block: per-mode panels, hover, sidebar slash, progress
+  sheen, the backgrounds, transitions), `components/Backdrop.tsx` (original
+  SVG/CSS layers per mode, `ThemeArt` with an SVG colour-matrix filter that
+  turns dark lines into the mode's colour, pointer parallax, pause when the
+  window is hidden or unfocused), `components/BleachSwitcher.tsx` (2×2
+  switcher, transitions, synthesized sounds, picture dialog).
+  `theme_art.rs` keeps one picture per mode.
+- Controllers: `lib/padScene.ts` (three.js model per family, live state,
+  picking), `PadStudio.tsx` (the studio), remapping in `lib/pads.ts`
+  (`actionFor`, used by `usePadInput`).
+- `sites.rs` (list and opening), `media/outputs.rs` (default playback
+  device), `system/bt.rs` (Bluetooth list, connect, forget); desktop
+  commands in `src-tauri/src/extras.rs`, phone routes in
+  `remote/api/extra.rs`, phone pages `Watch.tsx`, `Bluetooth.tsx` and the
+  outputs card in `Sound.tsx`.

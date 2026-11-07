@@ -11,6 +11,7 @@ import { api, errorText } from '../../../api';
 import { cx } from '../../../lib/cx';
 import { DEFAULT_PREFS, GLYPHS, type PadInfo, accentHex, padPrefs, rumble, setPadPrefs, usePadInput, usePadPrefs, useConnectedPads } from '../../../lib/pads';
 import { toast } from '../../../state/toasts';
+import { PadStudio } from './PadStudio';
 
 const LIGHTS: [string, string][] = [
   ['theme', 'Theme'],
@@ -99,6 +100,7 @@ export function PadPanel({ onClose, lastPad }: { onClose: () => void; lastPad: P
   const pads = useConnectedPads();
   const p = usePadPrefs();
   const [row, setRow] = useState(0);
+  const [studio, setStudio] = useState(false);
   const tester = lastPad?.index ?? pads[0]?.index ?? null;
   const pressed = useLiveButtons(tester);
   const testerPad = pads.find((x) => x.index === tester) ?? null;
@@ -122,6 +124,14 @@ export function PadPanel({ onClose, lastPad }: { onClose: () => void; lastPad: P
 
   const rows: Row[] = useMemo(() => {
     const out: Row[] = [];
+    out.push({
+      id: 'studio',
+      label: 'Button studio (3D)',
+      hint: 'Your controller in 3D: see every button and stick live, and change what each button does.',
+      ok: () => setStudio(true),
+      right: () => setStudio(true),
+      render: () => <span className="rounded-full bg-accent px-3 py-1 text-[13px] font-semibold text-white">Open</span>,
+    });
     out.push({
       id: 'test',
       label: 'Test vibration',
@@ -210,7 +220,7 @@ export function PadPanel({ onClose, lastPad }: { onClose: () => void; lastPad: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p, tester, testerPad?.rumble, anyPs, lightAt, vibAt]);
 
-  usePadInput(true, {
+  usePadInput(!studio, {
     move: (dx, dy) => {
       if (dy) setRow((r) => Math.max(0, Math.min(rows.length - 1, r + dy)));
       else if (dx < 0) rows[row]?.left?.();
@@ -222,6 +232,7 @@ export function PadPanel({ onClose, lastPad }: { onClose: () => void; lastPad: P
     select: onClose,
   });
   useEffect(() => {
+    if (studio) return;
     const onKey = (e: KeyboardEvent) => {
       const map: Record<string, () => void> = {
         ArrowUp: () => setRow((r) => Math.max(0, r - 1)),
@@ -240,7 +251,7 @@ export function PadPanel({ onClose, lastPad }: { onClose: () => void; lastPad: P
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [rows, row, onClose]);
+  }, [rows, row, onClose, studio]);
 
   return (
     <div className="bp-in absolute inset-0 z-30 flex justify-end bg-black/60 backdrop-blur-sm" role="dialog" aria-label="Controllers">
@@ -297,6 +308,7 @@ export function PadPanel({ onClose, lastPad }: { onClose: () => void; lastPad: P
           <p>Elite controllers’ paddles work as whatever buttons you set in the Xbox Accessories app. If Steam is open, its controller settings may change how a controller appears here.</p>
         </div>
       </div>
+      {studio && <PadStudio padIndex={tester} onClose={() => setStudio(false)} />}
     </div>
   );
 }

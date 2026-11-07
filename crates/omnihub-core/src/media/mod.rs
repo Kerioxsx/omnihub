@@ -16,6 +16,7 @@ pub mod look;
 pub mod lyrics;
 pub mod mirror;
 pub mod mixer;
+pub mod outputs;
 pub mod motion;
 pub mod stream;
 pub mod video;

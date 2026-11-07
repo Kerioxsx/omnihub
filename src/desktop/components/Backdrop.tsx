@@ -3,10 +3,11 @@
 // pauses while the window is hidden and holds still with Reduce motion.
 
 import type { Look } from '@shared/types';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { api } from '../api';
 import { useAuroraLook, useTexture } from '../lib/aurora/textures';
 import { cx } from '../lib/cx';
-import { lookInfo } from '../lib/looks';
+import { BLEACH, lookInfo } from '../lib/looks';
 import { useSettings } from '../state/settings';
 
 /** The same layout every time (no jumping between renders). */
@@ -232,19 +233,84 @@ const INK = (() => {
   return `url("data:image/svg+xml;utf8,${svg}")`;
 })();
 
-function BleachLayers({ look, mini }: { look: 'bankai' | 'hollow' | 'mugetsu'; mini: boolean }) {
-  const motes = useMemo(() => particles(mini ? 5 : look === 'mugetsu' ? 12 : 16, look === 'mugetsu' ? 53 : 47, 9, 18), [look, mini]);
+/** Black ink splatters for Hollow (original shapes), as one SVG picture. */
+const SPLAT = (() => {
+  const r = seeded(91);
+  const blobs = Array.from({ length: 7 }, () => {
+    const cx = 40 + r() * 920;
+    const cy = 40 + r() * 620;
+    const rad = 8 + r() * 24;
+    const drops = Array.from({ length: 5 + Math.floor(r() * 6) }, () => {
+      const a = r() * Math.PI * 2;
+      const d = rad * (1.2 + r() * 1.8);
+      return `<circle cx='${(cx + Math.cos(a) * d).toFixed(0)}' cy='${(cy + Math.sin(a) * d).toFixed(0)}' r='${(2 + r() * rad * 0.22).toFixed(1)}'/>`;
+    }).join('');
+    return `<circle cx='${cx.toFixed(0)}' cy='${cy.toFixed(0)}' r='${rad.toFixed(0)}'/>${drops}`;
+  }).join('');
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 700' preserveAspectRatio='xMidYMid slice'><filter id='r'><feTurbulence type='fractalNoise' baseFrequency='0.05' numOctaves='2' seed='3'/><feDisplacementMap in='SourceGraphic' scale='22'/></filter><g filter='url(%23r)' fill='%2317171c'>${blobs}</g></svg>`;
+  return `url("data:image/svg+xml;utf8,${svg}")`;
+})();
+
+/** Torn manga-panel edges for Hollow. */
+const TORN = (() => {
+  const r = seeded(17);
+  const edge = (y0: number, y1: number) => Array.from({ length: 26 }, (_, i) => `${(i * 40).toFixed(0)},${(y0 + (y1 - y0) * (i / 25) + (r() - 0.5) * 18).toFixed(0)}`).join(' ');
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 700' preserveAspectRatio='none'><polygon points='0,0 1000,0 ${edge(120, 40).split(' ').reverse().join(' ')}' fill='%2317171c' opacity='0.07'/><polyline points='${edge(150, 70)}' fill='none' stroke='%2317171c' stroke-width='3' opacity='0.12'/><polygon points='0,700 1000,700 ${edge(600, 660).split(' ').reverse().join(' ')}' fill='%2317171c' opacity='0.05'/></svg>`;
+  return `url("data:image/svg+xml;utf8,${svg}")`;
+})();
+
+/** Frost in a corner for Hakka no Togame: branching ice lines. */
+const FROST = (() => {
+  const r = seeded(5);
+  const lines: string[] = [];
+  const grow = (x: number, y: number, a: number, len: number, depth: number) => {
+    if (depth > 5 || len < 6) return;
+    const x2 = x + Math.cos(a) * len;
+    const y2 = y + Math.sin(a) * len;
+    lines.push(`M${x.toFixed(0)} ${y.toFixed(0)}L${x2.toFixed(0)} ${y2.toFixed(0)}`);
+    grow(x2, y2, a + (r() - 0.5) * 0.5, len * 0.78, depth + 1);
+    grow(x2, y2, a + 0.9 + r() * 0.3, len * 0.5, depth + 1);
+    grow(x2, y2, a - 0.9 - r() * 0.3, len * 0.5, depth + 1);
+  };
+  for (let i = 0; i < 6; i++) grow(0, 0, 0.12 + i * 0.25, 70 + r() * 50, 0);
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400'><path d='${lines.join('')}' fill='none' stroke='%23dff3ff' stroke-width='1.3' stroke-linecap='round' opacity='0.55'/></svg>`;
+  return `url("data:image/svg+xml;utf8,${svg}")`;
+})();
+
+/** Long frost ribbons drifting through the air (Hakka no Togame). */
+const RIBBONS = (() => {
+  const paths = [
+    'M-50 520 C 180 380, 260 640, 520 470 S 820 160, 1060 300',
+    'M-80 300 C 160 190, 300 420, 560 260 S 880 60, 1080 140',
+    'M120 720 C 300 560, 420 700, 640 560 S 920 380, 1080 460',
+  ];
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 700' preserveAspectRatio='xMidYMid slice'>${paths
+    .map((d, i) => `<path d='${d}' fill='none' stroke='%23e8f6ff' stroke-width='${[5, 3, 2][i]}' stroke-linecap='round' opacity='${[0.32, 0.22, 0.18][i]}'/><path d='${d}' fill='none' stroke='%23a9d8ff' stroke-width='${[14, 9, 6][i]}' opacity='0.05'/>`)
+    .join('')}</svg>`;
+  return `url("data:image/svg+xml;utf8,${svg}")`;
+})();
+
+type BleachLook = 'bankai' | 'hollow' | 'mugetsu' | 'hakka';
+
+function BleachLayers({ look, mini }: { look: BleachLook; mini: boolean }) {
+  const motes = useMemo(() => particles(mini ? 5 : look === 'mugetsu' ? 12 : look === 'bankai' ? 26 : 16, look === 'mugetsu' ? 53 : 47, 9, 18), [look, mini]);
+  const snow = useMemo(() => (look === 'hakka' ? particles(mini ? 14 : 60, 31, 14, 28) : []), [look, mini]);
+  const shards = useMemo(() => (look === 'hakka' ? particles(mini ? 3 : 9, 77, 16, 30) : []), [look, mini]);
+  const fog = useMemo(() => (look === 'mugetsu' ? particles(mini ? 2 : 5, 13, 38, 70) : []), [look, mini]);
   if (look === 'bankai') {
     return (
       <>
         <i className="bd-bk-glow" />
+        <i className="bd-bk-layer" />
         <i className="bd-bk-slash s1" />
         <i className="bd-bk-slash s2" />
         <i className="bd-bk-slash s3" />
+        {!mini && [1, 2, 3, 4].map((n) => <i key={n} className={`bd-bk-trail t${n}`} />)}
         <i className="bd-bk-crescent" />
         {motes.map((p) => (
           <i key={p.key} className="bd-reiatsu" style={p.style} />
         ))}
+        {!mini && <ThemeArt look={look} />}
         {!mini && <i className="bd-kanji">斬月</i>}
       </>
     );
@@ -254,21 +320,148 @@ function BleachLayers({ look, mini }: { look: 'bankai' | 'hollow' | 'mugetsu'; m
       <>
         <i className="bd-ho-paper" />
         <i className="bd-ho-dots" />
+        <i className="bd-ho-torn" style={{ backgroundImage: TORN }} />
         <i className="bd-ho-ink" style={{ backgroundImage: INK }} />
+        <i className="bd-ho-splat" style={{ backgroundImage: SPLAT }} />
         <i className="bd-ho-stripes" />
+        {!mini && <i className="bd-ho-crack" />}
+        {!mini && (
+          <i className="bd-ho-eyes">
+            <i />
+            <i />
+          </i>
+        )}
+        {!mini && <ThemeArt look={look} />}
         {!mini && <i className="bd-kanji">虚</i>}
+      </>
+    );
+  }
+  if (look === 'hakka') {
+    return (
+      <>
+        <i className="bd-hk-sky" />
+        <i className="bd-hk-mist m1" />
+        {!mini && <i className="bd-hk-mist m2" />}
+        <i className="bd-hk-ribbons" style={{ backgroundImage: RIBBONS }} />
+        {!mini && <i className="bd-hk-frost tl" style={{ backgroundImage: FROST }} />}
+        {!mini && <i className="bd-hk-frost br" style={{ backgroundImage: FROST }} />}
+        {shards.map((p) => (
+          <i key={p.key} className="bd-hk-shard" style={p.style} />
+        ))}
+        {snow.map((p) => (
+          <i key={p.key} className="bd-flake bd-hk-snow" style={p.style} />
+        ))}
+        <i className="bd-hk-floor" />
+        {!mini && <ThemeArt look={look} />}
+        {!mini && <i className="bd-kanji">白霞罸</i>}
       </>
     );
   }
   return (
     <>
       <i className="bd-mg-void" />
+      {fog.map((p) => (
+        <i key={p.key} className="bd-mg-fog" style={p.style} />
+      ))}
       <i className="bd-mg-eclipse" />
+      {!mini && <i className="bd-mg-ripple r1" />}
+      {!mini && <i className="bd-mg-ripple r2" />}
       {motes.map((p) => (
         <i key={p.key} className="bd-mg-flame" style={p.style} />
       ))}
+      <i className="bd-mg-absorb" />
+      {!mini && <ThemeArt look={look} />}
       {!mini && <i className="bd-kanji">無月</i>}
     </>
+  );
+}
+
+// ---------- your own picture behind a Bleach theme ----------
+
+export type ArtStyle = 'tint' | 'ink' | 'color';
+export interface ArtPrefs {
+  style: ArtStyle;
+  opacity: number;
+  side: 'left' | 'center' | 'right';
+}
+const ART_KEY = 'omnihub.themeArt';
+
+export function artPrefs(look: string): ArtPrefs {
+  const fallback: ArtPrefs = { style: look === 'hollow' ? 'ink' : 'tint', opacity: look === 'hollow' ? 0.22 : 0.34, side: 'right' };
+  try {
+    return { ...fallback, ...(JSON.parse(localStorage.getItem(ART_KEY) ?? '{}')[look] ?? {}) };
+  } catch {
+    return fallback;
+  }
+}
+
+export function setArtPrefs(look: string, patch: Partial<ArtPrefs>) {
+  try {
+    const all = JSON.parse(localStorage.getItem(ART_KEY) ?? '{}');
+    all[look] = { ...artPrefs(look), ...patch };
+    localStorage.setItem(ART_KEY, JSON.stringify(all));
+  } catch {
+    /* this session only */
+  }
+  window.dispatchEvent(new Event('omnihub:theme-art'));
+}
+
+/** Matrix that turns dark lines into the tint colour and drops the paper. */
+function inkMatrix(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => (v / 255).toFixed(3));
+  return `0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  -0.45 -0.45 -0.45 1.35 0`;
+}
+
+function ThemeArt({ look }: { look: BleachLook }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [prefs, setPrefs] = useState<ArtPrefs>(() => artPrefs(look));
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      setPrefs(artPrefs(look));
+      void api.themeArt.get(look).then((u) => alive && setUrl(u), () => undefined);
+    };
+    load();
+    window.addEventListener('omnihub:theme-art', load);
+    return () => {
+      alive = false;
+      window.removeEventListener('omnihub:theme-art', load);
+    };
+  }, [look]);
+  // A slow parallax with the pointer (skipped with reduced motion).
+  useEffect(() => {
+    if (!url || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let frame = 0;
+    const on = (e: PointerEvent) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const el = ref.current;
+        if (!el) return;
+        el.style.setProperty('--px', `${((e.clientX / window.innerWidth - 0.5) * -18).toFixed(1)}px`);
+        el.style.setProperty('--py', `${((e.clientY / window.innerHeight - 0.5) * -10).toFixed(1)}px`);
+      });
+    };
+    window.addEventListener('pointermove', on, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('pointermove', on);
+    };
+  }, [url]);
+  if (!url) return null;
+  const mode = BLEACH.find((m) => m.id === look);
+  const tint = prefs.style === 'ink' ? '#17171c' : (mode?.tint ?? '#ffffff');
+  const filterId = `bd-art-${look}`;
+  return (
+    <i ref={ref} className={cx('bd-art', `at-${prefs.side}`, `is-${prefs.style}`)} style={{ '--art-opacity': prefs.opacity, '--art-glow': mode?.color } as React.CSSProperties}>
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden>
+        <filter id={filterId} colorInterpolationFilters="sRGB">
+          <feColorMatrix type="matrix" values={inkMatrix(tint)} />
+        </filter>
+      </svg>
+      <img src={url} alt="" draggable={false} style={prefs.style === 'color' ? undefined : { filter: `url(#${filterId})` }} />
+    </i>
   );
 }
 
@@ -285,14 +478,30 @@ function useStill(): boolean {
   return !animate || reduced || osReduced;
 }
 
+/** Minimized, hidden or in the background: decorations hold still. */
 function useHidden(): boolean {
   const [hidden, setHidden] = useState(() => document.visibilityState === 'hidden');
+  const [blurred, setBlurred] = useState(() => !document.hasFocus());
   useEffect(() => {
     const on = () => setHidden(document.visibilityState === 'hidden');
+    const focus = () => setBlurred(false);
+    // A moment's grace, so a click into a menu or dialog doesn't freeze it.
+    let t = 0;
+    const blur = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => setBlurred(!document.hasFocus()), 1500);
+    };
     document.addEventListener('visibilitychange', on);
-    return () => document.removeEventListener('visibilitychange', on);
+    window.addEventListener('focus', focus);
+    window.addEventListener('blur', blur);
+    return () => {
+      window.clearTimeout(t);
+      document.removeEventListener('visibilitychange', on);
+      window.removeEventListener('focus', focus);
+      window.removeEventListener('blur', blur);
+    };
   }, []);
-  return hidden;
+  return hidden || blurred;
 }
 
 function Layers({ look, mini }: { look: Look; mini: boolean }) {
@@ -372,6 +581,7 @@ function Layers({ look, mini }: { look: Look; mini: boolean }) {
     case 'bankai':
     case 'hollow':
     case 'mugetsu':
+    case 'hakka':
       return <BleachLayers look={look} mini={mini} />;
     case 'matrix':
       return (

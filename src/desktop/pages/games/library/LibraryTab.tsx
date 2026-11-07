@@ -4,7 +4,7 @@
 // (GameView). Friends online and wishlist sales sit beside it.
 
 import type { LibraryGame, ShelfStatus, SteamAccount, SteamFriend, WishItem } from '@shared/types';
-import { Gamepad2, Heart, KeyRound, Maximize2, Search, Sparkles, Star, Tag, Users } from 'lucide-react';
+import { Gamepad2, Heart, KeyRound, Maximize2, Search, Sparkles, Star, Tag, Tv, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../../../api';
 import { Button } from '../../../components/ui/Button';
@@ -17,6 +17,7 @@ import { usePadInput } from '../../../lib/pads';
 import { useEvent } from '../../../lib/hooks';
 import { toast } from '../../../state/toasts';
 import { BigPicture } from './BigPicture';
+import { SitesDialog } from './SitesDialog';
 import { GameView } from './GameView';
 
 export const STATUS_LABEL: Record<ShelfStatus, string> = { '': 'No status', playing: 'Playing', backlog: 'Backlog', finished: 'Finished', dropped: 'Dropped' };
@@ -187,6 +188,7 @@ export function LibraryTab() {
   const [focus, setFocus] = useState(0);
   const [keys, setKeys] = useState(false);
   const [big, setBig] = useState(false);
+  const [sitesOpen, setSitesOpen] = useState(false);
   const grid = useRef<HTMLDivElement>(null);
   const load = useCallback(() => {
     void api.library.games().then(setGames, (e) => toast.error('Couldn’t read your games', errorText(e)));
@@ -268,6 +270,9 @@ export function LibraryTab() {
           <Button icon={Maximize2} onClick={() => setBig(true)} title="Full screen, for a controller (View button)">
             Big Picture
           </Button>
+          <Button icon={Tv} onClick={() => setSitesOpen(true)} title="Netflix, YouTube, Crunchyroll… in Big Picture and on your phone">
+            Sites
+          </Button>
           <Button icon={KeyRound} onClick={() => setKeys(true)}>
             Steam extras
           </Button>
@@ -313,6 +318,7 @@ export function LibraryTab() {
       </div>
       {current && <GameView game={current} onClose={() => setOpen(null)} onChanged={load} />}
       {big && games && <BigPicture games={games} onClose={() => setBig(false)} />}
+      <SitesDialog open={sitesOpen} onClose={() => setSitesOpen(false)} />
       <KeysDialog open={keys} onClose={() => setKeys(false)} account={account} onSaved={load} />
     </div>
   );

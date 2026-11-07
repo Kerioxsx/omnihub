@@ -161,9 +161,9 @@ export interface LiveStats {
   game: string | null;
 }
 
-export type { QuietSchedule, QuietStatus } from '@shared/types';
+export type { AudioOutput, BtDevice, QuietSchedule, QuietStatus, Site } from '@shared/types';
 export type { AudioInfo, FpsLive, GameKind, GameSession, GameStep, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, PingResult, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
-import type { QuietSchedule, QuietStatus, ApprovalRequest, BoardStroke, DownloadItem, DownloadMode, Scanned, ScanKind, ScanTarget, VideoJob, VideoTask, AudioInfo, FpsLive, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
+import type { AudioOutput, BtDevice, Site, QuietSchedule, QuietStatus, ApprovalRequest, BoardStroke, DownloadItem, DownloadMode, Scanned, ScanKind, ScanTarget, VideoJob, VideoTask, AudioInfo, FpsLive, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
 
 /** One app in the PC's volume mixer. */
 export interface AppVolume {
@@ -289,6 +289,13 @@ export const client = {
   photosCheck: (files: { name: string; size: number }[]) => request<{ have: boolean[]; dest: string }>('POST', '/api/photos/check', { files }),
   capriDesktop: () => request<{ installed: boolean; running: boolean }>('GET', '/api/capri-desktop'),
   setCapriDesktop: (open: boolean) => request<{ running: boolean }>('POST', '/api/capri-desktop', { open }),
+  sites: () => request<{ sites: Site[] }>('GET', '/api/sites'),
+  openSite: (id: string, fullScreen = true) => request<void>('POST', '/api/sites/open', { id, fullScreen }),
+  outputs: () => request<{ outputs: AudioOutput[] }>('GET', '/api/sound/outputs'),
+  setOutput: (id: string) => request<{ outputs: AudioOutput[] }>('POST', '/api/sound/outputs', { id }),
+  bluetooth: () => request<{ devices: BtDevice[] }>('GET', '/api/bluetooth'),
+  btConnect: (address: string, name: string, on: boolean) => request<{ devices: BtDevice[] }>('POST', '/api/bluetooth/connect', { address, name, on }),
+  btForget: (address: string, name: string) => request<{ devices: BtDevice[] }>('POST', '/api/bluetooth/forget', { address, name }),
   party: () => request<{ code: string | null; queue: number; playing: { title: string; artist: string } | null }>('GET', '/api/party'),
   /** Lock the vault, cut phones off (this one too) and lock the PC. */
   panic: () => request<void>('POST', '/api/panic'),

@@ -3,7 +3,7 @@
 // or the keyboard (arrows, Enter, Esc). The focused game's art fills the
 // screen behind and drifts slowly; covers glide and grow as you move.
 
-import type { LibraryGame } from '@shared/types';
+import type { LibraryGame, Site } from '@shared/types';
 import { Gamepad2, Play, Settings2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../../../api';
@@ -56,7 +56,9 @@ function Backdrop({ game }: { game: LibraryGame | undefined }) {
     <div className="absolute inset-0 overflow-hidden">
       {layers.map((g) => (
         <div key={g.key} className="bp-fade absolute inset-0">
-          {g.art.hero ? (
+          {g.key.startsWith('site:') ? (
+            <div className="bp-drift h-full w-full" style={{ background: `radial-gradient(70% 70% at 75% 30%, ${g.profileId ?? '#6366f1'}88, #050507 75%)` }} />
+          ) : g.art.hero ? (
             <img src={g.art.hero} alt="" draggable={false} className="bp-drift h-full w-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
           ) : (
             <Cover game={g} bare className="bp-drift scale-125 blur-3xl" />
@@ -87,7 +89,33 @@ function Hint({ k, label }: { k: string; label: string }) {
   );
 }
 
+/** The list with `i` set to `v` (growing it when rows appear later). */
+const setAt = (c: number[], i: number, v: number) => {
+  const n = [...c];
+  while (n.length <= i) n.push(0);
+  n[i] = v;
+  return n;
+};
+
+/** A quick site shown as a tile in the Watch row. */
+const asTile = (s: Site): LibraryGame => ({ key: `site:${s.id}`, name: s.name, source: 'site', app: null, process: s.url, art: { cover: null, hero: null, logo: null, header: null }, status: '', favorite: false, minutes: 0, lastPlayed: 0, profileId: s.color, canLaunch: true });
+const isSite = (g: LibraryGame) => g.key.startsWith('site:');
+
+function SiteTile({ game }: { game: LibraryGame }) {
+  const color = game.profileId ?? '#6366f1';
+  return (
+    <div className="flex h-full w-full flex-col justify-end p-4" style={{ background: `radial-gradient(120% 80% at 20% 0%, ${color}, #0b0b10 75%)` }}>
+      <span className="font-display text-[24px] font-extrabold leading-tight drop-shadow-lg">{game.name}</span>
+      <span className="mt-1 text-[12px] text-white/60">Opens full screen</span>
+    </div>
+  );
+}
+
 export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: () => void }) {
+  const [sites, setSites] = useState<Site[]>([]);
+  useEffect(() => {
+    void api.sites.list().then(setSites, () => undefined);
+  }, []);
   const rows = useMemo<Row[]>(() => {
     const recent = games.filter((g) => g.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 15);
     const favs = games.filter((g) => g.favorite).sort((a, b) => a.name.localeCompare(b.name));
@@ -98,8 +126,9 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
       { title: 'Favourites', games: favs },
       { title: 'Playing', games: playing },
       { title: 'All games', games: all },
+      { title: 'Watch', games: sites.map(asTile) },
     ].filter((r) => r.games.length);
-  }, [games]);
+  }, [games, sites]);
   const [row, setRow] = useState(0);
   const [cols, setCols] = useState<number[]>(() => rows.map(() => 0));
   const [launching, setLaunching] = useState<LibraryGame | null>(null);
@@ -139,11 +168,23 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
     const next = Math.min(len - 1, Math.max(0, col + dx));
     if (next !== col) {
       blip('move');
-      setCols((c) => c.map((v, i) => (i === row ? next : v)));
+      setCols((c) => setAt(c, row, next));
     }
   };
   const play = (g: LibraryGame | undefined = focused) => {
     if (!g || launching) return;
+    if (isSite(g)) {
+      blip('play');
+      setLaunching(g);
+      api.sites.open(g.process, true).then(
+        () => setTimeout(() => setLaunching(null), 2200),
+        (e) => {
+          setLaunching(null);
+          toast.error('Couldn’t open it', errorText(e));
+        },
+      );
+      return;
+    }
     if (!g.canLaunch) {
       toast.info('OmniHub can’t start this one', 'Open it from its own launcher.');
       return;
@@ -247,7 +288,7 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
             <h1 className="font-display text-[clamp(36px,5vw,72px)] font-extrabold leading-none drop-shadow-lg">{focused.name}</h1>
           )}
           <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-1 text-[16px] text-white/75">
-            <span>{focused.minutes ? `${hours(focused.minutes)} played` : 'Not played yet'}</span>
+            <span>{isSite(focused) ? 'Opens full screen in its own window, with no browser bars' : focused.minutes ? `${hours(focused.minutes)} played` : 'Not played yet'}</span>
             {focused.lastPlayed > 0 && <span>Last played {ago(focused.lastPlayed).toLowerCase()}</span>}
             {focused.status && <span className="rounded-full bg-white/15 px-3 py-0.5 text-[13px] font-semibold">{STATUS_LABEL[focused.status]}</span>}
           </div>
@@ -280,7 +321,7 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
                           if (on) play(g);
                           else {
                             setRow(ri);
-                            setCols((c) => c.map((v, i) => (i === ri ? gi : v)));
+                            setCols((c) => setAt(c, ri, gi));
                             blip('move');
                           }
                         }}
@@ -290,7 +331,7 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
                           on ? 'z-10 scale-[1.14] shadow-[0_24px_60px_-12px_var(--accent-glow)] ring-[3px] ring-accent' : gi < at ? 'pointer-events-none scale-90 opacity-0' : 'scale-100 opacity-85 hover:opacity-100',
                         )}
                       >
-                        <Cover game={g} />
+                        {isSite(g) ? <SiteTile game={g} /> : <Cover game={g} />}
                         {on && <span className="bp-shine pointer-events-none absolute inset-0" />}
                       </button>
                     );
@@ -322,11 +363,11 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
           <div className="flex flex-col items-center gap-7">
             <div className="bp-pulse relative w-[200px] overflow-hidden rounded-2xl ring-[3px] ring-accent">
               <div className="aspect-[2/3]">
-                <Cover game={launching} />
+                {isSite(launching) ? <SiteTile game={launching} /> : <Cover game={launching} />}
               </div>
             </div>
             <div className="text-center">
-              <div className="text-[15px] uppercase tracking-[0.3em] text-white/60">Starting</div>
+              <div className="text-[15px] uppercase tracking-[0.3em] text-white/60">{isSite(launching) ? 'Opening' : 'Starting'}</div>
               <div className="mt-1 font-display text-[34px] font-bold">{launching.name}</div>
             </div>
           </div>

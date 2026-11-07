@@ -786,7 +786,7 @@ export interface SunshineStatus {
 export type Theme = 'system' | 'dark' | 'light';
 
 /** The app's look: classic, or one of the animated themes. */
-export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember' | 'minecraft' | 'matrix' | 'rain' | 'snowfall' | 'fireflies' | 'lava' | 'clouds' | 'bankai' | 'hollow' | 'mugetsu';
+export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember' | 'minecraft' | 'matrix' | 'rain' | 'snowfall' | 'fireflies' | 'lava' | 'clouds' | 'bankai' | 'hollow' | 'mugetsu' | 'hakka';
 
 export interface Settings {
   general: {
@@ -3850,4 +3850,25 @@ export interface LightResult {
   set: number;
   skippedBluetooth: number;
   failed: number;
+}
+
+export interface Site {
+  id: string;
+  name: string;
+  url: string;
+  color: string;
+}
+
+export interface AudioOutput {
+  id: string;
+  name: string;
+  default: boolean;
+}
+
+export interface BtDevice {
+  address: string;
+  name: string;
+  connected: boolean;
+  kind: 'audio' | 'keyboard' | 'mouse' | 'gamepad' | 'phone' | 'computer' | 'other';
+  audio: boolean;
 }
