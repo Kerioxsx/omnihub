@@ -3,7 +3,7 @@
 // save straight into the Pokémon save editor.
 
 import type { EmuState, Rom } from '@shared/types';
-import { Cpu, FolderPlus, Pencil, Play, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { Cpu, FolderPlus, Pencil, Play, Plus, RefreshCw, Settings2, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, errorText } from '../../../api';
 import { Button, IconButton } from '../../../components/ui/Button';
@@ -12,6 +12,8 @@ import { Segmented, Select } from '../../../components/ui/Form';
 import { EmptyState } from '../../../components/ui/States';
 import { navigate } from '../../../lib/router';
 import { toast } from '../../../state/toasts';
+import { BiosCard, DatCard, GetEmulators, PadSetupCard, RetroAchievementsCard, SavesCard } from './EmuTools';
+import { RomOptions } from './RomOptions';
 
 const PLATFORM_NAMES: Record<string, string> = { gba: 'Game Boy Advance', gb: 'Game Boy', gbc: 'Game Boy Color', nds: 'Nintendo DS', '3ds': 'Nintendo 3DS', nes: 'NES', snes: 'SNES', n64: 'Nintendo 64', gc: 'GameCube', wii: 'Wii', wiiu: 'Wii U', switch: 'Switch', genesis: 'Mega Drive', psx: 'PlayStation', ps2: 'PlayStation 2', psp: 'PSP', ps3: 'PlayStation 3' };
 
@@ -31,6 +33,7 @@ export function EmulatorsTab() {
   const [s, setS] = useState<EmuState | null>(null);
   const [busy, setBusy] = useState(false);
   const [platform, setPlatform] = useState('all');
+  const [opts, setOpts] = useState<Rom | null>(null);
   const run = (p: Promise<EmuState>) => void p.then(setS, (e) => toast.error('Something went wrong', errorText(e)));
   useEffect(() => {
     void api.emulators.state().then((st) => {
@@ -152,6 +155,7 @@ export function EmulatorsTab() {
                       <IconButton size="sm" icon={Pencil} label="Edit the save (Pokémon save editor)" onClick={() => navigate('tools', { tab: 'pokemon', open: r.save ?? '' })} />
                     )}
                     {r.save && r.platform !== 'gba' && <Badge tone="good">Save</Badge>}
+                    <IconButton size="sm" icon={Settings2} label="Options, cheats and netplay" className="ml-auto" onClick={() => setOpts(r)} />
                   </div>
                 </div>
               </div>
@@ -162,6 +166,15 @@ export function EmulatorsTab() {
       <p className="flex items-center gap-1.5 text-[11.5px] text-faint">
         <Trash2 size={11} /> OmniHub doesn’t download games: it plays the ones you already have.
       </p>
+      {opts && <RomOptions rom={opts} state={s} onClose={() => setOpts(null)} onState={setS} />}
+      <GetEmulators onState={setS} />
+      <div className="grid gap-5 xl:grid-cols-2">
+        <BiosCard />
+        <DatCard onState={setS} />
+        <SavesCard />
+        <PadSetupCard />
+        <RetroAchievementsCard />
+      </div>
     </div>
   );
 }

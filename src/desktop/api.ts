@@ -237,7 +237,28 @@ export const api = {
     remove: (id: string) => call<T.EmuState>('emulators_remove', { id }),
     setDirs: (dirs: string[]) => call<T.EmuState>('emulators_set_dirs', { dirs }),
     choose: (platform: string, emulator: string) => call<T.EmuState>('emulators_choose', { platform, emulator }),
-    launch: (rom: string) => call<void>('emulators_launch', { rom }),
+    launch: (rom: string, netplay: T.Netplay | null = null) => call<void>('emulators_launch', { rom, netplay }),
+    /** Fullscreen, a RetroArch shader, more options and cheats for one game. */
+    setRomOpts: (rom: string, opts: T.RomOpts) => call<T.EmuState>('emulators_rom_opts', { rom, opts }),
+    /** With `check`, asks GitHub for the newest versions. */
+    offers: (check = false) => call<T.EmuOffer[]>('emulators_offers', { check }),
+    saves: () => call<T.SavePlace[]>('emulator_saves'),
+    /** RetroAchievements: your own account (the key stays on this PC, encrypted). */
+    raUser: () => call<string | null>('ra_user'),
+    raConnect: (user: string, key: string) => call<string | null>('ra_connect', { user, key }),
+    raSummary: () => call<T.RaSummary>('ra_summary'),
+    /** Map an Xbox-style controller in DuckStation and PCSX2 (port 1, only if nothing is mapped). */
+    padSetup: () => call<T.PadResult[]>('emulators_pad_setup'),
+    /** Zip every emulator's saves into Documents\\OmniHub Backups; returns the zip. */
+    backupSaves: () => call<string>('emulator_saves_backup'),
+    /** Your own BIOS folder against the known good dumps (nothing is downloaded). */
+    checkBios: (dir: string) => call<T.BiosFile[]>('bios_check', { dir }),
+    /** The ROM folders against a No-Intro / Redump DAT. */
+    checkDat: (dat: string) => call<T.DatReport>('romdat_check', { dat }),
+    /** Rename what the last check found (saves follow). */
+    applyDat: () => call<{ renamed: number; skipped: string[]; state: T.EmuState }>('romdat_apply'),
+    /** Official GitHub release, checksum checked; progress as "emu:install". */
+    install: (id: string) => call<T.EmuState>('emulators_install', { id }),
   },
 
   /** The macro deck, the quick-launch wheel and their hotkeys. */

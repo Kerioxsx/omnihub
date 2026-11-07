@@ -34,6 +34,7 @@ pub(super) fn authed() -> Router<Ctx> {
         .route("/api/bluetooth", get(bt_list))
         .route("/api/bluetooth/connect", post(bt_connect))
         .route("/api/bluetooth/forget", post(bt_forget))
+        .route("/api/pad", get(pad_layout).post(pad_button))
         .route("/api/timers", get(timers_get).post(timers_start))
         .route("/api/timers/{id}", axum::routing::delete(timers_cancel))
         .route("/api/alarms", post(alarm_save))
@@ -454,6 +455,36 @@ mod tests {
 }
 
 // ---------- timers and alarms ----------
+
+#[derive(Deserialize)]
+struct PadReq {
+    /// A button ("a", "up"…), "alive" while held, or "release".
+    button: String,
+    #[serde(default)]
+    down: bool,
+}
+
+/// The keys each phone button presses.
+async fn pad_layout() -> Json<serde_json::Value> {
+    Json(serde_json::json!(crate::padremote::BUTTONS.iter().map(|(b, _, k)| serde_json::json!({ "button": b, "key": k })).collect::<Vec<_>>()))
+}
+
+async fn pad_button(State(core): State<Ctx>, Json(req): Json<PadReq>) -> ApiResult<StatusCode> {
+    if !core.settings.get().remote.allow_control {
+        return Err(ApiError::forbidden("the phone controller is off on the PC (Settings → Phone → let phones use the mouse and keyboard)"));
+    }
+    let send = crate::capture::stream::input::key_state;
+    match req.button.as_str() {
+        "release" => core.pad.release_all(&send),
+        "alive" => core.pad.alive(),
+        b => {
+            if !core.pad.button(b, req.down, &send) {
+                return Err(ApiError::bad("unknown button"));
+            }
+        }
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
 
 async fn timers_get(State(core): State<Ctx>) -> Json<crate::timers::TimersState> {
     Json(core.timers.get())

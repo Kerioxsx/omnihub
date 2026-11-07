@@ -56,6 +56,7 @@ pub mod scan;
 pub mod screentime;
 pub mod settings;
 pub mod sites;
+pub mod padremote;
 pub mod snippets;
 pub mod soundboard;
 pub mod translate;

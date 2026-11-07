@@ -866,6 +866,26 @@ pub mod input {
         INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VIRTUAL_KEY(vk), wScan: scan, dwFlags: flags, time: 0, dwExtraInfo: 0 } } }
     }
 
+    /// Hold or let go of one key, sent as a hardware scan code (what games
+    /// and emulators read), extended for the arrows and the block above them.
+    pub fn key_state(vk: u16, down: bool) {
+        #[cfg(windows)]
+        {
+            use windows::Win32::UI::Input::KeyboardAndMouse::{MapVirtualKeyW, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, MAPVK_VK_TO_VSC, VIRTUAL_KEY};
+            let scan = unsafe { MapVirtualKeyW(u32::from(vk), MAPVK_VK_TO_VSC) } as u16;
+            let mut flags = KEYEVENTF_SCANCODE;
+            if matches!(vk, 0x21..=0x28 | 0x2D | 0x2E | 0xA3 | 0xA5) {
+                flags |= KEYEVENTF_EXTENDEDKEY;
+            }
+            if !down {
+                flags |= KEYEVENTF_KEYUP;
+            }
+            send(&[INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VIRTUAL_KEY(0), wScan: scan, dwFlags: flags, time: 0, dwExtraInfo: 0 } } }]);
+        }
+        #[cfg(not(windows))]
+        let _ = (vk, down);
+    }
+
     /// Virtual-key code for a key name such as "Enter", "F5", "a".
     pub fn vk_for(name: &str) -> Option<u16> {
         let n = name.to_lowercase();

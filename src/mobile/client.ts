@@ -344,6 +344,8 @@ export const client = {
   counterTimer: (id: string, run: boolean) => request<{ running: boolean }>('POST', `/api/counters/${encodeURIComponent(id)}/timer`, { run }),
   deck: () => request<{ columns: number; buttons: DeckButton[]; scenes?: DeckButton[] }>('GET', '/api/deck'),
   timers: () => request<PhoneTimers>('GET', '/api/timers'),
+  /** The phone as a controller: hold or let go of a button's key on the PC. */
+  pad: (button: string, down: boolean) => request<void>('POST', '/api/pad', { button, down }),
   startTimer: (minutes: number, label = '') => request<PhoneTimers>('POST', '/api/timers', { minutes, label }),
   cancelTimer: (id: string) => request<PhoneTimers>('DELETE', `/api/timers/${encodeURIComponent(id)}`),
   saveAlarm: (alarm: PhoneAlarm) => request<PhoneTimers>('POST', '/api/alarms', alarm),

@@ -267,6 +267,96 @@ export interface PendingRegion {
   image: string;
 }
 
+/** An emulator OmniHub can install from its official GitHub release. */
+export interface EmuOffer {
+  id: string;
+  name: string;
+  platforms: string[];
+  installed: string | null;
+  latest: string | null;
+}
+
+export interface Cheat {
+  name: string;
+  code: string;
+  on: boolean;
+}
+
+/** How one game starts, and its cheats. */
+export interface RomOpts {
+  fullscreen: boolean;
+  /** A RetroArch shader preset. */
+  shader: string;
+  extra: string;
+  cheats: Cheat[];
+}
+
+export type Netplay = { kind: 'host' } | { kind: 'join'; address: string };
+
+export interface SavePlace {
+  emulator: string;
+  what: string;
+  path: string;
+  files: number;
+  bytes: number;
+}
+
+export interface PadResult {
+  emulator: string;
+  /** set · already · notRun */
+  status: string;
+  file: string;
+}
+
+export interface RaGame {
+  id: number;
+  title: string;
+  console: string;
+  icon: string;
+  lastPlayed: string;
+  achieved: number;
+  total: number;
+}
+
+export interface RaAchievement {
+  title: string;
+  description: string;
+  game: string;
+  badge: string;
+  points: number;
+  date: string;
+  hardcore: boolean;
+}
+
+export interface RaSummary {
+  user: string;
+  points: number;
+  rank: number | null;
+  games: RaGame[];
+  recent: RaAchievement[];
+}
+
+export interface BiosFile {
+  platform: string;
+  name: string;
+  /** good · different · missing · ps2 */
+  status: string;
+  detail: string;
+}
+
+export interface RomCheck {
+  path: string;
+  /** ok · rename · unknown */
+  status: string;
+  proper: string | null;
+}
+
+export interface DatReport {
+  datRoms: number;
+  checked: RomCheck[];
+  duplicates: string[][];
+}
+
 export interface Translation {
   text: string;
   translated: string;
@@ -3570,6 +3660,8 @@ export interface EmuState {
   emulators: Emulator[];
   romDirs: string[];
   chosen: Record<string, string>;
+  /** Per game, by ROM path. */
+  romOpts: Record<string, RomOpts>;
   roms: Rom[];
 }
 

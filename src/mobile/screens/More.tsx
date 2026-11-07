@@ -30,9 +30,10 @@ import { PhotosPage } from './Photos';
 import { WatchPage } from './Watch';
 import { BluetoothPage } from './Bluetooth';
 import { SyncFolderPage } from './SyncFolder';
+import { ControllerPage } from './Controller';
 import { TimersPage } from './Timers';
 
-export type MorePage = 'live' | 'timers' | 'sync' | 'photos' | 'party' | 'watch' | 'bluetooth' | 'deck' | 'counters' | 'sound' | 'open' | 'tasks' | 'games' | 'servers' | 'notes' | 'apps' | 'vault' | 'scan' | 'barcode' | 'board' | 'downloads' | 'settings';
+export type MorePage = 'live' | 'timers' | 'controller' | 'sync' | 'photos' | 'party' | 'watch' | 'bluetooth' | 'deck' | 'counters' | 'sound' | 'open' | 'tasks' | 'games' | 'servers' | 'notes' | 'apps' | 'vault' | 'scan' | 'barcode' | 'board' | 'downloads' | 'settings';
 
 export function MoreScreen({ active, page, setPage, onUnpaired }: { active: boolean; page: MorePage | null; setPage: (p: MorePage | null) => void; onUnpaired: () => void }) {
   const info = useApp((s) => s.info);
@@ -49,6 +50,7 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
     { id: 'notes', title: 'Notes & ideas', sub: 'Read, search and capture ideas for Claude', icon: <NotebookPen size={21} />, tone: 'bg-violet-500/15 text-violet-400', show: !!f?.notes },
     { id: 'apps', title: 'Apps', sub: 'Launch programs on the PC', icon: <AppWindow size={21} />, tone: 'bg-cyan-500/15 text-cyan-400', show: !!f?.apps },
     { id: 'watch', title: 'Watch on the PC', sub: 'Netflix, YouTube, Crunchyroll, Disney+ and more, full screen', icon: <Tv size={21} />, tone: 'bg-red-500/15 text-red-300', show: !!f?.apps },
+    { id: 'controller', title: 'Controller', sub: 'Play emulators on the PC with this phone as the pad', icon: <Gamepad2 size={21} />, tone: 'bg-indigo-500/15 text-indigo-400', show: !!f?.control },
     { id: 'timers', title: 'Timers and alarms', sub: 'They ring on the PC and here', icon: <AlarmClock size={21} />, tone: 'bg-orange-500/15 text-orange-400', show: true },
     { id: 'sync', title: 'Synced folder', sub: 'Get what’s new in a PC folder in one tap, send files into it', icon: <FolderSync size={21} />, tone: 'bg-teal-500/15 text-teal-400', show: !!f?.uploads },
     { id: 'bluetooth', title: 'Bluetooth', sub: 'Connect headphones and speakers, forget devices', icon: <BluetoothIcon size={21} />, tone: 'bg-blue-500/15 text-blue-400', show: !!f?.media },
@@ -127,6 +129,7 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
             {page === 'party' && <PartyPage active={active} onBack={() => setPage(null)} />}
             {page === 'watch' && <WatchPage active={active} onBack={() => setPage(null)} />}
             {page === 'timers' && <TimersPage active={active} onBack={() => setPage(null)} />}
+            {page === 'controller' && <ControllerPage active={active} onBack={() => setPage(null)} />}
             {page === 'sync' && <SyncFolderPage active={active} onBack={() => setPage(null)} />}
             {page === 'bluetooth' && <BluetoothPage active={active} onBack={() => setPage(null)} />}
             {page === 'counters' && <CountersPage active={active} onBack={() => setPage(null)} />}

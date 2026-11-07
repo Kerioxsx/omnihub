@@ -33,6 +33,26 @@ pub struct LibraryGame {
     pub can_launch: bool,
 }
 
+/// A ROM's title without the No-Intro tags: "Pokemon - Emerald Version (USA, Europe)" → "Pokemon - Emerald Version".
+pub fn rom_title(name: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0i32;
+    for c in name.chars() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = (depth - 1).max(0),
+            _ if depth == 0 => out.push(c),
+            _ => {}
+        }
+    }
+    let t = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    if t.is_empty() {
+        name.to_string()
+    } else {
+        t
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Media {
@@ -108,7 +128,7 @@ impl AppCore {
         };
         let entries = self.shelf.entries();
         let totals = self.shelf.totals();
-        let list: Vec<LibraryGame> = self
+        let mut list: Vec<LibraryGame> = self
             .games
             .library()
             .into_iter()
@@ -165,6 +185,17 @@ impl AppCore {
             })
             .collect();
         self.find_store_art(&list);
+        // Your ROMs too, with libretro's box art, playing in their emulator.
+        for r in self.emulators.state().roms {
+            let key = format!("rom:{}", r.id);
+            let e = entries.get(&key).cloned().unwrap_or_default();
+            let tracked = totals.get(&key).copied().unwrap_or((0, 0));
+            let mut art = Art { cover: r.cover.clone(), ..Default::default() };
+            if let Some(v) = e.cover.as_deref().and_then(|v| self.shelf.art_src(v)) {
+                art.cover = Some(v);
+            }
+            list.push(LibraryGame { name: rom_title(&r.name), key, source: "rom".into(), app: None, process: String::new(), art, status: e.status, favorite: e.favorite, minutes: tracked.0, last_played: tracked.1, profile_id: None, can_launch: true });
+        }
         list
     }
 
@@ -190,6 +221,11 @@ impl AppCore {
     }
 
     fn find_game(&self, key: &str) -> Result<super::library::InstalledGame, String> {
+        if let Some(id) = key.strip_prefix("rom:") {
+            let r = self.emulators.state().roms.into_iter().find(|r| r.id == id).ok_or("That ROM isn't in your ROM folders any more")?;
+            let dir = Path::new(&r.path).parent().map(|d| d.display().to_string());
+            return Ok(super::library::InstalledGame { key: key.into(), name: rom_title(&r.name), source: "rom".into(), kind: Default::default(), launch: Default::default(), process: String::new(), exe_path: Some(r.path), install_dir: dir, profile_id: None });
+        }
         self.games.library().into_iter().find(|g| g.key == key).ok_or_else(|| "That game isn't installed any more".into())
     }
 
@@ -263,6 +299,15 @@ impl AppCore {
     }
 
     pub fn library_play(&self, key: &str) -> Result<(), String> {
+        if let Some(id) = key.strip_prefix("rom:") {
+            let (exe, args) = self.emulators.command(id)?;
+            let mut c = std::process::Command::new(&exe);
+            c.args(&args);
+            if let Some(dir) = Path::new(&exe).parent() {
+                c.current_dir(dir);
+            }
+            return c.spawn().map(|_| ()).map_err(|e| format!("Couldn't start the emulator: {e}"));
+        }
         let g = self.find_game(key)?;
         // Its scenes first (the screen mode is set before the game opens).
         self.scenes_game_started(key);
@@ -390,5 +435,17 @@ impl AppCore {
             }
             self.events.emit("games:limit", serde_json::json!({ "key": key, "name": name, "minutes": limit, "left": 0, "closing": true }));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rom_titles() {
+        assert_eq!(rom_title("Pokemon - Emerald Version (USA, Europe)"), "Pokemon - Emerald Version");
+        assert_eq!(rom_title("Metroid Fusion (USA) [!] (Rev 1)"), "Metroid Fusion");
+        assert_eq!(rom_title("(Unknown)"), "(Unknown)");
     }
 }

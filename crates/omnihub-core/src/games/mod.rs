@@ -6,9 +6,12 @@
 //! Nothing here can make a server closer: the ping helper measures the
 //! connection and removes the things on this PC that add lag and spikes.
 
+pub mod bios;
 pub mod configs;
 pub mod deck;
+pub mod emuinstall;
 pub mod emulators;
+pub mod emusaves;
 pub mod fortnite;
 pub mod fps;
 pub mod ini;
@@ -16,11 +19,14 @@ pub mod junk;
 pub mod library;
 pub mod mover;
 pub mod nvidia;
+pub mod padsetup;
 pub mod pc;
 pub mod ping;
 pub mod reshade;
+pub mod retroach;
 pub mod steam;
 pub mod roblox;
+pub mod romdat;
 pub mod shelf;
 pub mod storeart;
 pub mod stores;

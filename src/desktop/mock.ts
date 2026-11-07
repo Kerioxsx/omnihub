@@ -3,7 +3,7 @@
 // command in api.ts is implemented against realistic, seeded in-memory data.
 // Like Tauri, failures reject with a plain string.
 
-import type { DownloadMode, ImageJob, VideoJob, FolderRule, HashKind, MusicSource, PlayItem, RenameRule, CaptureKind, ChatSource, ConfigGame, ConfigOptions, DeepPartial, DupeOptions, EntryInput, GameKind, GameProfile, GeneratorOptions, MediaAction, ModSort, NewChatKind, NoteFilter, NoteInput, PowerAction, Priority, ProcessSort, Rect, RobloxFlags, RobloxShaders, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey, SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, TweakId } from '@shared/types';
+import type { DownloadMode, ImageJob, VideoJob, FolderRule, HashKind, MusicSource, PlayItem, RenameRule, CaptureKind, ChatSource, ConfigGame, ConfigOptions, DeepPartial, DupeOptions, EntryInput, GameKind, GameProfile, GeneratorOptions, MediaAction, ModSort, NewChatKind, NoteFilter, NoteInput, PowerAction, Priority, ProcessSort, Rect, RobloxFlags, RobloxShaders, RomOpts, ScanRequest, ScrcpyOptions, SearchQuery, Settings, ShotFilter, SortKey, SrvAction, SrvFlavor, SrvKind, SrvNew, SrvPatch, TweakId } from '@shared/types';
 import { type Args, bool, emit, listen, num, obj, optStr, str, strList } from './mock/bus';
 import { scene } from './mock/art';
 import * as core from './mock/core';
@@ -75,6 +75,16 @@ let mockWins = [
 ];
 let mockAfter = { action: '', quietSince: 0 };
 let mockSnippets = { keysOn: true, snippets: [{ id: 'a1', name: 'Good game', text: 'gg wp, thanks for the games!', key: 0x7c }] };
+let emuOffers = [
+  { id: 'duckstation', name: 'DuckStation', platforms: ['psx'], installed: null as string | null, latest: null as string | null },
+  { id: 'pcsx2', name: 'PCSX2', platforms: ['ps2'], installed: null, latest: null },
+  { id: 'melonds', name: 'melonDS', platforms: ['nds'], installed: '1.0', latest: null },
+  { id: 'mgba', name: 'mGBA', platforms: ['gba', 'gb', 'gbc'], installed: null, latest: null },
+  { id: 'cemu', name: 'Cemu', platforms: ['wiiu'], installed: null, latest: null },
+  { id: 'azahar', name: 'Azahar', platforms: ['3ds'], installed: null, latest: null },
+  { id: 'rpcs3', name: 'RPCS3', platforms: ['ps3'], installed: null, latest: null },
+];
+let mockRaUser: string | null = null;
 let mockBench = [{ at: Math.floor(Date.now() / 1000) - 86400 * 7, single: 1834.2, multi: 21877, memory: 24.35, threads: 16, cpuTemp: 68 }];
 let mockAppLimits = [{ exe: 'OneDrive.exe', kbps: 2000, active: true }];
 let mockBoard = { sounds: [{ id: 's1', name: 'Air horn', path: 'C:\\Sounds\\air horn.mp3', key: 0x61, volume: 80 }, { id: 's2', name: 'Bruh', path: 'C:\\Sounds\\bruh.wav', key: 0, volume: 100 }], output: '', keysOn: true };
@@ -527,6 +537,45 @@ const handlers: Record<string, Handler> = {
   library_delete_backup: () => lib.deleteBackup(),
   library_sessions: () => lib.sessions(),
   emulators_state: () => emus.state(),
+  ra_user: () => mockRaUser,
+  ra_connect: (a) => (mockRaUser = str(a, 'key') ? str(a, 'user') : null),
+  ra_summary: () => ({
+    user: mockRaUser ?? 'Player',
+    points: 1234,
+    rank: 5678,
+    games: [
+      { id: 1, title: 'Pokémon Emerald Version', console: 'Game Boy Advance', icon: '', lastPlayed: '2026-11-06 20:00', achieved: 12, total: 60 },
+      { id: 2, title: 'Metroid Fusion', console: 'Game Boy Advance', icon: '', lastPlayed: '2026-11-02 18:30', achieved: 41, total: 41 },
+    ],
+    recent: [{ title: 'Stone Badge', description: 'Beat Roxanne', game: 'Pokémon Emerald Version', badge: '', points: 5, date: '2026-11-06 20:01', hardcore: true }],
+  }),
+  emulators_pad_setup: () => [
+    { emulator: 'DuckStation', status: 'set', file: 'C:\\Users\\you\\Documents\\DuckStation\\settings.ini' },
+    { emulator: 'PCSX2', status: 'already', file: 'C:\\Users\\you\\Documents\\PCSX2\\inis\\PCSX2.ini' },
+  ],
+  emulator_saves: () => [
+    { emulator: 'PCSX2', what: 'Memory cards', path: 'C:\\Users\\you\\Documents\\PCSX2\\memcards', files: 2, bytes: 16_777_216 },
+    { emulator: 'DuckStation', what: 'Save states', path: 'C:\\Users\\you\\Documents\\DuckStation\\savestates', files: 7, bytes: 41_000_000 },
+  ],
+  emulator_saves_backup: () => 'C:\\Users\\you\\Documents\\OmniHub Backups\\Emulator saves 2026-11-07 10-30.zip',
+  emulators_rom_opts: (a) => emus.setRomOpts(str(a, 'rom'), obj<RomOpts>(a, 'opts')),
+  bios_check: () => [
+    { platform: 'gba', name: 'gba_bios.bin', status: 'good', detail: 'Game Boy Advance: matches the known dump.' },
+    { platform: 'psx', name: 'scph1001.bin', status: 'missing', detail: 'PlayStation (USA, SCPH-1001): not in this folder.' },
+    { platform: 'nds', name: 'bios7.bin', status: 'different', detail: 'Nintendo DS ARM7 BIOS: bios7.bin isn’t the known dump (a bad dump, or another revision). It may still work.' },
+  ],
+  romdat_check: () => ({ datRoms: 3021, checked: [{ path: 'D:\\ROMs\\GBA\\emerald.gba', status: 'rename', proper: 'Pokemon - Emerald Version (USA, Europe).gba' }, { path: 'D:\\ROMs\\GBA\\Metroid Fusion (USA).gba', status: 'ok', proper: 'Metroid Fusion (USA).gba' }, { path: 'D:\\ROMs\\GBA\\hack.gba', status: 'unknown', proper: null }], duplicates: [['D:\\ROMs\\GBA\\emerald.gba', 'D:\\ROMs\\GBA\\copy of emerald.gba']] }),
+  romdat_apply: () => ({ renamed: 1, skipped: [], state: emus.state() }),
+  emulators_offers: (a) => emuOffers.map((o) => (a?.check ? { ...o, latest: o.latest ?? '2.2.0' } : o)),
+  emulators_install: async (a) => {
+    const id = str(a, 'id');
+    for (const d of [10, 40, 80, 100]) {
+      emit('emu:install', { id, done: d, total: 100 });
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    emuOffers = emuOffers.map((o) => (o.id === id ? { ...o, installed: o.latest ?? '2.2.0' } : o));
+    return emus.state();
+  },
   emulators_refresh: () => emus.refresh(),
   emulators_add: () => emus.add(),
   emulators_remove: (a) => emus.remove(str(a, 'id')),

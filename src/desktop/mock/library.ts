@@ -1,6 +1,6 @@
 // The game library and emulator hub for the mock backend.
 
-import type { EmuState, GameDetail, GameRecap, LibraryGame, SessionRec, ShelfEntry, ShelfPatch, SteamAccount, SteamAchievement, SteamFriend, WishItem } from '@shared/types';
+import type { EmuState, RomOpts, GameDetail, GameRecap, LibraryGame, SessionRec, ShelfEntry, ShelfPatch, SteamAccount, SteamAchievement, SteamFriend, WishItem } from '@shared/types';
 import { emit } from './bus';
 
 const STEAM = 'https://shared.steamstatic.com/store_item_assets/steam/apps';
@@ -103,6 +103,7 @@ const emu: EmuState = {
   ],
   romDirs: ['C:\\Games\\ROMs'],
   chosen: {},
+  romOpts: {},
   roms: [
     ['Pokemon - Emerald Version (USA, Europe)', 'gba', true],
     ['Pokemon - FireRed Version (USA, Europe) (Rev 1)', 'gba', true],
@@ -138,4 +139,9 @@ export const emulators = {
     return structuredClone(emu);
   },
   launch: () => undefined,
+  setRomOpts: (rom: string, opts: RomOpts) => {
+    const r = emu.roms.find((x) => x.id === rom);
+    if (r) emu.romOpts[r.path] = opts;
+    return structuredClone(emu);
+  },
 };

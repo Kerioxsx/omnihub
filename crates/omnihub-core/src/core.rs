@@ -85,6 +85,7 @@ pub struct AppCore {
     pub net_limits: crate::system::netlimit::NetLimits,
     pub snippets: crate::snippets::Snippets,
     pub bench: crate::bench::Bench,
+    pub pad: crate::padremote::PadRemote,
     pub after_downloads: parking_lot::Mutex<crate::timers::AfterDownloads>,
     pub speedrun: crate::speedrun::Speedrun,
     /// Family and guest phones limited to some areas.
@@ -94,6 +95,8 @@ pub struct AppCore {
     /// Game art addresses asked of Steam's store.
     pub store_art: Arc<crate::games::storeart::StoreArt>,
     pub emulators: crate::games::emulators::Emulators,
+    pub emu_installer: crate::games::emuinstall::EmuInstaller,
+    pub retroach: crate::games::retroach::RetroAchievements,
     /// The OBS page for counters, while on.
     pub counters_overlay: parking_lot::Mutex<Option<crate::counters_overlay::OverlayServer>>,
     pub autoclick: crate::autoclick::AutoClicker,
@@ -207,12 +210,15 @@ impl AppCore {
             net_limits: crate::system::netlimit::NetLimits::new(&paths.data),
             snippets: crate::snippets::Snippets::new(&paths.data),
             bench: crate::bench::Bench::new(&paths.data),
+            pad: Default::default(),
             after_downloads: parking_lot::Mutex::new(Default::default()),
             speedrun: crate::speedrun::Speedrun::new(&paths.data, events.clone()),
             speedrun_keys: std::sync::atomic::AtomicBool::new(false),
             phone_limits: crate::remote::limits::PhoneLimits::new(&paths.data),
             store_art: Arc::new(crate::games::storeart::StoreArt::new(&paths.cache)),
             emulators: crate::games::emulators::Emulators::new(&paths.data),
+            emu_installer: crate::games::emuinstall::EmuInstaller::new(&paths.data),
+            retroach: crate::games::retroach::RetroAchievements::new(&paths.data),
             counters_overlay: parking_lot::Mutex::new(None),
             autoclick: crate::autoclick::AutoClicker::new(events.clone()),
             quick: Arc::new(crate::quick::Quick::new(&paths.data, events.clone())),
@@ -925,6 +931,7 @@ impl AppCore {
                             core.events.emit("alert:hot", &a);
                         }
                     }
+                    core.pad.sweep(&crate::capture::stream::input::key_state);
                     // Temperatures during a boosted game, for its heat report.
                     if core.games.session().is_some_and(|s| s.active()) {
                         if n % 4 == 1 {

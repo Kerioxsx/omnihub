@@ -324,7 +324,7 @@ export function GameView({ game, onClose, onChanged }: { game: LibraryGame; onCl
             [Clock, 'Played', game.minutes ? hours(game.minutes) : 'Not yet'],
             [Clock, 'Last played', ago(game.lastPlayed)],
             [Users, 'Playing now', detail?.players != null ? detail.players.toLocaleString() : game.app ? '…' : '—'],
-            [Search, 'Source', ({ steam: 'Steam', epic: 'Epic Games', gog: 'GOG', ubisoft: 'Ubisoft Connect', ea: 'EA app', battlenet: 'Battle.net', xbox: 'Xbox / Game Pass' } as Record<string, string>)[game.source] ?? game.source[0].toUpperCase() + game.source.slice(1)],
+            [Search, 'Source', ({ steam: 'Steam', epic: 'Epic Games', gog: 'GOG', ubisoft: 'Ubisoft Connect', ea: 'EA app', battlenet: 'Battle.net', xbox: 'Xbox / Game Pass', rom: 'Your ROMs (emulator)' } as Record<string, string>)[game.source] ?? game.source[0].toUpperCase() + game.source.slice(1)],
           ].map(([I, label, value]) => {
             const Icon = I as typeof Clock;
             return (

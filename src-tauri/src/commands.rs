@@ -3164,8 +3164,95 @@ pub async fn emulators_choose(core: Core<'_>, platform: String, emulator: String
 }
 
 #[tauri::command]
-pub async fn emulators_launch(core: Core<'_>, rom: String) -> Res<()> {
-    let (exe, args) = core.emulators.command(&rom)?;
+pub async fn emulators_offers(core: Core<'_>, check: bool) -> Res<Vec<omnihub_core::games::emuinstall::EmuOffer>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(if check { core.emu_installer.check() } else { core.emu_installer.offers() })).await
+}
+
+/// Install or update an emulator from its official GitHub release (checksum
+/// checked); progress as "emu:install". Returns the emulator list.
+#[tauri::command]
+pub async fn emulators_install(core: Core<'_>, id: String) -> Res<EmuState> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let ev = core.events.clone();
+        let (exe, src) = core.emu_installer.install(&id, &mut |done, total| ev.emit("emu:install", serde_json::json!({ "id": id, "done": done, "total": total })))?;
+        core.emulators.add(&exe.display().to_string(), src.platforms.iter().map(|p| p.to_string()).collect())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn emulators_rom_opts(core: Core<'_>, rom: String, opts: omnihub_core::games::emulators::RomOpts) -> Res<EmuState> {
+    core.emulators.set_rom_opts(&rom, opts)
+}
+
+#[tauri::command]
+pub async fn emulator_saves(core: Core<'_>) -> Res<Vec<omnihub_core::games::emusaves::SavePlace>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(omnihub_core::games::emusaves::on_this_pc(&core.emulators.state().emulators))).await
+}
+
+/// Zip every emulator's saves into Documents\OmniHub Backups; returns the zip's path.
+#[tauri::command]
+pub async fn emulator_saves_backup(core: Core<'_>) -> Res<String> {
+    let core = core.inner().clone();
+    blocking(move || omnihub_core::games::emusaves::backup_all(&core.emulators.state()).map(|p| p.display().to_string())).await
+}
+
+/// The standard controller mapping for DuckStation and PCSX2 (port 1, only if empty).
+#[tauri::command]
+pub async fn emulators_pad_setup(core: Core<'_>) -> Res<Vec<omnihub_core::games::padsetup::PadResult>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(omnihub_core::games::padsetup::setup(&core.emulators.state().emulators.iter().map(|e| (e.name.clone(), e.exe.clone())).collect::<Vec<_>>()))).await
+}
+
+#[tauri::command]
+pub async fn ra_user(core: Core<'_>) -> Res<Option<String>> {
+    Ok(core.retroach.user())
+}
+
+/// Save the RetroAchievements account (the key is kept encrypted; empty disconnects).
+#[tauri::command]
+pub async fn ra_connect(core: Core<'_>, user: String, key: String) -> Res<Option<String>> {
+    core.retroach.connect(&user, &key)?;
+    Ok(core.retroach.user())
+}
+
+#[tauri::command]
+pub async fn ra_summary(core: Core<'_>) -> Res<omnihub_core::games::retroach::RaSummary> {
+    let core = core.inner().clone();
+    blocking(move || core.retroach.summary()).await
+}
+
+#[tauri::command]
+pub async fn bios_check(dir: String) -> Res<Vec<omnihub_core::games::bios::BiosFile>> {
+    blocking(move || Ok(omnihub_core::games::bios::check(Path::new(&dir)))).await
+}
+
+#[tauri::command]
+pub async fn romdat_check(core: Core<'_>, dat: String) -> Res<omnihub_core::games::romdat::DatReport> {
+    let core = core.inner().clone();
+    blocking(move || core.emulators.check_dat(Path::new(&dat))).await
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatApplied {
+    renamed: usize,
+    skipped: Vec<String>,
+    state: EmuState,
+}
+
+#[tauri::command]
+pub async fn romdat_apply(core: Core<'_>) -> Res<DatApplied> {
+    let core = core.inner().clone();
+    blocking(move || core.emulators.apply_dat().map(|(renamed, skipped, state)| DatApplied { renamed, skipped, state })).await
+}
+
+#[tauri::command]
+pub async fn emulators_launch(core: Core<'_>, rom: String, netplay: Option<omnihub_core::games::emulators::Netplay>) -> Res<()> {
+    let (exe, args) = core.emulators.command_with(&rom, netplay.as_ref())?;
     let mut c = std::process::Command::new(&exe);
     c.args(&args);
     if let Some(dir) = Path::new(&exe).parent() {
