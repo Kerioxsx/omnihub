@@ -3,7 +3,7 @@ name = "omnihub-core"
 description = "OmniHub core: storage engine, vault, notes, remote server, capture and system integration"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+license-file.workspace = true
 authors.workspace = true
 
 [lib]
