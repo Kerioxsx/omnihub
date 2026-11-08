@@ -32,6 +32,11 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.34.0
+
+- **Big Picture, redesigned**: Home, Library, Watch and Settings tabs on the bumpers, a "pick up where you left off" card, landscape rows, a cover grid with filters, four backgrounds and reduce motion.
+- **Watch**: Continue watching (the series you're part way through on Netflix, Crunchyroll, Disney+, HBO Max, Prime Video, Paramount+, Apple TV and YouTube, read only from your browser's watch pages, on your PC), a browser you pick the first time (changeable in Settings), and the controller as the browser's remote until you press View.
+
 ## New in 0.33.0
 
 - **Performance**: latency to the screen, a smart frame cap (NVIDIA), VRR for windowed games, paused background apps and core parking off while playing, standby memory, a heat report after each game, overlay and shader-cache checks, a repeatable benchmark, a mouse polling-rate test, stretched resolution per game, and Fortnite update and downtime alerts.

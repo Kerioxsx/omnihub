@@ -143,8 +143,8 @@ export const ACTION_LABEL: Record<PadAction, string> = {
   menu: 'Controllers menu',
   start: 'Play',
   select: 'Controllers menu (2)',
-  lb: 'Jump left',
-  rb: 'Jump right',
+  lb: 'Previous tab',
+  rb: 'Next tab',
   up: 'Up',
   down: 'Down',
   left: 'Left',
@@ -289,6 +289,8 @@ export interface PadHandlers {
   select?: () => void;
   /** Bumpers: -1 left, 1 right. */
   bumper?: (dir: -1 | 1) => void;
+  /** Triggers (LT / RT, L2 / R2, ZL / ZR): -1 left, 1 right. */
+  trigger?: (dir: -1 | 1) => void;
 }
 
 /**
@@ -311,6 +313,14 @@ export function usePadInput(active: boolean, handlers: PadHandlers, opts: { hapt
     let first = true;
     const loop = (t: number) => {
       const p = prefs;
+      // Another window is in front (a channel the controller is driving):
+      // ignore the pad, and anything still held when OmniHub comes back.
+      if (!document.hasFocus()) {
+        first = true;
+        held = {};
+        frame = requestAnimationFrame(loop);
+        return;
+      }
       for (const pad of navigator.getGamepads?.() ?? []) {
         if (!pad || !pad.connected) continue;
         const info = identify(pad);
@@ -336,6 +346,8 @@ export function usePadInput(active: boolean, handlers: PadHandlers, opts: { hapt
           ['v', !!on.select, () => ref.current.select?.()],
           ['lb', !!on.lb, () => ref.current.bumper?.(-1)],
           ['rb', !!on.rb, () => ref.current.bumper?.(1)],
+          ['lt', info.standard && (pad.buttons[6]?.value ?? 0) > 0.5, () => ref.current.trigger?.(-1)],
+          ['rt', info.standard && (pad.buttons[7]?.value ?? 0) > 0.5, () => ref.current.trigger?.(1)],
         ];
         for (const [k0, on, act] of acts) {
           const k = `${pad.index}:${k0}`;

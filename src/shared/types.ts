@@ -4107,6 +4107,38 @@ export interface Site {
   color: string;
 }
 
+/** A browser on this PC that channels can open in. */
+export interface Browser {
+  /** "edge", "chrome", "brave", "firefox", "vivaldi", "opera", "operagx". */
+  id: string;
+  name: string;
+  exe: string;
+  kind: 'chromium' | 'firefox' | string;
+}
+
+export interface TvPrefs {
+  /** The browser id; empty until picked. */
+  browser: string;
+  /** Show "Continue watching" (reads the browser's history for streaming watch pages only). */
+  continueWatching: boolean;
+  /** The controller works inside the browser while a channel is open. */
+  remote: boolean;
+}
+
+/** A series or video you were part way through. */
+export interface Watching {
+  /** The quick site it belongs to ("netflix"). */
+  site: string;
+  service: string;
+  /** "" when the site's history doesn't name it. */
+  show: string;
+  episode: string;
+  url: string;
+  /** Unix ms. */
+  at: number;
+  thumb: string | null;
+}
+
 export interface AudioOutput {
   id: string;
   name: string;

@@ -4,6 +4,7 @@ pub mod awake;
 pub mod battery;
 pub mod bt;
 pub mod clipboard;
+pub mod couchpad;
 pub mod displays;
 pub mod dpapi;
 pub mod elevation;

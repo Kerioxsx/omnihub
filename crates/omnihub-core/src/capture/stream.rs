@@ -866,6 +866,34 @@ pub mod input {
         INPUT { r#type: INPUT_KEYBOARD, Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: VIRTUAL_KEY(vk), wScan: scan, dwFlags: flags, time: 0, dwExtraInfo: 0 } } }
     }
 
+    /// Move the pointer by (dx, dy) pixels.
+    pub fn mouse_move(dx: i32, dy: i32) {
+        #[cfg(windows)]
+        {
+            use windows::Win32::UI::Input::KeyboardAndMouse::MOUSEEVENTF_MOVE;
+            send(&[mouse(dx, dy, 0, MOUSEEVENTF_MOVE)]);
+        }
+        #[cfg(not(windows))]
+        let _ = (dx, dy);
+    }
+
+    /// Press or release the left (or right) mouse button.
+    pub fn mouse_button(right: bool, down: bool) {
+        #[cfg(windows)]
+        {
+            use windows::Win32::UI::Input::KeyboardAndMouse::{MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP};
+            let f = match (right, down) {
+                (false, true) => MOUSEEVENTF_LEFTDOWN,
+                (false, false) => MOUSEEVENTF_LEFTUP,
+                (true, true) => MOUSEEVENTF_RIGHTDOWN,
+                (true, false) => MOUSEEVENTF_RIGHTUP,
+            };
+            send(&[mouse(0, 0, 0, f)]);
+        }
+        #[cfg(not(windows))]
+        let _ = (right, down);
+    }
+
     /// Hold or let go of one key, sent as a hardware scan code (what games
     /// and emulators read), extended for the arrows and the block above them.
     pub fn key_state(vk: u16, down: bool) {

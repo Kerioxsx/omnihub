@@ -841,3 +841,10 @@ has Capri speak through her local bridge (`companion::say`).
 - `deals.rs` (CheapShark), `remote/peer.rs` (PC-to-PC client with a pinned
   certificate and a small HTTP/1.1 client), weekly report in `watchers.rs`,
   `home.rs` (Home Assistant, Shelly) with `QuickAction::Home`.
+- Big Picture (`pages/games/library/BigPicture.tsx` + `bigpicture/`): one
+  focus model for every tab (rows of items, `NavRow` in `model.ts`) drawn by
+  `RowView`, so the controller, keyboard and mouse share the same moves.
+  `watch.rs` finds browsers, keeps the browser choice (`watch-prefs.json`),
+  opens channels and builds Continue watching; `system/couchpad.rs` is the
+  XInput remote (`couch:home` brings OmniHub back). Commands: `tv_browsers`,
+  `tv_prefs`, `tv_set_prefs`, `tv_continue`, `tv_open`, `couch_stop`.

@@ -418,8 +418,19 @@ select:focus-visible {
 @keyframes bp-card { from { opacity: 0; translate: 0 40px; } to { opacity: 1; translate: 0 0; } }
 @keyframes bp-pulse { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-glow); } 50% { transform: scale(1.05); box-shadow: 0 0 60px 10px var(--accent-glow); } }
 @keyframes bp-shine { 0% { background-position: 150% 0; } 60%, 100% { background-position: -100% 0; } }
+/* Big Picture (ORBIT look): colours come from the chosen background. */
+.bp2 { --bp-panel: #111727; --bp-stroke: rgba(191, 202, 248, 0.15); --bp-muted: #9ba8c6; --bp-mint: #86e8c6; font-family: Inter, 'Segoe UI', system-ui, sans-serif; }
+.bp2-card { transition: transform 220ms cubic-bezier(0.2, 0.85, 0.2, 1), box-shadow 220ms ease, border-color 220ms ease, background-color 220ms ease; scroll-margin: 110px 80px 130px; }
+.bp2-on { box-shadow: 0 0 0 3px rgba(var(--bp-accent-rgb), 0.95), 0 0 0 10px rgba(var(--bp-accent-rgb), 0.13), 0 22px 50px -18px rgba(var(--bp-accent-rgb), 0.55); border-color: transparent !important; position: relative; z-index: 1; }
+.bp2-page { animation: bp2-page 300ms ease both; }
+.bp2-hero { animation: bp-fade 420ms ease both; }
+.bp2-rise { animation: bp-rise 480ms cubic-bezier(0.2, 0.85, 0.2, 1) both; }
+.bp2-fade { animation: bp-fade 700ms ease both; }
+.bp2-drift { animation: bp-drift 30s ease-in-out infinite alternate; transform-origin: 60% 40%; }
+@keyframes bp2-page { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.bp2-calm *, .bp2-calm *::before, .bp2-calm *::after { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
-  .bp-ease, .bp-in, .bp-out, .bp-fade, .bp-drift, .bp-rise, .bp-card, .bp-pulse, .bp-shine { animation: none !important; transition: none !important; }
+  .bp-ease, .bp-in, .bp-out, .bp-fade, .bp-drift, .bp-rise, .bp-card, .bp-pulse, .bp-shine, .bp2-card, .bp2-page, .bp2-hero, .bp2-rise, .bp2-fade, .bp2-drift { animation: none !important; transition: none !important; }
 }
 
 /* Floating windows (speedrun timer, crosshair, desktop widgets) are see-through. */

@@ -286,7 +286,8 @@ async fn sites_open(State(core): State<Ctx>, Extension(dev): Extension<Device>, 
     let site = core.sites.list().into_iter().find(|s| s.id == req.id).ok_or_else(|| ApiError::not_found("that site isn't on the list any more"))?;
     let (url, full) = (site.url.clone(), req.full_screen);
     crate::system::awake::wake_screen();
-    let r = tokio::task::spawn_blocking(move || crate::sites::open(&url, full)).await?;
+    let c = core.clone();
+    let r = tokio::task::spawn_blocking(move || c.watch.open(&url, full)).await?;
     core.audit.record(&actor(&dev), "site.open", &site.name, r.is_ok());
     r.map_err(ApiError::bad)?;
     Ok(StatusCode::NO_CONTENT)

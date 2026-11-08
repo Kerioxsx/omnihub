@@ -88,6 +88,8 @@ pub struct AppCore {
     pub pad: crate::padremote::PadRemote,
     pub peers: crate::remote::peer::Peers,
     pub home: crate::home::Home,
+    pub watch: crate::watch::Watch,
+    pub couch: crate::system::couchpad::CouchPad,
     pub after_downloads: parking_lot::Mutex<crate::timers::AfterDownloads>,
     pub speedrun: crate::speedrun::Speedrun,
     /// Family and guest phones limited to some areas.
@@ -215,6 +217,8 @@ impl AppCore {
             pad: Default::default(),
             peers: crate::remote::peer::Peers::new(&paths.data),
             home: crate::home::Home::new(&paths.data),
+            watch: crate::watch::Watch::new(&paths.data),
+            couch: Default::default(),
             after_downloads: parking_lot::Mutex::new(Default::default()),
             speedrun: crate::speedrun::Speedrun::new(&paths.data, events.clone()),
             speedrun_keys: std::sync::atomic::AtomicBool::new(false),

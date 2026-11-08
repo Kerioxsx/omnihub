@@ -363,6 +363,16 @@ export const api = {
     reset: () => call<T.Site[]>('sites_reset'),
     open: (url: string, fullScreen: boolean) => call<void>('sites_open', { url, fullScreen }),
   },
+  /** Channels in Big Picture: the browser they open in, continue watching, and the controller as a remote. */
+  tv: {
+    browsers: () => call<T.Browser[]>('tv_browsers'),
+    prefs: () => call<T.TvPrefs>('tv_prefs'),
+    setPrefs: (prefs: T.TvPrefs) => call<T.TvPrefs>('tv_set_prefs', { prefs }),
+    continueWatching: () => call<T.Watching[]>('tv_continue'),
+    /** Full screen in the chosen browser; the controller drives it until View is pressed. */
+    open: (url: string) => call<T.Browser | null>('tv_open', { url }),
+    stopRemote: () => call<void>('couch_stop'),
+  },
   audioOutputs: () => call<T.AudioOutput[]>('audio_outputs'),
   audioInputs: () => call<T.AudioOutput[]>('audio_inputs'),
   wifiQr: () => call<T.WifiQr>('wifi_qr'),

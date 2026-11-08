@@ -55,6 +55,21 @@ let mockSites = [
   { id: 'prime', name: 'Prime Video', url: 'https://www.primevideo.com', color: '#1399ff' },
   { id: 'twitch', name: 'Twitch', url: 'https://www.twitch.tv', color: '#9146ff' },
 ];
+const mockBrowsers = [
+  { id: 'edge', name: 'Microsoft Edge', exe: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', kind: 'chromium' },
+  { id: 'chrome', name: 'Google Chrome', exe: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', kind: 'chromium' },
+  { id: 'firefox', name: 'Firefox', exe: 'C:\\Program Files\\Mozilla Firefox\\firefox.exe', kind: 'firefox' },
+];
+let mockTv = { browser: new URLSearchParams(location.search).get('browser') ?? '', continueWatching: true, remote: true };
+const mockWatching = () => {
+  const now = Date.now();
+  return [
+    { site: 'crunchyroll', service: 'Crunchyroll', show: 'Frieren: Beyond Journey’s End', episode: 'Episode 14', url: 'https://www.crunchyroll.com/watch/GX9UQ0', at: now - 40 * 60000, thumb: null },
+    { site: 'netflix', service: 'Netflix', show: '', episode: '', url: 'https://www.netflix.com/watch/81234567', at: now - 5 * 3600000, thumb: null },
+    { site: 'youtube', service: 'YouTube', show: 'Building a tiny PC in a lunchbox', episode: '', url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa', at: now - 26 * 3600000, thumb: null },
+    { site: 'disney', service: 'Disney+', show: 'Andor', episode: 'Season 2 Episode 3', url: 'https://www.disneyplus.com/video/abc', at: now - 3 * 86400000, thumb: null },
+  ];
+};
 let mockOutputs = [
   { id: 'spk', name: 'Speakers (Realtek(R) Audio)', default: true },
   { id: 'hp', name: 'Headphones (WH-1000XM5)', default: false },
@@ -640,6 +655,12 @@ const handlers: Record<string, Handler> = {
   sites_save: (a) => (mockSites = (a?.list as typeof mockSites) ?? mockSites),
   sites_reset: () => mockSites,
   sites_open: () => undefined,
+  tv_browsers: () => mockBrowsers,
+  tv_prefs: () => mockTv,
+  tv_set_prefs: (a) => (mockTv = { ...mockTv, ...(obj(a, 'prefs') as Partial<typeof mockTv>) }),
+  tv_continue: () => (mockTv.continueWatching && mockTv.browser ? mockWatching() : []),
+  tv_open: () => mockBrowsers.find((b) => b.id === mockTv.browser) ?? null,
+  couch_stop: () => undefined,
   audio_outputs: () => mockOutputs,
   audio_output_set: (a) => (mockOutputs = mockOutputs.map((o) => ({ ...o, default: o.id === str(a, 'id') }))),
   ask_pc: (a) => {

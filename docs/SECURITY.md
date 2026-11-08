@@ -1164,3 +1164,16 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   as `nvcap:<fps>:<game>.exe` (30–1000 FPS, or 0 to remove).
 - **Game deals** read CheapShark's public API; **Fortnite alerts** read the
   Epic launcher's local manifest and Epic's public status page.
+- **Continue watching** (Big Picture, opt-in) reads the chosen browser's
+  history file, never the live one: the file (and its `-wal`) is copied to a
+  temporary folder, opened read-only with SQLite, and deleted straight after.
+  The query only asks for addresses that match the watch pages of a short
+  list of streaming sites (`RULES` in `watch.rs`), so other browsing is never
+  read; the results stay in memory and are not stored or sent anywhere.
+- **The controller remote** (`system/couchpad.rs`) sends mouse and keyboard
+  input only while the chosen browser's program is the window in front
+  (checked four times a second); held keys and the mouse button are let go
+  when it isn't. It stops when View is pressed, when Big Picture closes, when
+  another channel opens, or after six hours. Browsers start with plain
+  arguments (`--app=<url> --start-fullscreen`, `--kiosk <url>` for Firefox)
+  and only `http(s)` addresses are accepted.

@@ -353,8 +353,55 @@ pub async fn sites_reset(core: Core<'_>) -> Res<Vec<omnihub_core::sites::Site>> 
 }
 
 #[tauri::command]
-pub async fn sites_open(url: String, full_screen: bool) -> Res<()> {
-    blocking(move || omnihub_core::sites::open(&url, full_screen)).await
+pub async fn sites_open(core: Core<'_>, url: String, full_screen: bool) -> Res<()> {
+    let c = core.inner().clone();
+    blocking(move || c.watch.open(&url, full_screen).map(|_| ())).await
+}
+
+/// The browsers on this PC.
+#[tauri::command]
+pub async fn tv_browsers() -> Res<Vec<omnihub_core::watch::Browser>> {
+    blocking(|| Ok(omnihub_core::watch::browsers())).await
+}
+
+#[tauri::command]
+pub async fn tv_prefs(core: Core<'_>) -> Res<omnihub_core::watch::WatchPrefs> {
+    Ok(core.watch.prefs())
+}
+
+#[tauri::command]
+pub async fn tv_set_prefs(core: Core<'_>, prefs: omnihub_core::watch::WatchPrefs) -> Res<omnihub_core::watch::WatchPrefs> {
+    core.watch.set_prefs(prefs)
+}
+
+/// Continue watching, from the chosen browser's history (watch pages only).
+#[tauri::command]
+pub async fn tv_continue(core: Core<'_>) -> Res<Vec<omnihub_core::watch::Watching>> {
+    let c = core.inner().clone();
+    blocking(move || Ok(c.watch.continue_watching(24))).await
+}
+
+/// Open a channel from Big Picture: full screen in the chosen browser, with
+/// the controller as its remote (View returns to Big Picture).
+#[tauri::command]
+pub async fn tv_open(core: Core<'_>, url: String) -> Res<Option<omnihub_core::watch::Browser>> {
+    let c = core.inner().clone();
+    blocking(move || {
+        let b = c.watch.open(&url, true)?;
+        if let Some(b) = b.as_ref().filter(|_| c.watch.prefs().remote) {
+            let exe = std::path::Path::new(&b.exe).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let ev = c.events.clone();
+            c.couch.start(exe, std::sync::Arc::new(move || ev.emit("couch:home", serde_json::json!({}))));
+        }
+        Ok(b)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn couch_stop(core: Core<'_>) -> Res<()> {
+    core.couch.stop();
+    Ok(())
 }
 
 #[tauri::command]

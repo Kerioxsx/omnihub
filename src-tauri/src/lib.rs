@@ -233,6 +233,10 @@ pub fn run(args: Vec<String>) {
                                 tray::hide_main(&h);
                             }
                             // The browser extension waits on the user: bring the window up.
+                            // View on the controller while watching: back to Big Picture.
+                            if ev.topic == "couch:home" {
+                                tray::show_main(&h);
+                            }
                             if matches!(ev.topic.as_str(), "browser:pair-request" | "browser:unlock-request") {
                                 tray::show_main(&h);
                             }
@@ -570,6 +574,12 @@ pub fn run(args: Vec<String>) {
             extras::windows_list,
             extras::window_pin,
             extras::standby_purge,
+            extras::tv_browsers,
+            extras::tv_prefs,
+            extras::tv_set_prefs,
+            extras::tv_continue,
+            extras::tv_open,
+            extras::couch_stop,
             extras::home_status,
             extras::home_connect,
             extras::home_set_shelly,

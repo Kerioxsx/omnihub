@@ -75,4 +75,5 @@ pub mod voicecmd;
 pub mod watchers;
 pub mod web;
 pub mod vault;
+pub mod watch;
 pub mod winget;
