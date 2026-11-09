@@ -1177,3 +1177,18 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   another channel opens, or after six hours. Browsers start with plain
   arguments (`--app=<url> --start-fullscreen`, `--kiosk <url>` for Firefox)
   and only `http(s)` addresses are accepted.
+- **Photo wallpapers** (`wallpaper.rs`) are decoded with the `image` crate
+  (checked by their first bytes, at most 40 MB and 120 megapixels), resized
+  and saved as JPEGs in OmniHub's data folder; the original isn't kept. A
+  phone may upload only its own wallpaper (`POST /api/wallpaper/phone`,
+  paired phones only, audited), never the PC's.
+- **iPhone notifications** (`iphone.rs`) use Apple's Notification Center
+  Service over Bluetooth LE, only with an iPhone the user paired with
+  Windows and that has "Share System Notifications" allowed. Notifications
+  are kept in memory only (the last 60) and are never written to disk or
+  sent to phones; the only thing sent back to the iPhone is a dismiss for a
+  notification the user dismissed.
+- **Screen shortcuts** from the phone are ordinary key chords over the
+  existing control channel (it still needs "Allow control"); "Close window"
+  (Alt+F4) asks for a second tap.
+

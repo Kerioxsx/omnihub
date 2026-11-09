@@ -188,7 +188,7 @@ export function ChatsScreen({ active }: { active: boolean }) {
         <button
           aria-label="New chat"
           onClick={() => setCreating(true)}
-          className="press grad-bg fixed right-[max(16px,var(--safe-right))] z-30 grid h-[58px] w-[58px] place-items-center rounded-[20px] text-white shadow-[0_14px_34px_-10px_var(--accent-glow)] bottom-tabbar"
+          className="press grad-bg fixed right-[max(16px,var(--safe-right))] z-30 grid h-[58px] w-[58px] place-items-center rounded-[20px] text-on-grad shadow-[0_14px_34px_-10px_var(--accent-glow)] bottom-tabbar"
         >
           <Plus size={28} strokeWidth={2.4} />
         </button>
@@ -411,7 +411,7 @@ function ChatOverlay({ chat, defaults, agents, onClose }: { chat: { source: Chat
                   <Square size={18} fill="currentColor" />
                 </button>
               ) : (
-                <button aria-label="Send" disabled={!text.trim()} onClick={() => void send()} className="press grad-bg grid h-[46px] w-[46px] shrink-0 place-items-center rounded-full text-white disabled:opacity-40">
+                <button aria-label="Send" disabled={!text.trim()} onClick={() => void send()} className="press grad-bg grid h-[46px] w-[46px] shrink-0 place-items-center rounded-full text-on-grad disabled:opacity-40">
                   <ArrowUp size={22} strokeWidth={2.6} />
                 </button>
               )}

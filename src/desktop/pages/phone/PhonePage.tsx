@@ -22,6 +22,7 @@ import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
 import { ConnectionCheck } from './ConnectionCheck';
 import { GuestCard } from './GuestCard';
+import { IphoneNotifs } from './IphoneNotifs';
 import { OtherPcs } from './OtherPcs';
 import { PairDialog } from './PairDialog';
 import { Permissions } from './Permissions';
@@ -367,6 +368,7 @@ export function PhonePage() {
                 <ConnectionCheck key={String(checkFocus)} defaultOpen={checkFocus} />
               </div>
             )}
+            <IphoneNotifs />
             <Permissions />
             <OtherPcs />
             <WakeCard />

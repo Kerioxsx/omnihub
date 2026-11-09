@@ -1,12 +1,11 @@
 ## New in this version
 
-**A new Big Picture, made for the couch, with your shows in it.**
+**Your photo as the wallpaper, a glassier phone app, easier screen control, and your iPhone's notifications on the PC.**
 
-- **New look**: Home, Library, Watch and Settings tabs (switch with the bumpers), a big "pick up where you left off" card, landscape rows, a cover grid with filters and search, and four backgrounds (Nebula, OLED black, Aurora, Ember). Reduce motion and sounds in its Settings.
-- **Continue watching**: the series and videos you're part way through on Netflix, Crunchyroll, Disney+, HBO Max, Prime Video, Paramount+, Apple TV and YouTube, from your browser's history; A resumes where you left off. It reads only those sites' watch pages, from a copy on your PC that is deleted straight after, and you can turn it off.
-- **Pick your browser**: the first time you open a channel, Big Picture asks which browser to use (Edge, Chrome, Brave, Firefox, Vivaldi, Opera or your usual one). Change it in Big Picture's Settings or in Games → Sites. Channels open full screen with no bars.
-- **The controller as the remote**: in a channel, the left stick moves the pointer, A clicks, the right stick scrolls, X plays and pauses, Y goes full screen, the D-pad seeks and changes volume, B is Esc, LB / RB move between buttons, LT goes back a page, and View closes the channel and brings you back. It works only while that browser is in front. Xbox controllers and others Windows sees as one (XInput); PlayStation controllers need Steam or DS4Windows for this.
-- Everything in Big Picture works with a controller, the keyboard (arrows, Enter, Esc, [ and ]) or the mouse.
+- **Your photo as the wallpaper** (Settings → Appearance → Your photo): any photo fills the whole window, sized for 4K. Small photos are enlarged and sharpened (edges stay clean, though no photo gains detail it didn't have), and the theme's colours come from the photo.
+- **The phone app, redesigned**: frosted glass over the theme, **Match PC** (the phone takes the PC's theme, still colours for the animated ones), elegant palettes (Midnight, Aurora, Rose gold, Ocean, Graphite, Ember, Pearl), and a wallpaper: the PC's photo or one of your own from the phone, with colours that follow it. It also starts faster: pages load when you first open them.
+- **Easier screen control from the phone**: touch control is the default, a row of one-tap shortcuts (right click, Esc, Enter, Start, switch app, desktop, copy, paste, undo, volume, play/pause, close window), big Left click / Hold & drag / Right click buttons in trackpad mode, and a scroll strip on the right edge.
+- **iPhone notifications on the PC** (Phone page): pair your iPhone with Windows once, pick it in OmniHub, and allow "Share System Notifications" on the iPhone. Notifications show in OmniHub and as Windows pop-ups; dismissing one clears it on the iPhone too. It uses Apple's notification service for accessories (like watches and Phone Link) over Bluetooth, so nothing is installed on the phone. New and untested on real hardware: please report how it goes.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

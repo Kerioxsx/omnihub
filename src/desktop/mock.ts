@@ -55,6 +55,26 @@ let mockSites = [
   { id: 'prime', name: 'Prime Video', url: 'https://www.primevideo.com', color: '#1399ff' },
   { id: 'twitch', name: 'Twitch', url: 'https://www.twitch.tv', color: '#9146ff' },
 ];
+let mockIphone = (() => {
+  const on = new URLSearchParams(location.search).has('iphone');
+  const now = Date.now();
+  return {
+    prefs: { enabled: on, deviceId: on ? 'BluetoothLE#iphone' : '', deviceName: on ? 'iPhone 15' : '', toasts: true },
+    status: on ? { state: 'connected' as const, message: 'Connected to iPhone 15' } : { state: 'off' as const, message: '' },
+    notifs: on
+      ? [
+          { uid: 4, app: 'net.whatsapp.WhatsApp', appName: 'WhatsApp', title: 'Mum', message: 'Dinner’s ready! Come down when you finish your game 🍝', at: now - 2 * 60000, category: 'social' },
+          { uid: 3, app: 'com.hammerandchisel.discord', appName: 'Discord', title: '#squad', message: 'Alex: anyone up for ranked tonight?', at: now - 14 * 60000, category: 'social' },
+          { uid: 2, app: 'com.apple.MobileSMS', appName: 'Messages', title: 'Sam', message: 'Did you see the new update?', at: now - 50 * 60000, category: 'social' },
+          { uid: 1, app: 'com.apple.mobilecal', appName: 'Calendar', title: 'Dentist', message: 'Tomorrow at 9:30', at: now - 3 * 3600000, category: 'schedule' },
+        ]
+      : [],
+  };
+})();
+// A sunset over hills, standing in for a photo in the preview.
+const MOCK_WALL_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'><defs><linearGradient id='s' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#1b1640'/><stop offset='.55' stop-color='#b5487a'/><stop offset='.8' stop-color='#f4a259'/></linearGradient></defs><rect width='1600' height='900' fill='url(#s)'/><circle cx='1150' cy='560' r='120' fill='#ffd39a' opacity='.9'/><path d='M0 640 Q300 520 620 610 T1200 600 T1600 580 V900 H0Z' fill='#3a1f4d'/><path d='M0 740 Q400 640 800 720 T1600 700 V900 H0Z' fill='#1d1030'/></svg>`;
+const MOCK_WALL = { slot: 'pc' as const, version: 1, width: 3840, height: 2160, sourceWidth: 1600, sourceHeight: 900, upscaled: true, palette: { accent: '#f08ab4', accent2: '#f6b26b', light: false, tint: '#1a1024' }, url: `data:image/svg+xml;utf8,${encodeURIComponent(MOCK_WALL_SVG)}` };
+let mockWall: typeof MOCK_WALL | null = new URLSearchParams(location.search).has('photo') ? MOCK_WALL : null;
 const mockBrowsers = [
   { id: 'edge', name: 'Microsoft Edge', exe: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', kind: 'chromium' },
   { id: 'chrome', name: 'Google Chrome', exe: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', kind: 'chromium' },
@@ -655,6 +675,25 @@ const handlers: Record<string, Handler> = {
   sites_save: (a) => (mockSites = (a?.list as typeof mockSites) ?? mockSites),
   sites_reset: () => mockSites,
   sites_open: () => undefined,
+  iphone_get: () => mockIphone,
+  iphone_paired: () => [{ id: 'BluetoothLE#iphone', name: 'iPhone 15' }, { id: 'BluetoothLE#buds', name: 'Galaxy Buds2' }],
+  iphone_connect: (a) => {
+    mockIphone = { ...mockIphone, prefs: { ...mockIphone.prefs, enabled: !!a?.id, deviceId: optStr(a, 'id') ?? '', deviceName: optStr(a, 'name') ?? '' }, status: a?.id ? { state: 'connected', message: `Connected to ${optStr(a, 'name') ?? 'iPhone'}` } : { state: 'off', message: '' } };
+    return mockIphone.prefs;
+  },
+  iphone_toasts: (a) => (mockIphone = { ...mockIphone, prefs: { ...mockIphone.prefs, toasts: Boolean(a?.on) } }).prefs,
+  iphone_dismiss: (a) => {
+    mockIphone = { ...mockIphone, notifs: mockIphone.notifs.filter((n) => n.uid !== num(a, 'uid')) };
+    emit('iphone:removed', { uid: num(a, 'uid') });
+  },
+  iphone_clear: () => (mockIphone = { ...mockIphone, notifs: [] }) && undefined,
+  open_bluetooth_settings: () => undefined,
+  photo_wall_get: () => mockWall,
+  photo_wall_set: (a) => {
+    mockWall = a?.path ? { ...MOCK_WALL, version: Date.now() } : null;
+    emit('wallpaper:changed', { slot: 'pc' });
+    return mockWall;
+  },
   tv_browsers: () => mockBrowsers,
   tv_prefs: () => mockTv,
   tv_set_prefs: (a) => (mockTv = { ...mockTv, ...(obj(a, 'prefs') as Partial<typeof mockTv>) }),

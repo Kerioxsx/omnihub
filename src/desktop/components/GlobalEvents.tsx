@@ -1,5 +1,7 @@
 // Subscribes once to app-wide backend events and keeps the shared stores fresh.
 
+import { applyPalette } from '@shared/palette';
+import { useWallpaper } from '../lib/wallpaper';
 import { useEffect } from 'react';
 import type { Device, JobProgress, PendingPower, Screenshot, ScanSummary, ServerStatus, Settings, TransferEvent, ViewerInfo } from '@shared/types';
 import { formatBytes } from '@shared/format';
@@ -110,10 +112,17 @@ export function ThemeController() {
   const look = lookInfo(useSettings((s) => s.settings?.general.look)).id;
   const accent = useSettings((s) => s.settings?.general.accent);
   const reduced = useSettings((s) => s.settings?.general.reducedMotion);
+  const photoLight = useWallpaper()?.palette.light;
   const glass = useSettings((s) => s.settings?.general.glass ?? false);
+  const wall = useWallpaper();
+  const photo = look === 'photo' ? (wall?.palette ?? null) : null;
   useEffect(() => {
-    document.documentElement.toggleAttribute('data-glass', glass);
-  }, [glass]);
+    // A photo always gets glass, so it shows through.
+    document.documentElement.toggleAttribute('data-glass', glass || look === 'photo');
+  }, [glass, look]);
+  useEffect(() => {
+    applyPalette(photo);
+  }, [photo]);
   useEffect(() => {
     if (!theme) return;
     const root = document.documentElement;
@@ -121,7 +130,7 @@ export function ThemeController() {
     root.dataset.look = look;
     const apply = () => {
       // Animated themes bring their own light or dark palette.
-      const light = look !== 'classic' ? lookInfo(look).light : theme === 'light' || (theme === 'system' && mq.matches);
+      const light = look === 'photo' ? !!photoLight : look !== 'classic' ? lookInfo(look).light : theme === 'light' || (theme === 'system' && mq.matches);
       root.classList.toggle('light', light);
       root.style.colorScheme = light ? 'light' : 'dark';
     };
@@ -129,7 +138,7 @@ export function ThemeController() {
     if (theme !== 'system' || look !== 'classic') return;
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [theme, look]);
+  }, [theme, look, photoLight]);
   useEffect(() => {
     if (accent) document.documentElement.dataset.accent = accent;
   }, [accent]);

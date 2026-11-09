@@ -1,20 +1,19 @@
 // Settings: this phone, theme, PC info, unpair.
 
 import { useEffect, useState } from 'react';
-import { Smartphone, Sun, Moon, SunMoon, ShieldCheck, ShieldAlert, Unlink, Check, X, Info, Download, Server } from 'lucide-react';
+import { Smartphone, ShieldCheck, ShieldAlert, Unlink, Check, X, Info, Download, Server } from 'lucide-react';
 import type { Device } from '@shared/types';
 import { formatDate } from '@shared/format';
 import { client, savedDeviceName } from '../client';
 import { useApp, toast } from '../state';
 import { Sheet } from '../ui/Sheet';
-import { Button, Segmented } from '../ui/common';
+import { Button } from '../ui/common';
 import { SubHeader } from './More';
-import { getThemePref, setThemePref, type ThemePref } from '../lib/theme';
+import { LookSection } from './LookSettings';
 import { cx, errorMessage } from '../lib/util';
 
 export function SettingsPage({ onBack, onUnpaired }: { onBack: () => void; onUnpaired: () => void }) {
   const info = useApp((s) => s.info);
-  const [theme, setTheme] = useState<ThemePref>(getThemePref());
   const [me, setMe] = useState<Device | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -65,23 +64,10 @@ export function SettingsPage({ onBack, onUnpaired }: { onBack: () => void; onUnp
                 <div className="truncate text-[13px] text-dim">{me ? `Paired ${formatDate(me.created)}` : 'Paired device'}</div>
               </div>
             </div>
-            <div className="px-4 py-3.5">
-              <div className="mb-2.5 text-[15px] font-semibold">Appearance</div>
-              <Segmented
-                value={theme}
-                onChange={(t) => {
-                  setTheme(t);
-                  setThemePref(t);
-                }}
-                options={[
-                  { value: 'system', label: <><SunMoon size={15} /> System</> },
-                  { value: 'dark', label: <><Moon size={15} /> Dark</> },
-                  { value: 'light', label: <><Sun size={15} /> Light</> },
-                ]}
-              />
-            </div>
           </div>
         </section>
+
+        <LookSection />
 
         <section>
           <h2 className="mb-2.5 px-1 text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">PC</h2>

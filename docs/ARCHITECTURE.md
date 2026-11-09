@@ -848,3 +848,13 @@ has Capri speak through her local bridge (`companion::say`).
   opens channels and builds Continue watching; `system/couchpad.rs` is the
   XInput remote (`couch:home` brings OmniHub back). Commands: `tv_browsers`,
   `tv_prefs`, `tv_set_prefs`, `tv_continue`, `tv_open`, `couch_stop`.
+- Looks: `wallpaper.rs` (photo → 4K and phone JPEGs + palette) with
+  `photo_wall_get/set` on the PC (look `photo`, colours applied by
+  `src/shared/palette.ts`) and `/api/look` + `/api/wallpaper/{slot}` for the
+  phone, whose `lib/look.ts` resolves Match PC / palettes / wallpaper and
+  caches the picture in Cache Storage. Phone pages are lazy-loaded.
+- `iphone.rs`: ANCS client (WinRT GATT on its own thread; protocol parsing
+  shared and tested), events `iphone:notification`, `iphone:removed`,
+  `iphone:status`; commands `iphone_get`, `iphone_paired`, `iphone_connect`,
+  `iphone_toasts`, `iphone_dismiss`, `iphone_clear`.
+

@@ -15,6 +15,7 @@ export interface LookInfo {
 
 export const LOOKS: LookInfo[] = [
   { id: 'classic', name: 'Classic', blurb: 'Light or dark, with your accent colour.', light: false },
+  { id: 'photo', name: 'Your photo', blurb: 'Any photo, sized for 4K, with the colours taken from it.', light: false },
   { id: 'aurora', name: 'Aurora', blurb: 'Northern lights drifting behind everything.', light: false },
   { id: 'synthwave', name: 'Synthwave', blurb: 'A neon sun over a moving grid.', light: false },
   { id: 'ocean', name: 'Ocean', blurb: 'Slow waves in deep blue.', light: false },

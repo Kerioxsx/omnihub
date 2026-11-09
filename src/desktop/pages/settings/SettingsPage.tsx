@@ -15,6 +15,8 @@ import { Segmented, Select, Switch, TextInput } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { forgetPictures, LOOK_CHANGED, useAuroraLook } from '../../lib/aurora/textures';
+import { wallSummary } from '@shared/palette';
+import { setWallpaperLocal, useWallpaper } from '../../lib/wallpaper';
 import { LOOKS } from '../../lib/looks';
 import { controllerModeOn, setControllerMode } from '../../lib/padNav';
 import { navigate, useRoute } from '../../lib/router';
@@ -227,6 +229,7 @@ export function SettingsPage() {
                   <Switch checked={s.general.animateBackdrop} onChange={(v) => void update({ general: { animateBackdrop: v } })} label="Animate the background" />
                 </Row>
                 {s.general.look === 'minecraft' && <ItemPackRow />}
+                {s.general.look === 'photo' && <PhotoRow />}
               </>
             )}
             <Row title="Glass" hint="Frosted, see-through cards and sidebar over the background. Over a moving theme it uses a little more graphics power.">
@@ -801,6 +804,59 @@ function PrivacyDashboard() {
 }
 
 /** Minecraft theme: the items that float by come from a pack of pictures on this PC (shared with Aurora's lyrics). */
+function PhotoRow() {
+  const wall = useWallpaper();
+  const [busy, setBusy] = useState(false);
+  const choose = async () => {
+    try {
+      const [path] = await api.app.pickFiles('Pick a photo for the wallpaper');
+      if (!path) return;
+      setBusy(true);
+      const w = await api.wallpaper.set('pc', path);
+      setWallpaperLocal(w);
+      if (w) toast.success('Wallpaper ready', wallSummary(w));
+    } catch (e) {
+      toast.error('Couldn’t use that photo', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    setWallpaperLocal(await api.wallpaper.set('pc', null).catch(() => null));
+  };
+  return (
+    <Row title="Your photo" stack hint="Any photo: it fills the whole window and is sized for 4K (small photos are enlarged and sharpened, which keeps edges clean but can’t add detail that isn’t there). The theme’s colours come from it, and your phone can use it too. It stays on this PC.">
+      <div className="flex items-center gap-4">
+        <div className="relative h-24 w-40 shrink-0 overflow-hidden rounded-xl border border-line bg-surface-2">{wall ? <img src={wall.url} alt="" className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-[12px] text-faint">No photo yet</div>}</div>
+        <div className="min-w-0 flex-1 space-y-2">
+          {wall && (
+            <>
+              <div className="text-[12.5px] text-dim">{wallSummary(wall)}</div>
+              <div className="flex items-center gap-2 text-[12px] text-faint">
+                Colours from it:
+                {[wall.palette.accent, wall.palette.accent2, wall.palette.tint].map((c) => (
+                  <span key={c} className="h-5 w-5 rounded-full border border-line" style={{ background: c }} title={c} />
+                ))}
+                <span>{wall.palette.light ? 'light' : 'dark'}</span>
+              </div>
+            </>
+          )}
+          <div className="flex gap-2">
+            <Button variant="primary" onClick={() => void choose()} disabled={busy}>
+              {busy ? 'Preparing…' : wall ? 'Change photo' : 'Choose a photo'}
+            </Button>
+            {wall && (
+              <Button variant="ghost" onClick={() => void remove()}>
+                Remove
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </Row>
+  );
+}
+
 function ItemPackRow() {
   const { look, textures } = useAuroraLook();
   const [busy, setBusy] = useState(false);

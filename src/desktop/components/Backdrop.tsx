@@ -9,6 +9,7 @@ import { useAuroraLook, useTexture } from '../lib/aurora/textures';
 import { cx } from '../lib/cx';
 import { BLEACH, lookInfo } from '../lib/looks';
 import { useSettings } from '../state/settings';
+import { useWallpaper } from '../lib/wallpaper';
 
 /** The same layout every time (no jumping between renders). */
 function seeded(seed: number) {
@@ -506,6 +507,18 @@ function useHidden(): boolean {
   return hidden || (blurred && !wallpaper);
 }
 
+/** Your photo, covering the whole window (a sample in the theme picker). */
+function PhotoLayer({ mini }: { mini: boolean }) {
+  const wall = useWallpaper();
+  if (!wall) return <i className="bd-photo-empty" />;
+  return (
+    <>
+      <img className="bd-photo" src={wall.url} alt="" draggable={false} decoding="async" />
+      {!mini && <i className={cx('bd-photo-veil', wall.palette.light && 'is-light')} />}
+    </>
+  );
+}
+
 function Layers({ look, mini }: { look: Look; mini: boolean }) {
   const stars = useMemo(() => (look === 'galaxy' ? [starField(mini ? 40 : 140, 7), starField(mini ? 25 : 90, 19)] : null), [look, mini]);
   const petals = useMemo(() => (look === 'sakura' ? particles(mini ? 7 : 22, 3, 14, 26) : []), [look, mini]);
@@ -522,6 +535,8 @@ function Layers({ look, mini }: { look: Look; mini: boolean }) {
     [look, mini],
   );
   switch (look) {
+    case 'photo':
+      return <PhotoLayer mini={mini} />;
     case 'aurora':
       return (
         <>

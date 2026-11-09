@@ -497,6 +497,21 @@ export const api = {
     forget: (address: string, name: string) => call<T.BtDevice[]>('bt_forget', { address, name }),
   },
   /** Your own picture behind a Bleach theme (kept on this PC). */
+  /** Your iPhone's notifications on the PC, over Bluetooth. */
+  iphone: {
+    get: () => call<T.IphoneState>('iphone_get'),
+    paired: () => call<T.PairedPhone[]>('iphone_paired'),
+    connect: (id: string | null, name: string | null) => call<T.IphoneState['prefs']>('iphone_connect', { id, name }),
+    toasts: (on: boolean) => call<T.IphoneState['prefs']>('iphone_toasts', { on }),
+    dismiss: (uid: number) => call<void>('iphone_dismiss', { uid }),
+    clear: () => call<void>('iphone_clear'),
+    openBluetooth: () => call<void>('open_bluetooth_settings'),
+  },
+  /** Your own photo behind the whole app ("pc"), sized for 4K, with its colours. */
+  wallpaper: {
+    get: (slot: 'pc' | 'phone') => call<(import('@shared/palette').WallInfo & { url: string }) | null>('photo_wall_get', { slot }),
+    set: (slot: 'pc' | 'phone', path: string | null) => call<(import('@shared/palette').WallInfo & { url: string }) | null>('photo_wall_set', { slot, path }),
+  },
   themeArt: {
     get: (theme: string) => call<string | null>('theme_art_get', { theme }),
     set: (theme: string, path: string | null) => call<string | null>('theme_art_set', { theme, path }),

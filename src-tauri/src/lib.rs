@@ -51,6 +51,11 @@ fn init_logging(paths: &AppPaths) {
 /// Topics worth a desktop notification when the window is hidden.
 fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String, String)> {
     match topic {
+        "iphone:notification" if payload["announce"].as_bool() == Some(true) => {
+            let n = &payload["notif"];
+            let (app, title) = (n["appName"].as_str().unwrap_or("iPhone"), n["title"].as_str().unwrap_or(""));
+            Some((if title.is_empty() { app.to_string() } else { format!("{app}: {title}") }, n["message"].as_str().unwrap_or("").chars().take(240).collect()))
+        }
         "remote:paired" => Some(("Phone paired".into(), format!("{} can now connect to this PC.", payload["name"].as_str().unwrap_or("A phone")))),
         "guest:received" => Some((format!("{} sent you a file", payload["label"].as_str().unwrap_or("A guest")), format!("{} · saved in Incoming\\Guests", payload["name"].as_str().unwrap_or("file")))),
         "video:done" => Some((format!("{} is done", payload["label"].as_str().unwrap_or("Video")), payload["output"].as_str().unwrap_or("").rsplit(['\\', '/']).next().unwrap_or("").to_string())),
@@ -220,7 +225,7 @@ pub fn run(args: Vec<String>) {
                             // knowing about: always a Windows notification.
                             // During a focus round only what matters gets through.
                             let focusing = h.state::<std::sync::Arc<omnihub_core::core::AppCore>>().focus.state().is_some_and(|f| f.phase == omnihub_core::focus::Phase::Focus);
-                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request" | "counters:goal" | "games:limit" | "games:sale" | "battery:low" | "alert:hot" | "screentime:limit" | "timer:done" | "timer:alarm" | "timer:bedtime");
+                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request" | "counters:goal" | "games:limit" | "games:sale" | "battery:low" | "alert:hot" | "screentime:limit" | "timer:done" | "timer:alarm" | "timer:bedtime" | "iphone:notification");
                             if (hidden || important) && (!focusing || important) {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
                                     shortcuts::notify(&h, &title, &body);
@@ -260,6 +265,11 @@ pub fn run(args: Vec<String>) {
             let window_handle = handle.clone();
             core.updater.set_in_use(move || window_handle.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false)));
             core.start_background();
+            // iPhone notifications over Bluetooth, if they were on.
+            {
+                let ev = core.events.clone();
+                core.iphone.start(std::sync::Arc::new(move |t, v| ev.emit(t, v)));
+            }
             ambient::start(handle.clone());
             rig::start(handle.clone());
             floats::restore(&handle, core.clone());
@@ -580,6 +590,15 @@ pub fn run(args: Vec<String>) {
             extras::tv_continue,
             extras::tv_open,
             extras::couch_stop,
+            extras::photo_wall_get,
+            extras::photo_wall_set,
+            extras::iphone_get,
+            extras::iphone_paired,
+            extras::iphone_connect,
+            extras::iphone_toasts,
+            extras::iphone_dismiss,
+            extras::iphone_clear,
+            extras::open_bluetooth_settings,
             extras::home_status,
             extras::home_connect,
             extras::home_set_shelly,

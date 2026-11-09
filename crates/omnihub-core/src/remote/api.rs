@@ -26,6 +26,7 @@ use crate::settings::BrowseScope;
 use crate::system::power::PowerAction;
 
 mod extra;
+mod look;
 
 type Ctx = Arc<AppCore>;
 
@@ -156,6 +157,7 @@ pub fn router(core: Ctx) -> Router {
         .route("/api/vault/entries", get(vault_entries))
         .route("/api/vault/reveal", post(vault_reveal))
         .merge(extra::authed())
+        .merge(look::authed())
         .route_layer(middleware::from_fn_with_state(core.clone(), require_device));
 
     Router::new()

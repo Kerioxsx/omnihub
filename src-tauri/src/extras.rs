@@ -335,6 +335,88 @@ pub async fn theme_art_set(core: Core<'_>, theme: String, path: Option<String>) 
     Ok(art_url(&core, p))
 }
 
+// ---------- photo wallpaper ----------
+
+fn wall_json(core: &AppCore, slot: &str) -> Option<serde_json::Value> {
+    let info = core.wallpapers.info(slot)?;
+    let url = art_url(core, core.wallpapers.file(slot, false))?;
+    let mut v = serde_json::to_value(info).ok()?;
+    v["url"] = serde_json::Value::String(format!("{url}?v={}", v["version"]));
+    Some(v)
+}
+
+/// Your photo wallpaper ("pc" or "phone"), with its colours and address.
+#[tauri::command]
+pub async fn photo_wall_get(core: Core<'_>, slot: String) -> Res<Option<serde_json::Value>> {
+    Ok(wall_json(&core, &slot))
+}
+
+/// Use a photo as the wallpaper (sized for 4K, colours read), or none.
+#[tauri::command]
+pub async fn photo_wall_set(core: Core<'_>, slot: String, path: Option<String>) -> Res<Option<serde_json::Value>> {
+    let c = core.inner().clone();
+    blocking(move || {
+        match path {
+            Some(p) => {
+                c.wallpapers.set_file(&slot, std::path::Path::new(&p))?;
+            }
+            None => c.wallpapers.clear(&slot)?,
+        }
+        c.events.emit("wallpaper:changed", serde_json::json!({ "slot": slot }));
+        Ok(wall_json(&c, &slot))
+    })
+    .await
+}
+
+// ---------- iPhone notifications ----------
+
+/// Its settings, the connection and the notifications so far.
+#[tauri::command]
+pub async fn iphone_get(core: Core<'_>) -> Res<serde_json::Value> {
+    Ok(serde_json::json!({ "prefs": core.iphone.prefs(), "status": core.iphone.status(), "notifs": core.iphone.list() }))
+}
+
+/// Bluetooth devices paired with Windows (iPhones first).
+#[tauri::command]
+pub async fn iphone_paired() -> Res<Vec<omnihub_core::iphone::PairedPhone>> {
+    blocking(|| Ok(omnihub_core::iphone::paired_phones())).await
+}
+
+/// Listen to this iPhone (or stop with no id).
+#[tauri::command]
+pub async fn iphone_connect(core: Core<'_>, id: Option<String>, name: Option<String>) -> Res<omnihub_core::iphone::IphonePrefs> {
+    let ev = core.events.clone();
+    core.iphone.connect(id.map(|i| (i, name.unwrap_or_default())), std::sync::Arc::new(move |t, v| ev.emit(t, v)))
+}
+
+#[tauri::command]
+pub async fn iphone_toasts(core: Core<'_>, on: bool) -> Res<omnihub_core::iphone::IphonePrefs> {
+    core.iphone.set_toasts(on)
+}
+
+/// Clear it here and on the iPhone.
+#[tauri::command]
+pub async fn iphone_dismiss(core: Core<'_>, uid: u32) -> Res<()> {
+    core.iphone.dismiss(uid);
+    let ev = core.events.clone();
+    core.iphone.remove(uid, &(std::sync::Arc::new(move |t: &str, v| ev.emit(t, v)) as omnihub_core::iphone::Emit));
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn iphone_clear(core: Core<'_>) -> Res<()> {
+    core.iphone.clear();
+    Ok(())
+}
+
+/// Windows Settings → Bluetooth & devices (to pair the iPhone).
+#[tauri::command]
+pub async fn open_bluetooth_settings() -> Res<()> {
+    #[cfg(windows)]
+    std::process::Command::new("explorer.exe").arg("ms-settings:bluetooth").spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // ---------- quick sites, sound output, Bluetooth ----------
 
 #[tauri::command]

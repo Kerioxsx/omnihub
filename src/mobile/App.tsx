@@ -1,7 +1,7 @@
 // Root of the phone app: boot → pair or main UI (tabs), live events,
 // offline banner, toasts.
 
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { WifiOff, RefreshCw, LoaderCircle } from 'lucide-react';
 import type { InboxItem, PendingPower, PowerAction } from '@shared/types';
@@ -9,6 +9,7 @@ import { client, connectEvents, getToken, pairSecretFromUrl, setToken } from './
 import { useApp, useInbox, usePower, toast, TAB_ORDER, type Tab } from './state';
 import { useUploads, isActive } from './uploads';
 import { emitEvent } from './lib/events';
+import { refreshLook } from './lib/look';
 import { useBackHandler } from './lib/back';
 import { copyToClipboard, cx, errorMessage, useInterval, vibrate } from './lib/util';
 import { TabBar } from './ui/TabBar';
@@ -19,12 +20,14 @@ import { Button } from './ui/common';
 import { PairScreen } from './screens/Pair';
 import { HomeScreen } from './screens/Home';
 import { FilesScreen } from './screens/Files';
-import { ScreenScreen } from './screens/Screen';
 import { PowerScreen, autoScreenshot } from './screens/Power';
-import { MusicScreen } from './screens/Music';
 import { MoreScreen, type MorePage } from './screens/More';
-import { ChatsScreen } from './screens/Chats';
 import { ApprovalSheet } from './screens/Approve';
+
+// The bigger tabs load the first time you open them.
+const ScreenScreen = lazy(() => import('./screens/Screen').then((m) => ({ default: m.ScreenScreen })));
+const MusicScreen = lazy(() => import('./screens/Music').then((m) => ({ default: m.MusicScreen })));
+const ChatsScreen = lazy(() => import('./screens/Chats').then((m) => ({ default: m.ChatsScreen })));
 
 type Phase = 'boot' | 'pair' | 'ready' | 'unreachable';
 
@@ -56,6 +59,7 @@ export function App() {
       if (token && i.paired) {
         if (pairSecretFromUrl()) history.replaceState(history.state, '', location.pathname + location.search);
         setPhase('ready');
+        void refreshLook();
       } else {
         if (token) setToken(null);
         setPhase('pair');
@@ -285,7 +289,7 @@ export function App() {
   const panel = (t: Tab, node: React.ReactNode) =>
     visited.has(t) && (
       <div key={t} className={cx('absolute inset-0', tab === t && dir)} hidden={tab !== t} aria-hidden={tab !== t}>
-        {node}
+        <Suspense fallback={null}>{node}</Suspense>
       </div>
     );
 

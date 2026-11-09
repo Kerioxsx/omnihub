@@ -929,7 +929,7 @@ export interface SunshineStatus {
 export type Theme = 'system' | 'dark' | 'light';
 
 /** The app's look: classic, or one of the animated themes. */
-export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember' | 'minecraft' | 'matrix' | 'rain' | 'snowfall' | 'fireflies' | 'lava' | 'clouds' | 'bankai' | 'hollow' | 'mugetsu' | 'hakka';
+export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember' | 'minecraft' | 'matrix' | 'rain' | 'snowfall' | 'fireflies' | 'lava' | 'clouds' | 'bankai' | 'hollow' | 'mugetsu' | 'hakka' | 'photo';
 
 export interface Settings {
   general: {
@@ -4105,6 +4105,29 @@ export interface Site {
   name: string;
   url: string;
   color: string;
+}
+
+/** A notification from your iPhone (over Bluetooth). */
+export interface IphoneNotif {
+  uid: number;
+  app: string;
+  appName: string;
+  title: string;
+  message: string;
+  /** Unix ms. */
+  at: number;
+  category: string;
+}
+
+export interface PairedPhone {
+  id: string;
+  name: string;
+}
+
+export interface IphoneState {
+  prefs: { enabled: boolean; deviceId: string; deviceName: string; toasts: boolean };
+  status: { state: 'off' | 'connecting' | 'connected' | 'waiting' | 'unsupported'; message: string };
+  notifs: IphoneNotif[];
 }
 
 /** A browser on this PC that channels can open in. */

@@ -3,35 +3,37 @@
 
 import { AnimatePresence, motion } from 'motion/react';
 import { Activity, Gamepad2, NotebookPen, AppWindow, KeyRound, Settings as SettingsIcon, ChevronRight, ShieldCheck, ShieldAlert, ArrowLeft, SlidersVertical, SquareX, Server, ScanText, ScanBarcode, PenTool, CloudDownload, Grid3x3, Sparkles, Gauge, Images, PartyPopper, Tv, Bluetooth as BluetoothIcon, FolderSync, AlarmClock } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { useApp } from '../state';
 import { Logo } from '../ui/Logo';
 import { IconButton, PageHeader } from '../ui/common';
 import { useBackHandler } from '../lib/back';
 import { cx } from '../lib/util';
-import { NotesPage } from './Notes';
-import { AppsPage } from './Apps';
-import { VaultPage } from './Vault';
-import { SettingsPage } from './Settings';
-import { TasksPage } from './Tasks';
-import { GamesPage } from './Games';
-import { ServersPage } from './Servers';
-import { SoundPage } from './Sound';
-import { OpenAppsPage } from './OpenApps';
-import { ScanPage } from './Scan';
-import { BarcodePage } from './Barcode';
-import { CountersPage } from './Counters';
-import { DeckPage } from './Deck';
-import { BoardPage } from './Board';
-import { DownloadsPage } from './Downloads';
-import { LivePage } from './Live';
-import { PartyPage } from './Party';
-import { PhotosPage } from './Photos';
-import { WatchPage } from './Watch';
-import { BluetoothPage } from './Bluetooth';
-import { SyncFolderPage } from './SyncFolder';
-import { ControllerPage } from './Controller';
-import { TimersPage } from './Timers';
+
+// Each page loads when it's first opened (a smaller, faster app to start).
+const NotesPage = lazy(() => import('./Notes').then((x) => ({ default: x.NotesPage })));
+const AppsPage = lazy(() => import('./Apps').then((x) => ({ default: x.AppsPage })));
+const VaultPage = lazy(() => import('./Vault').then((x) => ({ default: x.VaultPage })));
+const SettingsPage = lazy(() => import('./Settings').then((x) => ({ default: x.SettingsPage })));
+const TasksPage = lazy(() => import('./Tasks').then((x) => ({ default: x.TasksPage })));
+const GamesPage = lazy(() => import('./Games').then((x) => ({ default: x.GamesPage })));
+const ServersPage = lazy(() => import('./Servers').then((x) => ({ default: x.ServersPage })));
+const SoundPage = lazy(() => import('./Sound').then((x) => ({ default: x.SoundPage })));
+const OpenAppsPage = lazy(() => import('./OpenApps').then((x) => ({ default: x.OpenAppsPage })));
+const ScanPage = lazy(() => import('./Scan').then((x) => ({ default: x.ScanPage })));
+const BarcodePage = lazy(() => import('./Barcode').then((x) => ({ default: x.BarcodePage })));
+const CountersPage = lazy(() => import('./Counters').then((x) => ({ default: x.CountersPage })));
+const DeckPage = lazy(() => import('./Deck').then((x) => ({ default: x.DeckPage })));
+const BoardPage = lazy(() => import('./Board').then((x) => ({ default: x.BoardPage })));
+const DownloadsPage = lazy(() => import('./Downloads').then((x) => ({ default: x.DownloadsPage })));
+const LivePage = lazy(() => import('./Live').then((x) => ({ default: x.LivePage })));
+const PartyPage = lazy(() => import('./Party').then((x) => ({ default: x.PartyPage })));
+const PhotosPage = lazy(() => import('./Photos').then((x) => ({ default: x.PhotosPage })));
+const WatchPage = lazy(() => import('./Watch').then((x) => ({ default: x.WatchPage })));
+const BluetoothPage = lazy(() => import('./Bluetooth').then((x) => ({ default: x.BluetoothPage })));
+const SyncFolderPage = lazy(() => import('./SyncFolder').then((x) => ({ default: x.SyncFolderPage })));
+const ControllerPage = lazy(() => import('./Controller').then((x) => ({ default: x.ControllerPage })));
+const TimersPage = lazy(() => import('./Timers').then((x) => ({ default: x.TimersPage })));
 
 export type MorePage = 'live' | 'timers' | 'controller' | 'sync' | 'photos' | 'party' | 'watch' | 'bluetooth' | 'deck' | 'counters' | 'sound' | 'open' | 'tasks' | 'games' | 'servers' | 'notes' | 'apps' | 'vault' | 'scan' | 'barcode' | 'board' | 'downloads' | 'settings';
 
@@ -114,6 +116,7 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 34, stiffness: 340 }}
           >
+            <Suspense fallback={<PageLoading />}>
             {page === 'sound' && <SoundPage active={active} onBack={() => setPage(null)} />}
             {page === 'open' && <OpenAppsPage active={active} onBack={() => setPage(null)} />}
             {page === 'tasks' && <TasksPage active={active} onBack={() => setPage(null)} />}
@@ -137,6 +140,7 @@ export function MoreScreen({ active, page, setPage, onUnpaired }: { active: bool
             {page === 'board' && <BoardPage active={active} onBack={() => setPage(null)} />}
             {page === 'downloads' && <DownloadsPage active={active} onBack={() => setPage(null)} />}
             {page === 'settings' && <SettingsPage onBack={() => setPage(null)} onUnpaired={onUnpaired} />}
+            </Suspense>
           </motion.div>
         )}
       </AnimatePresence>
@@ -157,5 +161,13 @@ export function SubHeader({ title, subtitle, onBack, right }: { title: string; s
       }
       right={right}
     />
+  );
+}
+
+function PageLoading() {
+  return (
+    <div className="grid h-full place-items-center">
+      <span className="h-7 w-7 animate-spin rounded-full border-2 border-line border-t-accent" />
+    </div>
   );
 }

@@ -144,7 +144,7 @@ export function NotesPage({ active, onBack }: { active: boolean; onBack: () => v
       <button
         aria-label="New note"
         onClick={() => setComposing(true)}
-        className="press grad-bg fixed right-[max(16px,var(--safe-right))] z-30 grid h-[58px] w-[58px] place-items-center rounded-[20px] text-white shadow-[0_14px_34px_-10px_var(--accent-glow)] bottom-tabbar"
+        className="press grad-bg fixed right-[max(16px,var(--safe-right))] z-30 grid h-[58px] w-[58px] place-items-center rounded-[20px] text-on-grad shadow-[0_14px_34px_-10px_var(--accent-glow)] bottom-tabbar"
       >
         <Plus size={28} strokeWidth={2.4} />
       </button>

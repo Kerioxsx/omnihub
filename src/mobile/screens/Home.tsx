@@ -466,7 +466,7 @@ function IdeaComposer({ onOpenNotes }: { onOpenNotes: () => void }) {
       <section className="card relative overflow-hidden p-4">
         <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[radial-gradient(closest-side,rgba(124,58,237,.28),transparent)]" />
         <div className="relative flex items-center gap-2.5">
-          <div className="grid h-9 w-9 place-items-center rounded-xl grad-bg text-white">
+          <div className="grid h-9 w-9 place-items-center rounded-xl grad-bg text-on-grad">
             <Lightbulb size={18} />
           </div>
           <div className="text-sm text-dim">Capture it now — it lands in OmniHub notes on the PC.</div>

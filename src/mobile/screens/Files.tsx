@@ -391,7 +391,7 @@ export function FilesScreen({ active }: { active: boolean }) {
               <div className="card mt-1 overflow-hidden">
                 {roots.map((r, i) => (
                   <button key={r.path} onClick={() => setPath(r.path)} className={cx('press flex w-full items-center gap-3.5 px-4 py-3.5 text-left active:bg-surface-2', i > 0 && 'border-t border-line')}>
-                    <div className={cx('grid h-11 w-11 place-items-center rounded-2xl', r.name === 'From phone' ? 'grad-bg text-white' : 'bg-violet-500/15 text-violet-400')}>{rootIcon(r.name)}</div>
+                    <div className={cx('grid h-11 w-11 place-items-center rounded-2xl', r.name === 'From phone' ? 'grad-bg text-on-grad' : 'bg-violet-500/15 text-violet-400')}>{rootIcon(r.name)}</div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[16px] font-semibold">{r.name}</div>
                       <div className="truncate text-xs text-faint">{r.name === 'From phone' ? 'Where uploads from this phone go' : shortPath(r.path)}</div>
@@ -452,7 +452,7 @@ export function FilesScreen({ active }: { active: boolean }) {
           whileTap={{ scale: 0.92 }}
           aria-label="Send files to the PC"
           onClick={() => setUploadOpen(true)}
-          className="grad-bg fixed right-[max(16px,var(--safe-right))] z-30 grid h-[58px] w-[58px] place-items-center rounded-[20px] text-white shadow-[0_14px_34px_-10px_var(--accent-glow)] bottom-tabbar"
+          className="grad-bg fixed right-[max(16px,var(--safe-right))] z-30 grid h-[58px] w-[58px] place-items-center rounded-[20px] text-on-grad shadow-[0_14px_34px_-10px_var(--accent-glow)] bottom-tabbar"
         >
           <Plus size={28} strokeWidth={2.4} />
         </motion.button>
