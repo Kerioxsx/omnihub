@@ -11,6 +11,8 @@ public final class Draw {
     }
 
     private static WorldRenderer begin(int mode) {
+        // Text drawing turns texturing on; shapes are untextured.
+        net.minecraft.client.renderer.GlStateManager.disableTexture2D();
         WorldRenderer w = Tessellator.getInstance().getWorldRenderer();
         w.begin(mode, DefaultVertexFormats.POSITION_COLOR);
         return w;

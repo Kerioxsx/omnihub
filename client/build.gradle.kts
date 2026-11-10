@@ -22,7 +22,7 @@ loom {
     runConfigs {
         getByName("client") {
             property("fml.coreMods.load", "")
-            programArgs("--username", "VesperDev")
+            programArgs("--username", "VesperDev", "--width", "1600", "--height", "900")
         }
         remove(getByName("server"))
     }

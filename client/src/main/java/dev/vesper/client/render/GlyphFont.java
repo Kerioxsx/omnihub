@@ -32,7 +32,7 @@ public final class GlyphFont {
     static {
         StringBuilder sb = new StringBuilder();
         for (char c = 32; c < 127; c++) sb.append(c);
-        sb.append("·•–—…←→↑↓✓★☆✦✧◆◇○●×°§²³µ¼½¾ÀÁÂÄÇÈÉÊËÍÎÏÑÓÔÖÚÜßàáâäçèéêëíîïñóôöùúûüÿ☠⚔♥");
+        sb.append("‹›▾▸·•–—…←→↑↓✓★☆✦✧◆◇○●×°§²³µ¼½¾ÀÁÂÄÇÈÉÊËÍÎÏÑÓÔÖÚÜßàáâäçèéêëíîïñóôöùúûüÿ☠⚔♥");
         CHARS = sb.toString();
     }
 

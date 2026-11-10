@@ -45,6 +45,8 @@ public class VesperClient {
         Hud.init();
         config.apply();
         Hooks.register();
+        // Our generated textures (font, glow) go away on a resource reload; make them again.
+        ((net.minecraft.client.resources.IReloadableResourceManager) net.minecraft.client.Minecraft.getMinecraft().getResourceManager()).registerReloadListener(rm -> Hooks.onResourcesReloaded());
         LOG.info("Vesper Client {} ready", VERSION);
     }
 }
