@@ -13,6 +13,8 @@ import { PowerBanner } from './components/PowerBanner';
 import { isWindowFullscreen, setWindowFullscreen, usePlayer } from './lib/nowPlaying';
 import { SendDialog } from './components/SendDialog';
 import { Sidebar } from './components/Sidebar';
+import { cx } from './lib/cx';
+import { Rail, TopBar } from './components/TopShell';
 import { Toaster } from './components/Toaster';
 import { MenuHost } from './components/ui/Menu';
 import { overlayOpen } from './components/ui/Overlay';
@@ -137,6 +139,8 @@ export function App() {
     if (playerOpen) setPlayerUsed(true);
   }, [playerOpen]);
   const [storedCollapsed, setStoredCollapsed] = useStoredState('omnihub.sidebarCollapsed', false);
+  // "top": the new layout (top bar + rail); "sidebar": the classic one.
+  const [layout] = useStoredState<'top' | 'sidebar'>('omnihub.layout', 'top');
   // Narrow windows collapse the sidebar automatically unless the user opens it.
   const narrow = useMediaQuery('(max-width: 1199px)');
   const [narrowExpanded, setNarrowExpanded] = useState(false);
@@ -162,8 +166,10 @@ export function App() {
       <RecapModal />
       <PadNavigator />
       <Backdrop />
-      <div className="relative z-10 flex h-full">
-        <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
+      <div className={cx('relative z-10 flex h-full', layout === 'top' && 'flex-col')}>
+        {layout === 'top' ? <TopBar /> : <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />}
+        <div className="flex min-h-0 flex-1">
+        {layout === 'top' && <Rail />}
         <main className="relative min-w-0 flex-1">
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
@@ -186,6 +192,7 @@ export function App() {
             </div>
           )}
         </main>
+        </div>
       </div>
       <CommandPalette />
       <ConfirmHost />

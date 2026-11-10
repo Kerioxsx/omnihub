@@ -14,6 +14,7 @@ import { Badge, Kbd } from '../../components/ui/Card';
 import { Segmented, Select, Switch, TextInput } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
+import { useStoredState } from '../../lib/hooks';
 import { forgetPictures, LOOK_CHANGED, useAuroraLook } from '../../lib/aurora/textures';
 import { wallSummary } from '@shared/palette';
 import { type PcWall, setPhotoPrefs, setWallpaperLocal, usePhotoPrefs, useWallpaper } from '../../lib/wallpaper';
@@ -249,6 +250,7 @@ export function SettingsPage() {
             <Row title="Reduce motion" hint="Turns off page transitions, zoom animations and springy effects.">
               <Switch checked={s.general.reducedMotion} onChange={(v) => void update({ general: { reducedMotion: v } })} label="Reduce motion" />
             </Row>
+            <LayoutRow />
             <Row title="Interface size" hint="Makes text and controls larger or smaller. Ctrl+= and Ctrl+- work too.">
               <Select value={String(s.general.uiScale)} onChange={(e) => void update({ general: { uiScale: Number(e.target.value) } })} className="w-[140px]" aria-label="Interface size">
                 {[80, 90, 100, 110, 125, 150].map((z) => (
@@ -888,6 +890,28 @@ function ThemePictureRow({ look }: { look: string }) {
           )}
         </div>
       </div>
+    </Row>
+  );
+}
+
+/** The new layout (top bar + rail) or the classic sidebar. */
+function LayoutRow() {
+  const [layout, setLayout] = useStoredState<'top' | 'sidebar'>('omnihub.layout', 'top');
+  return (
+    <Row title="Layout" hint="Top bar: sections across the top and the section's pages in a slim rail. Sidebar: every page in one list on the left, like before.">
+      <Segmented
+        value={layout}
+        onChange={(v) => {
+          setLayout(v);
+          // The shell reads it at start: reload to switch.
+          setTimeout(() => location.reload(), 80);
+        }}
+        options={[
+          { value: 'top', label: 'Top bar' },
+          { value: 'sidebar', label: 'Sidebar' },
+        ]}
+        label="Layout"
+      />
     </Row>
   );
 }
