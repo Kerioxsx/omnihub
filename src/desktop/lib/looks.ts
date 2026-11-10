@@ -33,7 +33,14 @@ export const LOOKS: LookInfo[] = [
   { id: 'hollow', name: 'Bleach: Hollow', blurb: 'Bone white, black ink splatter, torn manga panels and red eyes in the dark.', light: true },
   { id: 'mugetsu', name: 'Bleach: Mugetsu', blurb: 'Near-black, slow dark fog and violet distortion that swallows the light.', light: false },
   { id: 'hakka', name: 'Bleach: Hakka no Togame', blurb: 'A frozen night: snowfall, floating ice crystals, frost ribbons and frosted glass.', light: false },
+  { id: 'soul', name: 'Bleach: Soul Society', blurb: 'Daylight over white walls and towers, with spirit lights rising.', light: true },
+  { id: 'hueco', name: 'Bleach: Hueco Mundo', blurb: 'White dunes under a black sky and a thin crescent moon.', light: false },
+  { id: 'karakura', name: 'Bleach: Karakura night', blurb: 'A town skyline at night, a full moon and spirit lights.', light: false },
+  { id: 'senbon', name: 'Bleach: Senbonzakura', blurb: 'A thousand pink blades drifting through the dark.', light: false },
 ];
+
+/** Looks that can show a picture of your own behind the cards (besides the Bleach modes). */
+export const PICTURE_LOOKS: string[] = ['soul', 'hueco', 'karakura', 'senbon'];
 
 /** The Bleach modes, switched from the sidebar while one is on. */
 export const BLEACH: { id: Look; kanji: string; name: string; sub: string; color: string; tint: string }[] = [

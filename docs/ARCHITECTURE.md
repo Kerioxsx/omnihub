@@ -863,4 +863,10 @@ has Capri speak through her local bridge (`companion::say`).
   `--float-*`). Floating layers use the `.float` class: solid by default,
   frosted with `data-glass`, solid again under `prefers-reduced-transparency`.
   Blur belongs on floating layers and top-level cards only, never nested.
+- Photo gallery: `Wallpapers::add/select/remove/gallery` (files under
+  `wallpaper/gallery/`); selecting copies a photo into the `pc` slot, so the
+  phone API is unchanged. Commands `photo_wall_gallery/select/remove`. How
+  the photo is shown (dim, blur, drift, rotation) lives in
+  `src/desktop/lib/wallpaper.ts`. The place themes are `PlaceLayers` in
+  `Backdrop.tsx` with `.bd2-*` styles.
 

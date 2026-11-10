@@ -59,6 +59,10 @@ const PC_LOOKS: Record<string, Swatch> = {
   bankai: { accent: '#ff7a1f', accent2: '#ffb36b', light: false, bg: g('rgba(255,101,0,.32)', 'rgba(255,60,0,.16)', '#0b0604') },
   hollow: { accent: '#d11f30', accent2: '#17171c', light: true, bg: g('rgba(209,31,48,.12)', 'rgba(23,23,28,.08)', '#f4f1ea') },
   mugetsu: { accent: '#a066e0', accent2: '#6d28d9', light: false, bg: g('rgba(142,74,201,.3)', 'rgba(30,10,50,.5)', '#050307') },
+  soul: { accent: '#2f6fd8', accent2: '#c98a1e', light: true, bg: g('rgba(191,224,255,.9)', 'rgba(255,240,214,.9)', '#f3f8ff') },
+  hueco: { accent: '#9fd0c8', accent2: '#e8e4d6', light: false, bg: g('rgba(232,228,214,.16)', 'rgba(159,208,200,.14)', '#07080c') },
+  karakura: { accent: '#6ea8ff', accent2: '#ffd27a', light: false, bg: g('rgba(60,80,180,.34)', 'rgba(255,210,122,.12)', '#080b1d') },
+  senbon: { accent: '#ff7ab8', accent2: '#c9a0ff', light: false, bg: g('rgba(255,122,184,.26)', 'rgba(140,60,160,.24)', '#0c0711') },
   hakka: { accent: '#8fd3ff', accent2: '#bfe6ff', light: false, bg: g('rgba(143,211,255,.26)', 'rgba(191,230,255,.14)', '#060b12') },
 };
 const NAMED: Record<string, [string, string]> = { violet: ['#8b5cf6', '#22d3ee'], cyan: ['#06b6d4', '#a78bfa'], rose: ['#f43f5e', '#fb923c'], emerald: ['#10b981', '#38bdf8'], amber: ['#f59e0b', '#f472b6'] };

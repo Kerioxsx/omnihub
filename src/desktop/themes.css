@@ -91,6 +91,32 @@
   --accent: #ff6b5b;
   --accent-2: #ffb44c;
 }
+:root.light[data-look='soul'] {
+  --bg: #eef5ff;
+  --bg-elev: #ffffff;
+  --accent: #2f6fd8;
+  --accent-2: #c98a1e;
+  --border: rgba(20, 60, 120, 0.1);
+  --border-strong: rgba(20, 60, 120, 0.2);
+}
+:root[data-look='hueco'] {
+  --bg: #07080c;
+  --bg-elev: #10121a;
+  --accent: #9fd0c8;
+  --accent-2: #e8e4d6;
+}
+:root[data-look='karakura'] {
+  --bg: #080b1d;
+  --bg-elev: #10152e;
+  --accent: #6ea8ff;
+  --accent-2: #ffd27a;
+}
+:root[data-look='senbon'] {
+  --bg: #0c0711;
+  --bg-elev: #170d1e;
+  --accent: #ff7ab8;
+  --accent-2: #c9a0ff;
+}
 :root.light[data-look='clouds'] {
   --bg: #eef5ff;
   --bg-elev: #ffffff;
@@ -2113,3 +2139,60 @@
 .look-photo .bd-photo-veil.is-light { background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.3)); }
 .look-photo .bd-photo-empty { position: absolute; inset: 0; background: linear-gradient(135deg, #2a2350, #a24d7b 60%, #f2a65a); opacity: 0.85; }
 
+.look-photo .bd-photo.is-drift { animation: bd2-photo-drift 60s ease-in-out infinite alternate; }
+@keyframes bd2-photo-drift { from { transform: scale(1.03) translate(0, 0); } to { transform: scale(1.1) translate(-1.5%, -1%); } }
+
+/* ---------- Bleach-inspired places: shapes and colour only ---------- */
+.bd2-sky, .bd2-walls, .bd2-dune, .bd2-city { position: absolute; inset: 0; }
+.look-soul .bd2-sky { background: linear-gradient(180deg, #a9d2ff 0%, #e6f2ff 52%, #fff4de 100%); }
+.look-soul .bd2-walls {
+  top: auto; height: 36%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), #efe4cf);
+  clip-path: polygon(0 46%, 7% 46%, 7% 30%, 13% 30%, 13% 46%, 27% 46%, 27% 20%, 29% 20%, 31% 2%, 33% 20%, 35% 20%, 35% 46%, 52% 46%, 52% 34%, 55% 26%, 58% 34%, 58% 46%, 72% 46%, 72% 24%, 79% 24%, 79% 46%, 90% 46%, 90% 36%, 95% 36%, 95% 46%, 100% 46%, 100% 100%, 0 100%);
+  filter: drop-shadow(0 -6px 20px rgba(120, 150, 200, 0.25));
+}
+.look-hueco .bd2-sky { background: radial-gradient(60% 40% at 78% 18%, rgba(232, 228, 214, 0.1), transparent 70%), linear-gradient(180deg, #030407 0%, #0a0c13 58%, #1b1d27 100%); }
+.bd2-crescent { position: absolute; top: 11%; right: 17%; width: 9vmin; height: 9vmin; border-radius: 50%; box-shadow: -1.5vmin 0.7vmin 0 0 #f4f1e6, -1.5vmin 0.7vmin 5vmin 0 rgba(244, 241, 230, 0.35); }
+.look-hueco .bd2-dune { top: auto; height: 42%; background: linear-gradient(180deg, #e9e6dc, #8f8d86 85%); }
+.look-hueco .bd2-dune.d1 { clip-path: polygon(0 62%, 18% 40%, 34% 55%, 52% 30%, 70% 52%, 86% 38%, 100% 50%, 100% 100%, 0 100%); opacity: 0.5; }
+.look-hueco .bd2-dune.d2 { clip-path: polygon(0 78%, 22% 60%, 44% 74%, 63% 56%, 82% 72%, 100% 62%, 100% 100%, 0 100%); }
+.look-karakura .bd2-sky { background: radial-gradient(50% 36% at 76% 20%, rgba(255, 238, 190, 0.16), transparent 70%), linear-gradient(180deg, #060818 0%, #121838 58%, #2a2350 100%); }
+.bd2-moon { position: absolute; top: 9%; right: 16%; width: 11vmin; height: 11vmin; border-radius: 50%; background: radial-gradient(circle at 38% 36%, #fffbe8, #f1dfa6 70%); box-shadow: 0 0 9vmin 1vmin rgba(255, 236, 170, 0.28); }
+.look-karakura .bd2-city {
+  top: auto; height: 34%;
+  background: repeating-linear-gradient(90deg, transparent 0 13px, rgba(255, 214, 130, 0.5) 13px 16px, transparent 16px 31px), repeating-linear-gradient(0deg, #0a0d22 0 9px, transparent 9px 17px), #0a0d22;
+  background-blend-mode: multiply, normal, normal;
+  clip-path: polygon(0 100%, 0 52%, 6% 52%, 6% 34%, 12% 34%, 12% 60%, 19% 60%, 19% 22%, 25% 22%, 25% 48%, 33% 48%, 33% 66%, 41% 66%, 41% 30%, 44% 30%, 44% 12%, 47% 12%, 47% 30%, 50% 30%, 50% 58%, 60% 58%, 60% 40%, 68% 40%, 68% 64%, 76% 64%, 76% 26%, 84% 26%, 84% 54%, 92% 54%, 92% 38%, 100% 38%, 100% 100%);
+}
+.look-senbon .bd2-sky { background: radial-gradient(90% 60% at 50% 112%, #5a1840, transparent 70%), radial-gradient(50% 40% at 20% 0%, rgba(201, 160, 255, 0.14), transparent 70%), #0b0610; }
+.bd2-mote {
+  position: absolute; left: var(--x); bottom: -4%;
+  width: calc(7px * var(--s)); height: calc(7px * var(--s)); border-radius: 50%;
+  background: radial-gradient(circle, #ffffff, rgba(160, 210, 255, 0.5) 45%, transparent 70%);
+  animation: bd2-rise var(--dur) linear var(--delay) infinite;
+}
+.look-soul .bd2-mote { background: radial-gradient(circle, #ffffff, rgba(255, 220, 140, 0.7) 45%, transparent 70%); }
+.bd2-sand {
+  position: absolute; left: -6%; top: calc(55% + var(--y) * 0.4);
+  width: calc(46px * var(--s)); height: 1.5px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgba(233, 230, 220, 0.6), transparent);
+  animation: bd2-blow var(--dur) linear var(--delay) infinite;
+}
+.bd2-blade {
+  position: absolute; left: var(--x); top: -5%;
+  width: calc(15px * var(--s)); height: calc(4px * var(--s)); border-radius: 70% 30% 70% 30%;
+  background: linear-gradient(90deg, #ffe1f0, #ff7ab8);
+  box-shadow: 0 0 8px rgba(255, 122, 184, 0.55);
+  animation: bd2-fall var(--dur) linear var(--delay) infinite;
+}
+@keyframes bd2-rise { from { transform: translate(0, 0); opacity: 0; } 12% { opacity: 0.9; } to { transform: translate(var(--sway), -108vh); opacity: 0; } }
+@keyframes bd2-blow { from { transform: translateX(0); opacity: 0; } 15% { opacity: 1; } to { transform: translateX(118vw); opacity: 0; } }
+@keyframes bd2-fall { from { transform: translate(0, 0) rotate(20deg); opacity: 0; } 8% { opacity: 1; } to { transform: translate(calc(var(--sway) * 3), 112vh) rotate(380deg); opacity: 0.6; } }
+.app-backdrop.is-contained :is(.bd2-mote, .bd2-blade) { animation-duration: 6s; }
+.app-backdrop.is-still :is(.bd2-mote, .bd2-sand, .bd2-blade, .bd-photo.is-drift) { animation: none; }
+.app-backdrop.is-still .bd2-mote { bottom: var(--y); opacity: 0.7; }
+.app-backdrop.is-still .bd2-blade { top: var(--y); opacity: 0.8; transform: rotate(25deg); }
+
+/* The small previews in Settings: sizes follow the box, not the window. */
+.app-backdrop.is-contained .bd2-moon { width: 20px; height: 20px; box-shadow: 0 0 14px 2px rgba(255, 236, 170, 0.3); }
+.app-backdrop.is-contained .bd2-crescent { width: 16px; height: 16px; box-shadow: -3px 1px 0 0 #f4f1e6; }

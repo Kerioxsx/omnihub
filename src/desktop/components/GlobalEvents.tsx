@@ -1,7 +1,7 @@
 // Subscribes once to app-wide backend events and keeps the shared stores fresh.
 
 import { applyPalette } from '@shared/palette';
-import { useWallpaper } from '../lib/wallpaper';
+import { rotateIfDue, useWallpaper } from '../lib/wallpaper';
 import { useEffect } from 'react';
 import type { Device, JobProgress, PendingPower, Screenshot, ScanSummary, ServerStatus, Settings, TransferEvent, ViewerInfo } from '@shared/types';
 import { formatBytes } from '@shared/format';
@@ -123,6 +123,12 @@ export function ThemeController() {
   useEffect(() => {
     applyPalette(photo);
   }, [photo]);
+  useEffect(() => {
+    if (look !== 'photo') return;
+    void rotateIfDue();
+    const t = setInterval(() => void rotateIfDue(), 30_000);
+    return () => clearInterval(t);
+  }, [look]);
   useEffect(() => {
     if (!theme) return;
     const root = document.documentElement;

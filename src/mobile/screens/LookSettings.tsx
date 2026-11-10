@@ -10,7 +10,7 @@ import { toast } from '../state';
 import { Button, Segmented, Switch } from '../ui/common';
 import { cx, errorMessage } from '../lib/util';
 
-const PC_NAMES: Record<string, string> = { classic: 'Classic', photo: 'Your photo', aurora: 'Aurora', synthwave: 'Synthwave', ocean: 'Ocean', galaxy: 'Galaxy', sakura: 'Sakura', ember: 'Ember', minecraft: 'Minecraft', matrix: 'Matrix', rain: 'Rain', snowfall: 'Snowfall', fireflies: 'Fireflies', lava: 'Lava lamp', clouds: 'Clouds', bankai: 'Bankai', hollow: 'Hollow', mugetsu: 'Mugetsu', hakka: 'Hakka no Togame' };
+const PC_NAMES: Record<string, string> = { classic: 'Classic', photo: 'Your photo', aurora: 'Aurora', synthwave: 'Synthwave', ocean: 'Ocean', galaxy: 'Galaxy', sakura: 'Sakura', ember: 'Ember', minecraft: 'Minecraft', matrix: 'Matrix', rain: 'Rain', snowfall: 'Snowfall', fireflies: 'Fireflies', lava: 'Lava lamp', clouds: 'Clouds', bankai: 'Bankai', hollow: 'Hollow', mugetsu: 'Mugetsu', hakka: 'Hakka no Togame', soul: 'Soul Society', hueco: 'Hueco Mundo', karakura: 'Karakura night', senbon: 'Senbonzakura' };
 
 export function LookSection() {
   const { prefs, pc, wallUrl, resolved } = useLook();

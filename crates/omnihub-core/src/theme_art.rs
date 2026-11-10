@@ -1,11 +1,11 @@
-//! Your own picture behind a Bleach theme: a character or anything else you
+//! Your own picture behind a Bleach or Bleach-inspired theme: a character or anything else you
 //! choose, copied into OmniHub's data folder on this PC and shown faded
 //! behind the cards. OmniHub ships no artwork from the series; this is only
 //! ever a file you pick.
 
 use std::path::{Path, PathBuf};
 
-pub const THEMES: &[&str] = &["bankai", "hollow", "mugetsu", "hakka"];
+pub const THEMES: &[&str] = &["bankai", "hollow", "mugetsu", "hakka", "soul", "hueco", "karakura", "senbon"];
 const EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif"];
 const MAX_BYTES: u64 = 25 << 20;
 

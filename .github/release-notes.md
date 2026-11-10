@@ -1,11 +1,11 @@
 ## New in this version
 
-**The first step of the redesign: a cleaner, glassier shell and a search that finds more.**
+**Redesign, step 2: more themes and a photo gallery.**
 
-- **Floating sidebar**: the menu is now a rounded panel that floats over the background. Its groups (Performance, Security, Devices) fold away with a click and stay folded.
-- **Glass on every floating layer**: with Glass on, the sidebar, dialogs, search and pop-up messages are all frosted the same way. If Windows is set to reduce transparency, they turn solid.
-- **Search finds more** (Ctrl+K): your games (Enter plays), your channels like Netflix (Enter opens full screen), every Settings section, every theme, glass on/off, and Big Picture.
-- Under the hood: one set of design tokens (corner sizes, blur, depth) shared by the PC and the phone app, ready for the next redesign steps.
+- **Four new Bleach-inspired themes**, drawn with shapes and colour only: **Soul Society** (daylight over white walls, spirit lights rising), **Hueco Mundo** (white dunes, a black sky, a crescent moon), **Karakura night** (a town skyline under a full moon) and **Senbonzakura** (a thousand pink blades drifting). Each can show **a picture of your own** faded behind the cards (Settings → Appearance → Your picture). OmniHub still ships no artwork from any series.
+- **Photo gallery**: "Your photo" now keeps up to 24 photos. Click one to use it, or let OmniHub **change the photo** every 15 minutes, hour or day.
+- **Photo options**: darken, blur and a slow drift.
+- The phone's **Match PC** knows the new themes.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

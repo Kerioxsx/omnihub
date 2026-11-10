@@ -47,7 +47,13 @@ pub struct WallInfo {
     /// The photo was enlarged to reach 4K.
     pub upscaled: bool,
     pub palette: Palette,
+    /// The gallery photo it came from ("" for a photo set directly).
+    #[serde(default)]
+    pub source: String,
 }
+
+/// How many photos the gallery keeps.
+pub const GALLERY_MAX: usize = 24;
 
 pub struct Wallpapers {
     dir: PathBuf,
@@ -100,6 +106,85 @@ impl Wallpapers {
     /// Use these picture bytes as the wallpaper for `slot`.
     pub fn set_bytes(&self, slot: &str, bytes: &[u8]) -> Result<WallInfo, String> {
         Self::check(slot)?;
+        self.write(&self.dir, slot, slot, "", bytes)
+    }
+
+    fn gallery_dir(&self) -> PathBuf {
+        self.dir.join("gallery")
+    }
+
+    fn gallery_id(id: &str) -> Result<(), String> {
+        if id.len() > 1 && id.len() < 24 && id.starts_with('g') && id[1..].bytes().all(|b| b.is_ascii_digit()) {
+            Ok(())
+        } else {
+            Err("Unknown photo".into())
+        }
+    }
+
+    /// Your photos, newest first.
+    pub fn gallery(&self) -> Vec<WallInfo> {
+        let mut v: Vec<WallInfo> = std::fs::read_dir(self.gallery_dir())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+            .filter_map(|e| serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok())
+            .collect();
+        v.sort_by_key(|w| std::cmp::Reverse(w.version));
+        v
+    }
+
+    /// A gallery photo's picture (the phone-sized one is its thumbnail).
+    pub fn gallery_file(&self, id: &str, phone: bool) -> Option<PathBuf> {
+        Self::gallery_id(id).ok()?;
+        let p = self.gallery_dir().join(if phone { format!("{id}-phone.jpg") } else { format!("{id}.jpg") });
+        p.is_file().then_some(p)
+    }
+
+    /// Add a photo to the gallery (prepared for 4K like any wallpaper).
+    pub fn add(&self, src: &Path) -> Result<WallInfo, String> {
+        if self.gallery().len() >= GALLERY_MAX {
+            return Err(format!("The gallery holds {GALLERY_MAX} photos; remove one first"));
+        }
+        let meta = std::fs::metadata(src).map_err(|e| format!("Couldn't read that file: {e}"))?;
+        if meta.len() as usize > MAX_BYTES {
+            return Err("That picture is over 40 MB; pick a smaller one".into());
+        }
+        let bytes = std::fs::read(src).map_err(|e| format!("Couldn't read that file: {e}"))?;
+        let mut id = chrono::Utc::now().timestamp_millis();
+        while self.gallery_dir().join(format!("g{id}.json")).exists() {
+            id += 1;
+        }
+        let id = format!("g{id}");
+        self.write(&self.gallery_dir(), &id, "pc", &id, &bytes)
+    }
+
+    /// Make a gallery photo the PC's wallpaper.
+    pub fn select(&self, id: &str) -> Result<WallInfo, String> {
+        Self::gallery_id(id)?;
+        let g = self.gallery_dir();
+        let mut info: WallInfo = serde_json::from_slice(&std::fs::read(g.join(format!("{id}.json"))).map_err(|_| "That photo isn't in the gallery any more".to_string())?).map_err(|e| e.to_string())?;
+        for (from, to) in [(format!("{id}.jpg"), "pc.jpg"), (format!("{id}-phone.jpg"), "pc-phone.jpg")] {
+            let b = std::fs::read(g.join(from)).map_err(|e| format!("Couldn't read the photo: {e}"))?;
+            crate::settings::write_atomic(&self.dir.join(to), &b).map_err(|e| e.to_string())?;
+        }
+        info.slot = "pc".into();
+        info.source = id.into();
+        info.version = chrono::Utc::now().timestamp_millis();
+        crate::settings::write_atomic(&self.dir.join("pc.json"), &serde_json::to_vec_pretty(&info).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        Ok(info)
+    }
+
+    pub fn remove(&self, id: &str) -> Result<(), String> {
+        Self::gallery_id(id)?;
+        for f in [format!("{id}.jpg"), format!("{id}-phone.jpg"), format!("{id}.json")] {
+            let _ = std::fs::remove_file(self.gallery_dir().join(f));
+        }
+        Ok(())
+    }
+
+    /// Prepare `bytes` and save them as `name`.* in `dir`.
+    fn write(&self, dir: &Path, name: &str, slot: &str, source: &str, bytes: &[u8]) -> Result<WallInfo, String> {
         if bytes.len() > MAX_BYTES {
             return Err("That picture is over 40 MB; pick a smaller one".into());
         }
@@ -117,11 +202,11 @@ impl Wallpapers {
         // The PC copy covers 3840 × 2160; the phone copy covers 1440 × 3120.
         let (big, upscaled) = fit(&rgb, (3840, 2160), 6144);
         let (small, _) = fit(&rgb, (1440, 3120), 3600);
-        std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
-        crate::settings::write_atomic(&self.dir.join(format!("{slot}.jpg")), &jpeg(&big, 92)?).map_err(|e| e.to_string())?;
-        crate::settings::write_atomic(&self.dir.join(format!("{slot}-phone.jpg")), &jpeg(&small, 88)?).map_err(|e| e.to_string())?;
-        let info = WallInfo { slot: slot.into(), version: chrono::Utc::now().timestamp_millis(), width: big.width(), height: big.height(), source_width: sw, source_height: sh, upscaled, palette };
-        crate::settings::write_atomic(&self.dir.join(format!("{slot}.json")), &serde_json::to_vec_pretty(&info).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        crate::settings::write_atomic(&dir.join(format!("{name}.jpg")), &jpeg(&big, 92)?).map_err(|e| e.to_string())?;
+        crate::settings::write_atomic(&dir.join(format!("{name}-phone.jpg")), &jpeg(&small, 88)?).map_err(|e| e.to_string())?;
+        let info = WallInfo { slot: slot.into(), version: chrono::Utc::now().timestamp_millis(), width: big.width(), height: big.height(), source_width: sw, source_height: sh, upscaled, palette, source: source.into() };
+        crate::settings::write_atomic(&dir.join(format!("{name}.json")), &serde_json::to_vec_pretty(&info).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
         Ok(info)
     }
 }
@@ -296,6 +381,28 @@ mod tests {
         assert!(palette(&img).light);
         let (phone, _) = fit(&img, (1440, 3120), 3600);
         assert!(phone.height() >= 3120 || phone.width() == 3600, "{}×{}", phone.width(), phone.height());
+    }
+
+    #[test]
+    fn gallery_adds_selects_and_removes() {
+        let t = tempfile::tempdir().unwrap();
+        let w = Wallpapers::new(t.path());
+        let a = t.path().join("a.png");
+        std::fs::write(&a, png(64, 36, |_, _| [200, 60, 40])).unwrap();
+        let b = t.path().join("b.png");
+        std::fs::write(&b, png(64, 36, |_, _| [40, 60, 200])).unwrap();
+        let ia = w.add(&a).unwrap();
+        let ib = w.add(&b).unwrap();
+        assert_ne!(ia.source, ib.source);
+        assert_eq!(w.gallery().len(), 2);
+        assert!(w.info("pc").is_none(), "adding doesn't change the wallpaper");
+        let now = w.select(&ia.source).unwrap();
+        assert_eq!((now.slot.as_str(), now.source.as_str()), ("pc", ia.source.as_str()));
+        assert_eq!(w.info("pc").unwrap().palette, ia.palette);
+        assert!(w.gallery_file(&ib.source, true).is_some());
+        w.remove(&ib.source).unwrap();
+        assert_eq!(w.gallery().len(), 1);
+        assert!(w.select(&ib.source).is_err() && w.select("../pc").is_err() && w.gallery_file("g1/../x", false).is_none());
     }
 
     #[test]

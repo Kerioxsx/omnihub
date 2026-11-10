@@ -74,7 +74,19 @@ let mockIphone = (() => {
 // A sunset over hills, standing in for a photo in the preview.
 const MOCK_WALL_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'><defs><linearGradient id='s' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#1b1640'/><stop offset='.55' stop-color='#b5487a'/><stop offset='.8' stop-color='#f4a259'/></linearGradient></defs><rect width='1600' height='900' fill='url(#s)'/><circle cx='1150' cy='560' r='120' fill='#ffd39a' opacity='.9'/><path d='M0 640 Q300 520 620 610 T1200 600 T1600 580 V900 H0Z' fill='#3a1f4d'/><path d='M0 740 Q400 640 800 720 T1600 700 V900 H0Z' fill='#1d1030'/></svg>`;
 const MOCK_WALL = { slot: 'pc' as const, version: 1, width: 3840, height: 2160, sourceWidth: 1600, sourceHeight: 900, upscaled: true, palette: { accent: '#f08ab4', accent2: '#f6b26b', light: false, tint: '#1a1024' }, url: `data:image/svg+xml;utf8,${encodeURIComponent(MOCK_WALL_SVG)}` };
-let mockWall: typeof MOCK_WALL | null = new URLSearchParams(location.search).has('photo') ? MOCK_WALL : null;
+// More sample "photos": the same scene in other colours.
+const MOCK_TONES: [string, string, string, string, string][] = [
+  ['#1b1640', '#b5487a', '#f4a259', '#f08ab4', '#f6b26b'],
+  ['#06141f', '#1f6f8b', '#9be3d0', '#6fd3c7', '#8fb8ff'],
+  ['#120a24', '#5b3fb0', '#c9a0ff', '#b79cff', '#ff9bd0'],
+];
+const mockShot = (i: number) => {
+  const [a, b, c, accent, accent2] = MOCK_TONES[i % MOCK_TONES.length];
+  const svg = MOCK_WALL_SVG.replace('#1b1640', a).replace('#b5487a', b).replace('#f4a259', c);
+  return { ...MOCK_WALL, source: `g${1000 + i}`, version: Date.now() + i, palette: { ...MOCK_WALL.palette, accent, accent2 }, url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}` };
+};
+let mockGallery: ReturnType<typeof mockShot>[] = new URLSearchParams(location.search).has('photo') ? [mockShot(0), mockShot(1), mockShot(2)] : [];
+let mockWall: ReturnType<typeof mockShot> | null = mockGallery[0] ?? null;
 const mockBrowsers = [
   { id: 'edge', name: 'Microsoft Edge', exe: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', kind: 'chromium' },
   { id: 'chrome', name: 'Google Chrome', exe: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', kind: 'chromium' },
@@ -690,9 +702,22 @@ const handlers: Record<string, Handler> = {
   open_bluetooth_settings: () => undefined,
   photo_wall_get: () => mockWall,
   photo_wall_set: (a) => {
-    mockWall = a?.path ? { ...MOCK_WALL, version: Date.now() } : null;
+    if (a?.path) {
+      const g = mockShot(mockGallery.length);
+      mockGallery = [g, ...mockGallery];
+      mockWall = g;
+    } else mockWall = null;
     emit('wallpaper:changed', { slot: 'pc' });
     return mockWall;
+  },
+  photo_wall_gallery: () => mockGallery,
+  photo_wall_select: (a) => {
+    mockWall = mockGallery.find((g) => g.source === str(a, 'id')) ?? mockWall;
+    emit('wallpaper:changed', { slot: 'pc' });
+    return mockWall;
+  },
+  photo_wall_remove: (a) => {
+    mockGallery = mockGallery.filter((g) => g.source !== str(a, 'id'));
   },
   tv_browsers: () => mockBrowsers,
   tv_prefs: () => mockTv,

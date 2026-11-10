@@ -1191,4 +1191,8 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
 - **Screen shortcuts** from the phone are ordinary key chords over the
   existing control channel (it still needs "Allow control"); "Close window"
   (Alt+F4) asks for a second tap.
+- **Theme pictures and the photo gallery** only ever hold files the user
+  picked on this PC. OmniHub bundles and downloads no artwork; the
+  Bleach-inspired themes are drawn with CSS shapes. Gallery ids are checked
+  (`g` + digits) before any file is read or removed.
 

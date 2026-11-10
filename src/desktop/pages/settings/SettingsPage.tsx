@@ -16,8 +16,9 @@ import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
 import { forgetPictures, LOOK_CHANGED, useAuroraLook } from '../../lib/aurora/textures';
 import { wallSummary } from '@shared/palette';
-import { setWallpaperLocal, useWallpaper } from '../../lib/wallpaper';
-import { LOOKS } from '../../lib/looks';
+import { type PcWall, setPhotoPrefs, setWallpaperLocal, usePhotoPrefs, useWallpaper } from '../../lib/wallpaper';
+import { LOOKS, PICTURE_LOOKS } from '../../lib/looks';
+import { artPrefs, setArtPrefs } from '../../components/Backdrop';
 import { controllerModeOn, setControllerMode } from '../../lib/padNav';
 import { navigate, useRoute } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
@@ -230,6 +231,7 @@ export function SettingsPage() {
                 </Row>
                 {s.general.look === 'minecraft' && <ItemPackRow />}
                 {s.general.look === 'photo' && <PhotoRow />}
+                {PICTURE_LOOKS.includes(s.general.look) && <ThemePictureRow look={s.general.look} />}
               </>
             )}
             <Row title="Glass" hint="Frosted, see-through cards and sidebar over the background. Over a moving theme it uses a little more graphics power.">
@@ -804,8 +806,88 @@ function PrivacyDashboard() {
 }
 
 /** Minecraft theme: the items that float by come from a pack of pictures on this PC (shared with Aurora's lyrics). */
+/** Your own picture behind one of the Bleach-inspired looks. */
+function ThemePictureRow({ look }: { look: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [prefs, setPrefs] = useState(() => artPrefs(look));
+  useEffect(() => {
+    setPrefs(artPrefs(look));
+    void api.themeArt.get(look).then(setUrl, () => setUrl(null));
+  }, [look]);
+  const changed = () => window.dispatchEvent(new Event('omnihub:theme-art'));
+  const choose = async () => {
+    try {
+      const [path] = await api.app.pickFiles('Pick a picture for this theme');
+      if (!path) return;
+      setUrl(await api.themeArt.set(look, path));
+      changed();
+    } catch (e) {
+      toast.error('Couldn’t use that picture', errorText(e));
+    }
+  };
+  const patch = (x: Partial<ReturnType<typeof artPrefs>>) => {
+    setArtPrefs(look, x);
+    setPrefs(artPrefs(look));
+  };
+  return (
+    <Row title="Your picture" stack hint="Optional: a picture of your own, shown faded behind the cards. OmniHub ships no artwork from any series, so use a picture you have the right to use (your own, or one its maker lets you download). It stays on this PC.">
+      <div className="flex items-center gap-4">
+        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl border border-line bg-surface-2">{url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center px-2 text-center text-[12px] text-faint">No picture</div>}</div>
+        <div className="min-w-0 flex-1 space-y-2.5">
+          <div className="flex gap-2">
+            <Button variant="primary" onClick={() => void choose()}>
+              {url ? 'Change picture' : 'Choose a picture'}
+            </Button>
+            {url && (
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  void api.themeArt.set(look, null).then(() => {
+                    setUrl(null);
+                    changed();
+                  })
+                }
+              >
+                Remove
+              </Button>
+            )}
+          </div>
+          {url && (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-dim">
+              <label className="flex items-center gap-2">
+                Strength
+                <input type="range" min={10} max={80} value={Math.round(prefs.opacity * 100)} onChange={(e) => patch({ opacity: Number(e.target.value) / 100 })} className="w-32 accent-[var(--accent)]" />
+              </label>
+              <label className="flex items-center gap-2">
+                Side
+                <Select value={prefs.side} onChange={(e) => patch({ side: e.target.value as 'left' | 'center' | 'right' })} className="w-28" aria-label="Side">
+                  <option value="left">Left</option>
+                  <option value="center">Centre</option>
+                  <option value="right">Right</option>
+                </Select>
+              </label>
+              <label className="flex items-center gap-2">
+                Style
+                <Select value={prefs.style} onChange={(e) => patch({ style: e.target.value as 'tint' | 'ink' | 'color' })} className="w-36" aria-label="Style">
+                  <option value="color">Its own colours</option>
+                  <option value="tint">Theme colour</option>
+                  <option value="ink">Ink lines</option>
+                </Select>
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+    </Row>
+  );
+}
+
 function PhotoRow() {
   const wall = useWallpaper();
+  const prefs = usePhotoPrefs();
+  const [gallery, setGallery] = useState<PcWall[]>([]);
+  const loadGallery = () => void api.wallpaper.gallery().then(setGallery, () => undefined);
+  useEffect(loadGallery, [wall?.version]);
   const [busy, setBusy] = useState(false);
   const choose = async () => {
     try {
@@ -847,12 +929,59 @@ function PhotoRow() {
             </Button>
             {wall && (
               <Button variant="ghost" onClick={() => void remove()}>
-                Remove
+                No photo
               </Button>
             )}
           </div>
         </div>
       </div>
+      {gallery.length > 0 && (
+        <div className="mt-4">
+          <div className="mb-2 text-[12.5px] font-medium text-dim">Your photos ({gallery.length})</div>
+          <div className="flex flex-wrap gap-2.5">
+            {gallery.map((g) => {
+              const on = !!g.source && g.source === wall?.source;
+              return (
+                <div key={g.source} className="group relative">
+                  <button type="button" aria-pressed={on} aria-label="Use this photo" onClick={() => g.source && void api.wallpaper.select(g.source).then(setWallpaperLocal, (e: unknown) => toast.error('Couldn’t use that photo', errorText(e)))} className={cx('block h-16 w-28 overflow-hidden rounded-lg border transition', on ? 'accent-ring border-transparent' : 'border-line hover:border-line-strong')}>
+                    <img src={g.url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  </button>
+                  {!on && (
+                    <button type="button" aria-label="Remove this photo" onClick={() => g.source && void api.wallpaper.remove(g.source).then(loadGallery)} className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 place-items-center rounded-full border border-line-strong bg-elev text-[11px] text-dim hover:text-fg group-hover:grid">
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {wall && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3 text-[12.5px] text-dim">
+          <label className="flex items-center gap-2">
+            Darken
+            <input type="range" min={0} max={70} value={prefs.dim} onChange={(e) => setPhotoPrefs({ dim: Number(e.target.value) })} className="w-32 accent-[var(--accent)]" />
+          </label>
+          <label className="flex items-center gap-2">
+            Blur
+            <input type="range" min={0} max={24} value={prefs.blur} onChange={(e) => setPhotoPrefs({ blur: Number(e.target.value) })} className="w-32 accent-[var(--accent)]" />
+          </label>
+          <label className="flex items-center gap-2">
+            Slow drift
+            <Switch checked={prefs.drift} onChange={(v) => setPhotoPrefs({ drift: v })} label="Slow drift" />
+          </label>
+          <label className="flex items-center gap-2">
+            Change photo
+            <Select value={String(prefs.rotate)} onChange={(e) => setPhotoPrefs({ rotate: Number(e.target.value) })} className="w-36" aria-label="Change photo" disabled={gallery.length < 2}>
+              <option value="0">Never</option>
+              <option value="15">Every 15 min</option>
+              <option value="60">Every hour</option>
+              <option value="1440">Every day</option>
+            </Select>
+          </label>
+        </div>
+      )}
     </Row>
   );
 }

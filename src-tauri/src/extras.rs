@@ -357,6 +357,11 @@ pub async fn photo_wall_set(core: Core<'_>, slot: String, path: Option<String>) 
     let c = core.inner().clone();
     blocking(move || {
         match path {
+            // A new PC photo joins the gallery and becomes the wallpaper.
+            Some(p) if slot == "pc" => {
+                let added = c.wallpapers.add(std::path::Path::new(&p))?;
+                c.wallpapers.select(&added.source)?;
+            }
             Some(p) => {
                 c.wallpapers.set_file(&slot, std::path::Path::new(&p))?;
             }
@@ -366,6 +371,39 @@ pub async fn photo_wall_set(core: Core<'_>, slot: String, path: Option<String>) 
         Ok(wall_json(&c, &slot))
     })
     .await
+}
+
+/// Your photo gallery, newest first (each with a small picture's address).
+#[tauri::command]
+pub async fn photo_wall_gallery(core: Core<'_>) -> Res<Vec<serde_json::Value>> {
+    Ok(core
+        .wallpapers
+        .gallery()
+        .into_iter()
+        .filter_map(|w| {
+            let url = art_url(&core, core.wallpapers.gallery_file(&w.source, true))?;
+            let mut v = serde_json::to_value(&w).ok()?;
+            v["url"] = serde_json::Value::String(url);
+            Some(v)
+        })
+        .collect())
+}
+
+/// Use a gallery photo as the wallpaper.
+#[tauri::command]
+pub async fn photo_wall_select(core: Core<'_>, id: String) -> Res<Option<serde_json::Value>> {
+    let c = core.inner().clone();
+    blocking(move || {
+        c.wallpapers.select(&id)?;
+        c.events.emit("wallpaper:changed", serde_json::json!({ "slot": "pc" }));
+        Ok(wall_json(&c, "pc"))
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn photo_wall_remove(core: Core<'_>, id: String) -> Res<()> {
+    core.wallpapers.remove(&id)
 }
 
 // ---------- iPhone notifications ----------

@@ -17,6 +17,8 @@ export interface WallInfo {
   sourceHeight: number;
   upscaled: boolean;
   palette: Palette;
+  /** The gallery photo it came from ("" when set directly). */
+  source?: string;
 }
 
 function rgba(hex: string, a: number): string {

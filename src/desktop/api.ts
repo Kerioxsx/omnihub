@@ -511,6 +511,10 @@ export const api = {
   wallpaper: {
     get: (slot: 'pc' | 'phone') => call<(import('@shared/palette').WallInfo & { url: string }) | null>('photo_wall_get', { slot }),
     set: (slot: 'pc' | 'phone', path: string | null) => call<(import('@shared/palette').WallInfo & { url: string }) | null>('photo_wall_set', { slot, path }),
+    /** Your photos (newest first); `select` makes one the wallpaper. */
+    gallery: () => call<(import('@shared/palette').WallInfo & { url: string })[]>('photo_wall_gallery'),
+    select: (id: string) => call<(import('@shared/palette').WallInfo & { url: string }) | null>('photo_wall_select', { id }),
+    remove: (id: string) => call<void>('photo_wall_remove', { id }),
   },
   themeArt: {
     get: (theme: string) => call<string | null>('theme_art_get', { theme }),

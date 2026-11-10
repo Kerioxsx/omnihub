@@ -9,7 +9,7 @@ import { useAuroraLook, useTexture } from '../lib/aurora/textures';
 import { cx } from '../lib/cx';
 import { BLEACH, lookInfo } from '../lib/looks';
 import { useSettings } from '../state/settings';
-import { useWallpaper } from '../lib/wallpaper';
+import { usePhotoPrefs, useWallpaper } from '../lib/wallpaper';
 
 /** The same layout every time (no jumping between renders). */
 function seeded(seed: number) {
@@ -414,7 +414,7 @@ function inkMatrix(hex: string): string {
   return `0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  -0.45 -0.45 -0.45 1.35 0`;
 }
 
-function ThemeArt({ look }: { look: BleachLook }) {
+function ThemeArt({ look }: { look: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<ArtPrefs>(() => artPrefs(look));
   const ref = useRef<HTMLElement>(null);
@@ -510,11 +510,42 @@ function useHidden(): boolean {
 /** Your photo, covering the whole window (a sample in the theme picker). */
 function PhotoLayer({ mini }: { mini: boolean }) {
   const wall = useWallpaper();
+  const prefs = usePhotoPrefs();
   if (!wall) return <i className="bd-photo-empty" />;
+  if (mini) return <img className="bd-photo" src={wall.url} alt="" draggable={false} decoding="async" />;
+  const veil = wall.palette.light ? `rgba(255, 255, 255, ${(prefs.dim / 100) * 0.7})` : `rgba(0, 0, 0, ${prefs.dim / 100})`;
   return (
     <>
-      <img className="bd-photo" src={wall.url} alt="" draggable={false} decoding="async" />
-      {!mini && <i className={cx('bd-photo-veil', wall.palette.light && 'is-light')} />}
+      <img className={cx('bd-photo', prefs.drift && 'is-drift')} src={wall.url} alt="" draggable={false} decoding="async" style={prefs.blur ? { filter: `blur(${prefs.blur}px)`, inset: -prefs.blur * 2, width: `calc(100% + ${prefs.blur * 4}px)`, height: `calc(100% + ${prefs.blur * 4}px)` } : undefined} />
+      <i className="bd-photo-veil" style={{ background: `linear-gradient(180deg, ${veil}, ${veil})` }} />
+    </>
+  );
+}
+
+/** The Bleach-inspired places: drawn with shapes and colour only (plus your own picture, if you add one). */
+function PlaceLayers({ look, mini }: { look: 'soul' | 'hueco' | 'karakura' | 'senbon'; mini: boolean }) {
+  const bits = useMemo(() => particles(mini ? (look === 'senbon' ? 16 : 8) : look === 'senbon' ? 80 : 26, 91, look === 'senbon' ? 7 : 11, look === 'senbon' ? 15 : 24), [look, mini]);
+  return (
+    <>
+      <i className="bd2-sky" />
+      {look === 'soul' && <i className="bd2-walls" />}
+      {look === 'hueco' && (
+        <>
+          <i className="bd2-crescent" />
+          <i className="bd2-dune d1" />
+          <i className="bd2-dune d2" />
+        </>
+      )}
+      {look === 'karakura' && (
+        <>
+          <i className="bd2-moon" />
+          <i className="bd2-city" />
+        </>
+      )}
+      {!mini && <ThemeArt look={look} />}
+      {bits.map((p) => (
+        <i key={p.key} className={look === 'senbon' ? 'bd2-blade' : look === 'hueco' ? 'bd2-sand' : 'bd2-mote'} style={p.style} />
+      ))}
     </>
   );
 }
@@ -537,6 +568,11 @@ function Layers({ look, mini }: { look: Look; mini: boolean }) {
   switch (look) {
     case 'photo':
       return <PhotoLayer mini={mini} />;
+    case 'soul':
+    case 'hueco':
+    case 'karakura':
+    case 'senbon':
+      return <PlaceLayers look={look} mini={mini} />;
     case 'aurora':
       return (
         <>
