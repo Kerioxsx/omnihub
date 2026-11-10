@@ -515,6 +515,8 @@ export const api = {
     gallery: () => call<(import('@shared/palette').WallInfo & { url: string })[]>('photo_wall_gallery'),
     select: (id: string) => call<(import('@shared/palette').WallInfo & { url: string }) | null>('photo_wall_select', { id }),
     remove: (id: string) => call<void>('photo_wall_remove', { id }),
+    /** Every picture in a folder: [added, skipped]. */
+    addFolder: (path: string) => call<[number, number]>('photo_wall_add_folder', { path }),
   },
   themeArt: {
     get: (theme: string) => call<string | null>('theme_art_get', { theme }),

@@ -3,7 +3,7 @@ import { formatRelative } from '@shared/format';
 import { motion } from 'motion/react';
 import type { LucideIcon } from 'lucide-react';
 import { Camera, Check, Download, ExternalLink, FolderOpen, HardDrive, Info, KeyRound, Laptop, Moon, Music2, NotebookPen, Palette, Plus, RotateCcw, Settings as SettingsIcon, ShieldCheck, Siren, Smartphone, Sun, Trash, Upload, X } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Backdrop } from '../../components/Backdrop';
 import { Logo } from '../../components/Logo';
@@ -57,9 +57,15 @@ function Section({ id, title, description, children }: { id: string; title: stri
   );
 }
 
+/** What's typed in "Find a setting" (lower case). */
+const FindCtx = createContext('');
+
 function Row({ title, hint, children, stack }: { title: ReactNode; hint?: ReactNode; children?: ReactNode; stack?: boolean }) {
+  const find = useContext(FindCtx);
+  // Rows whose words don't match are left out while you search.
+  if (find && typeof title === 'string' && !`${title} ${typeof hint === 'string' ? hint : ''}`.toLowerCase().includes(find)) return null;
   return (
-    <div className={cx('px-5 py-3.5', stack ? 'space-y-2.5' : 'flex items-center justify-between gap-6')}>
+    <div data-row className={cx('px-5 py-3.5', stack ? 'space-y-2.5' : 'flex items-center justify-between gap-6')}>
       <div className="min-w-0">
         <div className="text-[13.5px] font-medium text-fg">{title}</div>
         {hint && <div className="mt-0.5 text-[12.5px] leading-snug text-faint">{hint}</div>}
@@ -130,6 +136,7 @@ export function SettingsPage() {
   const info = useSettings((st) => st.info);
   const update = useSettings((st) => st.update);
   const [active, setActive] = useState('appearance');
+  const [find, setFind] = useState('');
   const [exclude, setExclude] = useState('');
   const vaultUnlocked = useLive((l) => l.vault?.unlocked ?? false);
   const scroller = useRef<HTMLDivElement>(null);
@@ -169,6 +176,7 @@ export function SettingsPage() {
     <Page title="Settings" subtitle="Everything saves as soon as you change it." scroll={false}>
       <div className="grid min-h-0 flex-1 grid-cols-[210px_minmax(0,1fr)] gap-6">
         <nav aria-label="Settings sections" className="space-y-0.5">
+          <TextInput value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a setting…" aria-label="Find a setting" className="mb-2 w-full" />
           {SECTIONS.map((sec) => (
             <button key={sec.id} type="button" onClick={() => go(sec.id)} aria-current={active === sec.id ? 'true' : undefined} className={cx('relative flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium transition-colors', active === sec.id ? 'text-fg' : 'text-dim hover:bg-surface hover:text-fg')}>
               {active === sec.id && <motion.span layoutId="settings-nav" transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="absolute inset-0 rounded-[10px] bg-surface-2" />}
@@ -177,7 +185,8 @@ export function SettingsPage() {
             </button>
           ))}
         </nav>
-        <div ref={scroller} className="min-h-0 space-y-8 overflow-y-auto pb-[50vh] pr-2">
+        <FindCtx.Provider value={find.trim().toLowerCase()}>
+        <div ref={scroller} data-finding={find.trim() ? '' : undefined} className="settings-body min-h-0 space-y-8 overflow-y-auto pb-[50vh] pr-2">
           <Section id="appearance" title="Appearance">
             <Row title="Theme" stack>
               <div className="grid grid-cols-4 gap-3" role="radiogroup" aria-label="Theme">
@@ -652,6 +661,7 @@ export function SettingsPage() {
             <UpdateRows />
           </Section>
         </div>
+        </FindCtx.Provider>
       </div>
     </Page>
   );
@@ -927,6 +937,26 @@ function PhotoRow() {
             <Button variant="primary" onClick={() => void choose()} disabled={busy}>
               {busy ? 'Preparing…' : wall ? 'Change photo' : 'Choose a photo'}
             </Button>
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={async () => {
+                const dir = await api.app.pickFolder('Pick a folder of photos').catch(() => null);
+                if (!dir) return;
+                setBusy(true);
+                try {
+                  const [added, skipped] = await api.wallpaper.addFolder(dir);
+                  loadGallery();
+                  toast.success(`${added} photo${added === 1 ? '' : 's'} added`, skipped ? `${skipped} skipped (not a picture, or the gallery is full at 24).` : undefined);
+                } catch (e) {
+                  toast.error('Couldn’t add that folder', errorText(e));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Add a folder
+            </Button>
             {wall && (
               <Button variant="ghost" onClick={() => void remove()}>
                 No photo
@@ -970,6 +1000,10 @@ function PhotoRow() {
           <label className="flex items-center gap-2">
             Slow drift
             <Switch checked={prefs.drift} onChange={(v) => setPhotoPrefs({ drift: v })} label="Slow drift" />
+          </label>
+          <label className="flex items-center gap-2">
+            Dark edges
+            <Switch checked={prefs.vignette} onChange={(v) => setPhotoPrefs({ vignette: v })} label="Dark edges" />
           </label>
           <label className="flex items-center gap-2">
             Change photo

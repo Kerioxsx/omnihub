@@ -518,12 +518,13 @@ function PhotoLayer({ mini }: { mini: boolean }) {
     <>
       <img className={cx('bd-photo', prefs.drift && 'is-drift')} src={wall.url} alt="" draggable={false} decoding="async" style={prefs.blur ? { filter: `blur(${prefs.blur}px)`, inset: -prefs.blur * 2, width: `calc(100% + ${prefs.blur * 4}px)`, height: `calc(100% + ${prefs.blur * 4}px)` } : undefined} />
       <i className="bd-photo-veil" style={{ background: `linear-gradient(180deg, ${veil}, ${veil})` }} />
+      {prefs.vignette && <i className="bd-photo-vignette" />}
     </>
   );
 }
 
 /** The Bleach-inspired places: drawn with shapes and colour only (plus your own picture, if you add one). */
-function PlaceLayers({ look, mini }: { look: 'soul' | 'hueco' | 'karakura' | 'senbon'; mini: boolean }) {
+function PlaceLayers({ look, mini }: { look: 'soul' | 'hueco' | 'karakura' | 'senbon' | 'dangai' | 'sokyoku'; mini: boolean }) {
   const bits = useMemo(() => particles(mini ? (look === 'senbon' ? 16 : 8) : look === 'senbon' ? 80 : 26, 91, look === 'senbon' ? 7 : 11, look === 'senbon' ? 15 : 24), [look, mini]);
   return (
     <>
@@ -542,9 +543,16 @@ function PlaceLayers({ look, mini }: { look: 'soul' | 'hueco' | 'karakura' | 'se
           <i className="bd2-city" />
         </>
       )}
+      {look === 'dangai' && <i className="bd2-tunnel" />}
+      {look === 'sokyoku' && (
+        <>
+          <i className="bd2-sun" />
+          <i className="bd2-cliff" />
+        </>
+      )}
       {!mini && <ThemeArt look={look} />}
       {bits.map((p) => (
-        <i key={p.key} className={look === 'senbon' ? 'bd2-blade' : look === 'hueco' ? 'bd2-sand' : 'bd2-mote'} style={p.style} />
+        <i key={p.key} className={look === 'senbon' ? 'bd2-blade' : look === 'hueco' || look === 'dangai' ? 'bd2-sand' : 'bd2-mote'} style={p.style} />
       ))}
     </>
   );
@@ -572,6 +580,8 @@ function Layers({ look, mini }: { look: Look; mini: boolean }) {
     case 'hueco':
     case 'karakura':
     case 'senbon':
+    case 'dangai':
+    case 'sokyoku':
       return <PlaceLayers look={look} mini={mini} />;
     case 'aurora':
       return (

@@ -111,6 +111,18 @@
   --accent: #6ea8ff;
   --accent-2: #ffd27a;
 }
+:root[data-look='dangai'] {
+  --bg: #0a0614;
+  --bg-elev: #140c24;
+  --accent: #b68cff;
+  --accent-2: #6fe3d6;
+}
+:root[data-look='sokyoku'] {
+  --bg: #140906;
+  --bg-elev: #20100b;
+  --accent: #ff9a4d;
+  --accent-2: #ffd27a;
+}
 :root[data-look='senbon'] {
   --bg: #0c0711;
   --bg-elev: #170d1e;
@@ -2196,3 +2208,20 @@
 /* The small previews in Settings: sizes follow the box, not the window. */
 .app-backdrop.is-contained .bd2-moon { width: 20px; height: 20px; box-shadow: 0 0 14px 2px rgba(255, 236, 170, 0.3); }
 .app-backdrop.is-contained .bd2-crescent { width: 16px; height: 16px; box-shadow: -3px 1px 0 0 #f4f1e6; }
+
+/* Dangai: a tunnel of violet walls with currents rushing past. */
+.look-dangai .bd2-sky { background: radial-gradient(38% 46% at 50% 52%, #2a1552 0%, #150a2c 55%, #07040f 100%); }
+.bd2-tunnel { position: absolute; inset: -10%; background: repeating-conic-gradient(from 0deg at 50% 52%, rgba(182, 140, 255, 0.1) 0deg 6deg, transparent 6deg 22deg); mask-image: radial-gradient(circle at 50% 52%, transparent 8%, #000 60%); -webkit-mask-image: radial-gradient(circle at 50% 52%, transparent 8%, #000 60%); animation: bd2-spin 90s linear infinite; }
+.look-dangai .bd2-sand { background: linear-gradient(90deg, transparent, rgba(111, 227, 214, 0.55), transparent); top: var(--y); height: 2px; }
+@keyframes bd2-spin { to { transform: rotate(360deg); } }
+/* Sōkyoku Hill: a cliff at sunset. */
+.look-sokyoku .bd2-sky { background: linear-gradient(180deg, #2a0f1e 0%, #7a2a1c 42%, #e0702a 70%, #ffc46b 100%); }
+.bd2-sun { position: absolute; left: 62%; bottom: 24%; width: 16vmin; height: 16vmin; border-radius: 50%; background: radial-gradient(circle, #fff1c2, #ffb347 60%, transparent 72%); box-shadow: 0 0 14vmin 4vmin rgba(255, 170, 80, 0.35); }
+.bd2-cliff { position: absolute; inset: 0; top: auto; height: 46%; background: linear-gradient(180deg, #1c0d0a, #0c0605); clip-path: polygon(0 100%, 0 38%, 9% 34%, 16% 22%, 24% 18%, 31% 6%, 34% 0, 38% 8%, 44% 12%, 47% 30%, 55% 44%, 66% 52%, 78% 60%, 90% 58%, 100% 66%, 100% 100%); }
+.look-sokyoku .bd2-mote { background: radial-gradient(circle, #fff1c2, rgba(255, 140, 60, 0.75) 45%, transparent 70%); }
+.app-backdrop.is-still .bd2-tunnel { animation: none; }
+.app-backdrop.is-contained .bd2-sun { width: 26px; height: 26px; box-shadow: 0 0 16px 4px rgba(255, 170, 80, 0.35); }
+
+/* Photo: a soft dark edge. */
+.look-photo .bd-photo-vignette { position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55) 100%); }
+

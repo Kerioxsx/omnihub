@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-pub const THEMES: &[&str] = &["bankai", "hollow", "mugetsu", "hakka", "soul", "hueco", "karakura", "senbon"];
+pub const THEMES: &[&str] = &["bankai", "hollow", "mugetsu", "hakka", "soul", "hueco", "karakura", "senbon", "dangai", "sokyoku"];
 const EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif"];
 const MAX_BYTES: u64 = 25 << 20;
 

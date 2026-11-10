@@ -593,6 +593,7 @@ pub fn run(args: Vec<String>) {
             extras::photo_wall_get,
             extras::photo_wall_set,
             extras::photo_wall_gallery,
+            extras::photo_wall_add_folder,
             extras::photo_wall_select,
             extras::photo_wall_remove,
             extras::iphone_get,

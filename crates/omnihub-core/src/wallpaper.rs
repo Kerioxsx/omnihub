@@ -159,6 +159,29 @@ impl Wallpapers {
         self.write(&self.gallery_dir(), &id, "pc", &id, &bytes)
     }
 
+    /// Add the pictures in a folder (not its subfolders) until the gallery is full: (added, skipped).
+    pub fn add_folder(&self, dir: &Path) -> Result<(usize, usize), String> {
+        let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
+            .map_err(|e| format!("Couldn't open that folder: {e}"))?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_file() && p.extension().is_some_and(|x| ["png", "jpg", "jpeg", "webp", "gif"].contains(&x.to_string_lossy().to_lowercase().as_str())))
+            .collect();
+        files.sort();
+        if files.is_empty() {
+            return Err("No pictures in that folder (PNG, JPG, WebP or GIF)".into());
+        }
+        let (mut added, mut skipped) = (0, 0);
+        for f in files {
+            if self.gallery().len() >= GALLERY_MAX || self.add(&f).is_err() {
+                skipped += 1;
+            } else {
+                added += 1;
+            }
+        }
+        Ok((added, skipped))
+    }
+
     /// Make a gallery photo the PC's wallpaper.
     pub fn select(&self, id: &str) -> Result<WallInfo, String> {
         Self::gallery_id(id)?;
@@ -403,6 +426,14 @@ mod tests {
         w.remove(&ib.source).unwrap();
         assert_eq!(w.gallery().len(), 1);
         assert!(w.select(&ib.source).is_err() && w.select("../pc").is_err() && w.gallery_file("g1/../x", false).is_none());
+        // A folder: its pictures come in, other files don't.
+        let folder = t.path().join("pics");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("one.png"), png(40, 40, |_, _| [10, 200, 90])).unwrap();
+        std::fs::write(folder.join("notes.txt"), b"hello").unwrap();
+        std::fs::write(folder.join("broken.jpg"), b"not a picture").unwrap();
+        assert_eq!(w.add_folder(&folder).unwrap(), (1, 1));
+        assert_eq!(w.gallery().len(), 2);
     }
 
     #[test]

@@ -63,6 +63,8 @@ const PC_LOOKS: Record<string, Swatch> = {
   hueco: { accent: '#9fd0c8', accent2: '#e8e4d6', light: false, bg: g('rgba(232,228,214,.16)', 'rgba(159,208,200,.14)', '#07080c') },
   karakura: { accent: '#6ea8ff', accent2: '#ffd27a', light: false, bg: g('rgba(60,80,180,.34)', 'rgba(255,210,122,.12)', '#080b1d') },
   senbon: { accent: '#ff7ab8', accent2: '#c9a0ff', light: false, bg: g('rgba(255,122,184,.26)', 'rgba(140,60,160,.24)', '#0c0711') },
+  dangai: { accent: '#b68cff', accent2: '#6fe3d6', light: false, bg: g('rgba(120,70,220,.34)', 'rgba(111,227,214,.14)', '#0a0614') },
+  sokyoku: { accent: '#ff9a4d', accent2: '#ffd27a', light: false, bg: g('rgba(224,112,42,.4)', 'rgba(122,42,28,.4)', '#140906') },
   hakka: { accent: '#8fd3ff', accent2: '#bfe6ff', light: false, bg: g('rgba(143,211,255,.26)', 'rgba(191,230,255,.14)', '#060b12') },
 };
 const NAMED: Record<string, [string, string]> = { violet: ['#8b5cf6', '#22d3ee'], cyan: ['#06b6d4', '#a78bfa'], rose: ['#f43f5e', '#fb923c'], emerald: ['#10b981', '#38bdf8'], amber: ['#f59e0b', '#f472b6'] };

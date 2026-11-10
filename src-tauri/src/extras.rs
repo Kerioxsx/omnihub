@@ -389,6 +389,13 @@ pub async fn photo_wall_gallery(core: Core<'_>) -> Res<Vec<serde_json::Value>> {
         .collect())
 }
 
+/// Add every picture in a folder to the gallery: [added, skipped].
+#[tauri::command]
+pub async fn photo_wall_add_folder(core: Core<'_>, path: String) -> Res<(usize, usize)> {
+    let c = core.inner().clone();
+    blocking(move || c.wallpapers.add_folder(std::path::Path::new(&path))).await
+}
+
 /// Use a gallery photo as the wallpaper.
 #[tauri::command]
 pub async fn photo_wall_select(core: Core<'_>, id: String) -> Res<Option<serde_json::Value>> {

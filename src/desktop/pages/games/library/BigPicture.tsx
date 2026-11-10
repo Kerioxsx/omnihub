@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorText, on } from '../../../api';
 import { cx } from '../../../lib/cx';
 import { setWindowFullscreen, usePlayer } from '../../../lib/nowPlaying';
+import { navigate } from '../../../lib/router';
 import { GLYPHS, confirmBack, setPadPrefs, usePadInput, useConnectedPads, usePadPrefs } from '../../../lib/pads';
 import { toast } from '../../../state/toasts';
 import { Cover } from './LibraryTab';
@@ -297,6 +298,17 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
             run: () => {
               close();
               setTimeout(() => usePlayer.getState().show(), 320);
+            },
+          },
+          {
+            key: 'np-karaoke',
+            type: 'quick',
+            label: 'Karaoke',
+            sub: 'Sing along, leaves Big Picture',
+            icon: 'lyrics',
+            run: () => {
+              close();
+              setTimeout(() => navigate('music', { tab: 'karaoke' }), 320);
             },
           },
         ],

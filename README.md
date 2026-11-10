@@ -32,6 +32,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.39.0
+
+- **Find a setting** in Settings; **search** runs music, mute, timers, lights, smart home and other PCs; two more themes (Dangai, Sōkyoku Hill); add a whole folder to the photo gallery; Karaoke from Big Picture; a fix for emulator disc images in oddly named folders.
+
 ## New in 0.38.0
 
 - **Big Picture Room tab**: music controls, lyrics, volume and light presets from the couch; rows that carry on into the next; it reopens on your last tab; clearer help for non-Xbox controllers in channels.

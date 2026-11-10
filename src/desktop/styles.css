@@ -442,3 +442,7 @@ html.float-route #root {
 html.float-route .app-backdrop {
   display: none;
 }
+
+/* Settings search: sections with no matching row step aside. */
+.settings-body[data-finding] section:not(:has([data-row])) { display: none; }
+

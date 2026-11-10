@@ -711,6 +711,10 @@ const handlers: Record<string, Handler> = {
     return mockWall;
   },
   photo_wall_gallery: () => mockGallery,
+  photo_wall_add_folder: () => {
+    mockGallery = [mockShot(mockGallery.length), mockShot(mockGallery.length + 1), ...mockGallery];
+    return [2, 0];
+  },
   photo_wall_select: (a) => {
     mockWall = mockGallery.find((g) => g.source === str(a, 'id')) ?? mockWall;
     emit('wallpaper:changed', { slot: 'pc' });

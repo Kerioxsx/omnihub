@@ -1,11 +1,13 @@
 ## New in this version
 
-**Redesign, step 3: Big Picture for the living room.**
+**The rest of the redesign plan: find a setting, search that does more, two more themes.**
 
-- **Room tab** in Big Picture: what's playing with previous, play/pause and next, full-screen lyrics, the PC's volume (quieter, louder, mute) and your saved **light presets**, all with the controller.
-- **Now playing** shows on Big Picture's Home when music is on.
-- **Smoother moving**: at the end of a row of covers or channels, right carries on into the next row; Big Picture opens on the tab you last used.
-- **Clearer controller help**: if the controller in your hands isn't an Xbox-style one, Watch says what's needed for it to work inside a channel (Steam Input or DS4Windows).
+- **Find a setting**: a search box in Settings shows only the rows that match.
+- **Search (Ctrl+K) does more**: play/pause, next and previous track, mute; `timer 10` starts a timer; your light presets, smart home devices and other PCs by name. Real matches now come first.
+- **Two more Bleach-inspired themes**, shapes and colour only: **Dangai** (the tunnel between worlds) and **Sōkyoku Hill** (a cliff at sunset). That makes six, each with an optional picture of your own.
+- **Photo gallery**: **Add a folder** brings in all its pictures at once, and there's a **Dark edges** option.
+- **Big Picture**: **Karaoke** from the Room tab.
+- Fixed: emulator disc images were given the wrong console when a folder far above them (even your Windows user name) contained "ps2", "psp" and the like.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

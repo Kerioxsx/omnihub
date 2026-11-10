@@ -54,11 +54,13 @@ export interface PhotoPrefs {
   blur: number;
   /** A slow drift (off with Reduce motion). */
   drift: boolean;
+  /** Darker edges. */
+  vignette: boolean;
   /** Change to the next gallery photo every N minutes (0 = never). */
   rotate: number;
 }
 const PREFS_KEY = 'omnihub.photoLook';
-const DEFAULT_PREFS: PhotoPrefs = { dim: 30, blur: 0, drift: false, rotate: 0 };
+const DEFAULT_PREFS: PhotoPrefs = { dim: 30, blur: 0, drift: false, vignette: false, rotate: 0 };
 let photo: PhotoPrefs = (() => {
   try {
     return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };

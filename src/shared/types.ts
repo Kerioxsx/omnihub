@@ -929,7 +929,7 @@ export interface SunshineStatus {
 export type Theme = 'system' | 'dark' | 'light';
 
 /** The app's look: classic, or one of the animated themes. */
-export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember' | 'minecraft' | 'matrix' | 'rain' | 'snowfall' | 'fireflies' | 'lava' | 'clouds' | 'bankai' | 'hollow' | 'mugetsu' | 'hakka' | 'photo' | 'soul' | 'hueco' | 'karakura' | 'senbon';
+export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember' | 'minecraft' | 'matrix' | 'rain' | 'snowfall' | 'fireflies' | 'lava' | 'clouds' | 'bankai' | 'hollow' | 'mugetsu' | 'hakka' | 'photo' | 'soul' | 'hueco' | 'karakura' | 'senbon' | 'dangai' | 'sokyoku';
 
 export interface Settings {
   general: {
