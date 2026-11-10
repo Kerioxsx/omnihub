@@ -32,6 +32,11 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.41.0
+
+- **OmniHub Client for Minecraft 1.8.9**: Forge plus the best open-source PvP mods (hitboxes, crosshair, hit colour, 1.7 animations, FPS fixes, HUD, in-game resource pack browser) as a profile in the official Minecraft Launcher, and OmniHub's own kill-effects mod (source in `minecraft-mod/`).
+- **Fortnite**: resolution, 3D resolution and frame cap recommended from your monitor and specs; display resolution setting; HDR off.
+
 ## New in 0.40.0
 
 - **New layout**: sections (Workspace, Play, Connect) in a floating top bar and the section's pages in a slim rail; the classic sidebar is still in Settings → Appearance → Layout.

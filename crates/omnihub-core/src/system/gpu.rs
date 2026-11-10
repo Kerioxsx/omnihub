@@ -169,6 +169,19 @@ pub fn adapter_names() -> Vec<String> {
     }
 }
 
+/// The main graphics card (the one with the most video memory): name and
+/// video memory in bytes.
+pub fn main_adapter() -> Option<(String, u64)> {
+    #[cfg(windows)]
+    {
+        win::adapters().into_iter().next().map(|(_, name, mem)| (name, mem))
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 #[cfg(windows)]
 mod win {
     use windows::core::PCWSTR;

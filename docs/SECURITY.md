@@ -272,6 +272,19 @@ and lets a phone do some of that. This is what protects each part.
   (SMBIOS type 17) against the speed its part number says the kit is sold
   at, with a link to Windows' Recovery settings; EXPO and XMP are BIOS
   settings OmniHub never changes.
+- OmniHub Client (Minecraft 1.8.9): Forge's installer comes from
+  maven.minecraftforge.net and is checked against the SHA-1 Forge publishes
+  next to it; its libraries are checked against the SHA-1s in Forge's install
+  profile or the `.sha1` file the library server publishes (Forge's Maven,
+  libraries.minecraft.net, Maven Central only). Mods and resource packs come
+  from Modrinth, checked against Modrinth's hashes. The kill-effects mod is
+  built from `minecraft-mod/` by the release workflow and checked against a
+  SHA-256 built into the app. It runs only in your game (client side), reads
+  only `config/omnihub-killfx.properties`, and sends nothing anywhere.
+  Everything goes in its own folder (`.minecraft/omnihub/client-1.8.9`) and
+  one launcher profile; signing in stays with the official launcher.
+- Fortnite resolution advice reads the monitor list, the main graphics card's
+  name and video memory (DXGI) and the processor's thread count, on this PC.
 - FPS meter: Intel PresentMon, downloaded from this repository's release and
   checked against a SHA-256 built into the app, runs as you while the game
   plays and reads the frame events Windows records (ETW); it never opens the

@@ -3,10 +3,10 @@
 // and Minecraft. Shows what the file says now, what Optimize changes, and
 // puts your own settings back.
 
-import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteOptions, FortniteRenderMode, GameConfigs, GameSession, GpuDriver, MinecraftOptions, NetCheck, ProOptions, Replays } from '@shared/types';
+import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteAdvice, FortniteOptions, FortniteRenderMode, GameConfigs, GameSession, GpuDriver, MinecraftOptions, NetCheck, ProOptions, Replays } from '@shared/types';
 import { formatBytes, formatRelative } from '@shared/format';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, ChevronDown, Eraser, ExternalLink, Film, Gauge, Info, Lightbulb, RotateCcw, Sparkles, XCircle, Zap } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Eraser, ExternalLink, Film, Gauge, Info, Lightbulb, MonitorCog, RotateCcw, Sparkles, XCircle, Zap } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
@@ -211,9 +211,10 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   <Segmented size="sm" label="View distance" value={String(o.fortnite.viewDistance)} onChange={(v) => fn({ viewDistance: Number(v) })} options={[{ value: '0', label: 'Near' }, { value: '1', label: 'Medium' }, { value: '2', label: 'Far' }, { value: '3', label: 'Epic' }]} />
                 </Row>
               )}
+              <ResolutionAdvice o={o.fortnite} set={fn} />
               <Row title="3D resolution" hint="Below 100% renders fewer pixels: more FPS, softer picture.">
                 <Select value={o.fortnite.resolutionScale} onChange={(e) => fn({ resolutionScale: Number(e.target.value) })} className="w-28">
-                  {[100, 90, 85, 75, 67, 50].map((r) => (
+                  {[100, 90, 85, 80, 75, 67, 50].map((r) => (
                     <option key={r} value={r}>
                       {r}%
                     </option>
@@ -356,6 +357,103 @@ const PRESETS: { id: string; label: string; icon: typeof Zap; set: Partial<Fortn
 ];
 
 /** How old the graphics driver is; after it changes, clean the shader caches. */
+/** Display resolution, 3D resolution and frame cap for this monitor and these specs. */
+function ResolutionAdvice({ o, set }: { o: FortniteOptions; set: (p: Partial<FortniteOptions>) => void }) {
+  const [a, setA] = useState<FortniteAdvice | null>(null);
+  const [why, setWhy] = useState(false);
+  useEffect(() => {
+    void api.games.fortniteAdvice().then(setA, () => setA(null));
+  }, []);
+  const res = o.width && o.height ? `${o.width}x${o.height}` : '';
+  const options = a ? a.resolutions : [];
+  const using = !!a && (o.width || a.nativeWidth) === a.width && (o.height || a.nativeHeight) === a.height && o.resolutionScale === a.resolutionScale && o.frameLimit === a.frameLimit;
+  return (
+    <>
+      {a && (
+        <div className="px-5 py-4">
+          <div className="rounded-[var(--r-md,14px)] border border-line bg-surface-2 p-4">
+            <div className="flex flex-wrap items-start gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+                <MonitorCog size={20} aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[14px] font-semibold text-fg">Recommended for your PC</div>
+                <div className="mt-0.5 text-[12.5px] text-dim">
+                  {a.gpu ? `${a.gpu}${a.vramGb ? ` (${a.vramGb} GB)` : ''} · ${a.tierLabel}` : 'Graphics card unknown'} · monitor {a.nativeWidth}×{a.nativeHeight} at {a.hz} Hz
+                </div>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <Badge tone="accent">
+                    {a.width}×{a.height}
+                  </Badge>
+                  <Badge tone="accent">3D {a.resolutionScale}%</Badge>
+                  <Badge tone="accent">{a.frameLimit ? `Cap ${a.frameLimit} FPS` : 'No cap'}</Badge>
+                  <Badge tone="good">≈ {a.expectedFps} FPS</Badge>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant={using ? 'secondary' : 'primary'}
+                icon={using ? CheckCircle2 : Zap}
+                disabled={using}
+                onClick={() =>
+                  set({
+                    width: a.width === a.nativeWidth && a.height === a.nativeHeight ? 0 : a.width,
+                    height: a.width === a.nativeWidth && a.height === a.nativeHeight ? 0 : a.height,
+                    resolutionScale: a.resolutionScale,
+                    frameLimit: a.frameLimit,
+                    fullscreen: true,
+                    renderMode: 'performance',
+                    performanceMode: true,
+                    lowestQuality: a.lowestQuality,
+                    quality: a.lowestQuality ? null : 1,
+                  })
+                }
+              >
+                {using ? 'Chosen' : 'Use this'}
+              </Button>
+            </div>
+            <button type="button" onClick={() => setWhy(!why)} className="mt-3 flex items-center gap-1 text-[12.5px] font-medium text-dim hover:text-fg" aria-expanded={why}>
+              <ChevronDown size={14} className={cx('transition-transform', why && 'rotate-180')} aria-hidden /> Why
+            </button>
+            {why && (
+              <ul className="mt-2 space-y-1 text-[12.5px] leading-relaxed text-dim">
+                {a.reasons.map((r) => (
+                  <li key={r} className="flex gap-2">
+                    <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-faint" />
+                    {r}
+                  </li>
+                ))}
+                <li className="flex gap-2">
+                  <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-faint" />A rough estimate: check the FPS counter in a match and move the 3D resolution up or down from there.
+                </li>
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+      <Row title="Display resolution" hint="Fewer pixels for the whole screen: the most FPS, but menus and text get softer too. Only works in Fullscreen; windowed fullscreen uses your desktop’s resolution.">
+        <Select
+          value={res}
+          onChange={(e) => {
+            const [w, h] = e.target.value.split('x').map(Number);
+            set(e.target.value ? { width: w, height: h, fullscreen: true } : { width: 0, height: 0 });
+          }}
+          className="w-40"
+        >
+          <option value="">Keep the game’s</option>
+          {options.map(([w, h]) => (
+            <option key={`${w}x${h}`} value={`${w}x${h}`}>
+              {w}×{h}
+              {a && w === a.nativeWidth && h === a.nativeHeight ? ' (native)' : ''}
+            </option>
+          ))}
+          {res && !options.some(([w, h]) => `${w}x${h}` === res) && <option value={res}>{res.replace('x', '×')}</option>}
+        </Select>
+      </Row>
+    </>
+  );
+}
+
 function DriverRow() {
   const [d, setD] = useState<GpuDriver | null | undefined>(undefined);
   useEffect(() => {

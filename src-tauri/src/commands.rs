@@ -2322,6 +2322,11 @@ pub async fn games_fortnite_clean(core: Core<'_>) -> Res<games::CacheClean> {
 }
 
 #[tauri::command]
+pub async fn games_fortnite_advice() -> Res<omnihub_core::games::fnres::Advice> {
+    blocking(|| Ok(omnihub_core::games::fnres::advise_here())).await
+}
+
+#[tauri::command]
 pub async fn games_gpu_drivers(core: Core<'_>) -> Res<Vec<games::fortnite::GpuDriver>> {
     let core = core.inner().clone();
     blocking(move || Ok(core.games.gpu_drivers())).await

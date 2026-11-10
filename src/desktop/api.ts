@@ -732,6 +732,7 @@ export const api = {
     restoreConfig: (game: T.ConfigGame) => call<T.GameConfigs>('games_config_restore', { game }),
     fortniteCleanCaches: () => call<T.CacheClean>('games_fortnite_clean'),
     gpuDrivers: () => call<T.GpuDriver[]>('games_gpu_drivers'),
+    fortniteAdvice: () => call<T.FortniteAdvice>('games_fortnite_advice'),
     fortniteReplays: () => call<T.Replays>('games_fortnite_replays'),
     fortniteCleanReplays: (keep: number, days: number | null) => call<[number, number]>('games_fortnite_clean_replays', { keep, days }),
     netCheck: () => call<T.NetCheck>('games_net_check'),
@@ -1015,6 +1016,16 @@ export const api = {
     launcherUpdates: (id: string) => call<Record<string, string>>('mc_launcher_updates', { id }),
     shareLauncherPack: (id: string, path: string, format: T.McPackFormat, server?: T.McServerEntry | null) => call<T.McShared>('mc_share_launcher_pack', { id, path, format, server: server ?? null }),
     install: (id: string) => call<T.McInstalled>('mc_install', { id }),
+    client: {
+      status: () => call<T.McClientStatus>('mc_client_status'),
+      /** Forge 1.8.9 + these mods (Modrinth slugs) + kill effects, as a launcher profile. */
+      install: (mods: string[], killfx: boolean) => call<T.McClientStatus>('mc_client_install', { mods, killfx }),
+      setKillfx: (settings: T.KillFx) => call<T.KillFx>('mc_client_set_killfx', { settings }),
+      packs: (query: string, offset = 0) => call<[T.McPackSearchHit[], number]>('mc_client_packs', { query, offset }),
+      addPack: (project: string) => call<string>('mc_client_add_pack', { project }),
+      removePack: (name: string) => call<void>('mc_client_remove_pack', { name }),
+      uninstall: () => call<void>('mc_client_uninstall'),
+    },
     uninstall: (profile: string) => call<void>('mc_uninstall', { profile }),
     /** Mixes worked out so far, newest first. */
     mixes: () => call<T.McMix[]>('mc_mixes'),

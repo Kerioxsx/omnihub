@@ -11,6 +11,28 @@ import * as games from './mock/games';
 import { rig } from './mock/rig';
 import { govee } from './mock/govee';
 import { modsMock as mm } from './mock/mods';
+
+let mcClient = {
+  minecraftFound: true,
+  installed: false,
+  dir: 'C:\\Users\\you\\AppData\\Roaming\\.minecraft\\omnihub\\client-1.8.9',
+  killfxInstalled: false,
+  killfx: { enabled: true, effect: 'blood' as const, sound: 'default', intensity: 2, color: '#FF3B3B', playersOnly: false, killMark: true },
+  packs: [] as string[],
+  installedAt: 0,
+  mods: [
+    ['patcher', 'PolyPatcher', 'Hundreds of fixes and FPS improvements for 1.8.9: faster chunk loading, entity culling, smoother fonts, less memory.', 'performance', true],
+    ['animations', 'OverflowAnimations', 'The 1.7 animations: blocking, sword swing, eating, bow pull, armour flashing red when hit.', 'visuals', true],
+    ['hitbox', 'PolyHitbox', 'Hitboxes you can colour and style per mob and player, with reach-line and on-hit colour.', 'visuals', true],
+    ['crosshair', 'PolyCrosshair', 'Draw your own crosshair: shape, size, colour, outline, and a colour change when aiming at a player.', 'visuals', true],
+    ['damagetint', 'DamageTint', 'The red flash when something is hit, in any colour and strength you like.', 'visuals', true],
+    ['overflowparticles', 'OverflowParticles', 'Particles your way: more crit and sharpness particles on every hit, sizes, fades.', 'visuals', true],
+    ['resourcify', 'Resourcify', 'Browse and download resource packs from Modrinth and CurseForge inside Minecraft’s own Resource Packs screen.', 'packs', true],
+    ['evergreenhud', 'EvergreenHUD', 'FPS, CPS, ping, coordinates, keystrokes, armour and more on screen, each placed where you want.', 'hud', true],
+    ['polysprint', 'PolySprint', 'Toggle sprint and sneak, with a small on-screen note.', 'movement', true],
+    ['freelook-oneconfig', 'Freelook', 'Hold a key to look around without turning.', 'movement', false],
+  ].map(([slug, name, what, group, defaultOn]) => ({ slug: slug as string, name: name as string, what: what as string, group: group as string, defaultOn: defaultOn as boolean, license: 'GPL-3.0', installed: false })),
+};
 import { chatsMock as cm, openaiMock as om } from './mock/chats';
 import { pollMock } from './mock/mcCover';
 import { serversMock as sv } from './mock/servers';
@@ -227,6 +249,7 @@ const handlers: Record<string, Handler> = {
   games_config_apply: (a) => optimize.apply(str(a, 'game') as ConfigGame),
   games_config_restore: (a) => optimize.restore(str(a, 'game') as ConfigGame),
   games_fortnite_clean: () => ({ freedBytes: 1_284_000_000, files: 2316, skipped: 3 }),
+  games_fortnite_advice: () => ({ gpu: 'NVIDIA GeForce RTX 4070', vramGb: 12, tier: 3, tierLabel: 'Fast', nativeWidth: 2560, nativeHeight: 1440, hz: 240, width: 2560, height: 1440, resolutionScale: 85, frameLimit: 240, lowestQuality: true, expectedFps: 300, reasons: ['Your monitor’s own 2560×1440: the sharpest picture.', '3D resolution 85%: the world is drawn smaller and scaled up, the menus and text stay sharp.', 'Frame cap 240: a little under what it can hold, for steady frame times and less input delay; at or above your 240 Hz.', 'Performance mode, lowest quality: the most frames, what most competitive players use.'], resolutions: [[2560, 1440], [1920, 1080]] }),
   games_gpu_drivers: () => [{ name: 'NVIDIA GeForce RTX 4070', version: '32.0.15.6094', date: Math.floor(Date.now() / 1000) - 140 * 86400, daysOld: 140, updateUrl: 'https://www.nvidia.com/en-us/geforce/drivers/', changed: true }],
   games_fortnite_replays: () => ({ dir: 'C:\\Users\\Player\\AppData\\Local\\FortniteGame\\Saved\\Demos', bytes: 1_920_000_000, list: Array.from({ length: 18 }, (_, i) => ({ name: `UnsavedReplay-2026.10.${String(30 - i).padStart(2, '0')}-21.14.07.replay`, bytes: 60_000_000 + i * 9_000_000, at: Math.floor(Date.now() / 1000) - i * 86400 * 2 })) }),
   games_fortnite_clean_replays: () => [12, 1_310_000_000],
@@ -1075,6 +1098,34 @@ const handlers: Record<string, Handler> = {
   mc_launcher_world_icon: (a) => mm.mcLauncherWorldIcon(str(a, 'id'), str(a, 'folder')),
   mc_launcher_updates: (a) => mm.mcLauncherUpdates(str(a, 'id')),
   mc_share_launcher_pack: (a) => mm.mcShareLauncherPack(str(a, 'id')),
+  mc_client_status: () => mcClient,
+  mc_client_install: (a) => {
+    const mods = (a?.mods as string[]) ?? [];
+    mcClient = { ...mcClient, installed: true, killfxInstalled: !!a?.killfx, installedAt: Math.floor(Date.now() / 1000), mods: mcClient.mods.map((m) => ({ ...m, installed: mods.includes(m.slug) })) };
+    return mcClient;
+  },
+  mc_client_set_killfx: (a) => {
+    mcClient = { ...mcClient, killfx: a?.settings as typeof mcClient.killfx };
+    return mcClient.killfx;
+  },
+  mc_client_packs: (a) => [
+    [
+      { project: 'p1', slug: 'faithful-32x', title: 'Faithful 32x', description: 'The classic look, twice as sharp.', author: 'Faithful', icon: null, downloads: 3_400_000, categories: ['32x'], serverSide: 'unsupported', clientSide: 'required' },
+      { project: 'p2', slug: 'pvp-pack', title: 'Clean PvP 16x', description: 'Short swords, clear ores, low fire.', author: 'packs', icon: null, downloads: 820_000, categories: ['16x', 'combat'], serverSide: 'unsupported', clientSide: 'required' },
+    ].filter((h) => !str(a, 'query') || h.title.toLowerCase().includes(str(a, 'query').toLowerCase())),
+    2,
+  ],
+  mc_client_add_pack: (a) => {
+    const name = `${str(a, 'project')}.zip`;
+    mcClient = { ...mcClient, packs: [...mcClient.packs, name] };
+    return name;
+  },
+  mc_client_remove_pack: (a) => {
+    mcClient = { ...mcClient, packs: mcClient.packs.filter((p) => p !== str(a, 'name')) };
+  },
+  mc_client_uninstall: () => {
+    mcClient = { ...mcClient, installed: false, killfxInstalled: false, mods: mcClient.mods.map((m) => ({ ...m, installed: false })) };
+  },
   mc_install: (a) => mm.mcInstall(str(a, 'id')),
   mc_uninstall: (a) => mm.mcUninstall(str(a, 'profile')),
   mc_cover: (a) => mm.mcCover(str(a, 'id')),

@@ -1625,31 +1625,7 @@ impl Mixer {
         let java = format!("-Xmx{memory_gb}G -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M");
         let icon = self.cover(id).ok().and_then(|c| super::cover::launcher_icon(&c)).unwrap_or_else(|| "Crafting_Table".into());
         let entry = json!({ "name": m.name, "type": "custom", "created": now, "lastUsed": now, "lastVersionId": version_id, "gameDir": dir.to_string_lossy(), "icon": icon, "javaArgs": java });
-        let mut wrote = false;
-        for file in ["launcher_profiles.json", "launcher_profiles_microsoft_store.json"] {
-            let p = mc_dir.join(file);
-            if !p.is_file() && file != "launcher_profiles.json" {
-                continue;
-            }
-            let mut v: Value = std::fs::read(&p).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_else(|| json!({ "profiles": {}, "settings": {}, "version": 3 }));
-            if p.is_file() {
-                let backup = mc_dir.join(format!("{file}.omnihub-backup"));
-                if !backup.exists() {
-                    let _ = std::fs::copy(&p, &backup);
-                }
-            }
-            if !v["profiles"].is_object() {
-                v["profiles"] = json!({});
-            }
-            v["profiles"][&key] = entry.clone();
-            let t = p.with_extension("json.omnihub");
-            std::fs::write(&t, serde_json::to_vec_pretty(&v).unwrap_or_default()).map_err(|e| e.to_string())?;
-            std::fs::rename(&t, &p).map_err(|e| e.to_string())?;
-            wrote = true;
-        }
-        if !wrote {
-            return Err("The Minecraft Launcher's profile list couldn't be written.".into());
-        }
+        write_launcher_profile(&mc_dir, &key, &entry)?;
         let inst = Installed { name: m.name.clone(), profile: key, dir: dir.to_string_lossy().into_owned(), version_id, mc: m.mc.clone(), loader: m.loader.clone(), mods, at: crate::db::now() };
         let mut all = self.installed();
         all.push(inst.clone());
@@ -1667,16 +1643,53 @@ impl Mixer {
         if dir.starts_with(mc_dir.join("omnihub")) && dir.is_dir() {
             std::fs::remove_dir_all(&dir).map_err(|e| format!("Couldn't remove its folder (is Minecraft running?): {e}"))?;
         }
-        for file in ["launcher_profiles.json", "launcher_profiles_microsoft_store.json"] {
-            let p = mc_dir.join(file);
-            if let Some(mut v) = std::fs::read(&p).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) {
-                if let Some(o) = v["profiles"].as_object_mut() {
-                    o.remove(profile);
-                }
-                let _ = std::fs::write(&p, serde_json::to_vec_pretty(&v).unwrap_or_default());
+        remove_launcher_profile(&mc_dir, profile);
+        std::fs::write(self.installs_file(), serde_json::to_vec_pretty(&all).unwrap_or_default()).map_err(|e| e.to_string())
+    }
+}
+
+/// Add (or replace) a profile in the official launcher's profile list (and
+/// the Microsoft Store launcher's, when it has one), keeping a backup of
+/// the list the first time.
+pub(crate) fn write_launcher_profile(mc_dir: &Path, key: &str, entry: &Value) -> Result<(), String> {
+    let mut wrote = false;
+    for file in ["launcher_profiles.json", "launcher_profiles_microsoft_store.json"] {
+        let p = mc_dir.join(file);
+        if !p.is_file() && file != "launcher_profiles.json" {
+            continue;
+        }
+        let mut v: Value = std::fs::read(&p).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_else(|| json!({ "profiles": {}, "settings": {}, "version": 3 }));
+        if p.is_file() {
+            let backup = mc_dir.join(format!("{file}.omnihub-backup"));
+            if !backup.exists() {
+                let _ = std::fs::copy(&p, &backup);
             }
         }
-        std::fs::write(self.installs_file(), serde_json::to_vec_pretty(&all).unwrap_or_default()).map_err(|e| e.to_string())
+        if !v["profiles"].is_object() {
+            v["profiles"] = json!({});
+        }
+        v["profiles"][key] = entry.clone();
+        let t = p.with_extension("json.omnihub");
+        std::fs::write(&t, serde_json::to_vec_pretty(&v).unwrap_or_default()).map_err(|e| e.to_string())?;
+        std::fs::rename(&t, &p).map_err(|e| e.to_string())?;
+        wrote = true;
+    }
+    if !wrote {
+        return Err("The Minecraft Launcher's profile list couldn't be written.".into());
+    }
+    Ok(())
+}
+
+/// Take a profile out of the launcher's profile lists.
+pub(crate) fn remove_launcher_profile(mc_dir: &Path, key: &str) {
+    for file in ["launcher_profiles.json", "launcher_profiles_microsoft_store.json"] {
+        let p = mc_dir.join(file);
+        if let Some(mut v) = std::fs::read(&p).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) {
+            if let Some(o) = v["profiles"].as_object_mut() {
+                o.remove(key);
+            }
+            let _ = std::fs::write(&p, serde_json::to_vec_pretty(&v).unwrap_or_default());
+        }
     }
 }
 

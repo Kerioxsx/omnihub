@@ -13,6 +13,7 @@ pub mod detect;
 pub mod install;
 pub mod launchers;
 pub mod maker;
+pub mod mcclient;
 pub mod minecraft;
 pub mod thunderstore;
 pub mod workshop;

@@ -11,6 +11,7 @@ use omnihub_core::mods::cover::{self, PollStatus, SignIn};
 use omnihub_core::mods::detect::LoaderKind;
 use omnihub_core::mods::launchers::Instance;
 use omnihub_core::mods::maker::{Project, View};
+use omnihub_core::mods::mcclient;
 use omnihub_core::mods::minecraft::{Installed, LauncherDetails, Mix, PackFormat, PackHit, PackVersion, ServerEntry, Shared, Source};
 use omnihub_core::mods::thunderstore::Sort;
 use omnihub_core::mods::workshop::WorkshopItem;
@@ -351,6 +352,54 @@ pub async fn mc_install(core: Core<'_>, id: String) -> Res<Installed> {
         c.audit.record("desktop", "minecraft.install", &id, r.is_ok());
         r
     })
+}
+
+// ---------- OmniHub Client (1.8.9) ----------
+
+#[tauri::command]
+pub async fn mc_client_status(core: Core<'_>) -> Res<mcclient::Status> {
+    run!(core, |c| Ok(mcclient::status(&c.mods.minecraft)))
+}
+
+#[tauri::command]
+pub async fn mc_client_install(core: Core<'_>, mods: Vec<String>, killfx: bool) -> Res<mcclient::Status> {
+    run!(core, |c| {
+        for exe in ["MinecraftLauncher.exe", "Minecraft.exe"] {
+            if !c.procs.pids_named(exe).is_empty() {
+                return Err("Close the Minecraft Launcher first (it rewrites its profile list when it closes).".into());
+            }
+        }
+        let ev = c.events.clone();
+        let memory = omnihub_core::mods::minecraft::memory_for_pc();
+        let r = mcclient::install(&c.mods.minecraft, &mods, killfx, memory, &mut |done, total, text| ev.emit("mods:progress", serde_json::json!({ "game": "mcclient", "text": text, "done": done, "total": total })));
+        c.audit.record("desktop", "minecraft.client-install", &mods.join(","), r.is_ok());
+        r
+    })
+}
+
+#[tauri::command]
+pub async fn mc_client_set_killfx(core: Core<'_>, settings: mcclient::KillFx) -> Res<mcclient::KillFx> {
+    run!(core, |c| mcclient::set_killfx(&c.mods.minecraft, &settings))
+}
+
+#[tauri::command]
+pub async fn mc_client_packs(core: Core<'_>, query: String, offset: usize) -> Res<(Vec<omnihub_core::mods::minecraft::ProjectHit>, u64)> {
+    run!(core, |c| c.mods.minecraft.api.search_projects("resourcepack", &query, &[vec!["versions:1.8.9".to_string()]], offset))
+}
+
+#[tauri::command]
+pub async fn mc_client_add_pack(core: Core<'_>, project: String) -> Res<String> {
+    run!(core, |c| mcclient::add_pack(&c.mods.minecraft, &project))
+}
+
+#[tauri::command]
+pub async fn mc_client_remove_pack(core: Core<'_>, name: String) -> Res<()> {
+    run!(core, |c| mcclient::remove_pack(&c.mods.minecraft, &name))
+}
+
+#[tauri::command]
+pub async fn mc_client_uninstall(core: Core<'_>) -> Res<()> {
+    run!(core, |c| mcclient::uninstall(&c.mods.minecraft))
 }
 
 #[tauri::command]

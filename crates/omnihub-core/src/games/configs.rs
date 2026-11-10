@@ -182,11 +182,15 @@ pub struct FortniteOptions {
     /// (1 medium, 2 high, 3 epic), for the Balanced and Pretty presets.
     /// None leaves Fortnite's own quality alone.
     pub quality: Option<u8>,
+    /// Display resolution (0 = leave Fortnite's choice). Only used in
+    /// fullscreen: windowed fullscreen always uses the desktop's.
+    pub width: u32,
+    pub height: u32,
 }
 
 impl Default for FortniteOptions {
     fn default() -> Self {
-        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None, quality: None }
+        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None, quality: None, width: 0, height: 0 }
     }
 }
 
@@ -344,7 +348,24 @@ fn fortnite_edits(o: &FortniteOptions) -> Vec<Edit> {
         edit(s, "bLatencyFlash", "False", false, "Latency flash off"),
         // The menu's NVIDIA Reflex Low Latency (0 off, 1 on, 2 on + boost).
         edit(s, "LatencyTweak2", o.reflex.min(2).to_string(), false, format!("NVIDIA Reflex: {}", REFLEX[o.reflex.min(2) as usize])),
+        // HDR output costs a little on every frame and washes out on many monitors.
+        edit(s, "bUseHDRDisplayOutput", "False", false, "HDR output off"),
     ];
+    if o.width >= 640 && o.height >= 480 {
+        let what = format!("Display resolution: {}×{}", o.width, o.height);
+        for (key, v, add) in [
+            ("ResolutionSizeX", o.width, true),
+            ("ResolutionSizeY", o.height, true),
+            ("LastUserConfirmedResolutionSizeX", o.width, true),
+            ("LastUserConfirmedResolutionSizeY", o.height, true),
+            ("DesiredScreenWidth", o.width, false),
+            ("DesiredScreenHeight", o.height, false),
+            ("LastUserConfirmedDesiredScreenWidth", o.width, false),
+            ("LastUserConfirmedDesiredScreenHeight", o.height, false),
+        ] {
+            e.push(edit(s, key, v.to_string(), add, what.clone()));
+        }
+    }
     if o.fullscreen {
         for key in ["FullscreenMode", "LastConfirmedFullscreenMode", "PreferredFullscreenMode"] {
             e.push(edit(s, key, "0", false, "Window mode: fullscreen"));
@@ -609,6 +630,8 @@ pub fn settings(game: ConfigGame, doc: &Doc) -> Vec<Setting> {
                 // Only where Fortnite offers it (an NVIDIA card).
                 row(if reflex.is_some() { "NVIDIA Reflex" } else { "" }, match reflex { Some(0) => "Off".into(), Some(1) => "On".into(), _ => "On + Boost".into() }, reflex.is_some_and(|r| r >= 1)),
                 row("Shadows", match shadows { Some(0) => "Off".into(), Some(n) => ["Off", "Medium", "High", "Epic", "Cinematic"].get(n as usize).copied().unwrap_or("High").into(), None => "Game's choice".into() }, shadows == Some(0)),
+                row("Display resolution", match (num(s, "ResolutionSizeX"), num(s, "ResolutionSizeY")) { (Some(w), Some(h)) if w > 0.0 => format!("{w:.0}×{h:.0}"), _ => "Game's choice".into() }, true),
+                row("3D resolution", num(Some(FN_SCALABILITY), "sg.ResolutionQuality").map(|r| format!("{r:.0}%")).unwrap_or_else(|| "Game's choice".into()), true),
                 row("Window mode", match mode { Some(0) => "Fullscreen".into(), Some(1) => "Windowed fullscreen".into(), Some(2) => "Windowed".into(), _ => "Game's choice".into() }, mode == Some(0)),
                 row("FPS counter", on_off(on("bShowFPS")), on("bShowFPS")),
             ]

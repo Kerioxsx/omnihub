@@ -22,6 +22,7 @@ import { navigate } from '../../lib/router';
 import { confirm } from '../../state/dialogs';
 import { toast } from '../../state/toasts';
 import { InstalledPacks, loaderText } from './InstalledPacks';
+import { McClientCard } from './McClient';
 import { ShareWithFriends } from './ShareWithFriends';
 import { count, ProgressLine, useModProgress } from './shared';
 
@@ -435,13 +436,14 @@ export function MinecraftView() {
       title={
         <span className="flex items-center gap-2">
           <IconButton icon={ArrowLeft} label="All games" onClick={() => navigate('mods')} />
-          Minecraft modpacks
+          Minecraft
         </span>
       }
-      subtitle="Mix two or more packs into one: every mod once, each at the version made for the Minecraft and loader you choose."
+      subtitle="OmniHub Client for 1.8.9 PvP, and modpacks mixed: every mod once, each at the version made for the Minecraft and loader you choose."
     >
       <AddFromModrinth open={adding} onClose={() => setAdding(false)} onAdded={load} />
       <div className="space-y-4">
+        <McClientCard />
         {st && !st.found && <Callout tone="info">Minecraft (Java Edition) wasn’t found on this PC. You can still mix packs and save them as a .mrpack.</Callout>}
         <InstalledPacks
           sources={st?.sources ?? []}

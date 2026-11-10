@@ -1,9 +1,12 @@
 ## New in this version
 
-**A new layout.**
+**OmniHub Client for Minecraft 1.8.9, and Fortnite resolution advice.**
 
-- **Top bar + rail**: the app's sections, **Workspace**, **Play** and **Connect**, sit across a floating top bar with search, the phone companion's status, the clock and Settings. A slim rail on the left shows the pages of the section you're in, and each section remembers the page you were last on. Pages get more room.
-- Prefer the old list? **Settings → Appearance → Layout → Sidebar** brings it back.
+- **OmniHub Client (Mods → Minecraft)**: one click sets up Minecraft 1.8.9 with Forge as a profile in the official Minecraft Launcher (sign in with Microsoft as usual; works on Hypixel and any server). Pick from the best open-source PvP mods: **PolyHitbox** (coloured hitboxes), **PolyCrosshair** (draw your own crosshair), **DamageTint** (hit colour), **OverflowAnimations** (1.7 animations), **OverflowParticles**, **PolyPatcher** (FPS fixes), **EvergreenHUD** (FPS, CPS, keystrokes…), **Resourcify** (download resource packs inside Minecraft), **PolySprint** and **Freelook**. PvP-friendly video settings out of the box.
+- **OmniHub Kill Effects**: our own mod. Blood, lightning, flames, firework, souls, hearts or an explosion when a player or mob you hit dies, with your colour, sound and size, plus a "☠ Kill" mark with streaks. Change it in OmniHub while you play; it applies within seconds.
+- **Resource packs**: search 1.8.9 packs on Modrinth and add them to the client from OmniHub.
+- **Fortnite: recommended for your PC**: from your monitor, graphics card and processor, the display resolution, 3D resolution and frame cap that should hold your refresh rate in Performance mode, with the reasons. One click to use it.
+- **Fortnite display resolution**: set a lower resolution for more FPS (fullscreen), and HDR output is turned off with the other tweaks.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

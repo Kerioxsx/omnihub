@@ -12,6 +12,7 @@ pub mod deck;
 pub mod emuinstall;
 pub mod emulators;
 pub mod emusaves;
+pub mod fnres;
 pub mod fortnite;
 pub mod fps;
 pub mod ini;

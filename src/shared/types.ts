@@ -1554,6 +1554,29 @@ export interface FortniteOptions {
   renderMode?: FortniteRenderMode | null;
   /** With lowestQuality off: every quality setting at 1 medium, 2 high or 3 epic; null leaves it alone. */
   quality?: number | null;
+  /** Display resolution; 0 leaves Fortnite's choice (fullscreen only). */
+  width?: number;
+  height?: number;
+}
+
+/** Resolution advice for Fortnite from the monitor and specs. */
+export interface FortniteAdvice {
+  gpu: string;
+  vramGb: number;
+  tier: number;
+  tierLabel: string;
+  nativeWidth: number;
+  nativeHeight: number;
+  hz: number;
+  width: number;
+  height: number;
+  resolutionScale: number;
+  /** 0 = unlimited */
+  frameLimit: number;
+  lowestQuality: boolean;
+  expectedFps: number;
+  reasons: string[];
+  resolutions: [number, number][];
 }
 
 export type FortniteRenderMode = 'performance' | 'dx12' | 'dx11' | 'keep';
@@ -4391,4 +4414,56 @@ export interface SoundboardSettings {
   sounds: SoundboardSound[];
   output: string;
   keysOn: boolean;
+}
+
+// ---------- OmniHub Client (Minecraft 1.8.9) ----------
+
+export interface McClientMod {
+  slug: string;
+  name: string;
+  what: string;
+  /** visuals, hud, performance, packs, movement */
+  group: string;
+  defaultOn: boolean;
+  license: string;
+  installed: boolean;
+}
+
+export type KillEffect = 'lightning' | 'blood' | 'flames' | 'firework' | 'souls' | 'hearts' | 'explosion' | 'random';
+
+export interface KillFx {
+  enabled: boolean;
+  effect: KillEffect;
+  sound: string;
+  /** 1 subtle … 3 big */
+  intensity: number;
+  /** "#RRGGBB" */
+  color: string;
+  playersOnly: boolean;
+  killMark: boolean;
+}
+
+export interface McClientStatus {
+  minecraftFound: boolean;
+  installed: boolean;
+  dir: string;
+  mods: McClientMod[];
+  killfxInstalled: boolean;
+  killfx: KillFx;
+  /** Resource pack files in the client's folder. */
+  packs: string[];
+  installedAt: number;
+}
+
+export interface McPackSearchHit {
+  project: string;
+  slug: string;
+  title: string;
+  description: string;
+  author: string;
+  icon: string | null;
+  downloads: number;
+  categories: string[];
+  serverSide: string;
+  clientSide: string;
 }
