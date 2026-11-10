@@ -5,12 +5,12 @@
 // pick the first time, shows the series you're part way through, and turns
 // the controller into the browser's remote until you press View.
 
-import type { Browser, LibraryGame, Site, TvPrefs, Watching } from '@shared/types';
+import type { Browser, GoveePreset, LibraryGame, MediaState, Site, TvPrefs, Watching } from '@shared/types';
 import { X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorText, on } from '../../../api';
 import { cx } from '../../../lib/cx';
-import { setWindowFullscreen } from '../../../lib/nowPlaying';
+import { setWindowFullscreen, usePlayer } from '../../../lib/nowPlaying';
 import { GLYPHS, confirmBack, setPadPrefs, usePadInput, useConnectedPads, usePadPrefs } from '../../../lib/pads';
 import { toast } from '../../../state/toasts';
 import { Cover } from './LibraryTab';
@@ -39,7 +39,30 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
   const [tv, setTv] = useState<TvPrefs | null>(null);
   const [browsers, setBrowsers] = useState<Browser[] | null>(null);
   const [watching, setWatching] = useState<Watching[]>([]);
-  const [tab, setTab] = useState<Tab>('home');
+  const [tab, setTabState] = useState<Tab>(() => {
+    // Open where you left (Settings aside).
+    const t = localStorage.getItem('omnihub.bpTab') as Tab | null;
+    return t && t !== 'settings' && TABS.some((x) => x.id === t) ? t : 'home';
+  });
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    try {
+      localStorage.setItem('omnihub.bpTab', t);
+    } catch {
+      /* fine */
+    }
+  };
+  // The living room: what's playing, the volume, the lights.
+  const [media, setMedia] = useState<MediaState | null>(null);
+  const [volume, setVolume] = useState<{ level: number; muted: boolean } | null>(null);
+  const [presets, setPresets] = useState<GoveePreset[]>([]);
+  useEffect(() => {
+    void api.media.state().then((r) => setMedia(r.state), () => undefined);
+    void api.media.audio().then((a) => setVolume(a.volume), () => undefined);
+    void api.govee.presets().then(setPresets, () => undefined);
+    const off = on<{ state: MediaState | null }>('media:state', (p) => setMedia(p.state));
+    return () => void off.then((f) => f());
+  }, []);
   const [nav, setNav] = useState<Record<string, { row: number; cols: number[] }>>({});
   const [filter, setFilter] = useState<LibFilter>('all');
   const [query, setQuery] = useState('');
@@ -196,6 +219,7 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
       kind: 'quick',
       title: 'Quick',
       items: [
+        ...(media ? [{ key: 'q-np', type: 'quick' as const, label: media.playing ? 'Now playing' : 'Paused', sub: media.title, icon: 'music', run: () => goTab('room') }] : []),
         { key: 'q-lib', type: 'quick', label: 'Library', sub: `${games.length} games`, icon: 'library', run: () => goTab('library') },
         { key: 'q-watch', type: 'quick', label: 'Watch', sub: `${sites.length} channels`, icon: 'watch', run: () => goTab('watch') },
         { key: 'q-pads', type: 'quick', label: 'Controllers', sub: pads.length ? `${pads.length} connected` : 'None connected', icon: 'pads', run: () => setPanel(true) },
@@ -250,6 +274,53 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
     return rows;
   };
 
+  const roomRows = (): NavRow[] => {
+    const act = (a: 'toggle' | 'next' | 'previous') => () => void api.media.control(a).catch((e) => toast.error('The player didn’t answer', errorText(e)));
+    const vol = (level: number | null, muted: boolean | null) => () => void api.media.setVolume(level, muted).then(setVolume, (e) => toast.error('Couldn’t change the volume', errorText(e)));
+    const lv = volume?.level ?? 0.5;
+    const rows: NavRow[] = [
+      {
+        id: 'np',
+        kind: 'quick',
+        title: 'Now playing',
+        sub: media ? `${media.title}${media.artist ? ` · ${media.artist}` : ''} · ${media.appName}` : 'Nothing is playing on the PC',
+        items: [
+          { key: 'np-prev', type: 'quick', label: 'Previous', sub: 'Last track', icon: 'prev', run: act('previous') },
+          { key: 'np-toggle', type: 'quick', label: media?.playing ? 'Pause' : 'Play', sub: media ? media.title : 'Start your music app first', icon: media?.playing ? 'pause' : 'resume', run: act('toggle') },
+          { key: 'np-next', type: 'quick', label: 'Next', sub: 'Skip this one', icon: 'next', run: act('next') },
+          {
+            key: 'np-lyrics',
+            type: 'quick',
+            label: 'Lyrics',
+            sub: 'Full screen, leaves Big Picture',
+            icon: 'lyrics',
+            run: () => {
+              close();
+              setTimeout(() => usePlayer.getState().show(), 320);
+            },
+          },
+        ],
+      },
+      {
+        id: 'vol',
+        kind: 'quick',
+        title: 'Volume',
+        sub: volume ? (volume.muted ? 'Muted' : `${Math.round(volume.level * 100)}%`) : undefined,
+        items: [
+          { key: 'v-down', type: 'quick', label: 'Quieter', sub: '−10%', icon: 'voldown', run: vol(Math.max(0, lv - 0.1), false) },
+          { key: 'v-up', type: 'quick', label: 'Louder', sub: '+10%', icon: 'volup', run: vol(Math.min(1, lv + 0.1), false) },
+          { key: 'v-mute', type: 'quick', label: volume?.muted ? 'Unmute' : 'Mute', sub: 'The whole PC', icon: 'mute', run: vol(null, !volume?.muted) },
+        ],
+      },
+    ];
+    if (presets.length)
+      chunk(presets.slice(0, 12), 4).forEach((part, i) =>
+        rows.push({ id: `li${i}`, kind: 'quick', group: 'lights', title: i === 0 ? 'Lights' : undefined, sub: i === 0 ? 'Your saved looks for the Govee lights' : undefined, items: part.map((p) => ({ key: `li-${p.id}`, type: 'quick', label: p.name, sub: p.brightness != null ? `Brightness ${p.brightness}%` : 'Light preset', icon: 'light', run: () => void api.govee.applyPreset(p.id).then(() => blip('play'), (e) => toast.error('The lights didn’t answer', errorText(e))) })) }),
+      );
+    else rows.push({ id: 'li-none', kind: 'notice', items: [{ key: 'li-none', type: 'notice', title: 'Lights', sub: 'Save a look on the Lights page (a preset) and it shows up here, one press from the couch.', action: 'OK', run: () => undefined }] });
+    return rows;
+  };
+
   const settingsRows = (): NavRow[] => {
     const p = tv ?? NO_TV;
     const line = (key: string, label: string, value: string | boolean, run: () => void, sub?: string, title?: string): NavRow => ({ id: key, kind: 'list', title, items: [{ key, type: 'setting', label, sub, value, run }] });
@@ -286,7 +357,8 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
   };
 
   const layer = picker ? 'picker' : tab;
-  const rows = picker ? pickerRows() : tab === 'home' ? homeRows() : tab === 'library' ? libRows() : tab === 'watch' ? watchRows() : settingsRows();
+  const tabRows = () => (tab === 'home' ? homeRows() : tab === 'library' ? libRows() : tab === 'watch' ? watchRows() : tab === 'room' ? roomRows() : settingsRows());
+  const rows = picker ? pickerRows() : tabRows();
   const st = nav[layer] ?? { row: 0, cols: [] };
   const row = clamp(st.row, 0, Math.max(0, rows.length - 1));
   const col = clamp(st.cols[row] ?? 0, 0, Math.max(0, (rows[row]?.items.length ?? 1) - 1));
@@ -313,10 +385,18 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
       focusAt(next, c);
       return;
     }
-    const next = clamp(col + dx, 0, (rows[row]?.items.length ?? 1) - 1);
+    const len = rows[row]?.items.length ?? 1;
+    const next = clamp(col + dx, 0, len - 1);
     if (next !== col) {
       blip('move');
       focusAt(row, next);
+      return;
+    }
+    // At the end of a grid row: carry on in the next (or previous) row.
+    const to = row + dx;
+    if (rows[row]?.group && rows[to]?.group === rows[row].group) {
+      blip('move');
+      focusAt(to, dx > 0 ? 0 : rows[to].items.length - 1);
     }
   };
   const ok = () => {
@@ -403,7 +483,7 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
   }, [layer, row, col, rows.length, picker, bp.reducedMotion]);
 
   const ctx = { family, color };
-  const head = tab === 'library' ? { eyebrow: 'Your games', title: 'Library', sub: `${games.length} games · ${FILTERS.find((f) => f.id === filter)?.label}` } : tab === 'watch' ? { eyebrow: 'Entertainment', title: 'Watch', sub: tv?.browser ? `Channels open in ${browserName}` : 'Your streaming channels, full screen' } : tab === 'settings' ? { eyebrow: 'Big Picture', title: 'Settings', sub: 'Changes save straight away' } : null;
+  const head = tab === 'library' ? { eyebrow: 'Your games', title: 'Library', sub: `${games.length} games · ${FILTERS.find((f) => f.id === filter)?.label}` } : tab === 'watch' ? { eyebrow: 'Entertainment', title: 'Watch', sub: tv?.browser ? `Channels open in ${browserName}` : 'Your streaming channels, full screen' } : tab === 'room' ? { eyebrow: 'Living room', title: 'Room', sub: 'Music, volume and lights without leaving the couch' } : tab === 'settings' ? { eyebrow: 'Big Picture', title: 'Settings', sub: 'Changes save straight away' } : null;
   const backLabel = launching || opening ? 'Hide' : picker ? 'Cancel' : q ? 'Clear search' : tab !== 'home' ? 'Home' : 'Leave';
   const side = (i: number) => (i === 1 ? 'right' : 'bottom') as 'right' | 'bottom';
   const cb = confirmBack(family, padP);
@@ -466,13 +546,14 @@ export function BigPicture({ games, onClose }: { games: LibraryGame[]; onClose: 
             </div>
           )}
           {rows.length === 0 && <div className="mt-10 rounded-2xl border border-dashed border-[var(--bp-stroke)] p-10 text-center text-[var(--bp-muted)]">Nothing here yet.</div>}
-          {(picker ? (tab === 'home' ? homeRows() : tab === 'library' ? libRows() : tab === 'watch' ? watchRows() : settingsRows()) : rows).map((r, ri) => (
+          {(picker ? tabRows() : rows).map((r, ri) => (
             <RowView key={r.id} row={r} ri={ri} on={!picker && ri === row} at={!picker && ri === row ? col : clamp((nav[tab]?.cols ?? [])[ri] ?? 0, 0, r.items.length - 1)} ctx={ctx} pick={picker ? () => undefined : pick} />
           ))}
           {tab === 'watch' && (
             <section className="mt-10 rounded-[20px] border border-[var(--bp-stroke)] p-6" style={{ background: 'linear-gradient(140deg, #141b2d, #0e1424)' }}>
               <h3 className="text-[18px] font-extrabold">Your controller in a channel</h3>
               <p className="mb-5 mt-1 text-[13px] text-[var(--bp-muted)]">{tv?.remote ? 'While the channel’s browser is in front. Xbox controllers and others Windows sees as one (XInput); PlayStation controllers need Steam or DS4Windows for this.' : 'Turned off: use the mouse and keyboard in the browser.'}</p>
+              {tv?.remote && family !== 'xbox' && <p className="mb-5 rounded-xl border border-[#b98a2c66] bg-[#4a391233] px-4 py-3 text-[13px] text-[#f1d9a0]">The controller you’re holding isn’t an Xbox-style one. It works here in Big Picture, but inside a channel it only works if Steam (Steam Input) or DS4Windows is running and presenting it as an Xbox controller. Otherwise use the mouse there, or turn the remote off.</p>}
               <RemoteLegend family={family} />
             </section>
           )}

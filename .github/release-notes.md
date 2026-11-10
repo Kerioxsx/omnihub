@@ -1,11 +1,11 @@
 ## New in this version
 
-**Redesign, step 2: more themes and a photo gallery.**
+**Redesign, step 3: Big Picture for the living room.**
 
-- **Four new Bleach-inspired themes**, drawn with shapes and colour only: **Soul Society** (daylight over white walls, spirit lights rising), **Hueco Mundo** (white dunes, a black sky, a crescent moon), **Karakura night** (a town skyline under a full moon) and **Senbonzakura** (a thousand pink blades drifting). Each can show **a picture of your own** faded behind the cards (Settings → Appearance → Your picture). OmniHub still ships no artwork from any series.
-- **Photo gallery**: "Your photo" now keeps up to 24 photos. Click one to use it, or let OmniHub **change the photo** every 15 minutes, hour or day.
-- **Photo options**: darken, blur and a slow drift.
-- The phone's **Match PC** knows the new themes.
+- **Room tab** in Big Picture: what's playing with previous, play/pause and next, full-screen lyrics, the PC's volume (quieter, louder, mute) and your saved **light presets**, all with the controller.
+- **Now playing** shows on Big Picture's Home when music is on.
+- **Smoother moving**: at the end of a row of covers or channels, right carries on into the next row; Big Picture opens on the tab you last used.
+- **Clearer controller help**: if the controller in your hands isn't an Xbox-style one, Watch says what's needed for it to work inside a channel (Steam Input or DS4Windows).
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

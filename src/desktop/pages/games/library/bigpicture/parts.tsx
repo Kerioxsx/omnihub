@@ -2,7 +2,7 @@
 // `data-bp-on` while the controller is on it; the shell scrolls it into view.
 
 import type { Browser, LibraryGame, Site } from '@shared/types';
-import { Check, ChevronLeft, ChevronRight, Gamepad2, Globe, Library, LogOut, MonitorPlay, MousePointer2, Search, Settings2, Sparkles, Tv } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Gamepad2, Globe, Library, Lightbulb, LogOut, MicVocal, MonitorPlay, MousePointer2, Music2, Pause, Play, Search, Settings2, SkipBack, SkipForward, Sparkles, Tv, Volume1, Volume2, VolumeX } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { cx } from '../../../../lib/cx';
 import { GLYPHS, type PadFamily } from '../../../../lib/pads';
@@ -16,7 +16,7 @@ export interface Ctx {
   color: (site: string) => string;
 }
 
-const ICONS: Record<string, typeof Tv> = { library: Library, watch: Tv, pads: Gamepad2, settings: Settings2, leave: LogOut, browser: Globe, remote: MousePointer2, search: Search, sparkles: Sparkles, play: MonitorPlay };
+const ICONS: Record<string, typeof Tv> = { library: Library, watch: Tv, pads: Gamepad2, settings: Settings2, leave: LogOut, browser: Globe, remote: MousePointer2, search: Search, sparkles: Sparkles, play: MonitorPlay, music: Music2, prev: SkipBack, next: SkipForward, resume: Play, pause: Pause, lyrics: MicVocal, volup: Volume2, voldown: Volume1, mute: VolumeX, light: Lightbulb };
 
 export function Clock() {
   const [now, setNow] = useState(() => new Date());
@@ -417,7 +417,7 @@ export function RowView({ row, ri, on, at, ctx, pick }: { row: NavRow; ri: numbe
     }
   })();
   return (
-    <div className={cx(row.kind === 'grid' && !row.title && 'mt-4', row.kind === 'chips' && 'mt-6')}>
+    <div className={cx((row.kind === 'grid' || row.kind === 'quick') && !row.title && 'mt-3.5', row.kind === 'chips' && 'mt-6')}>
       <Head row={row} />
       {body}
     </div>

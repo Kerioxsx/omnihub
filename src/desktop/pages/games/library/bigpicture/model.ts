@@ -6,11 +6,12 @@ import type { Browser, LibraryGame, Site, Watching } from '@shared/types';
 import { useSyncExternalStore } from 'react';
 import { padPrefs } from '../../../../lib/pads';
 
-export type Tab = 'home' | 'library' | 'watch' | 'settings';
+export type Tab = 'home' | 'library' | 'watch' | 'room' | 'settings';
 export const TABS: { id: Tab; label: string }[] = [
   { id: 'home', label: 'Home' },
   { id: 'library', label: 'Library' },
   { id: 'watch', label: 'Watch' },
+  { id: 'room', label: 'Room' },
   { id: 'settings', label: 'Settings' },
 ];
 
