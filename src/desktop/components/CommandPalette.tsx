@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { AppWindow, Gamepad2, Palette, Settings2, Tv, Calculator, Camera, CornerDownLeft, Crop, File, Folder, Gauge, HardDrive, Image, KeyRound, Lightbulb, LockKeyhole, Moon, Music2, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, StickyNote, Sun } from 'lucide-react';
+import { AppWindow, Gamepad2, Lightbulb as Bulb, Monitor, Palette, Pause, Plug, Settings2, SkipBack, SkipForward, Timer, Tv, VolumeX, Calculator, Camera, CornerDownLeft, Crop, File, Folder, Gauge, HardDrive, Image, KeyRound, Lightbulb, LockKeyhole, Moon, Music2, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, StickyNote, Sun } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../api';
@@ -38,7 +38,7 @@ interface Cmd {
   label: string;
   hint?: string;
   icon: LucideIcon;
-  group: 'Answer' | 'Pages' | 'Actions' | 'Drives' | 'Games' | 'Channels' | 'Settings' | 'Themes' | 'Files' | 'Notes' | 'Apps' | 'Screenshots' | 'Vault';
+  group: 'Answer' | 'Pages' | 'Actions' | 'Drives' | 'Games' | 'Channels' | 'Lights' | 'Smart home' | 'Other PCs' | 'Settings' | 'Themes' | 'Files' | 'Notes' | 'Apps' | 'Screenshots' | 'Vault';
   /** Shown only when you type (keeps the starting list short). */
   searchOnly?: boolean;
   keywords?: string;
@@ -84,6 +84,23 @@ function useCommands(): Cmd[] {
         run: () => attempt('Screenshot failed', () => api.shots.capture('screen', 0)),
       },
       { id: 'big-picture', label: 'Big Picture', hint: 'Full screen, for a controller: games and channels', icon: Tv, group: 'Actions', keywords: 'couch tv controller watch console', run: () => navigate('games', { tab: 'library', big: '1' }) },
+      { id: 'm-toggle', label: 'Play or pause the music', icon: Pause, group: 'Actions', keywords: 'music song stop resume', searchOnly: true, run: () => attempt('The player didn’t answer', () => api.media.control('toggle')) },
+      { id: 'm-next', label: 'Next track', icon: SkipForward, group: 'Actions', keywords: 'music song skip', searchOnly: true, run: () => attempt('The player didn’t answer', () => api.media.control('next')) },
+      { id: 'm-prev', label: 'Previous track', icon: SkipBack, group: 'Actions', keywords: 'music song back', searchOnly: true, run: () => attempt('The player didn’t answer', () => api.media.control('previous')) },
+      {
+        id: 'm-mute',
+        label: 'Mute or unmute the PC',
+        icon: VolumeX,
+        group: 'Actions',
+        keywords: 'volume sound silence quiet',
+        searchOnly: true,
+        run: () =>
+          attempt('Couldn’t change the volume', async () => {
+            const a = await api.media.audio();
+            const v = await api.media.setVolume(null, !a.volume?.muted);
+            toast.info(v.muted ? 'Muted' : 'Sound on');
+          }),
+      },
       { id: 'player', label: 'Full-screen lyrics', hint: 'What the PC plays, Apple Music style', icon: Music2, group: 'Actions', keywords: 'music song player now playing', run: () => usePlayer.getState().show() },
       { id: 'optimize-pc', label: 'Optimize this PC for games', hint: 'Refresh rate, power plan, Game DVR and more', icon: Gauge, group: 'Actions', keywords: 'fps boost performance', run: () => navigate('games', { tab: 'pc' }) },
       { id: 'new-note', label: 'New note', icon: NotebookPen, group: 'Actions', keywords: 'write', run: () => navigate('notes', { new: 'note' }) },
@@ -138,8 +155,11 @@ function useEverything(query: string, open: boolean): Cmd[] {
   const apps = useRef<Awaited<ReturnType<typeof api.apps.list>> | null>(null);
   const games = useRef<Awaited<ReturnType<typeof api.library.games>> | null>(null);
   const sites = useRef<Awaited<ReturnType<typeof api.sites.list>> | null>(null);
+  // Lights, smart home and other PCs: asked once each time search opens.
+  const room = useRef<{ presets: Awaited<ReturnType<typeof api.govee.presets>>; devices: Awaited<ReturnType<typeof api.home.devices>>; peers: Awaited<ReturnType<typeof api.peers.list>> } | null>(null);
   useEffect(() => {
     if (!open) {
+      room.current = null;
       apps.current = null;
       games.current = null;
       sites.current = null;
@@ -161,6 +181,31 @@ function useEverything(query: string, open: boolean): Cmd[] {
       for (const g of (games.current ?? []).filter((g) => g.name.toLowerCase().includes(low)).slice(0, 5))
         out.push({ id: `game-${g.key}`, label: g.name, hint: g.canLaunch ? `Play · ${g.source}` : `Open in the library · ${g.source}`, icon: Gamepad2, group: 'Games', run: () => (g.canLaunch ? attempt('Couldn’t start it', () => api.library.play(g.key)) : navigate('games', { tab: 'library' })) });
       for (const s of (sites.current ?? []).filter((s) => s.name.toLowerCase().includes(low)).slice(0, 4)) out.push({ id: `site-${s.id}`, label: s.name, hint: 'Channel · opens full screen', icon: Tv, group: 'Channels', run: () => attempt('Couldn’t open it', () => api.sites.open(s.url, true)) });
+      // "timer 10" or "10 min timer" starts a timer.
+      const tm = /^(?:timer\s+(\d{1,3})|(\d{1,3})\s*(?:m|min|minutes?)\s+timer)$/.exec(low);
+      const mins = Number(tm?.[1] ?? tm?.[2] ?? 0);
+      if (mins > 0 && mins <= 600)
+        out.push({
+          id: `timer-${mins}`,
+          label: `Start a ${mins} minute timer`,
+          hint: 'Rings on the PC and your phone',
+          icon: Timer,
+          group: 'Actions',
+          run: () =>
+            attempt('Couldn’t start the timer', async () => {
+              await api.timers.start(mins, '');
+              toast.success(`Timer started: ${mins} min`);
+            }),
+        });
+      if (!room.current) {
+        const [presets, devices, peers] = await Promise.all([safe(api.govee.presets()), safe(api.home.devices()), safe(api.peers.list())]);
+        room.current = { presets: presets ?? [], devices: devices ?? [], peers: peers ?? [] };
+      }
+      const hit = (name: string, words: string) => name.toLowerCase().includes(low) || words.split(' ').some((w) => w.startsWith(low));
+      for (const p of room.current.presets.filter((p) => hit(p.name, 'lights govee')).slice(0, 5)) out.push({ id: `light-${p.id}`, label: `Lights: ${p.name}`, hint: 'Apply this look to your lights', icon: Bulb, group: 'Lights', run: () => attempt('The lights didn’t answer', () => api.govee.applyPreset(p.id)) });
+      for (const d of room.current.devices.filter((d) => hit(d.name, 'smart home plug')).slice(0, 5))
+        out.push({ id: `home-${d.id}`, label: d.name, hint: d.state ? `Smart home · now ${d.state} · Enter switches it` : 'Smart home · Enter runs it', icon: Plug, group: 'Smart home', run: () => attempt('It didn’t answer', async () => void toast.success(await api.home.run(d.id, d.state ? 'toggle' : 'on'))) });
+      for (const pc of room.current.peers.filter((pc) => hit(pc.name, 'pc computer lock')).slice(0, 3)) out.push({ id: `peer-${pc.id}`, label: `Lock ${pc.name}`, hint: 'Your other PC', icon: Monitor, group: 'Other PCs', run: () => attempt(`Couldn’t reach ${pc.name}`, () => api.peers.action(pc.id, 'lock')) });
       const [scans, notes, shots, vault, appList] = await Promise.all([
         safe(api.storage.scans()),
         safe(api.notes.list({ query: q, limit: 5 })),
@@ -241,16 +286,24 @@ export function CommandPalette() {
     const query = q.trim().toLowerCase();
     const cmds = commands
       .filter((c) => query || !c.searchOnly)
-      .map((c) => ({ c, s: Math.max(score(query, c.label), score(query, `${c.keywords ?? ''} ${c.hint ?? ''}`) * 0.5) }))
+      .map((c) => {
+        // A real word match in the description counts; letters scattered through it don't.
+        const extra = score(query, `${c.keywords ?? ''} ${c.hint ?? ''}`);
+        const label = score(query, c.label);
+        return { c, s: Math.max(label === 1 ? 0.4 : label, extra >= 2 ? extra * 0.5 : 0) };
+      })
       .filter((x) => x.s > 0)
-      .sort((a, b) => (query ? b.s - a.s : 0))
-      .map((x) => x.c);
+      .sort((a, b) => (query ? b.s - a.s : 0));
+    const best = new Map<string, number>();
+    for (const x of cmds) best.set(x.c.group, Math.max(best.get(x.c.group) ?? 0, x.s));
     // The best pages and actions first, each group once, then what was found.
-    const top = cmds.slice(0, query ? 7 : cmds.length);
-    const order = ['Pages', 'Actions', 'Drives', 'Settings', 'Themes'];
-    if (query) top.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
+    // Scattered-letter matches only fill in when nothing better was found.
+    const strong = cmds.filter((x) => x.s >= 1);
+    const top = (query ? (strong.length ? strong : cmds).slice(0, 7) : cmds).map((x) => x.c);
+    // Groups stay together, the group with the best match first.
+    if (query) top.sort((a, b) => (best.get(b.group) ?? 0) - (best.get(a.group) ?? 0));
     // Games and channels are what you most likely typed a name for: first.
-    const named = everything.filter((c) => c.group === 'Games' || c.group === 'Channels');
+    const named = everything.filter((c) => c.group === 'Games' || c.group === 'Channels' || c.id.startsWith('timer-'));
     return [...answers, ...named, ...top, ...everything.filter((c) => !named.includes(c))];
   }, [commands, q, everything, answers]);
 
@@ -276,7 +329,7 @@ export function CommandPalette() {
             data-autofocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search games, channels, files, notes, apps, settings, themes… or type 12*4, 5 km in miles"
+            placeholder="Search games, channels, lights, files, notes, settings… or type timer 10, 12*4, 5 km in miles"
             className="h-14 flex-1 bg-transparent text-[15px] text-fg outline-none placeholder:text-faint"
             aria-label="Command"
             role="combobox"
