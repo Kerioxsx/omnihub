@@ -122,3 +122,40 @@ body {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
 :root.reduce-motion *, :root.reduce-motion *::before, :root.reduce-motion *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+
+/* ---------- Design tokens: shape, depth and floating surfaces ----------
+   Floating layers (sidebar, dialogs, search, toasts, sheets) use `.float`:
+   solid by default, frosted when Glass is on, and solid again when the
+   system asks for less transparency. Blur stays on floating layers only. */
+:root {
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 26px;
+  --blur-float: 24px;
+  --float-bg: var(--bg-elev);
+  --float-border: var(--border-strong);
+  --float-hi: rgba(255, 255, 255, 0.07);
+  --float-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.65);
+  --ease-spring: cubic-bezier(0.2, 0.85, 0.2, 1);
+}
+:root.light {
+  --float-hi: rgba(255, 255, 255, 0.9);
+  --float-shadow: 0 30px 70px -28px rgba(30, 40, 80, 0.35);
+}
+:root[data-glass] { --float-bg: color-mix(in oklab, var(--bg-elev) 58%, transparent); }
+:root.light[data-glass] { --float-bg: rgba(255, 255, 255, 0.66); }
+.float {
+  background: var(--float-bg);
+  border: 1px solid var(--float-border);
+  box-shadow: inset 0 1px 0 var(--float-hi), var(--float-shadow);
+}
+:root[data-glass] .float {
+  -webkit-backdrop-filter: blur(var(--blur-float)) saturate(165%);
+  backdrop-filter: blur(var(--blur-float)) saturate(165%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-glass] { --float-bg: var(--bg-elev); }
+  :root[data-glass] .float, :root[data-glass] .glass, :root[data-glass] .card { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
+

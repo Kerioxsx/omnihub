@@ -13,6 +13,7 @@ import { Field, Segmented, TextInput } from '../../../components/ui/Form';
 import { Modal } from '../../../components/ui/Overlay';
 import { EmptyState } from '../../../components/ui/States';
 import { cx } from '../../../lib/cx';
+import { useRoute } from '../../../lib/router';
 import { usePadInput } from '../../../lib/pads';
 import { useEvent } from '../../../lib/hooks';
 import { toast } from '../../../state/toasts';
@@ -188,6 +189,10 @@ export function LibraryTab() {
   const [focus, setFocus] = useState(0);
   const [keys, setKeys] = useState(false);
   const [big, setBig] = useState(false);
+  const wantBig = useRoute().params.get('big');
+  useEffect(() => {
+    if (wantBig) setBig(true);
+  }, [wantBig]);
   const [sitesOpen, setSitesOpen] = useState(false);
   const grid = useRef<HTMLDivElement>(null);
   const load = useCallback(() => {

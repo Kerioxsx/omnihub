@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Command, LockKeyhole, LockOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ChevronDown, Command, LockKeyhole, LockOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { type ReactNode, useMemo } from 'react';
 import { cx } from '../lib/cx';
+import { useStoredState } from '../lib/hooks';
 import { navigate, useRoute } from '../lib/router';
 import { MOD_LABEL } from '../lib/util';
 import { usePalette } from '../state/dialogs';
@@ -65,6 +66,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const devices = useLive((s) => s.devices);
   const viewers = useLive((s) => s.viewers);
   const phones = connectedCount(remote, devices, viewers);
+  // Groups you folded stay folded (the one you're in always shows).
+  const [folded, setFolded] = useStoredState<string[]>('omnihub.navFolded', []);
+  const activeGroup = NAV.find((n) => n.id === route.id)?.group;
 
   const item = (n: NavItem, index: number) => {
     const active = route.id === n.id;
@@ -94,7 +98,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       initial={false}
       animate={{ width: collapsed ? 72 : 248 }}
       transition={{ type: 'spring', stiffness: 380, damping: 40 }}
-      className="glass relative z-20 flex h-full shrink-0 flex-col border-r border-line"
+      className="float relative z-20 my-2.5 ml-2.5 flex h-[calc(100%-20px)] shrink-0 flex-col overflow-hidden rounded-[22px]"
     >
       <div className={cx('flex h-[64px] items-center gap-2.5 px-4', collapsed && 'justify-center px-0')}>
         <Logo size={30} />
@@ -127,13 +131,26 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-1">
-        {GROUPS.map((g) => (
-          <div key={g.id} className="mb-2">
-            {g.label && !collapsed && <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-faint">{g.label}</div>}
-            {g.label && collapsed && <div className="mx-auto my-2 h-px w-6 bg-line" />}
-            <div className="flex flex-col gap-0.5">{NAV.map((n, i) => (n.group === g.id ? item(n, i) : null))}</div>
-          </div>
-        ))}
+        {GROUPS.map((g) => {
+          const shut = !collapsed && !!g.label && folded.includes(g.id) && activeGroup !== g.id;
+          return (
+            <div key={g.id} className="mb-2">
+              {g.label && !collapsed && (
+                <button
+                  type="button"
+                  onClick={() => setFolded(folded.includes(g.id) ? folded.filter((x) => x !== g.id) : [...folded, g.id])}
+                  aria-expanded={!shut}
+                  className="group/h flex w-full items-center justify-between rounded-md px-2.5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-faint transition-colors hover:text-dim"
+                >
+                  {g.label}
+                  <ChevronDown size={13} aria-hidden className={cx('transition-transform', shut ? '-rotate-90' : 'opacity-0 group-hover/h:opacity-100')} />
+                </button>
+              )}
+              {g.label && collapsed && <div className="mx-auto my-2 h-px w-6 bg-line" />}
+              {!shut && <div className="flex flex-col gap-0.5">{NAV.map((n, i) => (n.group === g.id && n.id !== 'settings' ? item(n, i) : null))}</div>}
+            </div>
+          );
+        })}
       </div>
 
       <div className="border-t border-line p-3">

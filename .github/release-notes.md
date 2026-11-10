@@ -1,11 +1,11 @@
 ## New in this version
 
-**Your photo as the wallpaper, a glassier phone app, easier screen control, and your iPhone's notifications on the PC.**
+**The first step of the redesign: a cleaner, glassier shell and a search that finds more.**
 
-- **Your photo as the wallpaper** (Settings → Appearance → Your photo): any photo fills the whole window, sized for 4K. Small photos are enlarged and sharpened (edges stay clean, though no photo gains detail it didn't have), and the theme's colours come from the photo.
-- **The phone app, redesigned**: frosted glass over the theme, **Match PC** (the phone takes the PC's theme, still colours for the animated ones), elegant palettes (Midnight, Aurora, Rose gold, Ocean, Graphite, Ember, Pearl), and a wallpaper: the PC's photo or one of your own from the phone, with colours that follow it. It also starts faster: pages load when you first open them.
-- **Easier screen control from the phone**: touch control is the default, a row of one-tap shortcuts (right click, Esc, Enter, Start, switch app, desktop, copy, paste, undo, volume, play/pause, close window), big Left click / Hold & drag / Right click buttons in trackpad mode, and a scroll strip on the right edge.
-- **iPhone notifications on the PC** (Phone page): pair your iPhone with Windows once, pick it in OmniHub, and allow "Share System Notifications" on the iPhone. Notifications show in OmniHub and as Windows pop-ups; dismissing one clears it on the iPhone too. It uses Apple's notification service for accessories (like watches and Phone Link) over Bluetooth, so nothing is installed on the phone. New and untested on real hardware: please report how it goes.
+- **Floating sidebar**: the menu is now a rounded panel that floats over the background. Its groups (Performance, Security, Devices) fold away with a click and stay folded.
+- **Glass on every floating layer**: with Glass on, the sidebar, dialogs, search and pop-up messages are all frosted the same way. If Windows is set to reduce transparency, they turn solid.
+- **Search finds more** (Ctrl+K): your games (Enter plays), your channels like Netflix (Enter opens full screen), every Settings section, every theme, glass on/off, and Big Picture.
+- Under the hood: one set of design tokens (corner sizes, blur, depth) shared by the PC and the phone app, ready for the next redesign steps.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

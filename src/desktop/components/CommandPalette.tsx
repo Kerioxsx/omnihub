@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { AppWindow, Calculator, Camera, CornerDownLeft, Crop, File, Folder, Gauge, HardDrive, Image, KeyRound, Lightbulb, LockKeyhole, Moon, Music2, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, StickyNote, Sun } from 'lucide-react';
+import { AppWindow, Gamepad2, Palette, Settings2, Tv, Calculator, Camera, CornerDownLeft, Crop, File, Folder, Gauge, HardDrive, Image, KeyRound, Lightbulb, LockKeyhole, Moon, Music2, NotebookPen, QrCode, Search, ShieldCheck, Smartphone, StickyNote, Sun } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../api';
@@ -14,6 +14,21 @@ import { useStorage } from '../state/storage';
 import { toast } from '../state/toasts';
 import { formatBytes } from '@shared/format';
 import { NAV } from './nav';
+import { LOOKS } from '../lib/looks';
+
+/** Settings sections you can jump to: [id, label, other words for it]. */
+const SETTINGS_SECTIONS: [string, string, string][] = [
+  ['appearance', 'Appearance', 'theme look glass colour accent wallpaper photo size motion'],
+  ['general', 'General', 'start login tray name minimized'],
+  ['storage', 'Storage', 'scan cleanup exclude hidden low space'],
+  ['notes', 'Notes', 'ideas claude folder'],
+  ['vault', 'Vault', 'password lock hello autofill browser'],
+  ['phone', 'Phone', 'companion port pairing permissions uploads power screen control'],
+  ['music', 'Music', 'lyrics equalizer bass'],
+  ['screenshots', 'Screenshots', 'hotkey folder format'],
+  ['privacy', 'Privacy & security', 'data logs audit'],
+  ['about', 'About', 'version update licence'],
+];
 import { usePlayer } from '../lib/nowPlaying';
 import { Kbd } from './ui/Card';
 import { Modal } from './ui/Overlay';
@@ -23,7 +38,9 @@ interface Cmd {
   label: string;
   hint?: string;
   icon: LucideIcon;
-  group: 'Answer' | 'Pages' | 'Actions' | 'Drives' | 'Files' | 'Notes' | 'Apps' | 'Screenshots' | 'Vault';
+  group: 'Answer' | 'Pages' | 'Actions' | 'Drives' | 'Games' | 'Channels' | 'Settings' | 'Themes' | 'Files' | 'Notes' | 'Apps' | 'Screenshots' | 'Vault';
+  /** Shown only when you type (keeps the starting list short). */
+  searchOnly?: boolean;
   keywords?: string;
   shortcut?: string;
   run: () => void | Promise<void>;
@@ -66,6 +83,7 @@ function useCommands(): Cmd[] {
         keywords: 'capture',
         run: () => attempt('Screenshot failed', () => api.shots.capture('screen', 0)),
       },
+      { id: 'big-picture', label: 'Big Picture', hint: 'Full screen, for a controller: games and channels', icon: Tv, group: 'Actions', keywords: 'couch tv controller watch console', run: () => navigate('games', { tab: 'library', big: '1' }) },
       { id: 'player', label: 'Full-screen lyrics', hint: 'What the PC plays, Apple Music style', icon: Music2, group: 'Actions', keywords: 'music song player now playing', run: () => usePlayer.getState().show() },
       { id: 'optimize-pc', label: 'Optimize this PC for games', hint: 'Refresh rate, power plan, Game DVR and more', icon: Gauge, group: 'Actions', keywords: 'fps boost performance', run: () => navigate('games', { tab: 'pc' }) },
       { id: 'new-note', label: 'New note', icon: NotebookPen, group: 'Actions', keywords: 'write', run: () => navigate('notes', { new: 'note' }) },
@@ -106,8 +124,11 @@ function useCommands(): Cmd[] {
         void useStorage.getState().scan(v.root, v.mftCapable ? 'fast' : 'standard');
       },
     }));
-    return [...pages, ...actions, ...drives];
-  }, [volumes, settings?.general.theme, remote?.running]);
+    const sections: Cmd[] = SETTINGS_SECTIONS.map(([id, label, keywords]) => ({ id: `set-${id}`, label: `Settings: ${label}`, icon: Settings2, group: 'Settings', keywords, searchOnly: true, run: () => navigate('settings', { section: id }) }));
+    const themes: Cmd[] = LOOKS.map((l) => ({ id: `look-${l.id}`, label: `Theme: ${l.name}`, hint: l.blurb, icon: Palette, group: 'Themes', keywords: 'look appearance background wallpaper', searchOnly: true, run: () => void useSettings.getState().update({ general: { look: l.id } }) }));
+    themes.push({ id: 'glass', label: settings?.general.glass ? 'Turn glass off' : 'Turn glass on', hint: 'Frosted, see-through cards, sidebar and dialogs', icon: Palette, group: 'Themes', keywords: 'blur transparent frosted', searchOnly: true, run: () => void useSettings.getState().update({ general: { glass: !settings?.general.glass } }) });
+    return [...pages, ...actions, ...drives, ...sections, ...themes];
+  }, [volumes, settings?.general.theme, settings?.general.glass, remote?.running]);
 }
 
 /** Everything else that matches: files (from the latest scan of each drive), notes, apps, screenshots and vault titles. */
@@ -115,8 +136,14 @@ function useEverything(query: string, open: boolean): Cmd[] {
   const [found, setFound] = useState<Cmd[]>([]);
   const vaultOpen = !!useLive((s) => s.vault?.unlocked);
   const apps = useRef<Awaited<ReturnType<typeof api.apps.list>> | null>(null);
+  const games = useRef<Awaited<ReturnType<typeof api.library.games>> | null>(null);
+  const sites = useRef<Awaited<ReturnType<typeof api.sites.list>> | null>(null);
   useEffect(() => {
-    if (!open) apps.current = null;
+    if (!open) {
+      apps.current = null;
+      games.current = null;
+      sites.current = null;
+    }
   }, [open]);
   useEffect(() => {
     const q = query.trim();
@@ -129,6 +156,11 @@ function useEverything(query: string, open: boolean): Cmd[] {
       const low = q.toLowerCase();
       const out: Cmd[] = [];
       const safe = async <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null);
+      games.current ??= await safe(api.library.games());
+      sites.current ??= await safe(api.sites.list());
+      for (const g of (games.current ?? []).filter((g) => g.name.toLowerCase().includes(low)).slice(0, 5))
+        out.push({ id: `game-${g.key}`, label: g.name, hint: g.canLaunch ? `Play · ${g.source}` : `Open in the library · ${g.source}`, icon: Gamepad2, group: 'Games', run: () => (g.canLaunch ? attempt('Couldn’t start it', () => api.library.play(g.key)) : navigate('games', { tab: 'library' })) });
+      for (const s of (sites.current ?? []).filter((s) => s.name.toLowerCase().includes(low)).slice(0, 4)) out.push({ id: `site-${s.id}`, label: s.name, hint: 'Channel · opens full screen', icon: Tv, group: 'Channels', run: () => attempt('Couldn’t open it', () => api.sites.open(s.url, true)) });
       const [scans, notes, shots, vault, appList] = await Promise.all([
         safe(api.storage.scans()),
         safe(api.notes.list({ query: q, limit: 5 })),
@@ -208,15 +240,18 @@ export function CommandPalette() {
   const results = useMemo(() => {
     const query = q.trim().toLowerCase();
     const cmds = commands
+      .filter((c) => query || !c.searchOnly)
       .map((c) => ({ c, s: Math.max(score(query, c.label), score(query, `${c.keywords ?? ''} ${c.hint ?? ''}`) * 0.5) }))
       .filter((x) => x.s > 0)
       .sort((a, b) => (query ? b.s - a.s : 0))
       .map((x) => x.c);
     // The best pages and actions first, each group once, then what was found.
-    const top = cmds.slice(0, query ? 6 : cmds.length);
-    const order = ['Pages', 'Actions', 'Drives'];
+    const top = cmds.slice(0, query ? 7 : cmds.length);
+    const order = ['Pages', 'Actions', 'Drives', 'Settings', 'Themes'];
     if (query) top.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
-    return [...answers, ...top, ...everything];
+    // Games and channels are what you most likely typed a name for: first.
+    const named = everything.filter((c) => c.group === 'Games' || c.group === 'Channels');
+    return [...answers, ...named, ...top, ...everything.filter((c) => !named.includes(c))];
   }, [commands, q, everything, answers]);
 
   useEffect(() => setActive(0), [q]);
@@ -233,7 +268,7 @@ export function CommandPalette() {
   let lastGroup = '';
   return (
     <Modal open={open} onClose={() => setOpen(false)} bare className="mt-[10vh] max-w-[620px] self-start" labelledBy="palette-input">
-      <div className="overflow-hidden rounded-[20px] border border-line-strong bg-elev shadow-[0_40px_100px_-20px_rgba(0,0,0,0.7)]">
+      <div className="float overflow-hidden rounded-[20px]">
         <div className="flex items-center gap-3 border-b border-line px-4">
           <Search size={18} className="text-faint" aria-hidden />
           <input
@@ -241,7 +276,7 @@ export function CommandPalette() {
             data-autofocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search files, notes, apps, the vault… run an action, or type 12*4, 5 km in miles, uuid"
+            placeholder="Search games, channels, files, notes, apps, settings, themes… or type 12*4, 5 km in miles"
             className="h-14 flex-1 bg-transparent text-[15px] text-fg outline-none placeholder:text-faint"
             aria-label="Command"
             role="combobox"

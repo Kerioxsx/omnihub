@@ -858,3 +858,9 @@ has Capri speak through her local bridge (`companion::say`).
   `iphone:status`; commands `iphone_get`, `iphone_paired`, `iphone_connect`,
   `iphone_toasts`, `iphone_dismiss`, `iphone_clear`.
 
+
+- Design tokens live in `src/shared/theme.css` (radii `--r-*`, `--blur-float`,
+  `--float-*`). Floating layers use the `.float` class: solid by default,
+  frosted with `data-glass`, solid again under `prefers-reduced-transparency`.
+  Blur belongs on floating layers and top-level cards only, never nested.
+
