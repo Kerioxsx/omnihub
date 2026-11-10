@@ -165,7 +165,9 @@ pub fn platform_of(path: &Path) -> Option<&'static str> {
         "md" | "gen" | "smd" => "genesis",
         "pbp" | "cso" => "psp",
         "iso" | "chd" | "cue" | "bin" => {
-            let folder = path.parent().map(|p| p.to_string_lossy().to_lowercase()).unwrap_or_default();
+            // Only the two folders right above the file say what it is
+            // (not every folder on the way there, like a user or temp name).
+            let folder = path.ancestors().skip(1).take(2).filter_map(|p| p.file_name()).map(|n| n.to_string_lossy().to_lowercase()).collect::<Vec<_>>().join("/");
             if folder.contains("ps2") {
                 "ps2"
             } else if folder.contains("psp") {
@@ -510,13 +512,19 @@ mod tests {
             "https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance/master/Named_Boxarts/Pokemon%20%2D%20Emerald%20Version%20%28USA%2C%20Europe%29.png"
         );
         assert!(cover_url("switch", "x").is_none());
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("Pokemon Emerald.gba"), b"x").unwrap();
-        std::fs::write(dir.path().join("Pokemon Emerald.sav"), b"x").unwrap();
-        std::fs::write(dir.path().join("Game.cue"), b"x").unwrap();
-        std::fs::write(dir.path().join("Game.bin"), b"x").unwrap();
-        std::fs::write(dir.path().join("readme.txt"), b"x").unwrap();
-        let roms = scan_roms(&[dir.path().to_string_lossy().into_owned()], None);
+        // A folder far above the file doesn't decide the platform.
+        assert_eq!(platform_of(Path::new("tmpsp1/my/roms/thing.iso")), None);
+        assert_eq!(platform_of(Path::new("x/PSP/saves/thing.iso")), Some("psp"));
+        // The temporary folder's random name must not look like a console.
+        let top = tempfile::tempdir().unwrap();
+        let dir = top.path().join("my").join("roms");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("Pokemon Emerald.gba"), b"x").unwrap();
+        std::fs::write(dir.join("Pokemon Emerald.sav"), b"x").unwrap();
+        std::fs::write(dir.join("Game.cue"), b"x").unwrap();
+        std::fs::write(dir.join("Game.bin"), b"x").unwrap();
+        std::fs::write(dir.join("readme.txt"), b"x").unwrap();
+        let roms = scan_roms(&[dir.to_string_lossy().into_owned()], None);
         assert_eq!(roms.len(), 1, "{roms:?}");
         assert!(roms[0].save.as_deref().unwrap().ends_with("Pokemon Emerald.sav"));
     }
