@@ -1,0 +1,56 @@
+name: Vesper Client
+
+# Builds Vesper Client (an original Minecraft 1.8.9 Forge PvP client mod) from
+# client/ and hands it to the release workflow, which publishes it
+# as Vesper-Client-1.8.9.jar and builds its SHA-256 into the app. The app
+# checks every download against that checksum.
+
+on:
+  pull_request:
+    paths: ['client/src/**', '.github/workflows/vesper.yml']
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      sha256:
+        description: SHA-256 of Vesper-Client-1.8.9.jar
+        value: ${{ jobs.build.outputs.sha256 }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Vesper Client
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # Gradle runs on 21; the mod is compiled with Java 8 (fetched by
+          # Gradle's toolchain resolver, settings.gradle.kts).
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Build
+        working-directory: client
+        run: gradle build --no-daemon
+      - name: Check and name the jar
+        id: hash
+        run: |
+          set -euo pipefail
+          jar=$(ls client/build/libs/vesper-client-*.jar | grep -v -- -dev | head -1)
+          # The game loads it only with its classes and mcmod.info inside.
+          unzip -l "$jar" | grep -q 'dev/vesper/client/VesperClient.class'
+          unzip -l "$jar" | grep -q 'mcmod.info'
+          mkdir out
+          cp "$jar" out/Vesper-Client-1.8.9.jar
+          echo "sha256=$(sha256sum out/Vesper-Client-1.8.9.jar | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omnihub-vesper
+          path: out/Vesper-Client-1.8.9.jar
+          if-no-files-found: error

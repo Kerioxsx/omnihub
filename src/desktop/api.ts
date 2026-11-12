@@ -1019,7 +1019,7 @@ export const api = {
     client: {
       status: () => call<T.McClientStatus>('mc_client_status'),
       /** Forge 1.8.9 + these mods (Modrinth slugs) + kill effects, as a launcher profile. */
-      install: (mods: string[], killfx: boolean) => call<T.McClientStatus>('mc_client_install', { mods, killfx }),
+      install: (mods: string[], killfx: boolean, vesper: boolean) => call<T.McClientStatus>('mc_client_install', { mods, killfx, vesper }),
       setKillfx: (settings: T.KillFx) => call<T.KillFx>('mc_client_set_killfx', { settings }),
       packs: (query: string, offset = 0) => call<[T.McPackSearchHit[], number]>('mc_client_packs', { query, offset }),
       addPack: (project: string) => call<string>('mc_client_add_pack', { project }),

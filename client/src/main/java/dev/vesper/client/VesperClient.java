@@ -7,6 +7,7 @@ import dev.vesper.client.fx.Fx;
 import dev.vesper.client.hud.Hud;
 import dev.vesper.client.module.General;
 import dev.vesper.client.module.ModuleRegistry;
+import dev.vesper.client.module.Performance;
 import java.io.File;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
@@ -39,12 +40,14 @@ public class VesperClient {
     public void init(FMLInitializationEvent e) {
         // Modules first (each package registers its own), then their stored values.
         ModuleRegistry.register(new General());
+        ModuleRegistry.register(new Performance());
         Combat.init();
         Fx.init();
         Cosmetics.init();
         Hud.init();
         config.apply();
         Hooks.register();
+        net.minecraftforge.client.ClientCommandHandler.instance.registerCommand(new dev.vesper.client.diag.VesperCommand());
         // Our generated textures (font, glow) go away on a resource reload; make them again.
         ((net.minecraft.client.resources.IReloadableResourceManager) net.minecraft.client.Minecraft.getMinecraft().getResourceManager()).registerReloadListener(rm -> Hooks.onResourcesReloaded());
         LOG.info("Vesper Client {} ready", VERSION);

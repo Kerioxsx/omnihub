@@ -17,6 +17,7 @@ let mcClient = {
   installed: false,
   dir: 'C:\\Users\\you\\AppData\\Roaming\\.minecraft\\omnihub\\client-1.8.9',
   killfxInstalled: false,
+  vesperInstalled: false,
   killfx: { enabled: true, effect: 'blood' as const, sound: 'default', intensity: 2, color: '#FF3B3B', playersOnly: false, killMark: true },
   packs: [] as string[],
   installedAt: 0,
@@ -1101,7 +1102,7 @@ const handlers: Record<string, Handler> = {
   mc_client_status: () => mcClient,
   mc_client_install: (a) => {
     const mods = (a?.mods as string[]) ?? [];
-    mcClient = { ...mcClient, installed: true, killfxInstalled: !!a?.killfx, installedAt: Math.floor(Date.now() / 1000), mods: mcClient.mods.map((m) => ({ ...m, installed: mods.includes(m.slug) })) };
+    mcClient = { ...mcClient, installed: true, killfxInstalled: !!a?.killfx, vesperInstalled: !!a?.vesper, installedAt: Math.floor(Date.now() / 1000), mods: mcClient.mods.map((m) => ({ ...m, installed: mods.includes(m.slug) })) };
     return mcClient;
   },
   mc_client_set_killfx: (a) => {

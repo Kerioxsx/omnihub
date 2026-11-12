@@ -1,12 +1,15 @@
 ## New in this version
 
-**OmniHub Client for Minecraft 1.8.9, and Fortnite resolution advice.**
+**Vesper Client: our own PvP client for Minecraft 1.8.9.**
 
-- **OmniHub Client (Mods → Minecraft)**: one click sets up Minecraft 1.8.9 with Forge as a profile in the official Minecraft Launcher (sign in with Microsoft as usual; works on Hypixel and any server). Pick from the best open-source PvP mods: **PolyHitbox** (coloured hitboxes), **PolyCrosshair** (draw your own crosshair), **DamageTint** (hit colour), **OverflowAnimations** (1.7 animations), **OverflowParticles**, **PolyPatcher** (FPS fixes), **EvergreenHUD** (FPS, CPS, keystrokes…), **Resourcify** (download resource packs inside Minecraft), **PolySprint** and **Freelook**. PvP-friendly video settings out of the box.
-- **OmniHub Kill Effects**: our own mod. Blood, lightning, flames, firework, souls, hearts or an explosion when a player or mob you hit dies, with your colour, sound and size, plus a "☠ Kill" mark with streaks. Change it in OmniHub while you play; it applies within seconds.
-- **Resource packs**: search 1.8.9 packs on Modrinth and add them to the client from OmniHub.
-- **Fortnite: recommended for your PC**: from your monitor, graphics card and processor, the display resolution, 3D resolution and frame cap that should hold your refresh rate in Performance mode, with the reasons. One click to use it.
-- **Fortnite display resolution**: set a lower resolution for more FPS (fullscreen), and HDR output is turned off with the other tweaks.
+- **Download:** `Vesper-Client-1.8.9.jar` below. It needs Minecraft 1.8.9 with **Forge 1.8.9-11.15.1.2318**. Or let OmniHub install everything: Mods → Minecraft → OmniHub Client (Vesper is ticked by default).
+- **Title screen and menus:** a "Press to enter" splash with Vesper's own sigil, then a dark menu with satin-like curtains, twinkling stars and your player in a 3D preview wearing your cosmetics. Keyboard and mouse.
+- **Cosmetics** (only you see them): celestial wings modelled in Blender, a comet plume with a thorn crown, orbiting glyph tokens, a halo, a floor ring and glints. Three palettes switch everything at once: Tidal, Ember and Nebula.
+- **Five original kill effects:** Astral Collapse, Violet Rift, Solar Bloom, Frost Constellation and Comet Ascension. They play on kills the game confirms (singleplayer/LAN), or best-effort from chat if you turn that on. Never on a target that just disappears.
+- **Showroom:** a 3D stage with five skies, palettes, cosmetic toggles, kill-effect previews on a test figure, and a hover-cart prop.
+- **HUD:** status bar, FPS, ping, CPS, keystrokes, armour, potions, coordinates, session time and target info (singleplayer only by default). Drag, resize and hide them in the HUD editor.
+- **Performance:** skips far mobs and armour stands (players are always drawn), low FPS in menus and in the background, and quality presets for every effect.
+- Not yet tested with the official launcher using the release jar, on real servers, or with OptiFine. The test results and known limitations are in the repository under `client/docs/`.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

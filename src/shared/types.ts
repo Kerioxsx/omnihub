@@ -4449,6 +4449,8 @@ export interface McClientStatus {
   dir: string;
   mods: McClientMod[];
   killfxInstalled: boolean;
+  /** Vesper Client (OmniHub's own 1.8.9 PvP client mod) is in the mods folder. */
+  vesperInstalled: boolean;
   killfx: KillFx;
   /** Resource pack files in the client's folder. */
   packs: string[];

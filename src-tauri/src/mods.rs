@@ -362,7 +362,7 @@ pub async fn mc_client_status(core: Core<'_>) -> Res<mcclient::Status> {
 }
 
 #[tauri::command]
-pub async fn mc_client_install(core: Core<'_>, mods: Vec<String>, killfx: bool) -> Res<mcclient::Status> {
+pub async fn mc_client_install(core: Core<'_>, mods: Vec<String>, killfx: bool, vesper: bool) -> Res<mcclient::Status> {
     run!(core, |c| {
         for exe in ["MinecraftLauncher.exe", "Minecraft.exe"] {
             if !c.procs.pids_named(exe).is_empty() {
@@ -371,7 +371,7 @@ pub async fn mc_client_install(core: Core<'_>, mods: Vec<String>, killfx: bool) 
         }
         let ev = c.events.clone();
         let memory = omnihub_core::mods::minecraft::memory_for_pc();
-        let r = mcclient::install(&c.mods.minecraft, &mods, killfx, memory, &mut |done, total, text| ev.emit("mods:progress", serde_json::json!({ "game": "mcclient", "text": text, "done": done, "total": total })));
+        let r = mcclient::install(&c.mods.minecraft, &mods, killfx, vesper, memory, &mut |done, total, text| ev.emit("mods:progress", serde_json::json!({ "game": "mcclient", "text": text, "done": done, "total": total })));
         c.audit.record("desktop", "minecraft.client-install", &mods.join(","), r.is_ok());
         r
     })

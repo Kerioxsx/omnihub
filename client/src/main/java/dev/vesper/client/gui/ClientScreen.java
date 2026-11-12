@@ -329,7 +329,7 @@ public class ClientScreen extends GuiScreen {
         }
 
         List<Module> mods = ModuleRegistry.find(category, q.trim());
-        float listBottom = py + ph - 2 * u();
+        float listBottom = py + ph - 4.5f * u();
         scissor(cx, listTop, cw + 2.4f * u(), listBottom - listTop);
         float y = listTop - scroll;
         for (Module m : mods) y = card(m, hx, y, cw - 2.4f * u(), mx, my, listTop, listBottom, dt) + 1.2f * u();

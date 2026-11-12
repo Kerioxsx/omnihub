@@ -30,6 +30,9 @@ pub const PROFILE_KEY: &str = "omnihub-client-1.8.9";
 pub const PROFILE_NAME: &str = "OmniHub Client 1.8.9";
 pub const KILLFX_ASSET: &str = "OmniHub-KillFx-1.8.9.jar";
 const KILLFX_FILE: &str = "OmniHub-KillFx.jar";
+/// Vesper Client: OmniHub's own 1.8.9 PvP client mod (client/ in the repo).
+pub const VESPER_ASSET: &str = "Vesper-Client-1.8.9.jar";
+const VESPER_FILE: &str = "Vesper-Client.jar";
 const MANIFEST: &str = "omnihub-client.json";
 const FORGE_MAVEN: &str = "https://maven.minecraftforge.net/";
 const MOJANG_LIBS: &str = "https://libraries.minecraft.net/";
@@ -140,6 +143,7 @@ struct Manifest {
     /// slug → file name in mods/.
     mods: BTreeMap<String, String>,
     killfx: bool,
+    vesper: bool,
     at: i64,
 }
 
@@ -160,6 +164,7 @@ pub struct Status {
     pub dir: String,
     pub mods: Vec<ModState>,
     pub killfx_installed: bool,
+    pub vesper_installed: bool,
     pub killfx: KillFx,
     pub packs: Vec<String>,
     pub installed_at: i64,
@@ -195,6 +200,7 @@ pub fn status(mixer: &Mixer) -> Status {
         dir: dir.map(|d| d.to_string_lossy().into_owned()).unwrap_or_default(),
         mods: CURATED.iter().map(|c| ModState { info: c.clone(), installed: man.mods.contains_key(c.slug) }).collect(),
         killfx_installed: man.killfx,
+        vesper_installed: man.vesper,
         killfx,
         packs,
         installed_at: man.at,
@@ -301,22 +307,37 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
-fn killfx_sha256(agent: &ureq::Agent) -> Result<String, String> {
-    if let Some(s) = option_env!("OMNIHUB_KILLFX_SHA256").filter(|s| s.len() == 64) {
+/// The SHA-256 of a jar published with this release: built in when the
+/// release workflow knows it, else read from the release's SHA256SUMS.txt.
+fn release_sha256(agent: &ureq::Agent, asset: &str, pinned: Option<&'static str>) -> Result<String, String> {
+    if let Some(s) = pinned.filter(|s| s.len() == 64) {
         return Ok(s.to_ascii_lowercase());
     }
     let sums = String::from_utf8_lossy(&fetch(agent, &format!("{}/v{}/SHA256SUMS.txt", crate::capture::airplay::releases_url(), env!("CARGO_PKG_VERSION")), 1 << 20)?).into_owned();
-    crate::capture::airplay::checksum_for(&sums, KILLFX_ASSET).ok_or_else(|| "This version's release doesn't list the kill-effects mod.".to_string())
+    crate::capture::airplay::checksum_for(&sums, asset).ok_or_else(|| format!("This version's release doesn't list {asset}."))
+}
+
+/// Downloads a jar from this release into `path` unless it's already the right one.
+fn release_jar(agent: &ureq::Agent, asset: &str, pinned: Option<&'static str>, path: &Path) -> Result<(), String> {
+    let want = release_sha256(agent, asset, pinned)?;
+    if std::fs::read(path).ok().map(|b| sha256_hex(&b)).as_deref() == Some(want.as_str()) {
+        return Ok(());
+    }
+    let bytes = fetch(agent, &format!("{}/v{}/{asset}", crate::capture::airplay::releases_url(), env!("CARGO_PKG_VERSION")), 32 << 20)?;
+    if sha256_hex(&bytes) != want {
+        return Err(format!("{asset} didn't match its checksum."));
+    }
+    write_atomic(path, &bytes)
 }
 
 /// Install or update the client with these mods (Modrinth slugs from
 /// CURATED) and, when `killfx` is set, the kill-effects mod.
-pub fn install(mixer: &Mixer, chosen: &[String], killfx: bool, memory_gb: u32, progress: &mut dyn FnMut(usize, usize, &str)) -> Result<Status, String> {
+pub fn install(mixer: &Mixer, chosen: &[String], killfx: bool, vesper: bool, memory_gb: u32, progress: &mut dyn FnMut(usize, usize, &str)) -> Result<Status, String> {
     let mc = mixer.minecraft_dir().map(Path::to_path_buf).filter(|p| p.is_dir()).ok_or("Minecraft (Java Edition) isn't installed: open the Minecraft Launcher once, then try again.")?;
     let chosen: Vec<&Curated> = CURATED.iter().filter(|c| chosen.iter().any(|s| s == c.slug)).collect();
     let agent = agent();
     let dir = game_dir(&mc);
-    let total = 3 + chosen.len() + usize::from(killfx);
+    let total = 3 + chosen.len() + usize::from(killfx) + usize::from(vesper);
     let mut step = 0;
 
     // 1. Forge 1.8.9.
@@ -411,15 +432,7 @@ pub fn install(mixer: &Mixer, chosen: &[String], killfx: bool, memory_gb: u32, p
     let kpath = dir.join("mods").join(KILLFX_FILE);
     if killfx {
         progress(step, total, "Kill effects");
-        let want = killfx_sha256(&agent)?;
-        let have = std::fs::read(&kpath).ok().map(|b| sha256_hex(&b));
-        if have.as_deref() != Some(want.as_str()) {
-            let bytes = fetch(&agent, &format!("{}/v{}/{KILLFX_ASSET}", crate::capture::airplay::releases_url(), env!("CARGO_PKG_VERSION")), 16 << 20)?;
-            if sha256_hex(&bytes) != want {
-                return Err("The kill-effects mod didn't match its checksum.".into());
-            }
-            write_atomic(&kpath, &bytes)?;
-        }
+        release_jar(&agent, KILLFX_ASSET, option_env!("OMNIHUB_KILLFX_SHA256"), &kpath)?;
         let cfg = dir.join("config").join("omnihub-killfx.properties");
         if !cfg.is_file() {
             write_atomic(&cfg, KillFx::default().to_properties().as_bytes())?;
@@ -429,6 +442,17 @@ pub fn install(mixer: &Mixer, chosen: &[String], killfx: bool, memory_gb: u32, p
         let _ = std::fs::remove_file(&kpath);
     }
     man.killfx = killfx;
+
+    // 3b. Vesper Client.
+    let vpath = dir.join("mods").join(VESPER_FILE);
+    if vesper {
+        progress(step, total, "Vesper Client");
+        release_jar(&agent, VESPER_ASSET, option_env!("OMNIHUB_VESPER_SHA256"), &vpath)?;
+        step += 1;
+    } else {
+        let _ = std::fs::remove_file(&vpath);
+    }
+    man.vesper = vesper;
 
     // 4. Video settings and the launcher profile.
     progress(step, total, "Launcher profile");

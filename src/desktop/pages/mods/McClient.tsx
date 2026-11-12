@@ -53,7 +53,8 @@ const SOUNDS: { value: string; label: string }[] = [
 export function McClientCard() {
   const [st, setSt] = useState<McClientStatus | null>(null);
   const [chosen, setChosen] = useState<string[] | null>(null);
-  const [killfx, setKillfx] = useState(true);
+  const [killfx, setKillfx] = useState(false);
+  const [vesper, setVesper] = useState(true);
   const [busy, setBusy] = useState(false);
   const progress = useModProgress('mcclient');
 
@@ -62,18 +63,21 @@ export function McClientCard() {
       void api.minecraft.client.status().then((s) => {
         setSt(s);
         setChosen((c) => c ?? (s.installed ? s.mods.filter((m) => m.installed).map((m) => m.slug) : s.mods.filter((m) => m.defaultOn).map((m) => m.slug)));
-        if (s.installed) setKillfx(s.killfxInstalled);
+        if (s.installed) {
+          setKillfx(s.killfxInstalled);
+          setVesper(s.vesperInstalled);
+        }
       }, () => setSt(null)),
     [],
   );
   useEffect(load, [load]);
   if (!st || !chosen) return null;
 
-  const changed = st.installed && (st.killfxInstalled !== killfx || st.mods.some((m) => m.installed !== chosen.includes(m.slug)));
+  const changed = st.installed && (st.killfxInstalled !== killfx || st.vesperInstalled !== vesper || st.mods.some((m) => m.installed !== chosen.includes(m.slug)));
   const install = async () => {
     setBusy(true);
     try {
-      const s = await api.minecraft.client.install(chosen, killfx);
+      const s = await api.minecraft.client.install(chosen, killfx, vesper);
       setSt(s);
       toast.success(st.installed ? 'Client updated' : 'OmniHub Client is in the Minecraft Launcher', 'Pick “OmniHub Client 1.8.9” next to Play. Mod settings: Right Shift in-game (OneConfig).');
     } catch (e) {
@@ -164,12 +168,21 @@ export function McClientCard() {
               );
             })}
             <label className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-2">
+              <input type="checkbox" className="mt-1 h-4 w-4 accent-[var(--accent)]" checked={vesper} onChange={(e) => setVesper(e.target.checked)} />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5 text-[13.5px] font-medium text-fg">
+                  Vesper Client <Badge tone="accent">ours</Badge>
+                </span>
+                <span className="block text-[12px] leading-snug text-dim">Our own PvP client: an animated title and menus, celestial wings and other cosmetics, five kill effects, a HUD you can drag around, a showroom and FPS savers. Its settings are in-game (Client on the title screen).</span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-1.5 hover:bg-surface-2">
               <input type="checkbox" className="mt-1 h-4 w-4 accent-[var(--accent)]" checked={killfx} onChange={(e) => setKillfx(e.target.checked)} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5 text-[13.5px] font-medium text-fg">
                   OmniHub Kill Effects <Badge tone="accent">ours</Badge>
                 </span>
-                <span className="block text-[12px] leading-snug text-dim">An effect when a player or mob you hit dies. Set it up on the right; changes apply in-game within seconds.</span>
+                <span className="block text-[12px] leading-snug text-dim">The small kill-effects mod on its own (Vesper already has kill effects). Set it up on the right; changes apply in-game within seconds.</span>
               </span>
             </label>
           </div>

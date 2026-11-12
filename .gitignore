@@ -7,3 +7,6 @@ src-tauri/gen/schemas/
 *.log
 .DS_Store
 screenshots-out/
+
+# Claude Code agent worktrees
+.claude/worktrees/

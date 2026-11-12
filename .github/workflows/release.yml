@@ -96,9 +96,13 @@ jobs:
   killfx:
     uses: ./.github/workflows/killfx.yml
 
+  # Vesper Client, the 1.8.9 PvP client mod.
+  vesper:
+    uses: ./.github/workflows/vesper.yml
+
   windows:
     name: Build and publish the Windows installer
-    needs: [previous-addon, airplay-addon, presentmon, ffmpeg, killfx]
+    needs: [previous-addon, airplay-addon, presentmon, ffmpeg, killfx, vesper]
     # The add-on is either taken from the last release or built (one of the
     # two is skipped).
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
@@ -111,6 +115,7 @@ jobs:
       OMNIHUB_FFMPEG_SHA256: ${{ needs.ffmpeg.outputs.sha256 }}
       FFMPEG_VERSION: ${{ needs.ffmpeg.outputs.version }}
       OMNIHUB_KILLFX_SHA256: ${{ needs.killfx.outputs.sha256 }}
+      OMNIHUB_VESPER_SHA256: ${{ needs.vesper.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -136,7 +141,7 @@ jobs:
             echo "::error::$tag already points to ${existing:0:7}; bump the version to release ${GITHUB_SHA:0:7}"
             exit 1
           fi
-          if [ ${#OMNIHUB_AIRPLAY_ADDON_SHA256} -ne 64 ] || [ ${#OMNIHUB_PRESENTMON_SHA256} -ne 64 ] || [ ${#OMNIHUB_FFMPEG_SHA256} -ne 64 ] || [ ${#OMNIHUB_KILLFX_SHA256} -ne 64 ]; then
+          if [ ${#OMNIHUB_AIRPLAY_ADDON_SHA256} -ne 64 ] || [ ${#OMNIHUB_PRESENTMON_SHA256} -ne 64 ] || [ ${#OMNIHUB_FFMPEG_SHA256} -ne 64 ] || [ ${#OMNIHUB_KILLFX_SHA256} -ne 64 ] || [ ${#OMNIHUB_VESPER_SHA256} -ne 64 ]; then
             echo "::error::The add-on, PresentMon or FFmpeg checksum is missing"
             exit 1
           fi
@@ -168,6 +173,11 @@ jobs:
           name: omnihub-killfx
           path: killfx
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: omnihub-vesper
+          path: vesper
+
       - name: Collect installer files and checksums
         shell: bash
         run: |
@@ -181,6 +191,8 @@ jobs:
           (cd release && echo "$OMNIHUB_FFMPEG_SHA256  OmniHub-ffmpeg-x64.exe" | sha256sum -c -)
           cp killfx/OmniHub-KillFx-1.8.9.jar release/
           (cd release && echo "$OMNIHUB_KILLFX_SHA256  OmniHub-KillFx-1.8.9.jar" | sha256sum -c -)
+          cp vesper/Vesper-Client-1.8.9.jar release/
+          (cd release && echo "$OMNIHUB_VESPER_SHA256  Vesper-Client-1.8.9.jar" | sha256sum -c -)
           (cd release && sha256sum * > SHA256SUMS.txt)
           ls -l release
           cat release/SHA256SUMS.txt
