@@ -196,7 +196,11 @@ code {
   line-height: 1.2;
   text-decoration: none;
   cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.16s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.btn:active {
+  transform: scale(0.97);
 }
 
 .btn-solid {
@@ -567,10 +571,12 @@ h3 {
   border-radius: 999px;
   background: var(--violet-soft);
   color: var(--violet-deep);
-  font-size: 0.72rem;
+  font-size: max(0.3em, 0.8rem);
   font-weight: 700;
   font-stretch: 100%;
-  vertical-align: 0.15em;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  vertical-align: 0.6em;
 }
 
 /* Phones, as they are: a row you can scroll on small screens. */

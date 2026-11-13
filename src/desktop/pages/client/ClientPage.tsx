@@ -60,9 +60,10 @@ export function ClientPage() {
         </div>
       }
     >
-      <div className="grid gap-5 px-8 pb-10">
+      <div className="grid gap-5">
         <Segmented
           label="Section"
+          className="justify-self-start"
           value={tab}
           onChange={setTab}
           options={[

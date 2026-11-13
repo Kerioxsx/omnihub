@@ -1,12 +1,12 @@
 ## New in this version
 
-**A Minecraft hub: every launcher and client, and Forge, NeoForge, Fabric, Quilt or Legacy Fabric for any version, with mods.**
+**A cleaner, calmer look across the app and the website.**
 
-- **Launchers & clients** (Play → Client): the Minecraft Launcher, Prism Launcher, Modrinth App, CurseForge, ATLauncher, MultiMC and GDLauncher; Lunar Client, Badlion, LabyMod, Feather and Vesper. One click installs it from the publisher (Windows' winget), or opens the official download page, which also works for a Mac or Linux PC.
-- **Loaders for any version:** pick Fabric, Forge, NeoForge, Quilt, Legacy Fabric or plain Minecraft and a version; OmniHub adds it as a profile in the official Minecraft Launcher with its own folder, so different versions' mods never mix. Forge and NeoForge use their own installer, with Java fetched when needed.
-- **Mods for that version:** search Modrinth and add mods in a click; what a mod needs comes with it.
-- Also in this release (from 0.47 and 0.48): the Client tab for Vesper, resource packs inside Minecraft, the FPS boost, redesigned Wraith horns and cars, and the MIT licence.
-- Not tested on a real Windows PC yet: the winget installs and the loader installs were built and checked here, but not run end to end against a real Minecraft Launcher.
+- Page edges line up again on the Client tab, and its section tabs no longer stretch across the page.
+- Headings and the storage total use plain, solid colour instead of gradient text.
+- Stronger, quicker easing on cards and the Big Picture exit; cards give a small press when clicked.
+- Text fields and native controls use your theme's accent for the caret and checkboxes; headings wrap evenly and numbers line up in tables.
+- Website: buttons answer a click with a small press, and the Vesper version badge sits level with its heading.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

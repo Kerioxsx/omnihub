@@ -443,7 +443,7 @@ export function HomePage() {
   const power = useLive((s) => s.power);
   const date = useMemo(() => new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }), []);
   return (
-    <Page title={<span className="gradient-text">{name ? `${greeting()}, ${name}` : greeting()}</span>} subtitle={`${date} · ${info?.hostname ?? ''}`}>
+    <Page title={name ? `${greeting()}, ${name}` : greeting()} subtitle={`${date} · ${info?.hostname ?? ''}`}>
       <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
         {power && <PowerBanner inline />}
         <LowSpaceBanner />
