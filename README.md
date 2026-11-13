@@ -32,6 +32,12 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.47.0
+
+- **Client tab** for Vesper Client (Play → Client) with one-click install and its requirements: Minecraft 1.8.9, **Forge 1.8.9-11.15.1.2318** (not Fabric / Legacy Fabric / NeoForge), Java 8, no other mods needed.
+- **Vesper 0.4.0**: download Modrinth resource packs inside the game, and an FPS boost that restores your settings when off.
+- **MIT licence** for the whole repository.
+
 ## New in 0.46.0
 
 - **Vesper Client 0.3.0**: neon jump marks (six-point star and more) in your chosen world colour, world glyphs, rain that splashes plus puddles that mirror the sky, hit sounds, emotes with a wheel (including a car flex with original cars), a Wraith flame head with horns, speed blur, a neon block outline and a time changer.
@@ -528,3 +534,7 @@ omnihub/
 ├── scripts/               NTFS fixture and benchmark image builders
 └── docs/                  Plan, architecture, security, screen sharing, benchmarks
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE). It covers OmniHub, Vesper Client (`client/`) and OmniHub Kill Effects (`minecraft-mod/`); third-party fonts and the tools OmniHub downloads keep their own licenses.

@@ -1,5 +1,15 @@
 # Vesper Client — user guide
 
+## Requirements
+
+| | |
+|---|---|
+| Minecraft | Java Edition 1.8.9 |
+| Loader | Forge 1.8.9-11.15.1.2318 (not Fabric, Legacy Fabric or NeoForge) |
+| Java | 8 (supplied by the Minecraft Launcher) |
+| Required mods | none |
+| Optional | PolyPatcher (FPS); OptiFine 1.8.9 HD U M5 untested |
+
 ## Install
 
 **With OmniHub (easiest):** Mods → Minecraft → OmniHub Client. Leave "Vesper Client" ticked and press Install. It adds an "OmniHub Client 1.8.9" profile to the official Minecraft Launcher with Forge, Vesper and the curated PvP mods. Start Minecraft, pick that profile, press Play.
@@ -40,6 +50,11 @@
 - **Emotes:** press **B** for the wheel: Flex, Wave, Dance, Salute, Cheer and Car flex (a car drops in next to you with neon underglow; Supercar, Muscle car or Hypercar, in any colour). Moving or attacking stops an emote; the camera turns to face you.
 - **Wraith head:** your head becomes a ghostly flame with spiked horns (colours and sizes adjustable).
 - **More:** Speed blur while sprinting, a neon Block outline, a Time changer (your own time of day), and items in your hand can now be as small as 0.2×.
+
+## New in 0.4.0
+
+- **Resource packs inside the game:** Client → Resource packs, or the *Browse online (Vesper)* button on Minecraft's Resource Packs screen. Search Modrinth's 1.8.9 packs and press Download; the pack is checked against Modrinth's checksum, saved in your resourcepacks folder and listed right away (turn it on in Resource Packs).
+- **FPS boost:** Performance → *FPS boost game settings* switches to fast settings (fast graphics, no clouds, minimal particles, no entity shadows, smooth lighting off, VBOs on, vsync off, render distance capped) and saves yours; turn it off and yours come back exactly.
 
 ## Performance
 

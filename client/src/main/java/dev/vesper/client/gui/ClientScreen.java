@@ -275,6 +275,11 @@ public class ClientScreen extends GuiScreen {
                 mc.displayGuiScreen(new ShowroomScreen(ClientScreen.this));
             }
         });
+        cy = sideItem("Resource packs", false, sx, cy, mx, my, new Runnable() {
+            public void run() {
+                mc.displayGuiScreen(new dev.vesper.client.packs.PackBrowserScreen(ClientScreen.this));
+            }
+        });
 
         // Profiles, bottom of the side bar.
         float by = py + ph - 13 * u();

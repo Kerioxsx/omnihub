@@ -1,16 +1,13 @@
 ## New in this version
 
-**Vesper Client 0.3.0: jump marks, rain and puddles, emotes with cars, a flame head with horns, hit sounds and more.**
+**A Client tab for Vesper, resource packs inside Minecraft, an FPS boost, and OmniHub is now MIT-licensed.**
 
-- **World colour:** pick one neon colour (or rainbow) for your world; the new effects follow it.
-- **Jump marks:** every jump leaves a neon mark on the floor: six-point star, rune circle, ring, triangle or diamond, with sparks and a shockwave when you land from high up.
-- **World glyphs:** neon symbols floating around you.
-- **Rain & wet ground:** rain that stops at roofs and splashes, with sound, and puddles on the ground that mirror the sky and ripple, always or only when it rains.
-- **Hit sounds:** six sounds of Vesper's own (made from scratch) or Minecraft's, a different one on critical hits.
-- **Emotes (press B):** Flex, Wave, Dance, Salute, Cheer and Car flex: a car drops in next to you with neon underglow (Supercar, Muscle car or Hypercar; original designs, any colour).
-- **Wraith head:** your head becomes a ghostly flame with spiked, glowing horns.
-- **Also:** speed blur while sprinting, a neon block outline, a time changer, and even smaller items in your hand.
-- Only you see all of this. Tested in Minecraft with software rendering; the sounds weren't heard there (no audio device), and some options weren't screenshotted. Details are in `client/docs/TEST_RESULTS.md`.
+- **Client tab:** Vesper Client has its own tab in OmniHub (Play → Client): one-click install as a profile in the official launcher, the jar for doing it by hand, and exactly what it needs.
+- **What Vesper needs:** Minecraft Java Edition **1.8.9**, loader **Forge 1.8.9-11.15.1.2318** (not Fabric, Legacy Fabric or NeoForge), Java 8 from the launcher, and **no other mods**. PolyPatcher is optional for more FPS.
+- **Vesper 0.4.0 — resource packs inside the game:** Client → Resource packs (or the new button on Minecraft's Resource Packs screen) searches Modrinth's 1.8.9 packs and downloads one in a click, checked against Modrinth's checksum.
+- **Vesper 0.4.0 — FPS boost:** one switch for fast video settings; your own settings come back exactly when you turn it off.
+- **Open source:** OmniHub, Vesper Client and OmniHub Kill Effects are now under the MIT licence.
+- The pack browser was tested in Minecraft; the FPS boost hasn't been measured on a real graphics card yet.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

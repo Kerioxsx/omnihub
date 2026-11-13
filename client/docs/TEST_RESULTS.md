@@ -109,3 +109,11 @@ Screenshots referenced above are in `docs/screenshots/` locally (kept out of git
 | Emote wheel | Pass (wheel) |
 | Car flex (car drops in, underglow, arms crossed) and Flex | Pass (emotes) |
 | Not tested | Hit and rain sounds (no audio device), speed blur, block outline, time changer, wave/dance/salute/cheer, landing shockwave, other jump shapes, real GPU |
+
+## 0.4.0 (same environment)
+
+| Check | Result |
+|---|---|
+| Pack browser lists Modrinth's 1.8.9 packs | Pass: 30 packs shown |
+| Download a pack | Pass: `LowOnFire_1.8.9.zip` saved to resourcepacks after the SHA-1 check, button shows Added |
+| Not tested | FPS boost on a real GPU (the settings switch and restore were not exercised in a run), the button on Minecraft's Resource Packs screen |

@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Activity, Camera, Sparkles, Zap, Timer, Wrench, Cpu, Gamepad2, HardDrive, House, LayoutGrid, Lightbulb, LockKeyhole, MessagesSquare, Music2, NotebookPen, Puzzle, ScreenShare, Server, Settings, Smartphone } from 'lucide-react';
+import { Swords, Activity, Camera, Sparkles, Zap, Timer, Wrench, Cpu, Gamepad2, HardDrive, House, LayoutGrid, Lightbulb, LockKeyhole, MessagesSquare, Music2, NotebookPen, Puzzle, ScreenShare, Server, Settings, Smartphone } from 'lucide-react';
 import type { RouteId } from '../lib/router';
 
 export interface NavItem {
@@ -25,6 +25,7 @@ export const NAV: NavItem[] = [
   { id: 'tools', label: 'Tools', icon: Wrench, description: 'Checksums, shredder, bulk rename, folder rules, window layouts, ports, Git projects, PATH', group: 'performance' },
   { id: 'games', label: 'Games', icon: Gamepad2, description: 'Game boosts, Fortnite and PC optimizations, ping helper', group: 'performance' },
   { id: 'mods', label: 'Mods', icon: Puzzle, description: 'Mods for your Steam games, Minecraft modpack mixing, and Claude making mods', group: 'performance' },
+  { id: 'client', label: 'Client', icon: Swords, description: 'Vesper Client: OmniHub\'s own Minecraft 1.8.9 PvP client (Forge), install and what it needs', group: 'performance' },
   { id: 'servers', label: 'Servers', icon: Server, description: 'Host Minecraft servers 24/7 on this PC: players, live map, mods, plugins, modpacks and backups', group: 'performance' },
   { id: 'rig', label: 'My PC', icon: Cpu, description: 'Your PC in 3D: lighting, fan profiles and screens', group: 'performance' },
   { id: 'vault', label: 'Vault', icon: LockKeyhole, description: 'Encrypted passwords and secrets', group: 'security' },

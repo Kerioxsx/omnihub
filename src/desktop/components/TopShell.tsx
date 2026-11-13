@@ -20,7 +20,7 @@ import { Dot, Kbd } from './ui/Card';
 type SectionId = 'workspace' | 'play' | 'connect';
 const SECTIONS: { id: SectionId; label: string; pages: NavItem['id'][] }[] = [
   { id: 'workspace', label: 'Workspace', pages: ['home', 'storage', 'apps', 'screenshots', 'notes', 'chats', 'focus', 'counters', 'quick', 'music'] },
-  { id: 'play', label: 'Play', pages: ['games', 'mods', 'servers', 'tasks', 'tools', 'rig'] },
+  { id: 'play', label: 'Play', pages: ['games', 'mods', 'client', 'servers', 'tasks', 'tools', 'rig'] },
   { id: 'connect', label: 'Connect', pages: ['phone', 'screen', 'lights', 'vault'] },
 ];
 const byId = new Map(NAV.map((n) => [n.id, n]));

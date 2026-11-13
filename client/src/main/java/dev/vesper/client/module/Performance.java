@@ -29,6 +29,8 @@ public final class Performance extends Module {
     public final NumberSetting backgroundFps = number("backgroundFps", "Background FPS", 15, 5, 60, 5, "");
     public final BoolSetting capMenus = bool("capMenus", "Cap FPS on the title screen and menus", true);
     public final NumberSetting menuFps = number("menuFps", "Menu FPS", 60, 30, 144, 5, "");
+    public final BoolSetting boost = bool("boost", "FPS boost game settings (yours come back when off)", false);
+    public final NumberSetting boostDistance = number("boostDistance", "…render distance at most", 8, 2, 16, 1, " chunks");
 
     private int savedLimit = -1;
 
@@ -38,6 +40,7 @@ public final class Performance extends Module {
         cullDistance.visibleWhen(() -> cullEntities.on());
         backgroundFps.visibleWhen(() -> capBackground.on());
         menuFps.visibleWhen(() -> capMenus.on());
+        boostDistance.visibleWhen(() -> boost.on());
         MinecraftForge.EVENT_BUS.register(this);
         FMLCommonHandler.instance().bus().register(this);
     }
@@ -54,6 +57,83 @@ public final class Performance extends Module {
         // Armour stands (often hundreds of holograms in lobbies) use half the distance.
         if (ent instanceof EntityArmorStand) d *= 0.5;
         if (dist2 > d * d) e.setCanceled(true);
+    }
+
+    // ------------------------------------------------------------ FPS boost
+
+    private static java.io.File boostFile() {
+        return new java.io.File(Minecraft.getMinecraft().mcDataDir, "config/vesper/fps-boost-restore.properties");
+    }
+
+    @SubscribeEvent
+    public void onClientTick(TickEvent.ClientTickEvent e) {
+        if (e.phase != TickEvent.Phase.END) return;
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.gameSettings == null || mc.renderGlobal == null) return;
+        boolean want = enabled() && boost.on();
+        java.io.File f = boostFile();
+        if (want && !f.exists()) applyBoost(mc, f);
+        else if (!want && f.exists()) restoreBoost(mc, f);
+    }
+
+    /** Saves your graphics settings, then switches to fast ones. */
+    private void applyBoost(Minecraft mc, java.io.File f) {
+        net.minecraft.client.settings.GameSettings g = mc.gameSettings;
+        java.util.Properties p = new java.util.Properties();
+        p.setProperty("fancyGraphics", String.valueOf(g.fancyGraphics));
+        p.setProperty("ambientOcclusion", String.valueOf(g.ambientOcclusion));
+        p.setProperty("clouds", String.valueOf(g.clouds));
+        p.setProperty("particles", String.valueOf(g.particleSetting));
+        p.setProperty("entityShadows", String.valueOf(g.entityShadows));
+        p.setProperty("renderDistance", String.valueOf(g.renderDistanceChunks));
+        p.setProperty("useVbo", String.valueOf(g.useVbo));
+        p.setProperty("fboEnable", String.valueOf(g.fboEnable));
+        p.setProperty("vsync", String.valueOf(g.enableVsync));
+        try {
+            f.getParentFile().mkdirs();
+            java.io.FileOutputStream out = new java.io.FileOutputStream(f);
+            p.store(out, "Your settings before Vesper's FPS boost; put back when it is turned off");
+            out.close();
+        } catch (java.io.IOException ex) {
+            return;
+        }
+        g.fancyGraphics = false;
+        g.ambientOcclusion = 0;
+        g.clouds = 0;
+        g.particleSetting = 2;
+        g.entityShadows = false;
+        g.renderDistanceChunks = Math.min(g.renderDistanceChunks, boostDistance.i());
+        g.useVbo = true;
+        g.fboEnable = true;
+        g.enableVsync = false;
+        Display.setVSyncEnabled(false);
+        g.saveOptions();
+        mc.renderGlobal.loadRenderers();
+    }
+
+    private void restoreBoost(Minecraft mc, java.io.File f) {
+        net.minecraft.client.settings.GameSettings g = mc.gameSettings;
+        java.util.Properties p = new java.util.Properties();
+        try {
+            java.io.FileInputStream in = new java.io.FileInputStream(f);
+            p.load(in);
+            in.close();
+            g.fancyGraphics = Boolean.parseBoolean(p.getProperty("fancyGraphics", "true"));
+            g.ambientOcclusion = Integer.parseInt(p.getProperty("ambientOcclusion", "2"));
+            g.clouds = Integer.parseInt(p.getProperty("clouds", "2"));
+            g.particleSetting = Integer.parseInt(p.getProperty("particles", "0"));
+            g.entityShadows = Boolean.parseBoolean(p.getProperty("entityShadows", "true"));
+            g.renderDistanceChunks = Integer.parseInt(p.getProperty("renderDistance", "12"));
+            g.useVbo = Boolean.parseBoolean(p.getProperty("useVbo", "true"));
+            g.fboEnable = Boolean.parseBoolean(p.getProperty("fboEnable", "true"));
+            g.enableVsync = Boolean.parseBoolean(p.getProperty("vsync", "true"));
+            Display.setVSyncEnabled(g.enableVsync);
+            g.saveOptions();
+            mc.renderGlobal.loadRenderers();
+        } catch (Exception ex) {
+            // A broken file: keep the current settings.
+        }
+        f.delete();
     }
 
     @SubscribeEvent

@@ -12,6 +12,7 @@ public final class Visuals {
     }
 
     public static void init() {
+        dev.vesper.client.packs.PackBrowserScreen.hook();
         Module[] ms = {new FovModule(), new BlurModules.Menu(), new BlurModules.Motion(), new BlurModules.Speed(), new SwingModule(), new WorldLyricsModule(),
             new dev.vesper.client.world.JumpFxModule(), new dev.vesper.client.world.WorldGlyphsModule(), new dev.vesper.client.world.WeatherModule(),
             new dev.vesper.client.world.MoreVisuals.HitSounds(), new dev.vesper.client.world.MoreVisuals.BlockOutline(), new dev.vesper.client.world.MoreVisuals.TimeChanger(),

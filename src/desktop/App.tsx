@@ -29,6 +29,7 @@ import { Backdrop } from './components/Backdrop';
 const AppsPage = lazy(() => import('./pages/apps/AppsPage').then((m) => ({ default: m.AppsPage })));
 const GamesPage = lazy(() => import('./pages/games/GamesPage').then((m) => ({ default: m.GamesPage })));
 const LightsPage = lazy(() => import('./pages/lights/LightsPage').then((m) => ({ default: m.LightsPage })));
+const ClientPage = lazy(() => import('./pages/client/ClientPage').then((m) => ({ default: m.ClientPage })));
 const ModsPage = lazy(() => import('./pages/mods/ModsPage').then((m) => ({ default: m.ModsPage })));
 const ServersPage = lazy(() => import('./pages/servers/ServersPage').then((m) => ({ default: m.ServersPage })));
 const ChatsPage = lazy(() => import('./pages/chats/ChatsPage').then((m) => ({ default: m.ChatsPage })));
@@ -64,6 +65,7 @@ const PAGES: Record<Exclude<RouteId, 'overlay' | 'ambient' | 'casescreen' | 'pin
   quick: QuickPage,
   games: GamesPage,
   mods: ModsPage,
+  client: ClientPage,
   servers: ServersPage,
   chats: ChatsPage,
   rig: RigPage,

@@ -2,9 +2,9 @@
 
 import { useSyncExternalStore } from 'react';
 
-export type RouteId = 'home' | 'storage' | 'apps' | 'screenshots' | 'notes' | 'chats' | 'music' | 'tasks' | 'tools' | 'focus' | 'games' | 'mods' | 'servers' | 'rig' | 'lights' | 'vault' | 'phone' | 'screen' | 'settings' | 'counters' | 'quick' | 'overlay' | 'ambient' | 'casescreen' | 'pin' | 'counter' | 'wheel' | 'clipboard' | 'speedrun' | 'crosshair' | 'widget' | 'wallpaper' | 'soundboard';
+export type RouteId = 'home' | 'storage' | 'apps' | 'screenshots' | 'notes' | 'chats' | 'music' | 'tasks' | 'tools' | 'focus' | 'games' | 'mods' | 'client' | 'servers' | 'rig' | 'lights' | 'vault' | 'phone' | 'screen' | 'settings' | 'counters' | 'quick' | 'overlay' | 'ambient' | 'casescreen' | 'pin' | 'counter' | 'wheel' | 'clipboard' | 'speedrun' | 'crosshair' | 'widget' | 'wallpaper' | 'soundboard';
 
-export const PAGE_IDS: readonly RouteId[] = ['home', 'storage', 'apps', 'screenshots', 'notes', 'chats', 'music', 'tasks', 'games', 'mods', 'servers', 'rig', 'lights', 'vault', 'phone', 'screen', 'settings', 'tools', 'focus', 'counters', 'quick'];
+export const PAGE_IDS: readonly RouteId[] = ['home', 'storage', 'apps', 'screenshots', 'notes', 'chats', 'music', 'tasks', 'games', 'mods', 'client', 'servers', 'rig', 'lights', 'vault', 'phone', 'screen', 'settings', 'tools', 'focus', 'counters', 'quick'];
 
 export interface Route {
   id: RouteId;

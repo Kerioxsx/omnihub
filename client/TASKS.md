@@ -51,6 +51,9 @@ Evidence lives in `docs/TEST_RESULTS.md` and `docs/screenshots/`.
 | T9.7 | 9 | Emotes + wheel (B): flex, wave, dance, salute, cheer, car flex with 3 Blender cars and underglow | lead | — | partial | Wheel, car flex and flex seen; others not screenshotted |
 | T9.8 | 9 | Wraith head: hidden head, flame, Blender horns | lead | — | done | Seen in third person |
 
+| T10.1 | 10 | In-game resource pack browser (Modrinth, SHA-1 checked, bundled public root certificates for old Java) | lead | — | done | Searched and downloaded a pack in a running game |
+| T10.2 | 10 | FPS boost game settings with exact restore | lead | — | partial | Built; not measured on a real GPU |
+
 ## Notes on partial items (0.1.0)
 
 - T1.3: keyboard navigation, reduced motion and scaling work; 4K not tested.

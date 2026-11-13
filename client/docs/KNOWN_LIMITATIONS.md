@@ -1,4 +1,4 @@
-# Known limitations — Vesper Client 0.3.0
+# Known limitations — Vesper Client 0.4.0
 
 - **Only you see it.** Cosmetics, skies and kill effects are drawn on your own screen. Other players see nothing unless they run Vesper too, and even then they don't see *your* cosmetics (there is no server or sync).
 - **Kill effects on public servers.** The game only tells a client about a kill for sure in singleplayer or on a LAN world you host. On servers, kill effects play only if you turn on "Kill messages from chat" (best effort, English death messages, and only for someone you hit in the last 5 seconds). A target that just disappears never counts.
@@ -18,3 +18,5 @@
 - **Rain and puddles** are drawn on top of the world; they are not real water and don't reflect blocks or players, only the sky's colour. Rain can show through glass roofs that let rain through in Minecraft too.
 - **Hit sounds and the rain sound** weren't heard in testing (the test machine has no audio device).
 - **Time changer** sets the time on your screen only; daylight and mob behaviour on the server don't change.
+- **Resource packs** come from Modrinth only (CurseForge needs an API key). Vesper adds a few public root certificates to its own connections so the old Java the launcher uses for 1.8.9 can reach Modrinth; nothing else uses them.
+- **FPS boost** changes Minecraft's own video settings (saved in options.txt) while it is on; they come back when you turn it off. If the game crashes while it's on, turn it off and on again to restore.
