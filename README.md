@@ -32,10 +32,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
-## New in 0.47.0
+## New in 0.48.0
 
 - **Client tab** for Vesper Client (Play → Client) with one-click install and its requirements: Minecraft 1.8.9, **Forge 1.8.9-11.15.1.2318** (not Fabric / Legacy Fabric / NeoForge), Java 8, no other mods needed.
-- **Vesper 0.4.0**: download Modrinth resource packs inside the game, and an FPS boost that restores your settings when off.
+- **Vesper 0.4.1**: download Modrinth resource packs inside the game, an FPS boost that restores your settings when off, and redesigned Wraith horns (plus a crystal flame) and cars.
 - **MIT licence** for the whole repository.
 
 ## New in 0.46.0

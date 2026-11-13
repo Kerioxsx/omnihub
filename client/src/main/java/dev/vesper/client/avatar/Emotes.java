@@ -45,8 +45,11 @@ public final class Emotes extends Module {
     public final NumberSetting duration = number("duration", "Length (0 = until you move)", 8, 0, 30, 1, "s");
     public final ChoiceSetting car = choice("car", "Car", "super", new String[] {"super", "muscle", "hyper"}, new String[] {"Supercar", "Muscle car", "Hypercar"});
     public final BoolSetting carWorld = bool("carWorld", "Car in the world colour", false);
-    public final ColorSetting carColor = color("carColor", "Car colour", 0xFFE11D2E);
+    public final ColorSetting carColor = color("carColor", "Car colour", 0xFF111116);
     public final BoolSetting underglow = bool("underglow", "Neon underglow", true);
+    public final BoolSetting glowWorld = bool("glowWorld", "Underglow in the world colour", false);
+    public final ColorSetting glowColor = color("glowColor", "Underglow colour", 0xFFFF2A2A);
+    public final ColorSetting caliperColor = color("caliperColor", "Brake callipers", 0xFFD0202A);
 
     private String current;
     private float start;
@@ -183,9 +186,12 @@ public final class Emotes extends Module {
         GlStateManager.shadeModel(GL11.GL_SMOOTH);
         GlStateManager.disableTexture2D();
         GlStateManager.enableDepth();
-        model.draw("body", body);
-        model.draw("glass", 0xF0121A24);
-        model.draw("wheels", 0xFF16161A);
+        model.draw("body", Colors.mix(body, 0xFFFFFFFF, 0.06f));
+        model.draw("trim", Colors.mix(body, 0xFF000000, 0.45f));
+        model.draw("glass", 0xF00E141C);
+        model.draw("wheels", 0xFF111114);
+        model.draw("rims", 0xFF1E1E24);
+        model.draw("calipers", caliperColor.argb());
         model.draw("lights", 0xFFFFF7DD);
         model.draw("tail", 0xFFFF2A2A);
         if (underglow.on()) {
@@ -193,7 +199,7 @@ public final class Emotes extends Module {
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
             View.capture();
             FxDraw.geo();
-            int g = General.accent();
+            int g = glowWorld.on() ? General.accent() : glowColor.argb();
             float pulse = 0.75f + 0.25f * (float) Math.sin(t * 3);
             FxDraw.ringH(0, 0.04, 0, 0, 1.9, Colors.alpha(g, 0.55f * pulse), Colors.alpha(g, 0), 40);
             FxDraw.line(-1.02, 0.2, -2.0, -1.02, 0.2, 2.0, 0.05, Colors.alpha(g, pulse));

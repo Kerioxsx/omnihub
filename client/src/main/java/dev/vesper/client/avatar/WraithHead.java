@@ -31,14 +31,20 @@ public final class WraithHead extends Module {
     public final BoolSetting hideHead = bool("hideHead", "Hide my head", true);
     public final ColorSetting flame = color("flame", "Flame colour", 0xFF5CFFE0);
     public final NumberSetting flameSize = number("flameSize", "Flame size", 1.4, 0.4, 2.5, 0.05, "×");
+    public final dev.vesper.client.module.setting.ChoiceSetting flameStyle = choice("flameStyle", "Flame style", "smoke", new String[] {"smoke", "crystal"}, new String[] {"Soft smoke", "Crystal shards"});
     public final BoolSetting horns = bool("horns", "Horns", true);
     public final ColorSetting hornColor = color("hornColor", "Horn colour", 0xFF2C2F38);
     public final ColorSetting tipColor = color("tipColor", "Horn tip colour", 0xFF3D7BFF);
-    public final NumberSetting hornSize = number("hornSize", "Horn size", 1.0, 0.5, 1.6, 0.05, "×");
+    public final NumberSetting hornSize = number("hornSize", "Horn size", 0.75, 0.4, 1.4, 0.05, "×");
 
     public WraithHead() {
         super("wraith", "Wraith head", "Your head becomes a ghostly flame with spiked horns (only you see it).", Category.COSMETICS, false, true);
         INSTANCE = this;
+    }
+
+    /** Width of the flame at height 0..1: round at the bottom, widest low, pointed at the top. */
+    private static float teardrop(float h) {
+        return (float) (Math.sin(Math.min(1, h * 1.6) * Math.PI * 0.5) * Math.pow(1 - h, 0.85));
     }
 
     boolean hidesHead() {
@@ -79,12 +85,16 @@ public final class WraithHead extends Module {
             if (m.ok) {
                 GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
                 GlStateManager.pushMatrix();
-                GlStateManager.translate(0, 0.22, 0);
+                GlStateManager.translate(0, 0.1, 0);
                 float s = hornSize.f();
                 GlStateManager.scale(s, s, s);
-                m.draw("horn_base", hornColor.argb());
-                m.draw("horn_tip", tipColor.argb());
-                m.draw("spikes", Colors.mix(tipColor.argb(), 0xFF0A0F2A, 0.35f));
+                int base = hornColor.argb(), tip = tipColor.argb();
+                m.draw("horn_base", base);
+                m.draw("bands", Colors.mix(base, 0xFF000000, 0.5f));
+                m.draw("horn_mid", Colors.mix(base, tip, 0.55f));
+                m.draw("horn_tip", tip);
+                m.draw("spikes", Colors.mix(base, 0xFF000000, 0.35f));
+                m.draw("spikes_tip", Colors.mix(tip, 0xFFFFFFFF, 0.2f));
                 GlStateManager.popMatrix();
             }
         }
@@ -92,22 +102,45 @@ public final class WraithHead extends Module {
         GlStateManager.depthMask(false);
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
         View.capture();
-        FxDraw.sprites(Textures.glow());
         int base = flame.argb();
         float fs = flameSize.f();
-        int n = General.detail() <= 0 ? 22 : 46;
-        for (int i = 0; i < n; i++) {
-            float ph = (t * 1.3f + i / (float) n) % 1f;
-            float h = ph * 1.0f * fs;
-            float spread = 0.2f * fs * (float) Math.pow(1 - ph, 0.6) * (0.7f + 0.3f * (float) Math.sin(i * 2.3f));
-            float ang = i * 2.399f + t * 1.7f;
-            double x = Math.cos(ang) * spread + Math.sin(t * 5 + i) * 0.03 * ph;
-            double z = Math.sin(ang) * spread;
-            float size = (0.28f - 0.18f * ph) * fs;
-            int c = Colors.mix(Colors.mix(base, 0xFFFFFFFF, 0.55f * (1 - ph) * (1 - ph)), base, ph);
-            FxDraw.sprite(x, 0.05 + h, z, size, Colors.alpha(c, 0.42f * (1 - ph * ph)));
+        if (flameStyle.is("crystal")) {
+            // Shards tumbling inside a teardrop, bright at the core.
+            FxDraw.geo();
+            int n = General.detail() <= 0 ? 24 : 54;
+            for (int i = 0; i < n; i++) {
+                float ph = (t * 0.45f + i / (float) n) % 1f;
+                float h = (0.05f + ph * 0.95f) * fs;
+                float w = teardrop(ph) * 0.24f * fs;
+                float ang = i * 2.399f + t * 0.9f;
+                double cx = Math.cos(ang) * w * (0.4 + 0.6 * ((i * 7) % 10) / 10.0), cz = Math.sin(ang) * w * 0.6;
+                float sz = (0.075f + 0.05f * ((i * 13) % 7) / 7f) * fs;
+                float rot = t * 2 + i;
+                double ux = Math.cos(rot) * sz, uy = Math.sin(rot) * sz;
+                int c = Colors.alpha(Colors.mix(0xFFFFFFFF, base, 0.2f + 0.6f * ph), 0.95f * (1 - ph * ph));
+                double ax = cx + View.rx * ux + View.ux * uy, ay = h + View.ry * ux + View.uy * uy, az = cz + View.rz * ux + View.uz * uy;
+                double bx = cx - View.rx * uy + View.ux * ux * 0.5, by = h - View.ry * uy + View.uy * ux * 0.5, bz = cz - View.rz * uy + View.uz * ux * 0.5;
+                double qx = cx - View.rx * ux - View.ux * uy, qy = h - View.ry * ux - View.uy * uy, qz = cz - View.rz * ux - View.uz * uy;
+                FxDraw.quad(cx, h, cz, ax, ay, az, bx, by, bz, qx, qy, qz, c, c, Colors.alpha(c, 0.4f), c);
+            }
+            FxDraw.flush();
         }
-        FxDraw.sprite(0, 0.25 * fs, 0, 0.55 * fs, Colors.alpha(base, 0.25f + 0.05f * (float) Math.sin(t * 6)));
+        FxDraw.sprites(Textures.glow());
+        int n = General.detail() <= 0 ? 24 : 52;
+        float soft = flameStyle.is("crystal") ? 0.6f : 1f;
+        for (int i = 0; i < n; i++) {
+            float ph = (t * 1.25f + i / (float) n) % 1f;
+            float h = (0.04f + ph * 0.95f) * fs;
+            float spread = teardrop(ph) * 0.21f * fs * (0.75f + 0.25f * (float) Math.sin(i * 2.3f));
+            float ang = i * 2.399f + t * 1.7f;
+            double x = Math.cos(ang) * spread + Math.sin(t * 5 + i) * 0.025 * ph;
+            double z = Math.sin(ang) * spread * 0.7;
+            float size = (0.13f + 0.17f * teardrop(ph)) * fs;
+            int c = Colors.mix(Colors.mix(base, 0xFFFFFFFF, 0.6f * (1 - ph) * (1 - ph)), base, ph);
+            FxDraw.sprite(x, h, z, size, Colors.alpha(c, 0.4f * soft * (1 - ph * ph)));
+        }
+        FxDraw.sprite(0, 0.38 * fs, 0, 0.5 * fs, Colors.alpha(base, (0.22f + 0.05f * (float) Math.sin(t * 6)) * soft));
+        FxDraw.sprite(0, 0.26 * fs, 0, 0.2 * fs, Colors.alpha(0xFFFFFFFF, 0.35f * soft));
         FxDraw.flush();
         GlStateManager.depthMask(true);
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);

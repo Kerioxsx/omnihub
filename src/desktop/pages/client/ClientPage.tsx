@@ -12,7 +12,7 @@ import { Switch } from '../../components/ui/Form';
 import { useSettings } from '../../state/settings';
 import { McClientCard } from '../mods/McClient';
 
-export const VESPER_VERSION = '0.4.0';
+export const VESPER_VERSION = '0.4.1';
 const JAR = 'https://github.com/Kerioxsx/omnihub/releases/latest/download/Vesper-Client-1.8.9.jar';
 const FORGE = 'https://files.minecraftforge.net/net/minecraftforge/forge/index_1.8.9.html';
 

@@ -56,6 +56,11 @@
 - **Resource packs inside the game:** Client → Resource packs, or the *Browse online (Vesper)* button on Minecraft's Resource Packs screen. Search Modrinth's 1.8.9 packs and press Download; the pack is checked against Modrinth's checksum, saved in your resourcepacks folder and listed right away (turn it on in Resource Packs).
 - **FPS boost:** Performance → *FPS boost game settings* switches to fast settings (fast graphics, no clouds, minimal particles, no entity shadows, smooth lighting off, VBOs on, vsync off, render distance capped) and saves yours; turn it off and yours come back exactly.
 
+## New in 0.4.1
+
+- **Wraith head, redesigned:** the horns now curl round in a tall "C" either side of the flame, with dark bands at the base, thorns along the outside and a blue fade to the tips. New **Flame style**: soft smoke or crystal shards.
+- **Cars, redesigned:** smoother bodies with side air intakes, a rear wing on the Supercar and Hypercar, black five-spoke rims and coloured brake callipers. The default is glossy black with a red underglow; the underglow colour (or your world colour) and calliper colour are adjustable.
+
 ## Performance
 
 - **General → Quality:** Low-end, Competitive, Balanced or Cinematic sets how many particles and how much detail Vesper's own effects use.
