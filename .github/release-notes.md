@@ -2,6 +2,8 @@
 
 **Forge installs that keep going, and resource packs that install in one click inside Minecraft.**
 
+- **Fix: "Couldn't load versions … peer closed connection"** on the Loaders tab. Forge's version list now retries (through Windows' proxy, then directly), then uses a mirror of it, and if that fails too, works the list out from Forge's own Maven. NeoForge, Fabric and Minecraft's version lists fall back the same way.
+
 - **Forge doesn't give up:** when Forge's site is slow, down or blocked, OmniHub retries, then gets the same files from mirrors (BMCLAPI and Maven's second address), first through the proxy Windows is set to and then directly. Every file is still checked against Forge's own checksums, so a mirror can't change what's installed. Applies to OmniHub Client 1.8.9, Forge and NeoForge for any version, and Forge/NeoForge servers.
 - If Forge's own installer stops halfway (a dropped connection), it runs again by itself and picks up where it stopped. Damaged library files left from an earlier failed install are fetched again.
 - **Resource packs in one click (Vesper 0.4.2):** Minecraft's Resource Packs screen → *Get packs (Vesper)* → **Install**. The pack downloads, turns on at the top of your packs and loads straight away. Click again to turn it off.

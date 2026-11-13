@@ -290,7 +290,12 @@ and lets a phone do some of that. This is what protects each part.
   only read from the publisher. If Forge's own installer stops while it
   fetches its libraries, it is run up to twice more; a second run reuses what
   the first one got. OmniHub doesn't use free public proxy lists: they can
-  read and alter traffic, and the mirrors above make them unnecessary. Mods and resource packs come
+  read and alter traffic, and the mirrors above make them unnecessary.
+- Version lists (Minecraft, Fabric, Forge, NeoForge) are retried the same
+  way and, if the publisher can't be reached, read from BMCLAPI's copy or
+  worked out from Forge's or NeoForge's Maven list. A list only names
+  versions; what then gets installed is still checked against the
+  publisher's own checksums. Mods and resource packs come
   from Modrinth, checked against Modrinth's hashes. The kill-effects mod is
   built from `minecraft-mod/` by the release workflow and checked against a
   SHA-256 built into the app. It runs only in your game (client side), reads

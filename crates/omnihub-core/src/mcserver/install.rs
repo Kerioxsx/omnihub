@@ -195,6 +195,8 @@ pub type Progress<'a> = &'a mut dyn FnMut(u64, u64, &str);
 pub struct Web {
     pub ep: Endpoints,
     agent: ureq::Agent,
+    /// The same, never through a proxy (tried when the first one can't connect).
+    direct: ureq::Agent,
     local: bool,
 }
 
@@ -209,7 +211,8 @@ impl Web {
         if local {
             cfg = cfg.proxy(None);
         }
-        Web { ep, agent: cfg.build().into(), local }
+        let direct = ureq::Agent::config_builder().timeout_connect(Some(Duration::from_secs(20))).timeout_global(Some(Duration::from_secs(1800))).http_status_as_error(false).proxy(None).build().into();
+        Web { ep, agent: cfg.build().into(), direct, local }
     }
 
     /// Addresses from publishers' lists are only followed over HTTPS.
@@ -221,10 +224,76 @@ impl Web {
         }
     }
 
+    /// One address, a few tries: through the usual route (Windows' proxy if
+    /// it has one), pausing longer each time, then once more directly. A
+    /// dropped connection ("peer closed connection", a reset, a timeout) is
+    /// usually gone on the next try.
     fn get_raw(&self, url: &str, limit: u64) -> Result<Vec<u8>, String> {
+        let mut last = String::new();
+        let tries = if self.local { 1 } else { 4 };
+        for n in 0..tries {
+            if n > 0 {
+                std::thread::sleep(Duration::from_millis(700 * (n * n) as u64));
+            }
+            let agent = if n == tries - 1 && n > 0 { &self.direct } else { &self.agent };
+            match self.get_once(agent, url, limit) {
+                Ok(b) => return Ok(b),
+                Err(e) if e.contains("doesn't have that") || e.contains("isn't an HTTPS") => return Err(e),
+                Err(e) => last = e,
+            }
+        }
+        Err(last)
+    }
+
+    /// The first of `urls` that answers (the publisher first, then mirrors).
+    /// Only for lists of versions: nothing installed is decided by them alone.
+    fn get_json_any(&self, urls: &[String]) -> Result<Value, String> {
+        let mut first = String::new();
+        for u in urls {
+            match self.get_json(u) {
+                Ok(v) => return Ok(v),
+                Err(e) if first.is_empty() => first = e,
+                Err(_) => {}
+            }
+        }
+        Err(first)
+    }
+
+    /// A mirror's copy of a publisher's version list, when not testing locally.
+    fn mirror(&self, url: &str) -> Vec<String> {
+        if self.local {
+            return vec![url.to_string()];
+        }
+        let mut v = vec![url.to_string()];
+        for (from, to) in [("https://files.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/"), ("https://maven.minecraftforge.net/", "https://bmclapi2.bangbang93.com/maven/"), ("https://maven.neoforged.net/releases/", "https://bmclapi2.bangbang93.com/maven/"), ("https://meta.fabricmc.net/", "https://bmclapi2.bangbang93.com/fabric-meta/"), ("https://piston-meta.mojang.com/", "https://bmclapi2.bangbang93.com/")] {
+            if let Some(rest) = url.strip_prefix(from) {
+                v.push(format!("{to}{rest}"));
+            }
+        }
+        v
+    }
+
+    /// Forge's promoted builds; if neither Forge's site nor its mirror
+    /// answers, worked out from Forge's Maven list (newest build of each version).
+    fn forge_promos(&self) -> Result<Value, String> {
+        let promos = format!("{}/net/minecraftforge/forge/promotions_slim.json", self.ep.forge_files);
+        match self.get_json_any(&self.mirror(&promos)) {
+            Ok(v) if v["promos"].is_object() => Ok(v),
+            first => {
+                let meta = format!("{}/net/minecraftforge/forge/maven-metadata.xml", self.ep.forge_maven);
+                let xml = self.mirror(&meta).iter().find_map(|u| self.get_text(u).ok());
+                match xml {
+                    Some(x) => Ok(promos_from_maven(&x)),
+                    None => first.and_then(|_| Err("Forge's version list came back empty.".into())),
+                }
+            }
+        }
+    }
+
+    fn get_once(&self, agent: &ureq::Agent, url: &str, limit: u64) -> Result<Vec<u8>, String> {
         self.ok_url(url)?;
         let host = url.split('/').nth(2).unwrap_or(url).to_string();
-        let mut res = self.agent.get(url).header("User-Agent", ua()).call().map_err(|e| format!("Couldn't reach {host}: {e}"))?;
+        let mut res = agent.get(url).header("User-Agent", ua()).call().map_err(|e| format!("Couldn't reach {host}: {e}"))?;
         let status = res.status().as_u16();
         let mut out = Vec::new();
         res.body_mut().as_reader().take(limit).read_to_end(&mut out).map_err(|e| format!("The download from {host} stopped: {e}"))?;
@@ -299,7 +368,7 @@ impl Web {
 
     /// Minecraft versions, newest first.
     pub fn mc_versions(&self) -> Result<Vec<McVersion>, String> {
-        let v = self.get_json(&format!("{}/mc/game/version_manifest_v2.json", self.ep.piston))?;
+        let v = self.get_json_any(&self.mirror(&format!("{}/mc/game/version_manifest_v2.json", self.ep.piston)))?;
         Ok(v["versions"]
             .as_array()
             .into_iter()
@@ -335,11 +404,11 @@ impl Web {
             }
             Flavor::Fabric | Flavor::Quilt => {
                 let url = if flavor == Flavor::Fabric { format!("{}/v2/versions/game", self.ep.fabric_meta) } else { format!("{}/v3/versions/game", self.ep.quilt_meta) };
-                let v = self.get_json(&url)?;
+                let v = self.get_json_any(&self.mirror(&url))?;
                 v.as_array().into_iter().flatten().filter(|x| x["stable"].as_bool() == Some(true)).filter_map(|x| x["version"].as_str().map(String::from)).collect()
             }
             Flavor::Forge => {
-                let v = self.get_json(&format!("{}/net/minecraftforge/forge/promotions_slim.json", self.ep.forge_files))?;
+                let v = self.forge_promos()?;
                 let mut s: Vec<String> = v["promos"].as_object().into_iter().flat_map(|m| m.keys()).filter_map(|k| k.rsplit_once('-').map(|(mc, _)| mc.to_string())).collect();
                 s.dedup();
                 s
@@ -352,8 +421,15 @@ impl Web {
     }
 
     fn neo_versions(&self) -> Result<Vec<String>, String> {
-        let v = self.get_json(&format!("{}/api/maven/versions/releases/net/neoforged/neoforge", self.ep.neo_maven))?;
-        Ok(v["versions"].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect())
+        match self.get_json(&format!("{}/api/maven/versions/releases/net/neoforged/neoforge", self.ep.neo_maven)) {
+            Ok(v) => Ok(v["versions"].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect()),
+            Err(e) => {
+                // NeoForge's Maven list, from NeoForge or its mirror.
+                let meta = format!("{}/releases/net/neoforged/neoforge/maven-metadata.xml", self.ep.neo_maven);
+                let xml = self.mirror(&meta).iter().find_map(|u| self.get_text(u).ok()).ok_or(e)?;
+                Ok(maven_versions(&xml))
+            }
+        }
     }
 
     /// The newest loader (or build) for a server type and Minecraft version.
@@ -371,7 +447,7 @@ impl Web {
                 pick["loader"]["version"].as_str().map(String::from).ok_or_else(|| "No loader version.".into())
             }
             Flavor::Forge => {
-                let v = self.get_json(&format!("{}/net/minecraftforge/forge/promotions_slim.json", self.ep.forge_files))?;
+                let v = self.forge_promos()?;
                 let p = &v["promos"];
                 p[format!("{mc}-recommended")].as_str().or(p[format!("{mc}-latest")].as_str()).map(String::from).ok_or_else(|| format!("Forge has no build for Minecraft {mc}."))
             }
@@ -596,6 +672,32 @@ impl Web {
     }
 }
 
+/// Every `<version>` in a Maven metadata file.
+pub fn maven_versions(xml: &str) -> Vec<String> {
+    xml.split("<version>").skip(1).filter_map(|p| p.split("</version>").next()).map(|v| v.trim().to_string()).filter(|v| !v.is_empty() && v.len() < 64).collect()
+}
+
+/// Forge's Maven list ("1.20.1-47.2.0", ...) as promotions_slim.json would
+/// put it: the newest build of each Minecraft version as "<mc>-latest".
+pub fn promos_from_maven(xml: &str) -> Value {
+    use crate::mods::minecraft::version_cmp;
+    let mut best: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+    for v in maven_versions(xml) {
+        let Some((mc, build)) = v.split_once('-') else { continue };
+        // Old builds carry the Minecraft version again ("1.8.9-11.15.1.2318-1.8.9").
+        let build = build.strip_suffix(&format!("-{mc}")).unwrap_or(build).to_string();
+        if !build.chars().next().is_some_and(|c| c.is_ascii_digit()) || build.contains('-') {
+            continue;
+        }
+        let e = best.entry(mc.to_string()).or_default();
+        if e.is_empty() || version_cmp(&build, e) == std::cmp::Ordering::Greater {
+            *e = build;
+        }
+    }
+    let promos: serde_json::Map<String, Value> = best.into_iter().map(|(mc, b)| (format!("{mc}-latest"), Value::String(b))).collect();
+    serde_json::json!({ "promos": promos })
+}
+
 /// `<tag>value</tag>` from Maven's metadata.
 fn tag(xml: &str, name: &str) -> Option<String> {
     let start = xml.find(&format!("<{name}>"))? + name.len() + 2;
@@ -786,6 +888,16 @@ impl Runtimes {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forge_list_from_maven() {
+        let xml = "<metadata><versioning><versions><version>1.20.1-47.1.0</version><version>1.20.1-47.2.20</version><version>1.20.1-47.2.3</version><version>1.8.9-11.15.1.2318-1.8.9</version><version>1.7.10_pre4-10.12.2.1149-prerelease</version></versions></versioning></metadata>";
+        let v = promos_from_maven(xml);
+        assert_eq!(v["promos"]["1.20.1-latest"], "47.2.20");
+        assert_eq!(v["promos"]["1.8.9-latest"], "11.15.1.2318");
+        assert!(v["promos"].get("1.7.10_pre4-latest").is_none());
+        assert_eq!(maven_versions("<version>21.1.1</version><version> 21.1.2 </version>"), ["21.1.1", "21.1.2"]);
+    }
 
     #[test]
     fn version_names() {
