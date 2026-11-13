@@ -32,6 +32,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.44.0
+
+- **Aurora**: covers are sharp again (songs whose full-size cover was missed are looked up again, the match is more forgiving, nothing small is stretched across the screen, and the settings show each cover's size with *Look again*). **Spotify songs start right away** from Aurora's search and Up next, in the background, once you connect Spotify (your own Spotify developer app, Premium); plus **Play next** into Spotify's queue.
+
 ## New in 0.43.0
 
 - **Play resolution** (Games → Extras): switch the whole PC to 4K, 1440p (2K), 1080p, 720p or stretched 4:3 — per game (switches at start, back at close) or with one click — so windowed fullscreen plays at it and alt-tab stays instant. The switch keeps your refresh rate and lets the graphics card scale, so the monitor doesn't black out to re-sync.

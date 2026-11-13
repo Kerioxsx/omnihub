@@ -1105,7 +1105,7 @@ impl AppCore {
         let Some(song) = self.party.take_next() else { return Ok(None) };
         let item = crate::media::catalog::Item::Track { title: song.title.clone(), artist: song.artist.clone(), album: song.album.clone() };
         let app = self.media.state().map(|m| m.app_name);
-        crate::media::catalog::play(&item, crate::media::catalog::Source::Auto, app.as_deref())?;
+        crate::media::catalog::play(&item, crate::media::catalog::Source::Auto, app.as_deref(), Some(&self.media.spotify))?;
         self.events.emit("party:changed", self.party.state());
         Ok(Some(song))
     }

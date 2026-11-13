@@ -19,6 +19,8 @@ use super::lyrics::clean_query;
 
 /// Edge of the picture asked for: more than any cover has, so the original comes back.
 const SIZE: u32 = 10000;
+/// A song with no sharper cover is looked up again after this long.
+const MISS_FOR: std::time::Duration = std::time::Duration::from_secs(2 * 24 * 3600);
 /// Covers bigger than this are not downloaded.
 const MAX_BYTES: u64 = 16 << 20;
 
@@ -219,6 +221,12 @@ pub fn difference(a: &[u8], b: &[u8]) -> Option<f32> {
     Some(x.iter().zip(&y).map(|(p, q)| (p - q).abs()).sum::<f32>() / x.len() as f32)
 }
 
+/// Deezer's covers are plain baseline JPEGs at exactly 1900×1900 (Apple's
+/// originals are other sizes); good enough to name the source.
+pub fn looks_like_deezer(bytes: &[u8]) -> bool {
+    image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok().and_then(|r| r.into_dimensions().ok()) == Some((1900, 1900))
+}
+
 /// The picture's type from its first bytes (only JPEG and PNG are used).
 pub fn mime_of(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
@@ -259,10 +267,20 @@ impl ArtCache {
         self.dir.join(format!("{}.bin", hex::encode(&sha2::Sha256::digest(key.as_bytes())[..12])))
     }
 
-    /// `Some(None)`: looked up before, nothing better found.
+    /// `Some(None)`: looked up recently, nothing better found (a miss is
+    /// looked up again after two days: catalogues add covers).
     pub fn get(&self, key: &str) -> Option<Option<Vec<u8>>> {
-        let bytes = std::fs::read(self.file(key)).ok()?;
-        Some((!bytes.is_empty()).then_some(bytes))
+        let file = self.file(key);
+        let bytes = std::fs::read(&file).ok()?;
+        if bytes.is_empty() {
+            let age = std::fs::metadata(&file).ok()?.modified().ok()?.elapsed().unwrap_or_default();
+            return (age < MISS_FOR).then_some(None);
+        }
+        Some(Some(bytes))
+    }
+
+    pub fn remove(&self, key: &str) {
+        let _ = std::fs::remove_file(self.file(key));
     }
 
     pub fn put(&self, key: &str, bytes: Option<&[u8]>) {

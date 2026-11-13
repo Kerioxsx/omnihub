@@ -509,18 +509,41 @@ pub fn link(source: Source, item: &Item, installed: Installed, youtube: &dyn Fn(
     }
 }
 
-/// Play `item` in `source` (`Auto` resolved with the app playing now).
-/// Returns the service it went to.
-pub fn play(item: &Item, source: Source, playing_app: Option<&str>) -> Result<Source, String> {
+/// Where a song went.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Played {
+    pub to: Source,
+    /// It started playing (Spotify Connect, YouTube Music in the browser);
+    /// false when the app was only opened on it.
+    pub started: bool,
+    /// Why it couldn't start straight away, when it fell back to opening the app.
+    pub note: Option<String>,
+}
+
+/// Play `item` in `source` (`Auto` resolved with the app playing now). With
+/// Spotify connected (`spotify`), Spotify starts the song itself in the
+/// background; otherwise the app is opened on it.
+pub fn play(item: &Item, source: Source, playing_app: Option<&str>, spotify: Option<&super::spotify::Spotify>) -> Result<Played, String> {
     let have = installed();
     let to = resolve(source, playing_app, have);
+    let mut note = None;
+    if to == Source::Spotify {
+        if let Some(sp) = spotify.filter(|s| s.connected()) {
+            match sp.play(item) {
+                Ok(_) => return Ok(Played { to, started: true, note: None }),
+                Err(e) => note = Some(e),
+            }
+        }
+    }
     let url = link(to, item, have, &super::video::http_get, &http_get);
     crate::system::shell::shell_execute(&url, "").map_err(|e| match to {
         Source::Spotify => "Spotify isn't installed on this PC. Pick Spotify Web Player, or install Spotify.".to_string(),
         Source::AppleMusic if url.starts_with("musics:") => "The Apple Music app didn't open the song.".to_string(),
         _ => e.to_string(),
     })?;
-    Ok(to)
+    let started = to == Source::YoutubeMusic && url.contains("/watch?v=");
+    Ok(Played { to, started, note })
 }
 
 /// Which music apps can take a link (their link schemes are registered).

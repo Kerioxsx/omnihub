@@ -3186,6 +3186,33 @@ export interface MusicInstalled {
   appleMusic: boolean;
 }
 
+/** Where a song went: `started` when it plays already, else the app was opened on it. */
+export interface MusicPlayed {
+  to: MusicSource;
+  started: boolean;
+  /** Why Spotify couldn't start it straight away (then it was opened instead). */
+  note: string | null;
+}
+
+/** Spotify Connect: play straight away without opening Spotify. */
+export interface SpotifyStatus {
+  clientId: string;
+  connected: boolean;
+  name: string;
+  /** The redirect URI to add to the Spotify app. */
+  redirect: string;
+}
+
+/** How sharp the current cover is. */
+export interface CoverInfo {
+  width: number;
+  height: number;
+  /** "player", "Apple Music" or "Deezer". */
+  from: string;
+  hd: boolean;
+  looking: boolean;
+}
+
 // ---------- 0.21: guests, folder rules, focus and time, dev tools ----------
 
 export interface GuestLink {

@@ -601,8 +601,18 @@ export const api = {
     album: (id: string) => call<T.CatAlbumPage>('music_album', { id }),
     upNext: (title: string, artist: string) => call<T.CatUpNext>('music_up_next', { title, artist }),
     /** Returns the service it went to. */
-    play: (item: T.PlayItem, source: T.MusicSource, app: string | null) => call<T.MusicSource>('music_play', { item, source, app }),
+    play: (item: T.PlayItem, source: T.MusicSource, app: string | null) => call<T.MusicPlayed>('music_play', { item, source, app }),
     installed: () => call<T.MusicInstalled>('music_installed'),
+    /** Next in Spotify's queue (Spotify connected). */
+    queue: (item: T.PlayItem) => call<void>('music_queue', { item }),
+  },
+
+  /** Spotify Connect, with the user's own Spotify app (Client ID). */
+  spotify: {
+    status: () => call<T.SpotifyStatus>('spotify_status'),
+    /** Opens Spotify's sign-in in the browser and waits for it (up to 3 minutes). */
+    connect: (clientId: string) => call<string>('spotify_connect', { clientId }),
+    disconnect: () => call<void>('spotify_disconnect'),
   },
 
   /** Guest uploads: a QR code anyone nearby can scan to send files (no pairing). */
@@ -767,6 +777,8 @@ export const api = {
     state: () => call<{ state: T.MediaState | null; nowMs: number }>('media_state'),
     control: (action: T.MediaAction, positionMs = 0) => call<void>('media_control', { action, positionMs: Math.max(0, Math.round(positionMs)) }),
     lyrics: () => call<{ key: string | null; lyrics: T.LyricsStatus }>('media_lyrics'),
+    coverInfo: () => call<T.CoverInfo | null>('media_cover_info'),
+    coverRetry: () => call<void>('media_cover_retry'),
     video: () => call<{ key: string | null; video: T.VideoStatus }>('media_video'),
     /** The stream of a video YouTube will not embed (downloads yt-dlp and Deno the first time). */
     videoStream: (id: string, maxHeight: number) => call<string>('media_video_stream', { id, maxHeight }),

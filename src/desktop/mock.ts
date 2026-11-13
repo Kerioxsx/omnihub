@@ -55,6 +55,7 @@ let playClips: { path: string; name: string; size: number; created: number }[] =
 ];
 let capriOn = false;
 let capriInstalled = false;
+let mockSpotify = { clientId: '', connected: false, name: '' };
 const mockScanTask = { on: false };
 import { volumes } from './mock/drives';
 import * as media from './mock/media';
@@ -548,6 +549,17 @@ const handlers: Record<string, Handler> = {
   music_up_next: (a) => catalog.upNext(str(a, 'title'), str(a, 'artist')),
   music_play: (a) => catalog.play(obj<PlayItem>(a, 'item'), str(a, 'source') as MusicSource),
   music_installed: () => ({ spotify: true, appleMusic: false }),
+  music_queue: () => undefined,
+  spotify_status: () => ({ ...mockSpotify, redirect: 'http://127.0.0.1:43827/callback' }),
+  spotify_connect: (a) => {
+    mockSpotify = { clientId: str(a, 'clientId'), connected: true, name: 'Demo listener' };
+    return mockSpotify.name;
+  },
+  spotify_disconnect: () => {
+    mockSpotify = { ...mockSpotify, connected: false, name: '' };
+  },
+  media_cover_info: () => ({ width: 3000, height: 3000, from: 'Apple Music', hd: true, looking: false }),
+  media_cover_retry: () => undefined,
 
   // file tools, ports, layouts, privacy
   files_hash: (a) => tools.hash(str(a, 'path'), str(a, 'kind') as HashKind, str(a, 'job')),

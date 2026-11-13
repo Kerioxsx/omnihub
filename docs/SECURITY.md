@@ -827,7 +827,21 @@ internet only for:
   artist and album of the playing song go to Apple's iTunes Search API and
   to Deezer's public search (`api.deezer.com`), and the matching cover is
   downloaded at its original size (Apple: usually 3000×3000; Deezer:
-  1900×1900; at most 16 MB); covers are cached on the PC.
+  1900×1900; at most 16 MB); covers are cached on the PC. When none matches,
+  that is remembered for two days, then the song is looked up again
+  ("Look again" in Aurora's settings forgets it at once).
+- **Spotify Connect** (only when you connect it, in Aurora's settings): you
+  make your own app on developer.spotify.com and paste its Client ID.
+  Signing in uses Authorization Code with PKCE (no client secret): the
+  browser opens accounts.spotify.com and comes back to
+  `http://127.0.0.1:43827/callback`, a listener open only for that sign-in
+  (at most 3 minutes, this PC only) that checks a random `state` value. The
+  scopes are `user-read-playback-state` and `user-modify-playback-state`.
+  The refresh token is stored in `spotify.json`, encrypted with Windows
+  DPAPI for your account; the access token stays in memory. Playing a song
+  sends its title and artist to Spotify's search (`api.spotify.com`), reads
+  your devices and starts it on this PC's Spotify (started minimized when
+  it isn't running). Disconnect deletes the token.
 - **Music videos** (Aurora, on by default, can be turned off): the title and
   artist of the playing song go to YouTube's search page, and the artist's
   video plays from youtube-nocookie.com through OmniHub's relay page, or

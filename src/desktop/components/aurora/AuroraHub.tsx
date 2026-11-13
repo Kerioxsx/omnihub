@@ -24,7 +24,7 @@ import { toast } from '../../state/toasts';
 export const SOURCES: { value: MusicSource; label: string; color: string; icon: LucideIcon; hint: string }[] = [
   { value: 'auto', label: 'Automatic', color: 'linear-gradient(135deg,#a855f7,#22d3ee)', icon: Sparkles, hint: 'The app playing now, else your music app' },
   { value: 'appleMusic', label: 'Apple Music', color: '#fa2d48', icon: Music2, hint: 'Opens the song in Apple Music' },
-  { value: 'spotify', label: 'Spotify', color: '#1db954', icon: AudioLines, hint: 'Opens Spotify on the song (press play)' },
+  { value: 'spotify', label: 'Spotify', color: '#1db954', icon: AudioLines, hint: 'Plays right away when Spotify is connected (Aurora settings), else opens it on the song' },
   { value: 'spotifyWeb', label: 'Spotify Web Player', color: '#1db954', icon: Globe, hint: 'Spotify in your browser' },
   { value: 'youtubeMusic', label: 'YouTube Music', color: '#ff0033', icon: Play, hint: 'Plays the song on YouTube Music' },
   { value: 'soundcloud', label: 'SoundCloud', color: '#ff5500', icon: Cloud, hint: 'Opens SoundCloud on the song' },
@@ -49,9 +49,12 @@ function trackItem(t: CatTrack): PlayItem {
 /** Play in the chosen service; says where it went. */
 async function playIn(item: PlayItem, source: MusicSource, app: string | null) {
   try {
-    const to = await api.music.play(item, source, app);
+    const r = await api.music.play(item, source, app);
     const label = item.kind === 'artist' ? item.name : item.title;
-    toast.success(`${to === 'spotify' ? 'Opened' : 'Playing'} in ${sourceOf(to).label}`, label);
+    if (r.started) toast.success(`Playing in ${sourceOf(r.to).label}`, label);
+    else if (r.note) toast.info(`Opened in ${sourceOf(r.to).label} — press play`, r.note);
+    else if (r.to === 'spotify') toast.info('Opened in Spotify — press play', 'Connect Spotify in Aurora’s settings to start songs straight away, without leaving Aurora.');
+    else toast.success(`Opened in ${sourceOf(r.to).label}`, label);
   } catch (e) {
     toast.error('Couldn’t play it', errorText(e));
   }
@@ -97,31 +100,68 @@ function Cover({ src, className, round }: { src: string; className?: string; rou
   );
 }
 
+/** Whether Spotify is connected (asked once, shared by every row). */
+let spotifyAsk: Promise<boolean> | null = null;
+function useSpotifyConnected(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    spotifyAsk ??= api.spotify.status().then(
+      (s) => s.connected,
+      () => false,
+    );
+    void spotifyAsk.then(setOn);
+  }, []);
+  return on;
+}
+
+async function queueNext(t: CatTrack) {
+  try {
+    await api.music.queue(trackItem(t));
+    toast.success('Plays next in Spotify', t.title);
+  } catch (e) {
+    toast.error('Couldn’t queue it', errorText(e));
+  }
+}
+
 function SongRow({ t, onPlay, current, index }: { t: CatTrack; onPlay: () => void; current?: boolean; index?: number }) {
+  const canQueue = useSpotifyConnected();
   return (
-    <button type="button" onClick={onPlay} className={cx('group flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors', current ? 'bg-white/[0.14]' : 'hover:bg-white/[0.08]')}>
-      {index !== undefined ? (
-        <span className="w-5 shrink-0 text-center text-[12px] tabular-nums text-white/45">{current ? <AudioLines size={13} className="mx-auto text-white" /> : index + 1}</span>
-      ) : (
-        <span className="relative shrink-0">
-          <Cover src={t.cover} className="h-10 w-10" />
-          <span className="absolute inset-0 grid place-items-center rounded-[10px] bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
-            <Play size={14} fill="currentColor" />
+    <div className={cx('group flex w-full items-center rounded-xl transition-colors', current ? 'bg-white/[0.14]' : 'hover:bg-white/[0.08]')}>
+      <button type="button" onClick={onPlay} className="flex min-w-0 flex-1 items-center gap-3 px-2 py-1.5 text-left">
+        {index !== undefined ? (
+          <span className="w-5 shrink-0 text-center text-[12px] tabular-nums text-white/45">{current ? <AudioLines size={13} className="mx-auto text-white" /> : index + 1}</span>
+        ) : (
+          <span className="relative shrink-0">
+            <Cover src={t.cover} className="h-10 w-10" />
+            <span className="absolute inset-0 grid place-items-center rounded-[10px] bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+              <Play size={14} fill="currentColor" />
+            </span>
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className={cx('block truncate text-[13px] font-semibold', current && 'text-white')}>
+            {t.title}
+            {t.explicit && <span className="ml-1.5 rounded-[3px] bg-white/25 px-1 text-[9px] font-bold text-black/80">E</span>}
+          </span>
+          <span className="block truncate text-[11.5px] text-white/55">
+            {t.artist}
+            {index === undefined && t.album ? ` · ${t.album}` : ''}
           </span>
         </span>
+        {t.durationMs > 0 && <span className="shrink-0 text-[11.5px] tabular-nums text-white/40">{fmtTime(t.durationMs)}</span>}
+      </button>
+      {canQueue && !current && (
+        <button
+          type="button"
+          onClick={() => void queueNext(t)}
+          className="mr-1.5 grid h-7 w-7 shrink-0 place-items-center rounded-full text-white/60 opacity-0 transition-opacity hover:bg-white/15 hover:text-white focus-visible:opacity-100 group-hover:opacity-100"
+          aria-label={`Play ${t.title} next`}
+          title="Play next"
+        >
+          <ListMusic size={14} />
+        </button>
       )}
-      <span className="min-w-0 flex-1">
-        <span className={cx('block truncate text-[13px] font-semibold', current && 'text-white')}>
-          {t.title}
-          {t.explicit && <span className="ml-1.5 rounded-[3px] bg-white/25 px-1 text-[9px] font-bold text-black/80">E</span>}
-        </span>
-        <span className="block truncate text-[11.5px] text-white/55">
-          {t.artist}
-          {index === undefined && t.album ? ` · ${t.album}` : ''}
-        </span>
-      </span>
-      {t.durationMs > 0 && <span className="shrink-0 text-[11.5px] tabular-nums text-white/40">{fmtTime(t.durationMs)}</span>}
-    </button>
+    </div>
   );
 }
 

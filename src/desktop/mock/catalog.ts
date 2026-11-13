@@ -106,6 +106,7 @@ export async function upNext(title: string, artistName: string): Promise<CatUpNe
   return { track: t, album: { album: al, tracks: tracksOf(al) }, more: allTracks.filter((x) => x.artistId === a.id && x.albumId !== al.id).slice(0, 8), artist: a };
 }
 
-export function play(_item: PlayItem, source: MusicSource): MusicSource {
-  return source === 'auto' ? 'spotify' : source;
+export function play(_item: PlayItem, source: MusicSource): { to: MusicSource; started: boolean; note: string | null } {
+  const to = source === 'auto' ? 'spotify' : source;
+  return { to, started: to === 'spotify' || to === 'youtubeMusic', note: null };
 }

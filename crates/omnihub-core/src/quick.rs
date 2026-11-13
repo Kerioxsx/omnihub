@@ -823,7 +823,7 @@ impl crate::core::AppCore {
             QuickAction::Music { query } => {
                 let app = self.media.state().map(|m| m.app_name);
                 let item = crate::media::catalog::Item::Track { title: query.trim().to_string(), artist: String::new(), album: String::new() };
-                crate::media::catalog::play(&item, crate::media::catalog::Source::Auto, app.as_deref())?;
+                crate::media::catalog::play(&item, crate::media::catalog::Source::Auto, app.as_deref(), Some(&self.media.spotify))?;
                 Ok(format!("Playing {}", query.trim()))
             }
             QuickAction::Screen { width, height, hz } => {

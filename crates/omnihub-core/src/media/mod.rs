@@ -17,6 +17,7 @@ pub mod lyrics;
 pub mod mirror;
 pub mod mixer;
 pub mod outputs;
+pub mod spotify;
 pub mod motion;
 pub mod stream;
 pub mod video;
@@ -363,6 +364,29 @@ struct Art {
     bytes: Arc<Vec<u8>>,
     mime: String,
     hd: bool,
+    /// Where it came from: "player", "Apple Music" or "Deezer".
+    from: &'static str,
+}
+
+/// How sharp the current cover is, for Aurora's settings.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct CoverInfo {
+    pub width: u32,
+    pub height: u32,
+    pub from: String,
+    pub hd: bool,
+    /// Still looking for a sharper one.
+    pub looking: bool,
+}
+
+fn dimensions(bytes: &[u8]) -> (u32, u32) {
+    image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().ok().and_then(|r| r.into_dimensions().ok()).unwrap_or((0, 0))
+}
+
+/// The cover cache's key for a song ("v4": songs missed before are looked up again).
+fn cover_key(title: &str, artist: &str, album: &str, duration_ms: u64) -> String {
+    format!("v4\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}", title.to_lowercase(), artist.to_lowercase(), album.to_lowercase(), duration_ms / 4000)
 }
 
 impl Art {
@@ -392,7 +416,10 @@ pub struct MediaHub {
     quick_until: std::sync::atomic::AtomicI64,
     /// Look sharper covers up online (settings).
     hires_art: AtomicBool,
+    cover_looking: AtomicBool,
     covers: artwork::ArtCache,
+    /// Spotify Connect (play straight away), when the user connected it.
+    pub spotify: spotify::Spotify,
     /// Music videos per track (looked up when Aurora asks).
     videos: Mutex<HashMap<String, video::VideoStatus>>,
     video_cache: video::VideoCache,
@@ -430,7 +457,7 @@ impl MediaHub {
                 Box::new(NoBackend)
             }
         };
-        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), quick_until: std::sync::atomic::AtomicI64::new(0), hires_art: AtomicBool::new(false), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")), stream: stream::StreamTool::new(data_dir.join("tools").join("video")), motions: Mutex::new(HashMap::new()), motion: motion::MotionFinder::new(data_dir.join("motion")), look: look::LookFiles::new(data_dir.join("aurora-look")), syncs: Mutex::new(HashMap::new()), sync_cache: align::SyncCache::new(data_dir.join("videos").join("sync.json")), sync_running: Mutex::new(None), sync_asked: Mutex::new(HashMap::new()), sync_dir: data_dir.join("videos").join("soundtracks"), mirror: mirror::Mirror::new(fake) })
+        Arc::new(MediaHub { inner: Mutex::new(Inner { backend, tracker: Tracker::default(), state: None, art: None }), events, cache: LyricsCache::new(data_dir.join("lyrics")), lyrics: Mutex::new(HashMap::new()), fake, lrc_folder: Mutex::new(None), refetch: AtomicBool::new(false), quick_until: std::sync::atomic::AtomicI64::new(0), hires_art: AtomicBool::new(false), cover_looking: AtomicBool::new(false), spotify: spotify::Spotify::new(data_dir.to_path_buf()), covers: artwork::ArtCache::new(data_dir.join("covers")), videos: Mutex::new(HashMap::new()), video_cache: video::VideoCache::new(data_dir.join("videos")), stream: stream::StreamTool::new(data_dir.join("tools").join("video")), motions: Mutex::new(HashMap::new()), motion: motion::MotionFinder::new(data_dir.join("motion")), look: look::LookFiles::new(data_dir.join("aurora-look")), syncs: Mutex::new(HashMap::new()), sync_cache: align::SyncCache::new(data_dir.join("videos").join("sync.json")), sync_running: Mutex::new(None), sync_asked: Mutex::new(HashMap::new()), sync_dir: data_dir.join("videos").join("soundtracks"), mirror: mirror::Mirror::new(fake) })
     }
 
     /// Whether this is the pretend player (the mixer and open apps pretend too).
@@ -472,8 +499,10 @@ impl MediaHub {
             if g.art.as_ref().map(|a| &a.key) != Some(k) {
                 let (bytes, mime) = g.backend.art().unwrap_or_default();
                 let bytes = Arc::new(bytes);
-                g.art = Some(Art { key: k.clone(), bytes: bytes.clone(), mime, hd: false });
+                g.art = Some(Art { key: k.clone(), bytes: bytes.clone(), mime, hd: false, from: "player" });
+                self.cover_looking.store(false, Ordering::Relaxed);
                 if !self.fake && self.hires_art.load(Ordering::Relaxed) {
+                    self.cover_looking.store(true, Ordering::Relaxed);
                     self.upgrade_art(k.clone(), sn.title.clone(), sn.artist.clone(), sn.album.clone(), sn.duration_ms, bytes);
                 }
             }
@@ -770,6 +799,23 @@ impl MediaHub {
     }
 
     /// Look sharper covers up online (settings).
+    /// How sharp the current cover is and where it came from.
+    pub fn cover_info(&self) -> Option<CoverInfo> {
+        let g = self.inner.lock();
+        let a = g.art.as_ref().filter(|a| !a.bytes.is_empty())?;
+        let (width, height) = dimensions(&a.bytes);
+        Some(CoverInfo { width, height, from: a.from.into(), hd: a.hd, looking: self.cover_looking.load(Ordering::Relaxed) })
+    }
+
+    /// Forget what was found for this song and look for a sharper cover again.
+    pub fn retry_cover(&self) {
+        let mut g = self.inner.lock();
+        if let Some(st) = g.state.clone() {
+            self.covers.remove(&cover_key(&st.title, &st.artist, &st.album, st.duration_ms));
+        }
+        g.art = None;
+    }
+
     pub fn set_hires_art(&self, on: bool) {
         self.hires_art.store(on, Ordering::Relaxed);
     }
@@ -779,9 +825,8 @@ impl MediaHub {
     fn upgrade_art(self: &Arc<Self>, key: String, title: String, artist: String, album: String, duration_ms: u64, thumb: Arc<Vec<u8>>) {
         let hub = self.clone();
         std::thread::spawn(move || {
-            // "v3": matched by version too (a remix is not the original), and
-            // Deezer as well; songs missed before are looked up again.
-            let cache_key = format!("v3\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}", title.to_lowercase(), artist.to_lowercase(), album.to_lowercase(), duration_ms / 4000);
+            let cache_key = cover_key(&title, &artist, &album, duration_ms);
+            let done = |hub: &Arc<MediaHub>| hub.cover_looking.store(false, Ordering::Relaxed);
             let bytes = match hub.covers.get(&cache_key) {
                 Some(found) => found,
                 None => {
@@ -798,28 +843,46 @@ impl MediaHub {
                     }
                     if !reached {
                         // Offline or refused: try again next time.
+                        done(&hub);
                         return;
                     }
                     // The first that is a picture of the same cover (when the
                     // player gave one to compare); without one, only a close match.
                     let mut found = None;
-                    for c in candidates.iter().filter(|c| !thumb.is_empty() || c.score >= 10).take(5) {
+                    // A close second chance: the best match by song, if its
+                    // picture is near enough (players crop or re-encode covers).
+                    let mut near: Option<(f32, Vec<u8>)> = None;
+                    candidates.sort_by_key(|c| std::cmp::Reverse(c.score));
+                    for c in candidates.iter().filter(|c| !thumb.is_empty() || c.score >= 10).take(6) {
                         let Ok(b) = artwork::download(&c.url) else { continue };
-                        if artwork::mime_of(&b).is_some() && (thumb.is_empty() || artwork::difference(&thumb, &b).is_some_and(|d| d < 0.16)) {
-                            found = Some(b);
-                            break;
+                        if artwork::mime_of(&b).is_none() {
+                            continue;
+                        }
+                        let d = if thumb.is_empty() { Some(0.0) } else { artwork::difference(&thumb, &b) };
+                        match d {
+                            Some(d) if d < 0.16 => {
+                                found = Some(b);
+                                break;
+                            }
+                            Some(d) if d < 0.3 && c.score >= 10 && near.as_ref().is_none_or(|(n, _)| d < *n) => near = Some((d, b)),
+                            _ => {}
                         }
                     }
+                    let found = found.or(near.map(|(_, b)| b));
                     hub.covers.put(&cache_key, found.as_deref());
                     found
                 }
             };
-            let Some(bytes) = bytes else { return };
-            let Some(mime) = artwork::mime_of(&bytes) else { return };
+            let Some(bytes) = bytes else { return done(&hub) };
+            let Some(mime) = artwork::mime_of(&bytes) else { return done(&hub) };
+            // Which catalogue: Apple's covers come from mzstatic.com.
+            let from = if artwork::looks_like_deezer(&bytes) { "Deezer" } else { "Apple Music" };
             let mut g = hub.inner.lock();
             if g.art.as_ref().is_some_and(|a| a.key == key) {
-                g.art = Some(Art { key, bytes: Arc::new(bytes), mime: mime.into(), hd: true });
+                g.art = Some(Art { key, bytes: Arc::new(bytes), mime: mime.into(), hd: true, from });
             }
+            drop(g);
+            done(&hub);
         });
     }
 

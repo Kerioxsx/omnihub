@@ -1,14 +1,14 @@
 ## New in this version
 
-**Play resolution: switch the whole PC to 4K, 1440p (2K), 1080p or stretched 4:3 for a game.**
+**Aurora: sharp covers again, songs that start straight away, and more.**
 
-- **Where:** Games → Extras → Play resolution. Pick a size from the ones your screen offers (4K, 1440p (2K), 1080p, 900p, 720p, ultrawide, stretched 4:3 and more).
-- **Per game:** "Use with this game" switches the PC when that game starts and puts your normal resolution back when it closes. Or press "Switch now" / "Back to normal" yourself.
-- **Made for windowed fullscreen (borderless):** the game uses the PC's resolution, so there's nothing to change in the game and alt-tab stays instant.
-- **Faster switch:** OmniHub keeps your refresh rate and colour depth and asks the graphics card to do the scaling, so the monitor doesn't have to re-sync (no long black screen). It does nothing if you're already at that size, and it notices a game starting within about 4 seconds instead of 15.
-- 4K on a 1080p or 1440p monitor shows up once NVIDIA DSR or AMD VSR is turned on in the driver. For stretched 4:3, set scaling to full screen (GPU) in the driver.
-- The change lasts for this session only; Windows keeps your own resolution for the next start.
-- Not tested on a real Windows PC yet (built and checked here without a monitor). If a switch still blacks out the screen, your driver may not allow GPU scaling at that size.
+- **Sharper covers, fixed.** When the full-size cover couldn't be matched once, OmniHub remembered that for good and kept the player's small thumbnail. Now every song is looked up again (and again after two days if nothing was found), and the match accepts covers that the player cropped or re-compressed a little. Covers come from Apple Music (usually 3000×3000) or Deezer (1900×1900).
+- **Drawn sharper:** the full-size cover is drawn at the size it moves to, so the slow zoom doesn't soften it. A small cover is never stretched across the screen any more: it shows whole, with a shadow, over its own light.
+- **See the cover's quality:** Aurora settings → Sharper covers shows the cover's size and where it came from, with **Look again**.
+- **Spotify songs start right away.** Connect Spotify once (Aurora settings → Music hub → Play Spotify songs right away): songs, albums and artists you pick in Aurora start playing in Spotify in the background, without switching to Spotify. A song plays in its album, so the album continues after it. Spotify starts minimized if it's closed. This needs your own free Spotify developer app and Spotify Premium (Spotify's rule); the steps are in the settings. Without it, Spotify opens on the song as before.
+- **Play next:** with Spotify connected, every song row in Aurora has a Play next button that adds it to Spotify's queue.
+- Party mode and the Music quick action also start songs straight away when Spotify is connected.
+- Not tested on a real Windows PC with Spotify yet (built and checked here). If connecting fails, check that the Redirect URI in your Spotify app is exactly `http://127.0.0.1:43827/callback`.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

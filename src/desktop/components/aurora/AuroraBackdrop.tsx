@@ -452,6 +452,20 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
   // The whole cover: a square as big as the screen's shorter side.
   const side = Math.min(size.W, size.H);
   const wide = size.W >= size.H;
+  // A small cover (the player's thumbnail, when no sharper copy was found) is
+  // never stretched across the screen: it shows whole, at most about twice
+  // its own size, over its softened light.
+  const [artPx, setArtPx] = useState(0);
+  useEffect(() => {
+    setArtPx(0);
+    if (!art) return;
+    const img = new Image();
+    img.onload = () => setArtPx(Math.min(img.naturalWidth, img.naturalHeight));
+    img.src = art;
+  }, [art]);
+  const lowRes = artPx > 0 && artPx < 900;
+  const fit = lowRes ? 'whole' : scene.coverFit;
+  const coverSide = lowRes ? Math.min(side * 0.82, Math.max(420, artPx * 2)) : side;
 
   return (
     // With no cover (only a video), the light show stays visible underneath.
@@ -462,7 +476,7 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
         {art && (
           <motion.div key={art} className="absolute inset-0" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0.4 : 1.4, ease: [0.22, 1, 0.36, 1] }}>
             <div className="absolute inset-0" style={{ transform: `scale(calc(1 + var(--aurora-beat, 0) * ${(0.014 * m).toFixed(4)}))`, willChange: 'transform' }}>
-              {scene.coverFit === 'whole' ? (
+              {fit === 'whole' ? (
                 <>
                   {/* The screen around the cover: the cover itself, enlarged and
                       softened, so it reads as one picture reaching the edges. */}
@@ -481,12 +495,15 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
                   <div
                     className="absolute"
                     style={{
-                      width: side,
-                      height: side,
-                      left: (size.W - side) / 2,
-                      top: (size.H - side) / 2,
-                      maskImage: wide ? 'linear-gradient(to right, transparent, #000 9%, #000 91%, transparent)' : 'linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent)',
-                      WebkitMaskImage: wide ? 'linear-gradient(to right, transparent, #000 9%, #000 91%, transparent)' : 'linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent)',
+                      width: coverSide,
+                      height: coverSide,
+                      left: (size.W - coverSide) / 2,
+                      top: (size.H - coverSide) / 2,
+                      borderRadius: lowRes ? 18 : undefined,
+                      overflow: lowRes ? 'hidden' : undefined,
+                      boxShadow: lowRes ? '0 30px 90px -20px rgba(0,0,0,.85)' : undefined,
+                      maskImage: lowRes ? undefined : wide ? 'linear-gradient(to right, transparent, #000 9%, #000 91%, transparent)' : 'linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent)',
+                      WebkitMaskImage: lowRes ? undefined : wide ? 'linear-gradient(to right, transparent, #000 9%, #000 91%, transparent)' : 'linear-gradient(to bottom, transparent, #000 9%, #000 91%, transparent)',
                     }}
                   >
                     <img
@@ -495,7 +512,7 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
                       draggable={false}
                       decoding="async"
                       className="h-full w-full object-cover"
-                      style={{ ['--m' as string]: m * 0.5, animation: m > 0 ? `aurora-drift ${Math.round(46 / Math.max(0.3, scene.speed))}s ease-in-out infinite alternate` : undefined, animationPlayState: playing ? 'running' : 'paused', willChange: 'transform' }}
+                      style={{ ['--m' as string]: m * 0.5, animation: m > 0 ? `aurora-drift ${Math.round(46 / Math.max(0.3, scene.speed))}s ease-in-out infinite alternate` : undefined, animationPlayState: playing ? 'running' : 'paused' }}
                       data-aurora-cover
                     />
                   </div>
@@ -507,7 +524,7 @@ export const AuroraBackdrop = memo(function AuroraBackdrop({ scene, art, reduced
                   draggable={false}
                   decoding="async"
                   className="absolute left-[-5%] top-[-5%] h-[110%] w-[110%] max-w-none object-cover"
-                  style={{ objectPosition: `50% ${Math.round(focus * 100)}%`, ['--m' as string]: m, animation: m > 0 ? `aurora-drift ${Math.round(46 / Math.max(0.3, scene.speed))}s ease-in-out infinite alternate` : undefined, animationPlayState: playing ? 'running' : 'paused', willChange: 'transform' }}
+                  style={{ objectPosition: `50% ${Math.round(focus * 100)}%`, ['--m' as string]: m, animation: m > 0 ? `aurora-drift ${Math.round(46 / Math.max(0.3, scene.speed))}s ease-in-out infinite alternate` : undefined, animationPlayState: playing ? 'running' : 'paused' }}
                   data-aurora-cover
                 />
               )}

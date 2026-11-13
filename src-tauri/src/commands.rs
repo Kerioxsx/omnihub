@@ -1308,8 +1308,46 @@ pub async fn music_up_next(title: String, artist: String) -> Res<catalog::UpNext
 
 /// Play in the chosen service; returns the one it went to.
 #[tauri::command]
-pub async fn music_play(item: catalog::Item, source: catalog::Source, app: Option<String>) -> Res<catalog::Source> {
-    blocking(move || catalog::play(&item, source, app.as_deref())).await
+pub async fn music_play(core: Core<'_>, item: catalog::Item, source: catalog::Source, app: Option<String>) -> Res<catalog::Played> {
+    let core = core.inner().clone();
+    blocking(move || catalog::play(&item, source, app.as_deref(), Some(&core.media.spotify))).await
+}
+
+/// Put a song next in Spotify's queue (Spotify connected).
+#[tauri::command]
+pub async fn music_queue(core: Core<'_>, item: catalog::Item) -> Res<()> {
+    let core = core.inner().clone();
+    blocking(move || core.media.spotify.queue(&item)).await
+}
+
+#[tauri::command]
+pub async fn spotify_status(core: Core<'_>) -> Res<omnihub_core::media::spotify::Status> {
+    Ok(core.media.spotify.status())
+}
+
+/// Sign in to Spotify in the browser (waits up to 3 minutes); returns the account name.
+#[tauri::command]
+pub async fn spotify_connect(core: Core<'_>, client_id: String) -> Res<String> {
+    let core = core.inner().clone();
+    blocking(move || core.media.spotify.connect(&client_id)).await
+}
+
+#[tauri::command]
+pub async fn spotify_disconnect(core: Core<'_>) -> Res<()> {
+    core.media.spotify.disconnect()
+}
+
+/// How sharp the current cover is.
+#[tauri::command]
+pub async fn media_cover_info(core: Core<'_>) -> Res<Option<omnihub_core::media::CoverInfo>> {
+    Ok(core.media.cover_info())
+}
+
+/// Look for a sharper cover for the current song again.
+#[tauri::command]
+pub async fn media_cover_retry(core: Core<'_>) -> Res<()> {
+    core.media.retry_cover();
+    Ok(())
 }
 
 #[tauri::command]

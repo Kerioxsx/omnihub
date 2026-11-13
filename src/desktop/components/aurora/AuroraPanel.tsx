@@ -3,7 +3,7 @@
 // glow, colours), then the visual, the lyrics and the rest. Every change
 // shows at once and is saved (lib/aurora/settings.ts).
 
-import type { AmbientDisplay, Backdrop, ColorMode, Effects, LyricFont, MirrorStatus, SceneStyle, VideoStatus, VideoSync, VisualSettings, VisualStatus } from '@shared/types';
+import type { AmbientDisplay, Backdrop, ColorMode, CoverInfo, Effects, LyricFont, MirrorStatus, SceneStyle, SpotifyStatus, VideoStatus, VideoSync, VisualSettings, VisualStatus } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown, FolderOpen, RotateCcw, ShieldCheck, X } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useState } from 'react';
@@ -174,7 +174,128 @@ function HubSection({ v }: { v: VisualSettings }) {
           ))}
         </select>
       </label>
+      <SpotifyConnect />
     </Section>
+  );
+}
+
+/**
+ * Spotify Connect: with the user's own Spotify app, songs picked in Aurora
+ * start in Spotify straight away (in the background) instead of opening it.
+ */
+function SpotifyConnect() {
+  const [st, setSt] = useState<SpotifyStatus | null>(null);
+  const [id, setId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    void api.spotify.status().then(
+      (s) => {
+        setSt(s);
+        setId(s.clientId);
+      },
+      () => undefined,
+    );
+  }, []);
+  if (!st) return null;
+  const connect = async () => {
+    setBusy(true);
+    try {
+      const name = await api.spotify.connect(id.trim());
+      toast.success('Spotify is connected', name ? `Songs you pick start right away on ${name}’s Spotify.` : 'Songs you pick start right away.');
+      setSt(await api.spotify.status());
+      setOpen(false);
+    } catch (e) {
+      toast.error('Spotify didn’t connect', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-1.5 rounded-[12px] border border-white/10 bg-white/[0.04] p-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[12px] font-medium text-white/90">Play Spotify songs right away</div>
+          <div className="text-[11px] leading-snug text-white/50">
+            {st.connected ? `Connected${st.name ? ` as ${st.name}` : ''}: picked songs start in Spotify without leaving Aurora.` : 'Without this, Spotify opens on the song and you press play.'}
+          </div>
+        </div>
+        {st.connected ? (
+          <button type="button" onClick={() => void api.spotify.disconnect().then(() => api.spotify.status().then(setSt))} className="h-7 shrink-0 rounded-full bg-white/10 px-3 text-[11.5px] text-white/80 hover:bg-white/20">
+            Disconnect
+          </button>
+        ) : (
+          <button type="button" onClick={() => setOpen((o) => !o)} className="h-7 shrink-0 rounded-full bg-[#1db954] px-3 text-[11.5px] font-semibold text-black hover:brightness-110">
+            {open ? 'Close' : 'Set up'}
+          </button>
+        )}
+      </div>
+      {open && !st.connected && (
+        <div className="mt-2 space-y-1.5 text-[11px] leading-snug text-white/65">
+          <p>Spotify lets other apps start songs only through an app you make yourself (free, needs Spotify Premium). Once:</p>
+          <ol className="list-decimal space-y-0.5 pl-4">
+            <li>
+              Open{' '}
+              <button type="button" className="underline decoration-white/30 hover:text-white" onClick={() => void api.app.openUrl('https://developer.spotify.com/dashboard')}>
+                developer.spotify.com/dashboard
+              </button>{' '}
+              and <b>Create app</b> (any name, tick <b>Web API</b>).
+            </li>
+            <li>
+              As <b>Redirect URI</b> add{' '}
+              <button type="button" className="rounded bg-white/10 px-1 font-mono text-[10.5px] text-white/85 hover:bg-white/20" title="Copy" onClick={() => void navigator.clipboard?.writeText(st.redirect).then(() => toast.success('Copied', st.redirect))}>
+                {st.redirect}
+              </button>
+            </li>
+            <li>
+              Copy the app’s <b>Client ID</b> here and press Connect; sign in on the page that opens.
+            </li>
+          </ol>
+          <div className="flex gap-1.5 pt-0.5">
+            <input value={id} onChange={(e) => setId(e.target.value)} placeholder="Client ID" spellCheck={false} className="h-8 min-w-0 flex-1 rounded-[9px] border border-white/10 bg-white/[0.08] px-2 font-mono text-[11.5px] text-white outline-none focus:border-white/30" />
+            <button type="button" disabled={busy || !/^[0-9a-fA-F]{32}$/.test(id.trim())} onClick={() => void connect()} className="h-8 shrink-0 rounded-[9px] bg-[#1db954] px-3 text-[12px] font-semibold text-black disabled:opacity-40">
+              {busy ? 'Waiting…' : 'Connect'}
+            </button>
+          </div>
+          <p className="text-white/40">The Client ID stays on this PC; the sign-in is kept encrypted for your Windows account. Spotify’s own app plays the music.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** How sharp the cover is, with a button to look again. */
+function CoverQuality() {
+  const [info, setInfo] = useState<CoverInfo | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () =>
+      void api.media.coverInfo().then(
+        (i) => alive && setInfo(i),
+        () => undefined,
+      );
+    load();
+    const t = setInterval(load, 2500);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+  if (!info) return null;
+  const sharp = info.width >= 1000;
+  return (
+    <div className="flex items-center justify-between gap-2 py-1 text-[11px]">
+      <span className={sharp ? 'text-white/60' : 'text-amber-200/80'}>
+        This cover: {info.width}×{info.height}
+        {info.hd ? ` from ${info.from}` : ' from the player'}
+        {info.looking ? ' · looking for a sharper one…' : !sharp ? ' · no sharper copy found' : ''}
+      </span>
+      {!info.looking && (
+        <button type="button" onClick={() => void api.media.coverRetry().then(() => setInfo({ ...info, looking: true }))} className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-white/75 hover:bg-white/20">
+          Look again
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -929,10 +1050,11 @@ function SourcesSection() {
       />
       <Toggle
         label="Sharper covers"
-        hint="Players give Windows a small cover. This finds the same cover at 1200×1200 in Apple's iTunes catalogue (only the title, artist and album are sent) and uses it when it matches."
+        hint="Players give Windows a small cover. This finds the same cover at full size (usually 3000×3000) in Apple's catalogue or Deezer (only the title, artist and album are sent) and uses it when it matches."
         checked={media.hiresArt}
         onChange={(hiresArt) => void update({ media: { hiresArt } })}
       />
+      {media.hiresArt && <CoverQuality />}
     </Section>
   );
 }
