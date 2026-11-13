@@ -30,6 +30,17 @@
 - **Hit lines:** impact lines and a slash arc where you hit, gold on critical hits, and optional speed lines at the screen's edges while sprinting.
 - **World lyrics:** with OmniHub running on the same PC, the song you're playing shows its synced lyrics in the world: floating in front of you, huge in the sky, above your head or on the HUD. The sung part lights up; set colours, size, distance and a timing offset.
 
+## New in 0.3.0
+
+- **World colour:** General → World colour (neon) sets the colour of jump marks, world glyphs, the block outline and car underglow (or turn on Rainbow).
+- **Jump marks:** every jump leaves a neon mark on the floor: a six-point star, rune circle, ring, triangle or diamond, with sparks; landing from high up sends a shockwave.
+- **World glyphs:** neon symbols floating around you.
+- **Rain & wet ground:** rain that stops at roofs and splashes, with sound, and puddles that mirror the sky and ripple. Always, only when it really rains, or off.
+- **Hit sounds:** Pop, Ding, Thud, Click, Bass, Chime (Vesper's own) or Minecraft sounds, a different one on critical hits, volume and pitch.
+- **Emotes:** press **B** for the wheel: Flex, Wave, Dance, Salute, Cheer and Car flex (a car drops in next to you with neon underglow; Supercar, Muscle car or Hypercar, in any colour). Moving or attacking stops an emote; the camera turns to face you.
+- **Wraith head:** your head becomes a ghostly flame with spiked horns (colours and sizes adjustable).
+- **More:** Speed blur while sprinting, a neon Block outline, a Time changer (your own time of day), and items in your hand can now be as small as 0.2×.
+
 ## Performance
 
 - **General → Quality:** Low-end, Competitive, Balanced or Cinematic sets how many particles and how much detail Vesper's own effects use.

@@ -1,0 +1,56 @@
+{
+ "hit.pop": {
+  "category": "player",
+  "sounds": [
+   {
+    "name": "hit/pop",
+    "stream": false
+   }
+  ]
+ },
+ "hit.ding": {
+  "category": "player",
+  "sounds": [
+   {
+    "name": "hit/ding",
+    "stream": false
+   }
+  ]
+ },
+ "hit.thud": {
+  "category": "player",
+  "sounds": [
+   {
+    "name": "hit/thud",
+    "stream": false
+   }
+  ]
+ },
+ "hit.click": {
+  "category": "player",
+  "sounds": [
+   {
+    "name": "hit/click",
+    "stream": false
+   }
+  ]
+ },
+ "hit.bass": {
+  "category": "player",
+  "sounds": [
+   {
+    "name": "hit/bass",
+    "stream": false
+   }
+  ]
+ },
+ "hit.crit": {
+  "category": "player",
+  "sounds": [
+   {
+    "name": "hit/crit",
+    "stream": false
+   }
+  ]
+ }
+}

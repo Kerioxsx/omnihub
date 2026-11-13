@@ -105,4 +105,35 @@ public final class BlurModules {
             Gl.end2D();
         }
     }
+
+    /**
+     * Speed blur: the edges of the screen streak toward the centre while you
+     * sprint (or always), like moving fast. Under the HUD.
+     */
+    public static final class Speed extends Module {
+        public final NumberSetting amount = number("amount", "Strength", 0.5, 0.1, 1, 0.05, "");
+        public final BoolSetting always = bool("always", "Always (not only when sprinting)", false);
+        private final FrameGrab grab = new FrameGrab();
+        private float k;
+
+        public Speed() {
+            super("speedblur", "Speed blur", "The screen's edges streak toward the centre while you sprint.", Category.VISUALS, false, true);
+        }
+
+        @SubscribeEvent
+        public void onHud(RenderGameOverlayEvent.Pre e) {
+            if (e.type != RenderGameOverlayEvent.ElementType.ALL || !enabled() || General.calm()) return;
+            net.minecraft.client.entity.EntityPlayerSP p = Minecraft.getMinecraft().thePlayer;
+            if (p == null) return;
+            double v = Math.sqrt(p.motionX * p.motionX + p.motionZ * p.motionZ);
+            float target = always.on() ? 1 : p.isSprinting() ? Ease.clamp01((float) ((v - 0.1) / 0.18)) : 0;
+            k = Ease.approach(k, target, 4f, 1 / 60f);
+            if (k < 0.02f) return;
+            grab.copy();
+            grab.begin();
+            int taps = General.detail() <= 0 ? 4 : 7;
+            for (int i = 1; i <= taps; i++) grab.drawScaled(1f / (i + 1) * k, 1 + i * 0.012 * amount.f());
+            grab.end();
+        }
+    }
 }

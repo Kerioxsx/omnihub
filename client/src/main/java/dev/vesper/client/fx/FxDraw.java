@@ -119,6 +119,11 @@ public final class FxDraw {
         ring(cx, cy, cz, 1, 0, 0, 0, 0, 1, Math.max(0, r1), r2, ci, co, seg);
     }
 
+    /** Horizontal annulus with a default segment count. */
+    public static void ringH(double cx, double cy, double cz, double r1, double r2, int ci, int co) {
+        ringH(cx, cy, cz, r1, r2, ci, co, 24);
+    }
+
     /** A ring line of radius r and width wd lying flat, with a soft halo either side. */
     public static void glowRingH(double cx, double cy, double cz, double r, double wd, int c, int seg) {
         int clear = c & 0xFFFFFF;

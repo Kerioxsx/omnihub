@@ -42,6 +42,15 @@ Evidence lives in `docs/TEST_RESULTS.md` and `docs/screenshots/`.
 | T8.6 | 8 | Hit lines: impact burst, slash arc, crit colour, speed lines | lead | T5.1 | done | Burst and slash seen on a real hit |
 | T8.7 | 8 | World lyrics from OmniHub (front / sky / above / HUD), karaoke highlight, song card (ADR-9) | lead | — | partial | Front mode with highlight seen against a stand-in server; not yet with OmniHub itself |
 
+| T9.1 | 9 | World colour (neon, optional rainbow) used by the new effects | lead | — | done | Jump marks, glyphs, outline, underglow follow it |
+| T9.2 | 9 | Jump marks (six-point star, runes, ring, triangle, diamond), sparks, landing shockwave | lead | T9.1 | partial | Mark seen at the feet on a jump; landing shockwave not screenshotted |
+| T9.3 | 9 | World glyphs floating around you | lead | T9.1 | done | Seen in the world |
+| T9.4 | 9 | Rain (stops at roofs, splashes, sound) and puddles that mirror the sky with ripples | lead | — | partial | Rain, splashes, puddles and ripples seen; sound not heard (no audio device) |
+| T9.5 | 9 | Hit sounds (6 synthesized + 3 Minecraft), crit sound, pitch | lead | — | partial | Built and packaged; not heard (no audio device) |
+| T9.6 | 9 | Speed blur, block outline, time changer | lead | — | partial | Built; not screenshotted |
+| T9.7 | 9 | Emotes + wheel (B): flex, wave, dance, salute, cheer, car flex with 3 Blender cars and underglow | lead | — | partial | Wheel, car flex and flex seen; others not screenshotted |
+| T9.8 | 9 | Wraith head: hidden head, flame, Blender horns | lead | — | done | Seen in third person |
+
 ## Notes on partial items (0.1.0)
 
 - T1.3: keyboard navigation, reduced motion and scaling work; 4K not tested.

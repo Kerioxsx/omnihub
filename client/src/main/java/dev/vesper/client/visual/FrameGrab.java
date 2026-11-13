@@ -78,6 +78,22 @@ final class FrameGrab {
         t.draw();
     }
 
+    /** The copy scaled about the screen centre (zoom blur). */
+    void drawScaled(float alpha, double scale) {
+        ScaledResolution sr = new ScaledResolution(Minecraft.getMinecraft());
+        double sw = sr.getScaledWidth_double(), sh = sr.getScaledHeight_double();
+        double dx = sw * (scale - 1) / 2, dy = sh * (scale - 1) / 2;
+        GlStateManager.color(1, 1, 1, alpha);
+        Tessellator t = Tessellator.getInstance();
+        WorldRenderer wr = t.getWorldRenderer();
+        wr.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
+        wr.pos(-dx, sh + dy, 0).tex(0, 0).endVertex();
+        wr.pos(sw + dx, sh + dy, 0).tex(1, 0).endVertex();
+        wr.pos(sw + dx, -dy, 0).tex(1, 1).endVertex();
+        wr.pos(-dx, -dy, 0).tex(0, 1).endVertex();
+        t.draw();
+    }
+
     void end() {
         GlStateManager.color(1, 1, 1, 1);
         GlStateManager.enableDepth();

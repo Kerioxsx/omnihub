@@ -31,7 +31,7 @@ public final class SwingModule extends Module {
     public final ChoiceSetting block = choice("block", "While blocking", "swing", new String[] {"still", "swing", "push", "tilt"},
         new String[] {"1.8 (still)", "1.7 block-hit (swings)", "Push", "Tilted block-hit"});
     public final NumberSetting speed = number("speed", "Swing speed (look only)", 1.0, 0.4, 2.0, 0.05, "×");
-    public final NumberSetting size = number("size", "Item size", 1.0, 0.5, 1.5, 0.05, "×");
+    public final NumberSetting size = number("size", "Item size in hand", 1.0, 0.2, 1.5, 0.05, "×");
     public final NumberSetting x = number("x", "Left / right", 0, -0.6, 0.6, 0.02, "");
     public final NumberSetting y = number("y", "Down / up", 0, -0.6, 0.6, 0.02, "");
     public final NumberSetting z = number("z", "Near / far", 0, -0.6, 0.6, 0.02, "");

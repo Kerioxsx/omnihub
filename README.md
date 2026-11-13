@@ -32,6 +32,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.46.0
+
+- **Vesper Client 0.3.0**: neon jump marks (six-point star and more) in your chosen world colour, world glyphs, rain that splashes plus puddles that mirror the sky, hit sounds, emotes with a wheel (including a car flex with original cars), a Wraith flame head with horns, speed blur, a neon block outline and a time changer.
+
 ## New in 0.45.0
 
 - **Vesper Client 0.2.0**: four funny kill effects (Bonk!, Party Popper, Ghost Out, KA-POW!), full skies (3 new, daylight, moon, Milky Way, shooting stars, motes), menu and motion blur, FOV up to 150 with zoom, 8 swing and 4 block-hit styles, hit lines, and **live lyrics in your Minecraft world** from OmniHub (served on 127.0.0.1 only; can be turned off in Aurora's settings).

@@ -1,4 +1,4 @@
-# Known limitations — Vesper Client 0.2.0
+# Known limitations — Vesper Client 0.3.0
 
 - **Only you see it.** Cosmetics, skies and kill effects are drawn on your own screen. Other players see nothing unless they run Vesper too, and even then they don't see *your* cosmetics (there is no server or sync).
 - **Kill effects on public servers.** The game only tells a client about a kill for sure in singleplayer or on a LAN world you host. On servers, kill effects play only if you turn on "Kill messages from chat" (best effort, English death messages, and only for someone you hit in the last 5 seconds). A target that just disappears never counts.
@@ -14,3 +14,7 @@
 - **Sword animations** replace Minecraft's item renderer at run time (ADR-8). Another mod that does the same (some animation mods, possibly OptiFine features) may conflict; turn Sword animations off if hands look wrong. The Spin style turns around the grip, so the blade sweeps out of view.
 - **Motion blur** copies the screen every frame; on slow GPUs it costs some FPS. Menu blur draws 16 offset copies while a menu is open (8 on Low-end).
 - **FOV above 110** is applied only while a frame is drawn; Minecraft's own setting is never changed. It isn't applied while the Options or Video Settings screens are open.
+- **Emotes and the Wraith head** replace the player model at run time (ADR-11); another mod doing the same may conflict. Other players don't see your emotes, car or head.
+- **Rain and puddles** are drawn on top of the world; they are not real water and don't reflect blocks or players, only the sky's colour. Rain can show through glass roofs that let rain through in Minecraft too.
+- **Hit sounds and the rain sound** weren't heard in testing (the test machine has no audio device).
+- **Time changer** sets the time on your screen only; daylight and mob behaviour on the server don't change.

@@ -96,3 +96,16 @@ Screenshots referenced above are in `docs/screenshots/` locally (kept out of git
 | Hit lines: burst on the first frame, slash arc after | Pass (hits) |
 | World lyrics in front, karaoke highlight, next line | Pass against a stand-in for OmniHub's endpoint (v2-world) |
 | Not tested | Motion blur, FOV above 110, block-hit styles, HUD/sky/above lyric modes, daylight following the clock, with OmniHub itself, on a real GPU |
+
+## 0.3.0 (same environment)
+
+| Check | Result |
+|---|---|
+| Build | Pass: `vesper-client-0.3.0.jar`, 406 KB, with models, sounds and sounds.json |
+| Rain with splashes, world glyphs (night) | Pass (v3-world) |
+| Puddles with ripples (day) | Pass (v3-day, jumps) |
+| Jump mark at the feet | Pass (jumps, first frame) |
+| Wraith head: head hidden, flame, horns, third person | Pass (wraith) |
+| Emote wheel | Pass (wheel) |
+| Car flex (car drops in, underglow, arms crossed) and Flex | Pass (emotes) |
+| Not tested | Hit and rain sounds (no audio device), speed blur, block outline, time changer, wave/dance/salute/cheer, landing shockwave, other jump shapes, real GPU |
