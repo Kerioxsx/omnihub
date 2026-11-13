@@ -8,7 +8,9 @@ import { api } from '../../api';
 import { Page } from '../../components/Page';
 import { Button } from '../../components/ui/Button';
 import { Badge, Card, CardHeader } from '../../components/ui/Card';
-import { Switch } from '../../components/ui/Form';
+import { Segmented, Switch } from '../../components/ui/Form';
+import { useState } from 'react';
+import { LaunchersCard, LoadersCard } from './MinecraftHub';
 import { useSettings } from '../../state/settings';
 import { McClientCard } from '../mods/McClient';
 
@@ -45,10 +47,11 @@ const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
 export function ClientPage() {
   const media = useSettings((s) => s.settings?.media);
   const update = useSettings((s) => s.update);
+  const [tab, setTab] = useState<'vesper' | 'launchers' | 'loaders'>('vesper');
   return (
     <Page
-      title="Vesper Client"
-      subtitle={`OmniHub's own PvP client for Minecraft 1.8.9 · version ${VESPER_VERSION} · only you see its effects`}
+      title="Minecraft clients"
+      subtitle={`Vesper Client ${VESPER_VERSION} (OmniHub's own), every launcher and client, and loaders with mods for any Minecraft version`}
       actions={
         <div className="flex gap-2">
           <Button variant="secondary" icon={Download} onClick={() => void api.app.openUrl(JAR)}>
@@ -58,6 +61,20 @@ export function ClientPage() {
       }
     >
       <div className="grid gap-5 px-8 pb-10">
+        <Segmented
+          label="Section"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'vesper', label: 'Vesper Client' },
+            { value: 'launchers', label: 'Launchers & clients' },
+            { value: 'loaders', label: 'Loaders & mods' },
+          ]}
+        />
+        {tab === 'launchers' && <LaunchersCard onVesper={() => setTab('vesper')} />}
+        {tab === 'loaders' && <LoadersCard />}
+        {tab === 'vesper' && (
+        <>
         <div className="grid gap-5 xl:grid-cols-[1.25fr_1fr]">
           <McClientCard />
           <Card className="p-5">
@@ -113,6 +130,8 @@ export function ClientPage() {
               <Switch label="Lyrics in Minecraft" checked={media.gameLyrics} onChange={(gameLyrics) => void update({ media: { gameLyrics } })} />
             </div>
           </Card>
+        )}
+        </>
         )}
       </div>
     </Page>

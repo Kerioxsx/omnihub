@@ -1313,6 +1313,56 @@ pub async fn music_play(core: Core<'_>, item: catalog::Item, source: catalog::So
     blocking(move || catalog::play(&item, source, app.as_deref(), Some(&core.media.spotify))).await
 }
 
+// ---------- Minecraft hub: launchers, loaders and mods ----------
+
+use omnihub_core::mods::loaders;
+
+/// Minecraft versions a loader ("vanilla", "fabric", "forge", "neoforge", "quilt", "legacyfabric") has.
+#[tauri::command]
+pub async fn mc_loader_versions(core: Core<'_>, loader: String) -> Res<Vec<String>> {
+    let core = core.inner().clone();
+    blocking(move || loaders::versions(&core.mcserver.web, &loader)).await
+}
+
+/// Install a loader for a Minecraft version as a profile in the Minecraft Launcher.
+#[tauri::command]
+pub async fn mc_loader_install(core: Core<'_>, loader: String, mc: String) -> Res<loaders::Made> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let mc_dir = core.mods.minecraft.minecraft_dir().map(std::path::Path::to_path_buf).filter(|p| p.is_dir()).ok_or("Minecraft (Java Edition) isn't installed: install the Minecraft Launcher and open it once.")?;
+        let forge = |l: &str, m: &str, v: &str| core.mcserver.install_client_loader(l, m, v, &mc_dir, &mut |_, _, _| {});
+        loaders::install(&core.mcserver.web, &mc_dir, &loader, &mc, &forge)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn mc_mod_search(core: Core<'_>, loader: String, mc: String, query: String) -> Res<Vec<omnihub_core::mods::minecraft::ProjectHit>> {
+    let core = core.inner().clone();
+    blocking(move || loaders::search_mods(&core.mods.minecraft, &loader, &mc, &query)).await
+}
+
+#[tauri::command]
+pub async fn mc_mod_install(core: Core<'_>, loader: String, mc: String, project: String) -> Res<Vec<String>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        let mc_dir = core.mods.minecraft.minecraft_dir().map(std::path::Path::to_path_buf).ok_or("Minecraft isn't installed.")?;
+        loaders::install_mod(&core.mods.minecraft, &mc_dir, &loader, &mc, &project)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn mc_mods_in(core: Core<'_>, loader: String, mc: String) -> Res<Vec<String>> {
+    Ok(core.mods.minecraft.minecraft_dir().map(|d| loaders::mods_in(d, &loader, &mc)).unwrap_or_default())
+}
+
+/// Install an app (a launcher or client) with winget.
+#[tauri::command]
+pub async fn app_install_winget(id: String) -> Res<()> {
+    blocking(move || omnihub_core::winget::install(&id)).await
+}
+
 /// Put a song next in Spotify's queue (Spotify connected).
 #[tauri::command]
 pub async fn music_queue(core: Core<'_>, item: catalog::Item) -> Res<()> {

@@ -550,6 +550,15 @@ const handlers: Record<string, Handler> = {
   music_play: (a) => catalog.play(obj<PlayItem>(a, 'item'), str(a, 'source') as MusicSource),
   music_installed: () => ({ spotify: true, appleMusic: false }),
   music_queue: () => undefined,
+  mc_loader_versions: (a) => (str(a, 'loader') === 'legacyfabric' ? ['1.13.2', '1.12.2', '1.8.9'] : ['1.21.4', '1.21.1', '1.20.1', '1.19.2', '1.16.5']),
+  mc_loader_install: (a) => ({ profile: `${str(a, 'loader')} ${str(a, 'mc')} (OmniHub)`, versionId: `${str(a, 'loader')}-${str(a, 'mc')}`, loaderVersion: '0.16.9', gameDir: 'C:\\Users\\you\\AppData\\Roaming\\.minecraft\\omnihub\\instances' }),
+  mc_mod_search: () => [
+    { project: 'AANobbMI', slug: 'sodium', title: 'Sodium', description: 'The fastest rendering engine for Minecraft.', author: 'jellysquid3', icon: null, downloads: 9e7, categories: ['fabric'], serverSide: 'unsupported', clientSide: 'required' },
+    { project: 'gvQqBUqZ', slug: 'lithium', title: 'Lithium', description: 'General-purpose optimization mod.', author: 'jellysquid3', icon: null, downloads: 5e7, categories: ['fabric'], serverSide: 'optional', clientSide: 'optional' },
+  ],
+  mc_mod_install: () => ['sodium-fabric-0.6.jar'],
+  mc_mods_in: () => [],
+  app_install_winget: () => undefined,
   spotify_status: () => ({ ...mockSpotify, redirect: 'http://127.0.0.1:43827/callback' }),
   spotify_connect: (a) => {
     mockSpotify = { clientId: str(a, 'clientId'), connected: true, name: 'Demo listener' };

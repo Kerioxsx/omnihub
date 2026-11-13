@@ -607,6 +607,16 @@ export const api = {
     queue: (item: T.PlayItem) => call<void>('music_queue', { item }),
   },
 
+  /** Minecraft hub: loaders for any version, their mods, and launchers via winget. */
+  mcHub: {
+    versions: (loader: string) => call<string[]>('mc_loader_versions', { loader }),
+    install: (loader: string, mc: string) => call<T.McLoaderMade>('mc_loader_install', { loader, mc }),
+    searchMods: (loader: string, mc: string, query: string) => call<T.McPackSearchHit[]>('mc_mod_search', { loader, mc, query }),
+    installMod: (loader: string, mc: string, project: string) => call<string[]>('mc_mod_install', { loader, mc, project }),
+    modsIn: (loader: string, mc: string) => call<string[]>('mc_mods_in', { loader, mc }),
+    winget: (id: string) => call<void>('app_install_winget', { id }),
+  },
+
   /** Spotify Connect, with the user's own Spotify app (Client ID). */
   spotify: {
     status: () => call<T.SpotifyStatus>('spotify_status'),

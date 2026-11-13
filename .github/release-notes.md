@@ -1,15 +1,12 @@
 ## New in this version
 
-**A Client tab for Vesper, resource packs inside Minecraft, an FPS boost, redesigned horns and cars, and OmniHub is now MIT-licensed.**
+**A Minecraft hub: every launcher and client, and Forge, NeoForge, Fabric, Quilt or Legacy Fabric for any version, with mods.**
 
-- **Client tab:** Vesper Client has its own tab in OmniHub (Play → Client): one-click install as a profile in the official launcher, the jar for doing it by hand, and exactly what it needs.
-- **What Vesper needs:** Minecraft Java Edition **1.8.9**, loader **Forge 1.8.9-11.15.1.2318** (not Fabric, Legacy Fabric or NeoForge), Java 8 from the launcher, and **no other mods**. PolyPatcher is optional for more FPS.
-- **Resource packs inside the game:** Client → Resource packs (or the new button on Minecraft's Resource Packs screen) searches Modrinth's 1.8.9 packs and downloads one in a click, checked against Modrinth's checksum.
-- **FPS boost:** one switch for fast video settings; your own settings come back exactly when you turn it off.
-- **Wraith head redesigned:** taller curling horns with bands, thorns and a blue fade, and a new crystal flame style.
-- **Cars redesigned:** smoother bodies, side intakes, rear wings, black rims, coloured callipers, glossy black with a red underglow by default (all adjustable). Original designs, no real brands.
-- **Open source:** OmniHub, Vesper Client and OmniHub Kill Effects are now under the MIT licence.
-- Tested in Minecraft with software rendering; the FPS boost hasn't been measured on a real graphics card yet.
+- **Launchers & clients** (Play → Client): the Minecraft Launcher, Prism Launcher, Modrinth App, CurseForge, ATLauncher, MultiMC and GDLauncher; Lunar Client, Badlion, LabyMod, Feather and Vesper. One click installs it from the publisher (Windows' winget), or opens the official download page, which also works for a Mac or Linux PC.
+- **Loaders for any version:** pick Fabric, Forge, NeoForge, Quilt, Legacy Fabric or plain Minecraft and a version; OmniHub adds it as a profile in the official Minecraft Launcher with its own folder, so different versions' mods never mix. Forge and NeoForge use their own installer, with Java fetched when needed.
+- **Mods for that version:** search Modrinth and add mods in a click; what a mod needs comes with it.
+- Also in this release (from 0.47 and 0.48): the Client tab for Vesper, resource packs inside Minecraft, the FPS boost, redesigned Wraith horns and cars, and the MIT licence.
+- Not tested on a real Windows PC yet: the winget installs and the loader installs were built and checked here, but not run end to end against a real Minecraft Launcher.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

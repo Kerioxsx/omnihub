@@ -11,6 +11,7 @@
 pub mod cover;
 pub mod detect;
 pub mod install;
+pub mod loaders;
 pub mod launchers;
 pub mod maker;
 pub mod mcclient;

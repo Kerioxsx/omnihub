@@ -3205,6 +3205,14 @@ export interface SpotifyStatus {
   redirect: string;
 }
 
+/** A loader installed as a Minecraft Launcher profile by OmniHub. */
+export interface McLoaderMade {
+  profile: string;
+  versionId: string;
+  loaderVersion: string;
+  gameDir: string;
+}
+
 /** How sharp the current cover is. */
 export interface CoverInfo {
   width: number;

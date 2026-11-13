@@ -830,6 +830,18 @@ internet only for:
   1900×1900; at most 16 MB); covers are cached on the PC. When none matches,
   that is remembered for two days, then the song is looked up again
   ("Look again" in Aurora's settings forgets it at once).
+- **Minecraft hub** (Play → Client, only when you press a button): launchers
+  and clients install with Windows' `winget` from the publisher's own
+  package (exact id, silent), or open the publisher's download page. Loaders
+  come from their official sources only: Fabric (`meta.fabricmc.net`), Quilt
+  (`meta.quiltmc.org`), Legacy Fabric (`meta.legacyfabric.net`), Forge
+  (`maven.minecraftforge.net`, installer checked against its published
+  checksum) and NeoForge (`maven.neoforged.net`); Forge and NeoForge run
+  their own installer with Eclipse Temurin Java when needed. Each install
+  writes a version file and a profile in the Minecraft Launcher's list (a
+  backup of the list is kept), with its own game folder under
+  `.minecraft/omnihub/instances/`. Mods come from Modrinth, checked against
+  Modrinth's hashes.
 - **Lyrics for games** (Music, on by default, can be turned off in Aurora's
   settings): OmniHub serves the playing song's title, artist, position and
   synced lyric lines read-only at `http://127.0.0.1:47830/vesper/lyrics`,

@@ -74,6 +74,20 @@ pub fn updates() -> Result<Vec<AppUpdate>, String> {
     Ok(parse_upgrades(&winget(&["upgrade", "--include-unknown"])?))
 }
 
+/// Install one app by its exact winget id (its installer may ask for administrator rights).
+pub fn install(id: &str) -> Result<(), String> {
+    if !valid_id(id) {
+        return Err("That isn't a winget package id.".into());
+    }
+    let out = winget(&["install", "--id", id, "--exact", "--silent", "--accept-package-agreements"])?;
+    let low = out.to_lowercase();
+    if low.contains("successfully installed") || low.contains("already installed") || low.contains("no available upgrade") || low.contains("no newer package") {
+        Ok(())
+    } else {
+        Err(out.lines().rev().map(str::trim).find(|l| !l.is_empty() && !l.chars().all(|c| "-\\|/ █▒".contains(c))).unwrap_or("winget didn't install it.").to_string())
+    }
+}
+
 /// Update one app quietly (its installer may still ask for administrator rights).
 pub fn update(id: &str) -> Result<(), String> {
     if !valid_id(id) {
