@@ -53,8 +53,12 @@
 
 ## New in 0.4.0
 
-- **Resource packs inside the game:** Client → Resource packs, or the *Browse online (Vesper)* button on Minecraft's Resource Packs screen. Search Modrinth's 1.8.9 packs and press Download; the pack is checked against Modrinth's checksum, saved in your resourcepacks folder and listed right away (turn it on in Resource Packs).
+- **Resource packs inside the game:** Client → Resource packs, or the *Get packs (Vesper)* button on Minecraft's Resource Packs screen. Search Modrinth's 1.8.9 packs and press Download; the pack is checked against Modrinth's checksum, saved in your resourcepacks folder and listed right away (turn it on in Resource Packs).
 - **FPS boost:** Performance → *FPS boost game settings* switches to fast settings (fast graphics, no clouds, minimal particles, no entity shadows, smooth lighting off, VBOs on, vsync off, render distance capped) and saves yours; turn it off and yours come back exactly.
+
+## New in 0.4.2
+
+- **Install resource packs in one click:** on Minecraft's Resource Packs screen press *Get packs (Vesper)* (or Client → Resource packs), search, and press **Install**. The pack is downloaded, checked against Modrinth's checksum, turned on at the top of your packs and loaded straight away; it stays on next time. Click it again (*Turn off*) to switch it off. Downloads retry by themselves if the connection drops.
 
 ## New in 0.4.1
 

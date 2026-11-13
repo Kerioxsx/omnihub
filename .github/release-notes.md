@@ -1,12 +1,12 @@
 ## New in this version
 
-**A cleaner, calmer look across the app and the website.**
+**Forge installs that keep going, and resource packs that install in one click inside Minecraft.**
 
-- Page edges line up again on the Client tab, and its section tabs no longer stretch across the page.
-- Headings and the storage total use plain, solid colour instead of gradient text.
-- Stronger, quicker easing on cards and the Big Picture exit; cards give a small press when clicked.
-- Text fields and native controls use your theme's accent for the caret and checkboxes; headings wrap evenly and numbers line up in tables.
-- Website: buttons answer a click with a small press, and the Vesper version badge sits level with its heading.
+- **Forge doesn't give up:** when Forge's site is slow, down or blocked, OmniHub retries, then gets the same files from mirrors (BMCLAPI and Maven's second address), first through the proxy Windows is set to and then directly. Every file is still checked against Forge's own checksums, so a mirror can't change what's installed. Applies to OmniHub Client 1.8.9, Forge and NeoForge for any version, and Forge/NeoForge servers.
+- If Forge's own installer stops halfway (a dropped connection), it runs again by itself and picks up where it stopped. Damaged library files left from an earlier failed install are fetched again.
+- **Resource packs in one click (Vesper 0.4.2):** Minecraft's Resource Packs screen → *Get packs (Vesper)* → **Install**. The pack downloads, turns on at the top of your packs and loads straight away. Click again to turn it off.
+- Packs added from OmniHub's Client tab are now turned on for the next game start too.
+- Honest note: no download can be guaranteed when there is no internet at all, but it now takes every source being unreachable at once for an install to fail, and the message then lists what was tried. The mirror path was checked here (the mirrors serve byte-identical Forge 1.8.9 files); a full install with Forge's site blocked hasn't been run on a real Windows PC.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

@@ -110,6 +110,23 @@ public final class Modrinth {
         return out.toByteArray();
     }
 
+    /** {@link #read} with up to three tries, a little longer apart each time. */
+    private static byte[] fetch(String url, int max) throws Exception {
+        Exception last = null;
+        for (int n = 0; n < 3; n++) {
+            if (n > 0) Thread.sleep(700L * n * n);
+            try {
+                return read(open(url), max);
+            } catch (IllegalArgumentException e) {
+                throw e;
+            } catch (Exception e) {
+                last = e;
+                if (String.valueOf(e.getMessage()).contains("answered 404")) break;
+            }
+        }
+        throw last;
+    }
+
     private static String str(JsonObject o, String k) {
         JsonElement e = o.get(k);
         return e == null || e.isJsonNull() ? "" : e.getAsString();
@@ -120,7 +137,7 @@ public final class Modrinth {
         String facets = URLEncoder.encode("[[\"project_type:resourcepack\"],[\"versions:1.8.9\"]]", "UTF-8");
         String url = "https://api.modrinth.com/v2/search?limit=30&index=" + (query.trim().isEmpty() ? "downloads" : "relevance")
             + "&query=" + URLEncoder.encode(query.trim(), "UTF-8") + "&facets=" + facets;
-        JsonObject o = new JsonParser().parse(new String(read(open(url), 4 << 20), "UTF-8")).getAsJsonObject();
+        JsonObject o = new JsonParser().parse(new String(fetch(url, 4 << 20), "UTF-8")).getAsJsonObject();
         List<Pack> out = new ArrayList<Pack>();
         for (JsonElement e : o.getAsJsonArray("hits")) {
             JsonObject h = e.getAsJsonObject();
@@ -133,7 +150,7 @@ public final class Modrinth {
     public static String install(String projectId, File dir) throws Exception {
         if (!projectId.matches("[A-Za-z0-9]{1,32}")) throw new IllegalArgumentException("bad id");
         String gv = URLEncoder.encode("[\"1.8.9\"]", "UTF-8");
-        JsonArray versions = new JsonParser().parse(new String(read(open("https://api.modrinth.com/v2/project/" + projectId + "/version?game_versions=" + gv), 4 << 20), "UTF-8")).getAsJsonArray();
+        JsonArray versions = new JsonParser().parse(new String(fetch("https://api.modrinth.com/v2/project/" + projectId + "/version?game_versions=" + gv, 4 << 20), "UTF-8")).getAsJsonArray();
         if (versions.size() == 0) throw new IllegalStateException("No 1.8.9 version of this pack");
         JsonArray files = versions.get(0).getAsJsonObject().getAsJsonArray("files");
         JsonObject f = null;
@@ -142,7 +159,7 @@ public final class Modrinth {
         String name = new File(str(f, "filename")).getName();
         if (!name.toLowerCase().endsWith(".zip") || name.contains("..")) throw new IllegalStateException("Not a .zip pack");
         String sha1 = str(f.getAsJsonObject("hashes"), "sha1");
-        byte[] data = read(open(str(f, "url")), 256 << 20);
+        byte[] data = fetch(str(f, "url"), 256 << 20);
         MessageDigest md = MessageDigest.getInstance("SHA-1");
         StringBuilder hex = new StringBuilder();
         for (byte b : md.digest(data)) hex.append(String.format("%02x", b & 0xFF));

@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "dev.vesper"
-version = "0.4.1"
+version = "0.4.2"
 
 java {
     toolchain.languageVersion.set(JavaLanguageVersion.of(8))

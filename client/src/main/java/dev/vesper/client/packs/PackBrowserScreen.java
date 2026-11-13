@@ -16,6 +16,7 @@ import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiScreenResourcePacks;
 import net.minecraft.client.gui.GuiTextField;
+import net.minecraft.client.resources.ResourcePackRepository;
 import net.minecraftforge.client.event.GuiScreenEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
@@ -23,9 +24,9 @@ import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
 /**
- * Browse and download resource packs for 1.8.9 from Modrinth inside the
- * game. Downloaded packs land in the resourcepacks folder and show up in
- * Minecraft's Resource Packs screen right away (turn them on there).
+ * Browse and install resource packs for 1.8.9 from Modrinth inside the
+ * game. Install downloads the pack into the resourcepacks folder and turns
+ * it on at the top of your packs; clicking it again turns it off.
  */
 public final class PackBrowserScreen extends GuiScreen {
     private final GuiScreen parent;
@@ -33,6 +34,7 @@ public final class PackBrowserScreen extends GuiScreen {
     private volatile List<Modrinth.Pack> hits = new ArrayList<Modrinth.Pack>();
     private volatile String status = "Loading popular packs…";
     private final Set<String> busy = new HashSet<String>(), done = new HashSet<String>();
+    private final java.util.Map<String, String> names = new java.util.HashMap<String, String>();
     private float scroll;
     private long typedAt;
     private String lastQuery = null;
@@ -46,7 +48,7 @@ public final class PackBrowserScreen extends GuiScreen {
         MinecraftForge.EVENT_BUS.register(new Object() {
             @SubscribeEvent
             public void onInit(GuiScreenEvent.InitGuiEvent.Post e) {
-                if (e.gui instanceof GuiScreenResourcePacks) e.buttonList.add(new GuiButton(7731, e.gui.width - 128, 6, 120, 20, "Browse online (Vesper)"));
+                if (e.gui instanceof GuiScreenResourcePacks) e.buttonList.add(new GuiButton(7731, e.gui.width - 128, 6, 120, 20, "Get packs (Vesper)"));
             }
 
             @SubscribeEvent
@@ -92,19 +94,59 @@ public final class PackBrowserScreen extends GuiScreen {
         t.start();
     }
 
+    /**
+     * Turns the pack in the resourcepacks folder called {@code file} on (at
+     * the top, so it wins over the others) or off, saves that in options.txt
+     * and reloads the game's resources. Main thread only.
+     */
+    static boolean setEnabled(Minecraft mc, String file, boolean on) {
+        ResourcePackRepository repo = mc.getResourcePackRepository();
+        repo.updateRepositoryEntriesAll();
+        List<ResourcePackRepository.Entry> active = new ArrayList<ResourcePackRepository.Entry>(repo.getRepositoryEntries());
+        ResourcePackRepository.Entry pick = null;
+        for (ResourcePackRepository.Entry e : repo.getRepositoryEntriesAll()) if (e.getResourcePackName().equals(file)) pick = e;
+        if (pick == null) return false;
+        for (ResourcePackRepository.Entry e : new ArrayList<ResourcePackRepository.Entry>(active)) if (e.getResourcePackName().equals(file)) active.remove(e);
+        // The last entry is the one on top in the Resource Packs screen.
+        if (on) active.add(pick);
+        repo.setRepositories(active);
+        mc.gameSettings.resourcePacks.clear();
+        mc.gameSettings.incompatibleResourcePacks.clear();
+        for (ResourcePackRepository.Entry e : active) {
+            mc.gameSettings.resourcePacks.add(e.getResourcePackName());
+            if (e.func_183027_f() != 1) mc.gameSettings.incompatibleResourcePacks.add(e.getResourcePackName());
+        }
+        mc.gameSettings.saveOptions();
+        mc.refreshResources();
+        return true;
+    }
+
     private void download(final Modrinth.Pack p) {
         if (busy.contains(p.id)) return;
+        if (done.contains(p.id) && names.containsKey(p.id)) {
+            // Installed and on: a second click turns it off again.
+            if (setEnabled(mc, names.get(p.id), false)) {
+                done.remove(p.id);
+                status = "Turned off " + p.title + ". Click Install to turn it back on.";
+            }
+            return;
+        }
         busy.add(p.id);
         final File dir = mc.getResourcePackRepository().getDirResourcepacks();
         Thread t = new Thread(new Runnable() {
             public void run() {
                 try {
                     final String name = Modrinth.install(p.id, dir);
-                    done.add(p.id);
-                    status = "Downloaded " + name + ". Turn it on in Resource Packs.";
+                    names.put(p.id, name);
+                    status = "Turning on " + name + "…";
                     mc.addScheduledTask(new Runnable() {
                         public void run() {
-                            mc.getResourcePackRepository().updateRepositoryEntriesAll();
+                            if (setEnabled(mc, name, true)) {
+                                done.add(p.id);
+                                status = "Installed and turned on " + p.title + ".";
+                            } else {
+                                status = "Downloaded " + name + ", but it couldn't be turned on: pick it in Resource Packs.";
+                            }
                         }
                     });
                 } catch (Exception e) {
@@ -187,9 +229,11 @@ public final class PackBrowserScreen extends GuiScreen {
             Gl.end2D();
             String title = p.title.length() > 40 ? p.title.substring(0, 39) + "…" : p.title;
             GlyphFont.draw(title, x + 8, y + 3, 9, true, 0xFFFFFFFF);
-            String desc = p.description.length() > 62 ? p.description.substring(0, 61) + "…" : p.description;
+            // Emoji aren't in the game's font: leave them out rather than show "??".
+            String desc = p.description.replaceAll("[\\uD800-\\uDFFF\\u2600-\\u27BF\\uFE0F]", "").replaceAll("\\s+", " ").trim();
+            desc = desc.length() > 62 ? desc.substring(0, 61) + "…" : desc;
             GlyphFont.draw(desc, x + 8, y + 16, 7, false, 0xFFA8ACB8);
-            String label = busy.contains(p.id) ? "…" : done.contains(p.id) ? "Added" : "Download";
+            String label = busy.contains(p.id) ? "…" : done.contains(p.id) ? (hover ? "Turn off" : "On") : "Install";
             GlyphFont.drawCentered(label, bx + 35, y + 10, 8, true, 0xFF0B0B10);
         }
         GlyphFont.drawCentered(status, width / 2f, height - 44, 8, false, 0xFFC8CCD6);

@@ -272,11 +272,25 @@ and lets a phone do some of that. This is what protects each part.
   (SMBIOS type 17) against the speed its part number says the kit is sold
   at, with a link to Windows' Recovery settings; EXPO and XMP are BIOS
   settings OmniHub never changes.
-- OmniHub Client (Minecraft 1.8.9): Forge's installer comes from
-  maven.minecraftforge.net and is checked against the SHA-1 Forge publishes
-  next to it; its libraries are checked against the SHA-1s in Forge's install
-  profile or the `.sha1` file the library server publishes (Forge's Maven,
-  libraries.minecraft.net, Maven Central only). Mods and resource packs come
+- OmniHub Client (Minecraft 1.8.9): Forge's installer is checked against
+  the SHA-1 Forge publishes for it, built into the app; its libraries
+  against the SHA-1s in Forge's install profile, SHA-1s built into the app
+  (taken from the publishers' own `.sha1` files) or the `.sha1` file on the
+  publisher's server (Forge's Maven, libraries.minecraft.net, Maven Central),
+  never a mirror's. A file already on disk that doesn't match is fetched again.
+- Download fallbacks (Forge and NeoForge installers, the 1.8.9 Forge
+  libraries, Vesper and the kill-effects mod): each file is tried at its
+  publisher, then at mirrors that copy the same paths (BMCLAPI,
+  `bmclapi2.bangbang93.com`, for Forge, NeoForge, Mojang and Fabric files;
+  `repo.maven.apache.org` for Maven Central), up to three times each with a
+  growing pause, first through the proxy Windows (or HTTPS_PROXY) is set to,
+  then directly. HTTPS only. Whatever comes back must match the publisher's
+  checksum (or one built in) before it's saved, so a mirror or proxy can make
+  a download work but can't change what's installed. Checksums themselves are
+  only read from the publisher. If Forge's own installer stops while it
+  fetches its libraries, it is run up to twice more; a second run reuses what
+  the first one got. OmniHub doesn't use free public proxy lists: they can
+  read and alter traffic, and the mirrors above make them unnecessary. Mods and resource packs come
   from Modrinth, checked against Modrinth's hashes. The kill-effects mod is
   built from `minecraft-mod/` by the release workflow and checked against a
   SHA-256 built into the app. It runs only in your game (client side), reads

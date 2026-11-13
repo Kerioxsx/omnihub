@@ -36,6 +36,7 @@ pub mod karaoke;
 pub mod nightlight;
 pub mod images;
 pub mod mcserver;
+pub mod mirrors;
 pub mod media;
 pub mod mods;
 pub mod files;

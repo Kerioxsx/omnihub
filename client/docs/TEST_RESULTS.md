@@ -125,3 +125,8 @@ Screenshots referenced above are in `docs/screenshots/` locally (kept out of git
 | New horns (curling "C" shape, bands, thorns, blue gradient) with the crystal flame, daylight | Pass (h2) |
 | Rebuilt car (smooth profile, side intake, wing, black rims, callipers) in the car flex | Pass (c2) |
 | Model previews rendered in Blender (Cycles) before going in game | Pass |
+
+## 0.4.2 (2026-11-13)
+
+- Pack browser, run in the game (headless, Forge 1.8.9 dev client): Options → Resource Packs → *Get packs (Vesper)* → Install on "Low On Fire". The zip landed in resourcepacks/, the button turned green ("On"), options.txt read `resourcePacks:["LowOnFire_1.8.9.zip"]`, and the status said it was turned on. Clicking it again set `resourcePacks:[]`. PASS.
+- Not tested: the retry path (needs a dropped connection).

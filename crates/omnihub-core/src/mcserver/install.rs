@@ -415,11 +415,27 @@ impl Web {
         let work = mc_dir.join("omnihub").join(".installer");
         std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
         let res = (|| {
-            let sum = self.maven_sum(&base)?;
-            progress(0, 0, &format!("Downloading {name}'s installer"));
-            self.fetch(&base, &sum, &work.join("installer.jar"), progress)?;
+            self.get_installer(&base, &name, &work.join("installer.jar"), progress)?;
             progress(0, 0, &format!("Installing {name} in the Minecraft Launcher (about a minute)"));
-            run_installer(java, &work, &["-jar", "installer.jar", "--installClient", &mc_dir.to_string_lossy()], progress)
+            let args = ["-jar", "installer.jar", "--installClient", &mc_dir.to_string_lossy()];
+            // The installer downloads libraries itself; a dropped connection
+            // fails it, and a second run picks up what the first one got.
+            let mut r = run_installer(java, &work, &args, progress);
+            for n in 1..3 {
+                if r.is_ok() || made(&id) {
+                    break;
+                }
+                progress(0, 0, &format!("{name}'s installer stopped; trying again ({n} of 2)"));
+                if !self.local {
+                    std::thread::sleep(Duration::from_secs(3 * n));
+                }
+                r = run_installer(java, &work, &args, progress);
+            }
+            if made(&id) {
+                Ok(())
+            } else {
+                r
+            }
         })();
         let _ = std::fs::remove_dir_all(&work);
         res?;
@@ -507,11 +523,20 @@ impl Web {
                 } else {
                     (format!("{}/releases/net/neoforged/neoforge/{loader}/neoforge-{loader}-installer.jar", self.ep.neo_maven), format!("NeoForge {loader}"))
                 };
-                let sum = self.maven_sum(&base)?;
-                progress(0, 0, &format!("Downloading {name}'s installer"));
                 let jar = dir.join("installer.jar");
-                self.fetch(&base, &sum, &jar, progress)?;
-                run_installer(java, dir, &["-jar", "installer.jar", "--installServer"], progress)?;
+                self.get_installer(&base, &name, &jar, progress)?;
+                let mut r = run_installer(java, dir, &["-jar", "installer.jar", "--installServer"], progress);
+                for n in 1..3 {
+                    if r.is_ok() {
+                        break;
+                    }
+                    progress(0, 0, &format!("{name}'s installer stopped; trying again ({n} of 2)"));
+                    if !self.local {
+                        std::thread::sleep(Duration::from_secs(3 * n));
+                    }
+                    r = run_installer(java, dir, &["-jar", "installer.jar", "--installServer"], progress);
+                }
+                r?;
                 let _ = std::fs::remove_file(&jar);
                 let _ = std::fs::remove_file(dir.join("installer.jar.log"));
                 forge_launch(dir, flavor, mc, &loader).ok_or_else(|| format!("{name}'s installer finished, but the server it made wasn't found."))?
@@ -521,6 +546,39 @@ impl Web {
     }
 
     /// The checksum Maven publishes beside a file (SHA-256 if there is one, else SHA-1).
+    /// A Forge or NeoForge installer into `dest`: from the publisher, then
+    /// from mirrors of it, each with retries; always checked against the
+    /// checksum the publisher lists.
+    fn get_installer(&self, base: &str, name: &str, dest: &Path, progress: Progress) -> Result<(), String> {
+        let sum = self.with_retries(|| self.maven_sum(base))?;
+        progress(0, 0, &format!("Downloading {name}'s installer"));
+        let mut last = String::new();
+        for u in crate::mirrors::alternates(base) {
+            match self.with_retries(|| self.fetch(&u, &sum, dest, progress)) {
+                Ok(()) => return Ok(()),
+                Err(e) => last = e,
+            }
+        }
+        Err(format!("Couldn't get {name}'s installer from its publisher or its mirrors: {last}"))
+    }
+
+    /// Runs `f` up to three times, pausing a little longer each time, unless
+    /// the answer says the thing isn't there or didn't match its checksum.
+    fn with_retries<T>(&self, mut f: impl FnMut() -> Result<T, String>) -> Result<T, String> {
+        let mut last = String::new();
+        for n in 0..3u64 {
+            if n > 0 && !self.local {
+                std::thread::sleep(Duration::from_millis(800 * n * n));
+            }
+            match f() {
+                Ok(v) => return Ok(v),
+                Err(e) if e.contains("doesn't have that") || e.contains("checksum") || e.contains("isn't an HTTPS") => return Err(e),
+                Err(e) => last = e,
+            }
+        }
+        Err(last)
+    }
+
     fn maven_sum(&self, url: &str) -> Result<Sum, String> {
         let clean = |s: String| s.split_whitespace().next().unwrap_or_default().to_string();
         if let Ok(s) = self.get_text(&format!("{url}.sha256")) {

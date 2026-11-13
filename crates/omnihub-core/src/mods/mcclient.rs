@@ -37,6 +37,22 @@ const MANIFEST: &str = "omnihub-client.json";
 const FORGE_MAVEN: &str = "https://maven.minecraftforge.net/";
 const MOJANG_LIBS: &str = "https://libraries.minecraft.net/";
 const MAVEN_CENTRAL: &str = "https://repo1.maven.org/maven2/";
+/// SHA-1 of forge-1.8.9-11.15.1.2318-1.8.9-installer.jar as Forge publishes
+/// it, built in so the installer can come from a mirror when Forge's own
+/// site is down.
+const FORGE_INSTALLER_SHA1: &str = "ec0293ff0776b8831f2ed90511bab76e635dda0c";
+/// SHA-1s (as their publishers list them) of the Forge 1.8.9 libraries
+/// whose entry in Forge's install profile has none.
+const PINNED_SHA1: &[(&str, &str)] = &[
+    ("net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar", "111e7bea9c968cdb3d06ef4632bf7ff0824d0f36"),
+    ("org/ow2/asm/asm-all/5.0.3/asm-all-5.0.3.jar", "4333508b8dd8ee72aa4e39afa713b3a74579b773"),
+    ("org/scala-lang/plugins/scala-continuations-library_2.11/1.0.2/scala-continuations-library_2.11-1.0.2.jar", "0e517c53a7e9acd6b1668c5a35eccbaa3bab9aac"),
+    ("org/scala-lang/plugins/scala-continuations-plugin_2.11.1/1.0.2/scala-continuations-plugin_2.11.1-1.0.2.jar", "f361a3283452c57fa30c1ee69448995de23c60f7"),
+    ("lzma/lzma/0.0.1/lzma-0.0.1.jar", "521616dc7487b42bef0e803bd2fa3faf668101d7"),
+    ("net/sf/jopt-simple/jopt-simple/4.6/jopt-simple-4.6.jar", "306816fb57cf94f108a43c95731b08934dcae15c"),
+    ("java3d/vecmath/1.5.2/vecmath-1.5.2.jar", "79846ba34cbd89e2422d74d53752f993dcc2ccaf"),
+    ("net/sf/trove4j/trove4j/3.0.3/trove4j-3.0.3.jar", "42ccaf4761f0dfdfa805c9e340d99a755907e2dd"),
+];
 
 /// A mod in the curated list.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -297,6 +313,26 @@ pub fn plan(profile: &Value) -> Result<(Value, Vec<Lib>), String> {
     Ok((version, libs))
 }
 
+/// The SHA-1s a library may have: from Forge's install profile, built in,
+/// or the publisher's own .sha1 file (never a mirror's).
+fn library_sums(net: &crate::mirrors::Fetcher, l: &Lib) -> Vec<String> {
+    if !l.sha1.is_empty() {
+        return l.sha1.clone();
+    }
+    if let Some((_, s)) = PINNED_SHA1.iter().find(|(p, _)| *p == l.path) {
+        return vec![s.to_string()];
+    }
+    for u in &l.urls {
+        if let Ok(b) = net.get_official(&format!("{u}.sha1"), 1024) {
+            let s = String::from_utf8_lossy(&b).split_whitespace().next().unwrap_or_default().to_ascii_lowercase();
+            if s.len() == 40 && s.chars().all(|c| c.is_ascii_hexdigit()) {
+                return vec![s];
+            }
+        }
+    }
+    Vec::new()
+}
+
 /// PvP-friendly video settings (only when the folder has no options.txt yet).
 pub const OPTIONS: &str = "maxFps:260\nenableVsync:false\nfancyGraphics:false\nao:0\nrenderClouds:false\nrenderDistance:8\nuseVbo:true\nfboEnable:true\nmipmapLevels:0\nentityShadows:false\nparticles:0\nguiScale:2\nbobView:false\n";
 
@@ -323,10 +359,12 @@ fn release_jar(agent: &ureq::Agent, asset: &str, pinned: Option<&'static str>, p
     if std::fs::read(path).ok().map(|b| sha256_hex(&b)).as_deref() == Some(want.as_str()) {
         return Ok(());
     }
-    let bytes = fetch(agent, &format!("{}/v{}/{asset}", crate::capture::airplay::releases_url(), env!("CARGO_PKG_VERSION")), 32 << 20)?;
-    if sha256_hex(&bytes) != want {
-        return Err(format!("{asset} didn't match its checksum."));
-    }
+    let url = format!("{}/v{}/{asset}", crate::capture::airplay::releases_url(), env!("CARGO_PKG_VERSION"));
+    let bytes = match fetch(agent, &url, 32 << 20) {
+        Ok(b) if sha256_hex(&b) == want => b,
+        // Once more with retries, through Windows' proxy and then directly.
+        _ => crate::mirrors::Fetcher::new(UA, Duration::from_secs(300)).get_any(&[url], 32 << 20, &|b| sha256_hex(b) == want).map_err(|e| format!("Couldn't get {asset}. {e}"))?,
+    };
     write_atomic(path, &bytes)
 }
 
@@ -336,6 +374,7 @@ pub fn install(mixer: &Mixer, chosen: &[String], killfx: bool, vesper: bool, mem
     let mc = mixer.minecraft_dir().map(Path::to_path_buf).filter(|p| p.is_dir()).ok_or("Minecraft (Java Edition) isn't installed: open the Minecraft Launcher once, then try again.")?;
     let chosen: Vec<&Curated> = CURATED.iter().filter(|c| chosen.iter().any(|s| s == c.slug)).collect();
     let agent = agent();
+    let net = crate::mirrors::Fetcher::new(UA, Duration::from_secs(300));
     let dir = game_dir(&mc);
     let total = 3 + chosen.len() + usize::from(killfx) + usize::from(vesper);
     let mut step = 0;
@@ -346,11 +385,7 @@ pub fn install(mixer: &Mixer, chosen: &[String], killfx: bool, vesper: bool, mem
     let forge_jar = mc.join("libraries").join(maven_path(&format!("net.minecraftforge:forge:{FORGE}")).unwrap_or_default());
     if !vfile.is_file() || !forge_jar.is_file() {
         let url = format!("{FORGE_MAVEN}net/minecraftforge/forge/{FORGE}/forge-{FORGE}-installer.jar");
-        let want = String::from_utf8_lossy(&fetch(&agent, &format!("{url}.sha1"), 1024)?).trim().to_ascii_lowercase();
-        let jar = fetch(&agent, &url, 64 << 20)?;
-        if want.len() != 40 || sha1_hex(&jar) != want {
-            return Err("Forge's installer didn't match its published checksum.".into());
-        }
+        let jar = net.get_any(&[url], 64 << 20, &|b| sha1_hex(b) == FORGE_INSTALLER_SHA1).map_err(|e| format!("Couldn't get Forge's installer. {e}"))?;
         let mut z = zip::ZipArchive::new(std::io::Cursor::new(jar)).map_err(|_| "Forge's installer couldn't be opened.".to_string())?;
         let profile: Value = {
             let mut f = z.by_name("install_profile.json").map_err(|_| "Forge's installer has no install profile.".to_string())?;
@@ -367,31 +402,19 @@ pub fn install(mixer: &Mixer, chosen: &[String], killfx: bool, vesper: bool, mem
         for (i, l) in libs.iter().enumerate() {
             let out = mc.join("libraries").join(&l.path);
             progress(step, total, &format!("Forge libraries ({}/{})", i + 1, libs.len()));
+            let sums = library_sums(&net, l);
             if out.is_file() {
-                continue;
-            }
-            let mut last = String::new();
-            let mut done = false;
-            for u in &l.urls {
-                let bytes = match fetch(&agent, u, 64 << 20) {
-                    Ok(b) => b,
-                    Err(e) => {
-                        last = e;
-                        continue;
-                    }
-                };
-                let sums = if l.sha1.is_empty() { fetch(&agent, &format!("{u}.sha1"), 1024).map(|s| vec![String::from_utf8_lossy(&s).split_whitespace().next().unwrap_or_default().to_ascii_lowercase()]).unwrap_or_default() } else { l.sha1.clone() };
-                if sums.is_empty() || !sums.contains(&sha1_hex(&bytes)) {
-                    last = format!("{u} didn't match its checksum.");
+                // Keep it unless it's known to be damaged (a half-written or changed file).
+                let bad = !sums.is_empty() && std::fs::read(&out).map(|b| !sums.contains(&sha1_hex(&b))).unwrap_or(true);
+                if !bad {
                     continue;
                 }
-                write_atomic(&out, &bytes)?;
-                done = true;
-                break;
             }
-            if !done {
-                return Err(if last.is_empty() { format!("Couldn't download {}.", l.path) } else { last });
+            if sums.is_empty() {
+                return Err(format!("No checksum could be found for {}, so it wasn't downloaded.", l.path));
             }
+            let bytes = net.get_any(&l.urls, 64 << 20, &|b| sums.contains(&sha1_hex(b))).map_err(|e| format!("Couldn't get {}. {e}", l.path))?;
+            write_atomic(&out, &bytes)?;
         }
         write_atomic(&vfile, &serde_json::to_vec_pretty(&version).unwrap_or_default())?;
     } else {
@@ -491,8 +514,35 @@ pub fn add_pack(mixer: &Mixer, project: &str) -> Result<String, String> {
         return Err("The pack's file name isn't safe.".into());
     }
     let bytes = mixer.api.download(&rel.file.urls, &rel.file.sha1, &rel.file.sha512)?;
-    write_atomic(&game_dir(mc).join("resourcepacks").join(&name), &bytes)?;
+    let dir = game_dir(mc);
+    write_atomic(&dir.join("resourcepacks").join(&name), &bytes)?;
+    // On (top of the list) the next time the game starts.
+    let opts = dir.join("options.txt");
+    let text = std::fs::read_to_string(&opts).unwrap_or_else(|_| OPTIONS.to_string());
+    write_atomic(&opts, pack_on(&text, &name).as_bytes())?;
     Ok(name)
+}
+
+/// options.txt with `pack` turned on, above every other pack (Minecraft
+/// lists the top pack last).
+pub fn pack_on(options: &str, pack: &str) -> String {
+    let mut found = false;
+    let mut out: Vec<String> = Vec::new();
+    for line in options.lines() {
+        if let Some(list) = line.strip_prefix("resourcePacks:") {
+            found = true;
+            let mut packs: Vec<String> = serde_json::from_str(list).unwrap_or_default();
+            packs.retain(|p| p != pack);
+            packs.push(pack.to_string());
+            out.push(format!("resourcePacks:{}", serde_json::to_string(&packs).unwrap_or_default()));
+        } else {
+            out.push(line.to_string());
+        }
+    }
+    if !found {
+        out.push(format!("resourcePacks:{}", serde_json::to_string(&[pack]).unwrap_or_default()));
+    }
+    out.join("\n") + "\n"
 }
 
 /// Remove a resource pack from the client's folder.
@@ -550,6 +600,14 @@ mod tests {
         assert_eq!(libs[1].urls[0], "https://libraries.minecraft.net/net/sf/trove4j/trove4j/3.0.3/trove4j-3.0.3.jar");
         assert!(libs[1].sha1.is_empty());
         assert!(plan(&json!({ "versionInfo": { "id": "other" } })).is_err());
+    }
+
+    #[test]
+    fn packs_turn_on_at_the_top() {
+        let o = pack_on("maxFps:260\nresourcePacks:[\"a.zip\",\"b.zip\"]\nguiScale:2\n", "a.zip");
+        assert_eq!(o, "maxFps:260\nresourcePacks:[\"b.zip\",\"a.zip\"]\nguiScale:2\n");
+        assert!(pack_on("maxFps:260\n", "c.zip").ends_with("resourcePacks:[\"c.zip\"]\n"));
+        assert!(pack_on("resourcePacks:[]\n", "Quote\"s.zip").contains(r#"["Quote\"s.zip"]"#));
     }
 
     #[test]
