@@ -187,11 +187,13 @@ pub struct MediaSettings {
     pub lrc_folder: Option<String>,
     /// Sharper covers from the iTunes catalogue (the player's are small).
     pub hires_art: bool,
+    /// Serve the playing song's lyrics to games on this PC (Vesper Client).
+    pub game_lyrics: bool,
 }
 
 impl Default for MediaSettings {
     fn default() -> Self {
-        MediaSettings { allow_phone: true, lyrics_online: true, eq_enabled: false, bass_db: 0.0, treble_db: 0.0, lrc_folder: None, hires_art: true }
+        MediaSettings { allow_phone: true, lyrics_online: true, eq_enabled: false, bass_db: 0.0, treble_db: 0.0, lrc_folder: None, hires_art: true, game_lyrics: true }
     }
 }
 

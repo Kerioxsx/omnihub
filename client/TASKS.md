@@ -34,6 +34,14 @@ Evidence lives in `docs/TEST_RESULTS.md` and `docs/screenshots/`.
 | T7.2 | 7 | Compatibility / security audit | compatibility-security | all | todo | `docs/AUDIT.md` |
 | T7.3 | 7 | TEST_RESULTS, KNOWN_LIMITATIONS, USER_GUIDE, install via OmniHub | qa-playtest + lead | all | partial | Docs based on real runs only |
 
+| T8.1 | 8 | Four comic kill effects: Bonk!, Party Popper, Ghost Out, KA-POW! (world text, solid shapes) | lead | T5.2 | done | Each plays from /vesper demo and the showroom; Bonk played on a real kill |
+| T8.2 | 8 | Skies: Galaxy Core, Sunset, Abyss; daylight following the clock, moon, Milky Way, shooting stars, hidden clouds, motes | lead | T3.3 | partial | Galaxy + Milky Way + motes seen in a world; daylight mode not screenshotted |
+| T8.3 | 8 | Menu blur (fading, tinted) and motion blur | lead | — | partial | Menu blur seen behind the pause menu; motion blur built, not screenshotted |
+| T8.4 | 8 | FOV up to 150, steady FOV, smooth zoom with scroll | lead | — | partial | Zoom seen (hand unchanged); FOV >110 not screenshotted |
+| T8.5 | 8 | Sword animations: 8 swing styles, 4 block-hit styles, speed, size/position, no lowering (ADR-8) | lead | — | partial | Rest pose identical to vanilla; spin swing seen; block-hit not screenshotted |
+| T8.6 | 8 | Hit lines: impact burst, slash arc, crit colour, speed lines | lead | T5.1 | done | Burst and slash seen on a real hit |
+| T8.7 | 8 | World lyrics from OmniHub (front / sky / above / HUD), karaoke highlight, song card (ADR-9) | lead | — | partial | Front mode with highlight seen against a stand-in server; not yet with OmniHub itself |
+
 ## Notes on partial items (0.1.0)
 
 - T1.3: keyboard navigation, reduced motion and scaling work; 4K not tested.

@@ -105,6 +105,8 @@ pub struct AppCore {
     pub retroach: crate::games::retroach::RetroAchievements,
     /// The OBS page for counters, while on.
     pub counters_overlay: parking_lot::Mutex<Option<crate::counters_overlay::OverlayServer>>,
+    /// Lyrics for games (Vesper Client), on 127.0.0.1 only.
+    pub game_lyrics: parking_lot::Mutex<Option<crate::game_lyrics::LyricsServer>>,
     pub autoclick: crate::autoclick::AutoClicker,
     /// Clipboard history, the quick-launch wheel and the macro deck.
     pub quick: Arc<crate::quick::Quick>,
@@ -232,6 +234,7 @@ impl AppCore {
             emu_installer: crate::games::emuinstall::EmuInstaller::new(&paths.data),
             retroach: crate::games::retroach::RetroAchievements::new(&paths.data),
             counters_overlay: parking_lot::Mutex::new(None),
+            game_lyrics: parking_lot::Mutex::new(None),
             autoclick: crate::autoclick::AutoClicker::new(events.clone()),
             quick: Arc::new(crate::quick::Quick::new(&paths.data, events.clone())),
             batteries: crate::system::battery::Batteries::new(events.clone()),
@@ -261,6 +264,20 @@ impl AppCore {
         core.media.set_lrc_folder(s.media.lrc_folder.as_ref().map(std::path::PathBuf::from));
         core.media.set_hires_art(s.media.hires_art);
         Ok(core)
+    }
+
+    /// Serve (or stop) the lyrics for games as the music settings say.
+    pub fn apply_game_lyrics(self: &Arc<Self>) {
+        let on = self.settings.get().media.game_lyrics;
+        let mut cur = self.game_lyrics.lock();
+        if !on {
+            *cur = None;
+        } else if cur.is_none() {
+            match crate::game_lyrics::start(Arc::downgrade(self)) {
+                Ok(s) => *cur = Some(s),
+                Err(e) => tracing::warn!("game lyrics: {e}"),
+            }
+        }
     }
 
     /// Serve (or stop) the counters' OBS page as the counters' settings say.
@@ -319,6 +336,7 @@ impl AppCore {
         if let Err(e) = self.apply_counters_overlay() {
             tracing::warn!("counters overlay: {e}");
         }
+        self.apply_game_lyrics();
         crate::quick::watch(self.quick.clone());
         // Network speed every two seconds; data used per day saved each minute.
         let weak = Arc::downgrade(self);
@@ -851,6 +869,9 @@ impl AppCore {
         }
         if before.media.hires_art != after.media.hires_art {
             self.media.set_hires_art(after.media.hires_art);
+        }
+        if before.media.game_lyrics != after.media.game_lyrics {
+            self.apply_game_lyrics();
         }
         if before.media.lrc_folder != after.media.lrc_folder {
             self.media.set_lrc_folder(after.media.lrc_folder.as_ref().map(std::path::PathBuf::from));

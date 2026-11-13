@@ -1044,6 +1044,8 @@ export interface Settings {
     lrcFolder: string | null;
     /** Sharper covers from the iTunes catalogue (the player's are small). */
     hiresArt: boolean;
+    /** Serve the playing song's lyrics to games on this PC (Vesper Client). */
+    gameLyrics: boolean;
   };
   visuals: VisualSettings;
   /** Focus timer and time tracking. */

@@ -1,4 +1,4 @@
-# Known limitations — Vesper Client 0.1.0
+# Known limitations — Vesper Client 0.2.0
 
 - **Only you see it.** Cosmetics, skies and kill effects are drawn on your own screen. Other players see nothing unless they run Vesper too, and even then they don't see *your* cosmetics (there is no server or sync).
 - **Kill effects on public servers.** The game only tells a client about a kill for sure in singleplayer or on a LAN world you host. On servers, kill effects play only if you turn on "Kill messages from chat" (best effort, English death messages, and only for someone you hit in the last 5 seconds). A target that just disappears never counts.
@@ -10,3 +10,7 @@
 - **Sounds** use Minecraft's own sound events; there are no custom sounds yet.
 - **Showroom prop** (the Skiff hover-cart) is decoration in the showroom only; it isn't in the world and can't be driven.
 - The reference videos showed another client's features; Vesper's look is original (its own logo, glyphs, models made in Blender from code in `models/vesper_models.py`, and procedural effects). Nothing was copied from that client.
+- **World lyrics need OmniHub** on the same PC (0.45 or later) with lyrics found for the song; without it nothing shows. They were tested against a stand-in server, not OmniHub itself.
+- **Sword animations** replace Minecraft's item renderer at run time (ADR-8). Another mod that does the same (some animation mods, possibly OptiFine features) may conflict; turn Sword animations off if hands look wrong. The Spin style turns around the grip, so the blade sweeps out of view.
+- **Motion blur** copies the screen every frame; on slow GPUs it costs some FPS. Menu blur draws 16 offset copies while a menu is open (8 on Low-end).
+- **FOV above 110** is applied only while a frame is drawn; Minecraft's own setting is never changed. It isn't applied while the Options or Video Settings screens are open.

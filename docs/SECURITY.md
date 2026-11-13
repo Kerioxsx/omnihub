@@ -830,6 +830,12 @@ internet only for:
   1900×1900; at most 16 MB); covers are cached on the PC. When none matches,
   that is remembered for two days, then the song is looked up again
   ("Look again" in Aurora's settings forgets it at once).
+- **Lyrics for games** (Music, on by default, can be turned off in Aurora's
+  settings): OmniHub serves the playing song's title, artist, position and
+  synced lyric lines read-only at `http://127.0.0.1:47830/vesper/lyrics`,
+  listening on this PC only (no other address), so Vesper Client can draw
+  them in Minecraft. It answers nothing else (any other path gets 404) and
+  accepts no input beyond a `have=` song key.
 - **Spotify Connect** (only when you connect it, in Aurora's settings): you
   make your own app on developer.spotify.com and paste its Client ID.
   Signing in uses Authorization Code with PKCE (no client secret): the

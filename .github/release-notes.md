@@ -1,14 +1,15 @@
 ## New in this version
 
-**Aurora: sharp covers again, songs that start straight away, and more.**
+**Vesper Client 0.2.0: funny kill effects, full skies, blur, FOV, sword animations, hit lines and live lyrics in your world.**
 
-- **Sharper covers, fixed.** When the full-size cover couldn't be matched once, OmniHub remembered that for good and kept the player's small thumbnail. Now every song is looked up again (and again after two days if nothing was found), and the match accepts covers that the player cropped or re-compressed a little. Covers come from Apple Music (usually 3000×3000) or Deezer (1900×1900).
-- **Drawn sharper:** the full-size cover is drawn at the size it moves to, so the slow zoom doesn't soften it. A small cover is never stretched across the screen any more: it shows whole, with a shadow, over its own light.
-- **See the cover's quality:** Aurora settings → Sharper covers shows the cover's size and where it came from, with **Look again**.
-- **Spotify songs start right away.** Connect Spotify once (Aurora settings → Music hub → Play Spotify songs right away): songs, albums and artists you pick in Aurora start playing in Spotify in the background, without switching to Spotify. A song plays in its album, so the album continues after it. Spotify starts minimized if it's closed. This needs your own free Spotify developer app and Spotify Premium (Spotify's rule); the steps are in the settings. Without it, Spotify opens on the song as before.
-- **Play next:** with Spotify connected, every song row in Aurora has a Play next button that adds it to Spotify's queue.
-- Party mode and the Music quick action also start songs straight away when Spotify is connected.
-- Not tested on a real Windows PC with Spotify yet (built and checked here). If connecting fails, check that the Redirect URI in your Spotify app is exactly `http://127.0.0.1:43827/callback`.
+- **Four funny kill effects:** Bonk! (a cartoon mallet, dizzy stars), Party Popper (confetti, streamers, a rainbow "GG!"), Ghost Out (a little ghost waves goodbye and floats away) and KA-POW! (a comic-book burst and smoke). Plus the five from 0.42, or Random.
+- **Full skies:** three new skies (Galaxy Core, Sunset, Abyss), daylight that follows the game's clock, a moon, the Milky Way, shooting stars, hidden clouds, and fireflies, snow sparkles or embers drifting around you. Brightness and speed are adjustable.
+- **Smooth blur:** in-game menus blur the world behind them, fading in, with your own strength and tint. Optional motion blur for smooth trails when you turn (the HUD stays sharp).
+- **More FOV:** your own FOV up to 150°, a steady FOV that doesn't jump when you sprint, and a smooth zoom key (C) with scroll.
+- **Sword animations:** 8 swing styles (1.8, 1.7 classic, Smooth, Spin, Stab, Chop, Swirl, Flick), 4 block-hit styles (including the 1.7 swing-while-blocking), swing speed, item size and position, and no lowering when switching items.
+- **Hit lines:** anime-style impact lines and a slash arc where you hit, gold on critical hits, and speed lines while you sprint.
+- **Live lyrics in your world:** OmniHub now shares the playing song's synced lyrics with Vesper (on this PC only). They float in front of you, huge in the sky, above your head or on the HUD, with the sung part lighting up. Turn it on in Vesper → Visuals → World lyrics.
+- Everything is original and can be adjusted in Vesper's Client menu. Tested here in Minecraft with software rendering; not yet on a real GPU, and the world lyrics were tested against a stand-in, not a full OmniHub.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

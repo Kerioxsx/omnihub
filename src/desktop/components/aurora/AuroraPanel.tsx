@@ -1055,6 +1055,12 @@ function SourcesSection() {
         onChange={(hiresArt) => void update({ media: { hiresArt } })}
       />
       {media.hiresArt && <CoverQuality />}
+      <Toggle
+        label="Lyrics in Minecraft (Vesper Client)"
+        hint="Vesper Client can show the playing song's synced lyrics floating in your Minecraft world. Only programs on this PC can read them (127.0.0.1)."
+        checked={media.gameLyrics}
+        onChange={(gameLyrics) => void update({ media: { gameLyrics } })}
+      />
     </Section>
   );
 }

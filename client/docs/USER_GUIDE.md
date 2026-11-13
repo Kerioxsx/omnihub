@@ -20,6 +20,16 @@
 - **Keys:** set a toggle key for any module in its options, and an "All effects on/off" key in General.
 - **`/vesper` command** (only on your client): `/vesper demo [effect]`, `/vesper effects on|off`, `/vesper toggle <module>`, `/vesper profile <name>`, `/vesper diag`.
 
+## New in 0.2.0
+
+- **Funny kill effects:** Bonk! (a cartoon mallet and dizzy stars), Party Popper (confetti and a rainbow "GG!"), Ghost Out (a little ghost waves and floats away) and KA-POW! (a comic burst). Pick one in Kill effects, or Random. Try them in the Showroom.
+- **World sky:** three more skies (Galaxy Core, Sunset, Abyss). Options: daylight that follows the game's clock, a moon, the Milky Way, shooting stars (how many per minute), hidden clouds, fireflies / snow / embers around you, brightness and speed.
+- **Menu blur:** in-game menus blur the world behind them, fading in; set the strength, fade and tint. **Motion blur** (off by default): smooth trails when you turn; the HUD stays sharp.
+- **FOV & zoom:** your own FOV up to 150°, a steady FOV that doesn't jump when you sprint, and hold **C** to zoom (scroll to zoom more). The hand stays normal.
+- **Sword animations:** swing styles (1.8, 1.7 classic, Smooth, Spin, Stab, Chop, Swirl, Flick), block-hit styles (1.7 swing while blocking, Push, Tilted), swing speed (look only), item size and position, and no lowering when switching items.
+- **Hit lines:** impact lines and a slash arc where you hit, gold on critical hits, and optional speed lines at the screen's edges while sprinting.
+- **World lyrics:** with OmniHub running on the same PC, the song you're playing shows its synced lyrics in the world: floating in front of you, huge in the sky, above your head or on the HUD. The sung part lights up; set colours, size, distance and a timing offset.
+
 ## Performance
 
 - **General → Quality:** Low-end, Competitive, Balanced or Cinematic sets how many particles and how much detail Vesper's own effects use.

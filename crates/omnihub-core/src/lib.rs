@@ -20,6 +20,7 @@ pub mod companion;
 pub mod core;
 pub mod counters;
 pub mod counters_overlay;
+pub mod game_lyrics;
 pub mod crashlog;
 pub mod db;
 pub mod deals;

@@ -79,3 +79,20 @@ Everything below was run for real. Nothing was tested on a physical GPU or with 
 - HUD editor dragging, profile switching, key binds.
 
 Screenshots referenced above are in `docs/screenshots/` locally (kept out of git).
+
+## 0.2.0 (same environment)
+
+| Check | Result |
+|---|---|
+| Build | Pass: `vesper-client-0.2.0.jar`, 320 KB |
+| Bonk!, Party Popper, Ghost Out, KA-POW! from `/vesper demo` in a world | Pass (fx-bonk, fx-party_popper, fx-ghost_out, fx-cmp) |
+| A real kill plays the selected effect (Bonk!) | Pass: a pig killed with a sword played Bonk! |
+| The new effects from the showroom buttons, 2-column layout | Pass (v2-show-bonk, v2-panel) |
+| Galaxy Core sky with Milky Way, shooting stars on, fireflies | Pass (sky1); daylight mode and the moon not screenshotted |
+| Menu blur behind the pause menu | Pass (blur) |
+| Zoom key: camera zooms, hand unchanged | Pass (zoomcmp) |
+| Sword at rest identical to vanilla with the module on/off | Pass (swcmp) |
+| Spin swing | Pass (swspin) |
+| Hit lines: burst on the first frame, slash arc after | Pass (hits) |
+| World lyrics in front, karaoke highlight, next line | Pass against a stand-in for OmniHub's endpoint (v2-world) |
+| Not tested | Motion blur, FOV above 110, block-hit styles, HUD/sky/above lyric modes, daylight following the clock, with OmniHub itself, on a real GPU |

@@ -14,17 +14,17 @@ import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import org.lwjgl.opengl.GL11;
 
 /**
- * Five procedural skies (VISUAL_SPEC §5): Nocturne (blue starfield),
+ * Procedural skies (VISUAL_SPEC §5): Nocturne (blue starfield),
  * Bloodmoon (crimson storm), Riftstorm (violet rift), Inferno (orange
- * clouds) and Aurora Veil (purple aurora). Nothing is a copied texture:
+ * clouds), Aurora Veil (purple aurora), Galaxy Core, Sunset and Abyss. Nothing is a copied texture:
  * gradients, seeded stars and soft glow clouds.
  */
 public final class Skies {
     private Skies() {
     }
 
-    public static final String[] IDS = {"nocturne", "bloodmoon", "riftstorm", "inferno", "aurora"};
-    public static final String[] NAMES = {"Nocturne", "Bloodmoon", "Riftstorm", "Inferno", "Aurora Veil"};
+    public static final String[] IDS = {"nocturne", "bloodmoon", "riftstorm", "inferno", "aurora", "galaxy", "sunset", "abyss"};
+    public static final String[] NAMES = {"Nocturne", "Bloodmoon", "Riftstorm", "Inferno", "Aurora Veil", "Galaxy Core", "Sunset", "Abyss"};
 
     /** zenith, mid, horizon, cloud colour, cloud alpha, star alpha, accent (aurora/rift). */
     private static final int[][] STYLE = {
@@ -33,6 +33,9 @@ public final class Skies {
         {0xFF0B0418, 0xFF2A0F4A, 0xFF5B2486, 0xFF7B3FB8, 45, 55, 0xFFD27BFF},
         {0xFF2A0A04, 0xFF8A2E08, 0xFFE0701A, 0xFFFF9A2E, 85, 0, 0xFFFFC46B},
         {0xFF080B26, 0xFF1C1748, 0xFF3D2A6E, 0xFF5A3B8E, 15, 100, 0xFF7CF5C8},
+        {0xFF03020A, 0xFF120A2A, 0xFF2B1650, 0xFF4A2A80, 10, 100, 0xFFFF8AD8},
+        {0xFF1E1250, 0xFF8A3B8E, 0xFFFF9A6B, 0xFFFFB38A, 60, 25, 0xFFFFD0E0},
+        {0xFF01060C, 0xFF04223A, 0xFF0A5566, 0xFF1A7F8A, 25, 70, 0xFF5CFFE0},
     };
 
     private static final int STARS = 220, CLOUDS = 26;
@@ -57,7 +60,7 @@ public final class Skies {
         }
     }
 
-    private static int index(String id) {
+    static int index(String id) {
         for (int i = 0; i < IDS.length; i++) if (IDS[i].equals(id)) return i;
         return 0;
     }

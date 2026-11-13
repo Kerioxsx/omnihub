@@ -20,13 +20,17 @@ public final class KillEffects {
     private KillEffects() {
     }
 
-    public static final String[] IDS = {"astral_collapse", "violet_rift", "solar_bloom", "frost_constellation", "comet_ascension"};
-    public static final String[] NAMES = {"Astral Collapse", "Violet Rift", "Solar Bloom", "Frost Constellation", "Comet Ascension"};
+    public static final String[] IDS = {"astral_collapse", "violet_rift", "solar_bloom", "frost_constellation", "comet_ascension", "bonk", "party_popper", "ghost_out", "kapow"};
+    public static final String[] NAMES = {"Astral Collapse", "Violet Rift", "Solar Bloom", "Frost Constellation", "Comet Ascension", "Bonk! (funny)", "Party Popper (funny)", "Ghost Out (funny)", "KA-POW! (funny)"};
 
     private static final List<KillEffect> WORLD = new ArrayList<KillEffect>(), STAGE = new ArrayList<KillEffect>();
     private static long seq = 0x5EED;
 
     static KillEffect create(String id) {
+        if ("bonk".equals(id)) return new dev.vesper.client.fx.effects.Bonk();
+        if ("party_popper".equals(id)) return new dev.vesper.client.fx.effects.PartyPopper();
+        if ("ghost_out".equals(id)) return new dev.vesper.client.fx.effects.GhostOut();
+        if ("kapow".equals(id)) return new dev.vesper.client.fx.effects.KaPow();
         if ("violet_rift".equals(id)) return new VioletRift();
         if ("solar_bloom".equals(id)) return new SolarBloom();
         if ("frost_constellation".equals(id)) return new FrostConstellation();

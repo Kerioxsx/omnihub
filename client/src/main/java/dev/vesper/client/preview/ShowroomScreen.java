@@ -338,7 +338,7 @@ public class ShowroomScreen extends GuiScreen {
                 }
             });
         }
-        y += 9.6f * u();
+        y += ((Skies.IDS.length + 2) / 3) * 4.4f * u() + 0.8f * u();
         y = section("COSMETICS", x, y);
         Cosmetics.Set set = Cosmetics.set();
         Module[] mods = {set.wings, set.comet, set.orbit, set.halo, set.floor, set.glints};
@@ -354,15 +354,16 @@ public class ShowroomScreen extends GuiScreen {
         }
         y += 13.6f * u();
         y = section("KILL EFFECTS (DEMO)", x, y);
+        float ew = (w - u()) / 2;
         for (int i = 0; i < KillEffects.IDS.length; i++) {
             final String id = KillEffects.IDS[i];
-            chip(x, y, w, "›  " + KillEffects.NAMES[i], false, 0, mx, my, new Runnable() {
+            chip(x + (i % 2) * (ew + u()), y + (i / 2) * 4.4f * u(), ew, "›  " + KillEffects.NAMES[i].replace(" (funny)", ""), false, 0, mx, my, new Runnable() {
                 public void run() {
                     KillEffects.demoStage(id, NPC_X, 0, NPC_Z);
                 }
             });
-            y += 4.4f * u();
         }
+        y += ((KillEffects.IDS.length + 1) / 2) * 4.4f * u();
         y += u();
         chip(x, y, w, skiff ? "Hide the Skiff prop" : "Show the Skiff prop", skiff, 0, mx, my, new Runnable() {
             public void run() {

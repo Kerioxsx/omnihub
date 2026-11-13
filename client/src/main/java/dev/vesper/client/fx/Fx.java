@@ -20,6 +20,7 @@ public final class Fx {
     private static KillFxModule kill;
     private static HitSparkModule spark;
     private static WorldSkyModule sky;
+    private static HitLinesModule lines;
 
     private Fx() {
     }
@@ -28,10 +29,12 @@ public final class Fx {
         kill = ModuleRegistry.register(new KillFxModule());
         spark = ModuleRegistry.register(new HitSparkModule());
         sky = ModuleRegistry.register(new WorldSkyModule());
+        lines = ModuleRegistry.register(new HitLinesModule());
         CombatBus.listen(new CombatBus.Listener() {
             public void on(CombatVisualEvent e) {
                 kill.on(e);
                 spark.on(e);
+                lines.on(e);
             }
         });
         Fx h = new Fx();
@@ -46,7 +49,17 @@ public final class Fx {
             return;
         }
         RenderManager rm = Minecraft.getMinecraft().getRenderManager();
+        sky.renderWorld(rm.viewerPosX, rm.viewerPosY, rm.viewerPosZ);
         KillEffects.renderWorld(rm.viewerPosX, rm.viewerPosY, rm.viewerPosZ);
+        dev.vesper.client.render.Gl.beginGlow();
+        View.capture();
+        lines.renderWorld(rm.viewerPosX, rm.viewerPosY, rm.viewerPosZ);
+        dev.vesper.client.render.Gl.endGlow();
+    }
+
+    @SubscribeEvent
+    public void onHud(net.minecraftforge.client.event.RenderGameOverlayEvent.Post e) {
+        if (e.type == net.minecraftforge.client.event.RenderGameOverlayEvent.ElementType.ALL && General.fx()) lines.renderHud(e.partialTicks);
     }
 
     @SubscribeEvent
