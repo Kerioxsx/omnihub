@@ -539,6 +539,8 @@ pub fn run(args: Vec<String>) {
             extras::karaoke_lyrics,
             extras::audio_inputs,
             extras::screen_modes,
+            extras::screen_set_resolution,
+            extras::screen_restore,
             extras::nightlight_get,
             extras::nightlight_save,
             extras::nightlight_now,

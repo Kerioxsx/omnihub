@@ -1,15 +1,14 @@
 ## New in this version
 
-**Vesper Client: our own PvP client for Minecraft 1.8.9.**
+**Play resolution: switch the whole PC to 4K, 1440p (2K), 1080p or stretched 4:3 for a game.**
 
-- **Download:** `Vesper-Client-1.8.9.jar` below. It needs Minecraft 1.8.9 with **Forge 1.8.9-11.15.1.2318**. Or let OmniHub install everything: Mods → Minecraft → OmniHub Client (Vesper is ticked by default).
-- **Title screen and menus:** a "Press to enter" splash with Vesper's own sigil, then a dark menu with satin-like curtains, twinkling stars and your player in a 3D preview wearing your cosmetics. Keyboard and mouse.
-- **Cosmetics** (only you see them): celestial wings modelled in Blender, a comet plume with a thorn crown, orbiting glyph tokens, a halo, a floor ring and glints. Three palettes switch everything at once: Tidal, Ember and Nebula.
-- **Five original kill effects:** Astral Collapse, Violet Rift, Solar Bloom, Frost Constellation and Comet Ascension. They play on kills the game confirms (singleplayer/LAN), or best-effort from chat if you turn that on. Never on a target that just disappears.
-- **Showroom:** a 3D stage with five skies, palettes, cosmetic toggles, kill-effect previews on a test figure, and a hover-cart prop.
-- **HUD:** status bar, FPS, ping, CPS, keystrokes, armour, potions, coordinates, session time and target info (singleplayer only by default). Drag, resize and hide them in the HUD editor.
-- **Performance:** skips far mobs and armour stands (players are always drawn), low FPS in menus and in the background, and quality presets for every effect.
-- Not yet tested with the official launcher using the release jar, on real servers, or with OptiFine. The test results and known limitations are in the repository under `client/docs/`.
+- **Where:** Games → Extras → Play resolution. Pick a size from the ones your screen offers (4K, 1440p (2K), 1080p, 900p, 720p, ultrawide, stretched 4:3 and more).
+- **Per game:** "Use with this game" switches the PC when that game starts and puts your normal resolution back when it closes. Or press "Switch now" / "Back to normal" yourself.
+- **Made for windowed fullscreen (borderless):** the game uses the PC's resolution, so there's nothing to change in the game and alt-tab stays instant.
+- **Faster switch:** OmniHub keeps your refresh rate and colour depth and asks the graphics card to do the scaling, so the monitor doesn't have to re-sync (no long black screen). It does nothing if you're already at that size, and it notices a game starting within about 4 seconds instead of 15.
+- 4K on a 1080p or 1440p monitor shows up once NVIDIA DSR or AMD VSR is turned on in the driver. For stretched 4:3, set scaling to full screen (GPU) in the driver.
+- The change lasts for this session only; Windows keeps your own resolution for the next start.
+- Not tested on a real Windows PC yet (built and checked here without a monitor). If a switch still blacks out the screen, your driver may not allow GPU scaling at that size.
 
 Updating from 0.2.1 or later: OmniHub installs this by itself (or Settings → About → Install now), or download the setup below and run it.
 

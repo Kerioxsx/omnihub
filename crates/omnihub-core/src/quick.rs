@@ -143,7 +143,7 @@ impl QuickAction {
             QuickAction::Input { input } if input.is_empty() => Err("Pick a microphone".into()),
             QuickAction::Music { query } if query.trim().is_empty() || query.len() > 200 => Err("Type a song, album or playlist".into()),
             QuickAction::Home { device, action } if device.is_empty() || !["on", "off", "toggle"].contains(&action.as_str()) => Err("Pick a device and on, off or toggle".into()),
-            QuickAction::Screen { width, height, hz } if *width < 640 || *height < 480 || *hz == 0 => Err("Pick a screen mode".into()),
+            QuickAction::Screen { width, height, .. } if *width < 640 || *height < 480 => Err("Pick a screen mode".into()),
             _ => Ok(()),
         }
     }
@@ -829,9 +829,14 @@ impl crate::core::AppCore {
             QuickAction::Screen { width, height, hz } => {
                 use crate::system::screenmode;
                 let before = screenmode::current();
-                screenmode::set(screenmode::Mode { width: *width, height: *height, hz: *hz })?;
+                // hz 0: keep today's refresh rate when the screen offers it there (the quickest switch).
+                let m = if *hz == 0 { screenmode::set_resolution(*width, *height)? } else {
+                    let m = screenmode::Mode { width: *width, height: *height, hz: *hz };
+                    screenmode::set(m)?;
+                    m
+                };
                 self.quick.screen_before.lock().get_or_insert(before);
-                Ok(format!("Screen: {width}×{height} at {hz} Hz"))
+                Ok(format!("Screen: {}×{} at {} Hz", m.width, m.height, m.hz))
             }
             QuickAction::Hdr { on } => {
                 use crate::system::screenmode;

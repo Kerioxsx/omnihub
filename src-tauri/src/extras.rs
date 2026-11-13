@@ -641,6 +641,31 @@ pub async fn screen_modes() -> Res<ScreenModes> {
     blocking(|| Ok(ScreenModes { current: screenmode::current(), modes: screenmode::modes(), hdr: screenmode::hdr() })).await
 }
 
+/// Switch the whole PC to a resolution now (at today's refresh rate when the
+/// screen offers it there); "back to normal" puts the previous mode back.
+#[tauri::command]
+pub async fn screen_set_resolution(core: Core<'_>, width: u32, height: u32) -> Res<omnihub_core::system::screenmode::Mode> {
+    use omnihub_core::system::screenmode;
+    let c = core.inner().clone();
+    blocking(move || {
+        let before = screenmode::current();
+        let m = screenmode::set_resolution(width, height)?;
+        c.quick.screen_before.lock().get_or_insert(before);
+        Ok(m)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn screen_restore(core: Core<'_>) -> Res<Option<omnihub_core::system::screenmode::Mode>> {
+    let c = core.inner().clone();
+    blocking(move || {
+        c.scenes_undo_screen();
+        Ok(omnihub_core::system::screenmode::current())
+    })
+    .await
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NightInfo {

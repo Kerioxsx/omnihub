@@ -12,6 +12,9 @@ import { rig } from './mock/rig';
 import { govee } from './mock/govee';
 import { modsMock as mm } from './mock/mods';
 
+let mockScreen = { width: 2560, height: 1440, hz: 165 };
+let mockScreenBefore: typeof mockScreen | null = null;
+
 let mcClient = {
   minecraftFound: true,
   installed: false,
@@ -904,7 +907,18 @@ const handlers: Record<string, Handler> = {
   },
   game_move_stop: () => undefined,
   audio_inputs: () => [{ id: 'mic1', name: 'Microphone (HyperX QuadCast)', default: true }, { id: 'mic2', name: 'Headset Microphone (WH-1000XM5)', default: false }],
-  screen_modes: () => ({ current: { width: 2560, height: 1440, hz: 165 }, modes: [{ width: 2560, height: 1440, hz: 165 }, { width: 2560, height: 1440, hz: 144 }, { width: 2560, height: 1440, hz: 60 }, { width: 1920, height: 1080, hz: 165 }, { width: 1920, height: 1080, hz: 144 }, { width: 1920, height: 1080, hz: 60 }, { width: 1280, height: 720, hz: 60 }], hdr: false }),
+  screen_set_resolution: (a) => {
+    const m = { width: Number(a?.width), height: Number(a?.height), hz: 165 };
+    if (!mockScreenBefore) mockScreenBefore = mockScreen;
+    mockScreen = m;
+    return m;
+  },
+  screen_restore: () => {
+    if (mockScreenBefore) mockScreen = mockScreenBefore;
+    mockScreenBefore = null;
+    return mockScreen;
+  },
+  screen_modes: () => ({ current: mockScreen, modes: [{ width: 3840, height: 2160, hz: 60 }, { width: 2560, height: 1440, hz: 165 }, { width: 2560, height: 1440, hz: 144 }, { width: 2560, height: 1440, hz: 60 }, { width: 1920, height: 1080, hz: 165 }, { width: 1920, height: 1080, hz: 144 }, { width: 1920, height: 1080, hz: 60 }, { width: 1600, height: 900, hz: 165 }, { width: 1440, height: 1080, hz: 165 }, { width: 1280, height: 720, hz: 60 }], hdr: false }),
   nightlight_get: () => mockNight,
   nightlight_save: (a) => (mockNight = { ...mockNight, settings: a?.settings as typeof mockNight.settings }),
   nightlight_now: (a) => (mockNight = { ...mockNight, status: { ...mockNight.status, manual: (a?.on as boolean | null) ?? null, level: a?.on ? 1 : 0, kelvin: a?.on ? mockNight.settings.kelvin : 6500 } }),

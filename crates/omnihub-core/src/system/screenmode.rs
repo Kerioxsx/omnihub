@@ -47,10 +47,49 @@ pub fn modes() -> Vec<Mode> {
 }
 
 pub fn set(m: Mode) -> Result<(), String> {
-    if !modes().contains(&m) {
+    let all = modes();
+    if !all.contains(&m) {
         return Err(format!("Your screen doesn't offer {}×{} at {} Hz", m.width, m.height, m.hz));
     }
-    imp::set(m)
+    // Already there: nothing to do (no flicker).
+    if current() == Some(m) {
+        return Ok(());
+    }
+    let native = all.first().map(|n| (n.width, n.height)) == Some((m.width, m.height));
+    imp::set(m, !native)
+}
+
+/// The best mode for a resolution: the current refresh rate if the screen
+/// offers it there (the quickest switch), else the highest one.
+pub fn pick(modes: &[Mode], width: u32, height: u32, prefer_hz: u32) -> Option<Mode> {
+    let at: Vec<&Mode> = modes.iter().filter(|m| m.width == width && m.height == height).collect();
+    at.iter().find(|m| m.hz == prefer_hz).or_else(|| at.iter().max_by_key(|m| m.hz)).map(|m| **m)
+}
+
+/// Sets a resolution at the best refresh rate for it (see [`pick`]).
+pub fn set_resolution(width: u32, height: u32) -> Result<Mode, String> {
+    let now = current().map(|m| m.hz).unwrap_or(0);
+    let m = pick(&modes(), width, height, now).ok_or_else(|| format!("Your screen doesn't offer {width}×{height}"))?;
+    set(m)?;
+    Ok(m)
+}
+
+/// A friendly name for well-known resolutions ("1440p (2K)").
+pub fn label(width: u32, height: u32) -> Option<&'static str> {
+    Some(match (width, height) {
+        (3840, 2160) => "4K",
+        (3440, 1440) => "Ultrawide 1440p",
+        (2560, 1440) => "1440p (2K)",
+        (2560, 1080) => "Ultrawide 1080p",
+        (1920, 1080) => "1080p",
+        (1600, 900) => "900p",
+        (1280, 720) => "720p",
+        (1920, 1440) => "Stretched 1440 (4:3)",
+        (1440, 1080) => "Stretched 1080 (4:3)",
+        (1280, 960) => "Stretched 960 (4:3)",
+        (1680, 1050) => "1050p (16:10)",
+        _ => return None,
+    })
 }
 
 /// Whether HDR is on (None: no screen supports it).
@@ -73,7 +112,7 @@ mod imp {
     use windows::core::PCWSTR;
     use windows::Win32::Devices::Display::{DisplayConfigGetDeviceInfo, DisplayConfigSetDeviceInfo, GetDisplayConfigBufferSizes, QueryDisplayConfig, DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO, DISPLAYCONFIG_DEVICE_INFO_HEADER, DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE, DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO, DISPLAYCONFIG_MODE_INFO, DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE, QDC_ONLY_ACTIVE_PATHS};
     use windows::Win32::Foundation::ERROR_SUCCESS;
-    use windows::Win32::Graphics::Gdi::{ChangeDisplaySettingsExW, CreateDCW, DeleteDC, EnumDisplayDevicesW, EnumDisplaySettingsW, CDS_TYPE, DEVMODEW, DISPLAY_DEVICEW, DISPLAY_DEVICE_ATTACHED_TO_DESKTOP, DISP_CHANGE_SUCCESSFUL, DM_DISPLAYFREQUENCY, DM_PELSHEIGHT, DM_PELSWIDTH, ENUM_CURRENT_SETTINGS, ENUM_DISPLAY_SETTINGS_MODE};
+    use windows::Win32::Graphics::Gdi::{ChangeDisplaySettingsExW, CreateDCW, DeleteDC, EnumDisplayDevicesW, EnumDisplaySettingsW, CDS_TYPE, DEVMODEW, DISPLAY_DEVICEW, DISPLAY_DEVICE_ATTACHED_TO_DESKTOP, DISP_CHANGE_SUCCESSFUL, DMDFO_DEFAULT, DMDFO_STRETCH, DM_BITSPERPEL, DM_DISPLAYFIXEDOUTPUT, DM_DISPLAYFREQUENCY, DM_PELSHEIGHT, DM_PELSWIDTH, ENUM_CURRENT_SETTINGS, ENUM_DISPLAY_SETTINGS_MODE};
     use windows::Win32::UI::ColorSystem::SetDeviceGammaRamp;
 
     fn devmode() -> DEVMODEW {
@@ -104,14 +143,27 @@ mod imp {
         out
     }
 
-    pub fn set(m: Mode) -> Result<(), String> {
+    /// `scaled`: below the native resolution, ask the graphics card to
+    /// scale the picture (the monitor keeps its own signal, so there's no
+    /// black re-sync and the switch is near instant). Falls back to a plain
+    /// mode change if the driver refuses.
+    pub fn set(m: Mode, scaled: bool) -> Result<(), String> {
         let mut d = devmode();
+        // Start from the current mode: same colour depth and the rest, so only the size changes.
+        let _ = unsafe { EnumDisplaySettingsW(PCWSTR::null(), ENUM_CURRENT_SETTINGS, &mut d) };
         d.dmPelsWidth = m.width;
         d.dmPelsHeight = m.height;
         d.dmDisplayFrequency = m.hz;
-        d.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY;
+        d.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY | DM_BITSPERPEL;
+        let mut fixed = d;
+        // Writing a union field is safe; ask the graphics card to scale (no monitor re-sync).
+        fixed.Anonymous1.Anonymous2.dmDisplayFixedOutput = if scaled { DMDFO_STRETCH } else { DMDFO_DEFAULT };
+        fixed.dmFields |= DM_DISPLAYFIXEDOUTPUT;
         // For this session only: Windows keeps your own mode for next time.
-        let r = unsafe { ChangeDisplaySettingsExW(PCWSTR::null(), Some(&d), None, CDS_TYPE(0), None) };
+        let mut r = unsafe { ChangeDisplaySettingsExW(PCWSTR::null(), Some(&fixed), None, CDS_TYPE(0), None) };
+        if r != DISP_CHANGE_SUCCESSFUL {
+            r = unsafe { ChangeDisplaySettingsExW(PCWSTR::null(), Some(&d), None, CDS_TYPE(0), None) };
+        }
         if r == DISP_CHANGE_SUCCESSFUL {
             Ok(())
         } else {
@@ -215,7 +267,7 @@ mod imp {
     pub fn modes() -> Vec<Mode> {
         Vec::new()
     }
-    pub fn set(_m: Mode) -> Result<(), String> {
+    pub fn set(_m: Mode, _scaled: bool) -> Result<(), String> {
         Err("Screen modes are changed on Windows".into())
     }
     pub fn hdr() -> Option<bool> {
@@ -232,6 +284,18 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pick_keeps_the_refresh_rate_when_it_can() {
+        let m = |w, h, hz| Mode { width: w, height: h, hz };
+        let modes = [m(2560, 1440, 165), m(2560, 1440, 60), m(1920, 1080, 165), m(1920, 1080, 144), m(1920, 1080, 60), m(1280, 720, 60)];
+        assert_eq!(pick(&modes, 1920, 1080, 165), Some(m(1920, 1080, 165)));
+        assert_eq!(pick(&modes, 1920, 1080, 120), Some(m(1920, 1080, 165)), "else the highest");
+        assert_eq!(pick(&modes, 1280, 720, 165), Some(m(1280, 720, 60)));
+        assert_eq!(pick(&modes, 3840, 2160, 165), None);
+        assert_eq!(label(2560, 1440), Some("1440p (2K)"));
+        assert_eq!(label(3840, 2160), Some("4K"));
+    }
 
     #[test]
     fn warmer_takes_blue_first() {

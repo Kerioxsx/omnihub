@@ -475,6 +475,10 @@ export const api = {
   /** "Ask your PC": answered from what OmniHub measures now (`words`: also in a sentence by a local model). */
   askPc: (question: string, words: boolean) => call<T.AskReply>('ask_pc', { question, words }),
   screenModes: () => call<T.ScreenModes>('screen_modes'),
+  /** The whole PC at this resolution now (today's refresh rate when offered). */
+  screenSetResolution: (width: number, height: number) => call<T.ScreenMode>('screen_set_resolution', { width, height }),
+  /** Back to the mode from before OmniHub changed it. */
+  screenRestore: () => call<T.ScreenMode | null>('screen_restore'),
   /** Night light on a schedule (warmer, dimmer screens). */
   nightLight: {
     get: () => call<T.NightInfo>('nightlight_get'),

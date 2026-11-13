@@ -357,7 +357,13 @@ impl AppCore {
                 let mut warned: HashMap<String, u8> = HashMap::new();
                 let mut sales_at = std::time::Instant::now() - Duration::from_secs(5 * 3600);
                 loop {
-                    std::thread::sleep(Duration::from_secs(15));
+                    // Games with a scene (like a play resolution) are watched every 4 s, so the
+                    // screen switches and comes back quickly; otherwise every 15 s.
+                    let fast = {
+                        let Some(core) = weak.upgrade() else { return };
+                        core.quick.state().scenes.iter().any(|s| !s.game.is_empty())
+                    };
+                    std::thread::sleep(Duration::from_secs(if fast { 4 } else { 15 }));
                     let Some(core) = weak.upgrade() else { return };
                     if games_at.elapsed() > Duration::from_secs(600) {
                         games = core.games.library().into_iter().filter(|g| !g.process.is_empty()).map(|g| (g.key, g.name, g.process.to_lowercase())).collect();

@@ -283,6 +283,13 @@ and lets a phone do some of that. This is what protects each part.
   only `config/omnihub-killfx.properties`, and sends nothing anywhere.
   Everything goes in its own folder (`.minecraft/omnihub/client-1.8.9`) and
   one launcher profile; signing in stays with the official launcher.
+- Play resolution changes the main monitor's mode with
+  `ChangeDisplaySettingsExW` for the current session only (never saved to the
+  registry), keeping the refresh rate and colour depth and asking for GPU
+  scaling (`DMDFO_STRETCH`) when the size is below the screen's own; the mode
+  from before is kept in OmniHub's quick-action state and put back when the
+  game closes or with "Back to normal". Only modes Windows lists for the
+  monitor are offered.
 - Fortnite resolution advice reads the monitor list, the main graphics card's
   name and video memory (DXGI) and the processor's thread count, on this PC.
 - FPS meter: Intel PresentMon, downloaded from this repository's release and
