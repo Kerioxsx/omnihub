@@ -406,7 +406,7 @@ public class ClientScreen extends GuiScreen {
         // You, live, with your cosmetics: turns slowly and leans toward the mouse.
         float cardY = sy + 5.5f * u(), cardH = Math.min(26 * u(), ph * 0.3f);
         Draw.roundRect(sx - u(), cardY, iw + 2 * u(), cardH, 1.4f * u(), Colors.withAlpha(0x0B0C0F, in));
-        Draw.glow(sx + iw / 2, cardY + cardH * 0.6f, cardH * 0.7f, Colors.withAlpha(accent, (0.34f + 0.06f * (float) Math.sin(now * 1.6f)) * in));
+        Draw.glow(sx + iw / 2, cardY + cardH * 0.58f, Math.min(cardH * 0.42f, iw * 0.5f), Colors.withAlpha(accent, (0.34f + 0.06f * (float) Math.sin(now * 1.6f)) * in));
         Draw.roundOutline(sx - u(), cardY, iw + 2 * u(), cardH, 1.4f * u(), 1, Colors.withAlpha(0xFFFFFF, 0.05f * in));
         float lean = Math.max(-1, Math.min(1, (mx - (sx + iw / 2)) / (width * 0.4f)));
         float yaw = 22 * (float) Math.sin(now * 0.45f) + lean * 30;

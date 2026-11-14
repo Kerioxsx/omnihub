@@ -38,6 +38,7 @@ public final class CosmeticRenderer {
         // Solid pass (depth writes on): wings, crown, token discs.
         if (c.wings.enabled()) wings(p, c.wings, level, drop, true);
         if (c.comet.enabled() && c.comet.crown.on()) crown(p, c.comet, level, drop);
+        Wardrobe.solid(p, level, drop);
 
         // Glow pass: additive, no depth writes.
         GlStateManager.depthMask(false);
@@ -49,6 +50,7 @@ public final class CosmeticRenderer {
         if (c.orbit.enabled()) orbit(p, c.orbit, level, drop);
         if (c.comet.enabled()) comet(p, c.comet, level, drop);
         if (c.glints.enabled()) glints(p, c.glints, level);
+        Wardrobe.glow(p, level, drop);
         Sprites.end();
         Solid.end();
 

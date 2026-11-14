@@ -56,6 +56,15 @@
 - **Resource packs inside the game:** Client → Resource packs, or the *Get packs (Vesper)* button on Minecraft's Resource Packs screen. Search Modrinth's 1.8.9 packs and press Download; the pack is checked against Modrinth's checksum, saved in your resourcepacks folder and listed right away (turn it on in Resource Packs).
 - **FPS boost:** Performance → *FPS boost game settings* switches to fast settings (fast graphics, no clouds, minimal particles, no entity shadows, smooth lighting off, VBOs on, vsync off, render distance capped) and saves yours; turn it off and yours come back exactly.
 
+## New in 0.6.0
+
+- **Right Shift** opens Vesper's mods menu and **Right Ctrl** the HUD editor, any time in game (change the keys in General → Menu keys).
+- **Toggle sprint** (General): press your sprint key once and keep sprinting; optionally toggle sneak too. On when you join.
+- **39 HUD readouts** (HUD; turn on and place each in the HUD editor): biome, compass, altitude, chunk, light level, dimension, yaw & pitch, looking at, block face, speed, sprint status, distance walked, jumps, fall speed, health, food, saturation, armor points, experience, held item durability, arrows, splash potions, blocks in hand, golden apples, ender pearls, in-game time, day, moon phase, weather, entities, server, players, memory, clock, date, kills, hits, combo and target distance.
+- **15 helpers:** menu keys, toggle sprint, fullbright, no fog, chat timestamps, chat cleanup (stacks repeats, hides lobby joins), nick hider, auto GG (off by default), durability warning, hunger warning, death coordinates, no pumpkin overlay, hide boss bar, more crit particles and always-sharpness particles.
+- **The wardrobe, 46 cosmetics** (Cosmetics, each with its own colours and size): 10 hats (gilded crown, top hat, wizard hat, cat ears, fox ears, bunny ears, antlers, party hat, flower crown, cowboy hat), 10 capes (midnight, ember, ocean, aurora, galaxy, rainbow, checker, royal, frost, neon), 8 auras (flame, frost, void, toxic, holy, blood, electric, rainbow), 8 trails (stardust, flame, bubbles, petals, snow, ink, hearts, ribbon), 6 pets (wisp, cube buddy, floating crystal, tiny planet, fireflies, lantern) and 4 back items (butterfly wings, jetpack, backpack, fox tail).
+- **13 visuals:** screen filter (8 looks), vignette, fireflies, falling leaves, snowfall, embers, item glow, kill streak banner, death marker, chunk borders, custom crosshair (6 shapes), cinema bars and kill flash.
+
 ## New in 0.5.0
 
 - **A new Client menu:** laid out like a launcher. You, live in 3D with your cosmetics, turn slowly beside the categories and lean toward the mouse. Every module is a tile with its switch; click a tile and its options slide in from the right. The panel opens and closes smoothly, tiles come in one after another, the category marker slides, tiles lift on hover and press when clicked, and switching something shows a short note at the bottom.

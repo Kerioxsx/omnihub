@@ -38,8 +38,14 @@ public final class Hud {
         add(new CoordsElement());
         add(new SessionElement());
         add(new TargetInfoElement());
+        InfoElements.init();
         MinecraftForge.EVENT_BUS.register(new ForgeEvents());
         FMLCommonHandler.instance().bus().register(new FmlEvents());
+    }
+
+    /** Adds an element registered elsewhere (the info readouts). */
+    public static void addElement(HudElement e) {
+        add(e);
     }
 
     private static void add(HudElement e) {

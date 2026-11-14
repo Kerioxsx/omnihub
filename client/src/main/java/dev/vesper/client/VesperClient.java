@@ -20,7 +20,7 @@ import org.apache.logging.log4j.Logger;
 public class VesperClient {
     public static final String MODID = "vesper";
     public static final String NAME = "Vesper Client";
-    public static final String VERSION = "0.5.0";
+    public static final String VERSION = "0.6.0";
     public static final Logger LOG = LogManager.getLogger(NAME);
 
     private static ConfigStore config;
@@ -46,6 +46,8 @@ public class VesperClient {
         Cosmetics.init();
         Hud.init();
         dev.vesper.client.visual.Visuals.init();
+        dev.vesper.client.qol.Utilities.init();
+        dev.vesper.client.visual.WorldVisuals.init();
         config.apply();
         Hooks.register();
         net.minecraftforge.client.ClientCommandHandler.instance.registerCommand(new dev.vesper.client.diag.VesperCommand());

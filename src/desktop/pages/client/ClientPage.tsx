@@ -14,7 +14,7 @@ import { LaunchersCard, LoadersCard } from './MinecraftHub';
 import { useSettings } from '../../state/settings';
 import { McClientCard } from '../mods/McClient';
 
-export const VESPER_VERSION = '0.5.0';
+export const VESPER_VERSION = '0.6.0';
 const JAR = 'https://github.com/Kerioxsx/omnihub/releases/latest/download/Vesper-Client-1.8.9.jar';
 const FORGE = 'https://files.minecraftforge.net/net/minecraftforge/forge/index_1.8.9.html';
 
@@ -34,7 +34,8 @@ const LOADERS: { name: string; ok: boolean; note: string }[] = [
 ];
 
 const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
-  { icon: Sparkles, title: 'Cosmetics', text: 'Wings, comet plume, halo, orbiting glyphs and the Wraith flame head with horns; three palettes.' },
+  { icon: Sparkles, title: 'Cosmetics', text: 'Wings, halo, the Wraith head and a 46-piece wardrobe: 10 hats, 10 capes, 8 auras, 8 trails, 6 pets and 4 back items.' },
+  { icon: Gauge, title: 'HUD & helpers', text: 'Right Shift opens the menu, toggle sprint, 39 HUD readouts and 15 helpers (fullbright, no fog, chat timestamps, warnings…).' },
   { icon: Swords, title: 'Kill & hit effects', text: 'Nine kill effects (four funny ones), hit lines, hit sounds and sword animations with 1.7 block-hit.' },
   { icon: Star, title: 'World', text: 'Skies, rain and puddles, neon jump marks, world glyphs, a block outline, time changer and your own world colour.' },
   { icon: Flame, title: 'Emotes', text: 'Flex, wave, dance, salute, cheer and a car flex — press B in game.' },

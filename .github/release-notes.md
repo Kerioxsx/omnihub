@@ -1,5 +1,13 @@
 ## New in this version
 
+**Vesper 0.6.0: Right Shift menu, toggle sprint, 54 new functions and 59 new cosmetics and visuals.**
+
+- **Right Shift** opens Vesper's mods menu in game and **Right Ctrl** the HUD editor.
+- **Toggle sprint** (and optional toggle sneak).
+- **39 HUD readouts** and **15 helpers**: fullbright, no fog, chat timestamps, chat cleanup, nick hider, auto GG, durability and hunger warnings, death coordinates, no pumpkin overlay, hide boss bar, more crit and sharpness particles.
+- **46 cosmetics** in the new wardrobe (10 hats, 10 capes, 8 auras, 8 trails, 6 pets, 4 back items) and **13 visuals** (screen filters, vignette, ambient fireflies/leaves/snow/embers, item glow, kill streak banner, death marker, chunk borders, custom crosshair, cinema bars, kill flash).
+
+
 **Vesper 0.5.0: a launcher-style Client menu, a POV camera, damage numbers and more motion.**
 
 - **New Client menu** (in Minecraft): you, live in 3D with your cosmetics, beside the categories; every module as a tile with its switch; options slide in from the right. The panel opens and closes smoothly, tiles come in one after another, the category marker slides, tiles lift and press, and a short note confirms each switch.

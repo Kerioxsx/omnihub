@@ -20,6 +20,8 @@ public final class Pose {
     public float bodyYaw;
     /** Head yaw relative to the body, degrees. */
     public float headYaw;
+    /** Head pitch in degrees (down is positive). */
+    public float headPitch;
     public boolean sneaking;
     /** Sprinting, flying or airborne: wings flap faster. */
     public boolean fast;
@@ -45,6 +47,7 @@ public final class Pose {
     public Pose idle(float bodyYaw, float alpha) {
         this.bodyYaw = bodyYaw;
         this.headYaw = 0;
+        this.headPitch = 0;
         this.sneaking = false;
         this.fast = false;
         this.limbSwing = 0;

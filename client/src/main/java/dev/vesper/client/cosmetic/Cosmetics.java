@@ -113,6 +113,7 @@ public final class Cosmetics {
         ModuleRegistry.register(set.halo);
         ModuleRegistry.register(set.floor);
         ModuleRegistry.register(set.glints);
+        Wardrobe.init();
         MinecraftForge.EVENT_BUS.register(new Cosmetics.Handler());
     }
 
@@ -135,7 +136,9 @@ public final class Cosmetics {
             Pose p = POSE;
             p.partialTicks = pt;
             p.bodyYaw = pl.prevRenderYawOffset + (pl.renderYawOffset - pl.prevRenderYawOffset) * pt;
-            p.headYaw = 0;
+            float hy = pl.prevRotationYawHead + (pl.rotationYawHead - pl.prevRotationYawHead) * pt;
+            p.headYaw = hy - p.bodyYaw;
+            p.headPitch = pl.prevRotationPitch + (pl.rotationPitch - pl.prevRotationPitch) * pt;
             p.sneaking = pl.isSneaking();
             p.fast = pl.isSprinting() || pl.capabilities.isFlying || !pl.onGround;
             p.limbSwing = pl.limbSwing;

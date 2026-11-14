@@ -140,3 +140,10 @@ Run in the game (headless, Forge 1.8.9 dev client):
 - Damage numbers: hitting a pig showed "4.0" in gold above it, rising. PASS (fixed a bug found here: the health record was cleared every tick).
 - Smooth hotbar: highlight drawn over the selected slot. PASS.
 - Not tested: freelook, low-health pulse, crosshair hit pulse (too short to catch), skip-front-view.
+
+## 0.6.0 (2026-11-14)
+
+Run in the game (headless, Forge 1.8.9 dev client):
+- Right Shift in a world opened the mods menu (156 modules); Right Ctrl opened the HUD editor. PASS.
+- Wardrobe: gilded crown, aurora cape, holy aura and tiny planet; then fox ears, galaxy cape, flame trail (while walking), fireflies and electric aura. All drawn. PASS. The fox tail sits behind a cape when both are on.
+- Not tried one by one in the game yet: the other wardrobe items, the 39 HUD readouts, toggle sprint, the chat helpers, warnings and the 13 visuals. They build and load without errors.
