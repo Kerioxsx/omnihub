@@ -32,6 +32,10 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.53.0
+
+- **Vesper 0.5.0**: a launcher-style Client menu with a live 3D preview and animated tiles and drawer, a POV camera (distance, over-the-shoulder, F5 glide, freelook), damage numbers, a smooth hotbar, low-health and hit pulses, and horns that grow from the top of the head.
+
 ## New in 0.52.0
 
 - Fix for "Couldn't load versions" when files.minecraftforge.net drops the connection: version lists retry, then use mirrors or Forge's Maven list.

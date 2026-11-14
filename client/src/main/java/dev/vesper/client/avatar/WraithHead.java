@@ -85,7 +85,8 @@ public final class WraithHead extends Module {
             if (m.ok) {
                 GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
                 GlStateManager.pushMatrix();
-                GlStateManager.translate(0, 0.1, 0);
+                // The horns grow from the top corners of the head (it is 0.5 tall above the neck).
+                GlStateManager.translate(0, 0.40, 0.02);
                 float s = hornSize.f();
                 GlStateManager.scale(s, s, s);
                 int base = hornColor.argb(), tip = tipColor.argb();

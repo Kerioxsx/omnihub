@@ -13,10 +13,11 @@ public final class Visuals {
 
     public static void init() {
         dev.vesper.client.packs.PackBrowserScreen.hook();
-        Module[] ms = {new FovModule(), new BlurModules.Menu(), new BlurModules.Motion(), new BlurModules.Speed(), new SwingModule(), new WorldLyricsModule(),
+        Module[] ms = {new FovModule(), new PovModule(), new BlurModules.Menu(), new BlurModules.Motion(), new BlurModules.Speed(), new SwingModule(), new WorldLyricsModule(),
             new dev.vesper.client.world.JumpFxModule(), new dev.vesper.client.world.WorldGlyphsModule(), new dev.vesper.client.world.WeatherModule(),
             new dev.vesper.client.world.MoreVisuals.HitSounds(), new dev.vesper.client.world.MoreVisuals.BlockOutline(), new dev.vesper.client.world.MoreVisuals.TimeChanger(),
-            new dev.vesper.client.avatar.Emotes(), new dev.vesper.client.avatar.WraithHead()};
+            new dev.vesper.client.avatar.Emotes(), new dev.vesper.client.avatar.WraithHead(),
+            new Animations.DamageNumbers(), new Animations.SmoothHotbar(), new Animations.LowHealth(), new Animations.HitPulse()};
         for (Module m : ms) {
             ModuleRegistry.register(m);
             MinecraftForge.EVENT_BUS.register(m);

@@ -75,20 +75,19 @@ def export(name):
 # ---------------------------------------------------------------- horns
 
 def horn_path(side):
-    """A "C" around a centre beside the head: from the side of the head out
-    and under, up the outside, then curling back in over the flame, with the
-    whole curve stretched upward so the tips stand tall."""
+    """Rooted at the top corner of the head (z = 0 is the root height): out
+    to the side, sweeping up the outside, the tip curling back in over the
+    flame. A cubic curve, so it never dips below the root."""
+    p0, p1, p2, p3 = (0.24, 0.0), (0.62, 0.03), (0.80, 0.56), (0.46, 0.98)
     pts = []
     n = 26
-    cx, cz, R = 0.55, 0.3, 0.33
-    a0, a1 = math.radians(214), math.radians(470)
     for i in range(n + 1):
         t = i / n
-        a = a0 + (a1 - a0) * t
-        x = side * (cx + R * math.cos(a))
-        z = cz + R * math.sin(a) + 0.55 * t ** 1.4
-        y = -0.06 * math.sin(t * math.pi)
-        pts.append(Vector((x, y, z)))
+        u = 1 - t
+        x = u ** 3 * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t ** 3 * p3[0]
+        z = u ** 3 * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t ** 3 * p3[1]
+        y = -0.07 * math.sin(t * math.pi)
+        pts.append(Vector((side * x, y, z)))
     return pts
 
 
@@ -112,7 +111,7 @@ def build_horns():
         for k, i in enumerate((5, 8, 10, 12, 14, 16, 18, 20, 22)):
             a = p[i]
             d = (p[i + 1] - p[i - 1]).normalized()
-            centre = Vector((side * 0.55, 0, 0.45))
+            centre = Vector((side * 0.5, 0, 0.5))
             out = (a - centre)
             out.y = 0
             out = (out - d * out.dot(d)).normalized()

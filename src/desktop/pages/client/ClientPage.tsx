@@ -14,7 +14,7 @@ import { LaunchersCard, LoadersCard } from './MinecraftHub';
 import { useSettings } from '../../state/settings';
 import { McClientCard } from '../mods/McClient';
 
-export const VESPER_VERSION = '0.4.2';
+export const VESPER_VERSION = '0.5.0';
 const JAR = 'https://github.com/Kerioxsx/omnihub/releases/latest/download/Vesper-Client-1.8.9.jar';
 const FORGE = 'https://files.minecraftforge.net/net/minecraftforge/forge/index_1.8.9.html';
 
@@ -41,7 +41,8 @@ const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
   { icon: Music2, title: 'Live lyrics', text: 'The song playing in OmniHub shows its synced lyrics in your world.' },
   { icon: Package, title: 'Resource packs', text: 'Browse 1.8.9 packs from Modrinth inside the game and install one in a click: it turns on right away.' },
   { icon: Gauge, title: 'FPS', text: 'Skips far mobs, caps FPS in menus and in the background, and an FPS boost that puts your settings back when off.' },
-  { icon: CloudRain, title: 'Blur & camera', text: 'Menu, motion and speed blur, FOV up to 150 and a smooth zoom.' },
+  { icon: CloudRain, title: 'Blur & camera', text: 'Menu, motion and speed blur, FOV up to 150, smooth zoom, and a POV camera: distance, over-the-shoulder, F5 glide and freelook.' },
+  { icon: Swords, title: 'Damage numbers', text: 'Hits pop numbers out of whatever you hurt; a gliding hotbar, a low-health pulse and a crosshair hit pulse.' },
 ];
 
 export function ClientPage() {

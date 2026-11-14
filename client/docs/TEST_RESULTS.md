@@ -130,3 +130,13 @@ Screenshots referenced above are in `docs/screenshots/` locally (kept out of git
 
 - Pack browser, run in the game (headless, Forge 1.8.9 dev client): Options → Resource Packs → *Get packs (Vesper)* → Install on "Low On Fire". The zip landed in resourcepacks/, the button turned green ("On"), options.txt read `resourcePacks:["LowOnFire_1.8.9.zip"]`, and the status said it was turned on. Clicking it again set `resourcePacks:[]`. PASS.
 - Not tested: the retry path (needs a dropped connection).
+
+## 0.5.0 (2026-11-14)
+
+Run in the game (headless, Forge 1.8.9 dev client):
+- Client menu: opened, tiles and live 3D preview drawn, Visuals category selected (marker moved), a tile opened its drawer with every option, Esc closed the drawer. PASS.
+- Wraith horns: front and back views show the horns rising from the top of the head. PASS.
+- POV: with the shoulder offset at 0.9 and height 0.15, F5 shows the player to the left of the crosshair. PASS. The F5 glide is too quick to catch at the test's ~15 FPS.
+- Damage numbers: hitting a pig showed "4.0" in gold above it, rising. PASS (fixed a bug found here: the health record was cleared every tick).
+- Smooth hotbar: highlight drawn over the selected slot. PASS.
+- Not tested: freelook, low-health pulse, crosshair hit pulse (too short to catch), skip-front-view.

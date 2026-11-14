@@ -56,6 +56,15 @@
 - **Resource packs inside the game:** Client → Resource packs, or the *Get packs (Vesper)* button on Minecraft's Resource Packs screen. Search Modrinth's 1.8.9 packs and press Download; the pack is checked against Modrinth's checksum, saved in your resourcepacks folder and listed right away (turn it on in Resource Packs).
 - **FPS boost:** Performance → *FPS boost game settings* switches to fast settings (fast graphics, no clouds, minimal particles, no entity shadows, smooth lighting off, VBOs on, vsync off, render distance capped) and saves yours; turn it off and yours come back exactly.
 
+## New in 0.5.0
+
+- **A new Client menu:** laid out like a launcher. You, live in 3D with your cosmetics, turn slowly beside the categories and lean toward the mouse. Every module is a tile with its switch; click a tile and its options slide in from the right. The panel opens and closes smoothly, tiles come in one after another, the category marker slides, tiles lift on hover and press when clicked, and switching something shows a short note at the bottom.
+- **POV & camera** (Visuals): third-person distance, an over-the-shoulder offset and camera height, a smooth glide out of first person when you press F5, F5 without the front view, and an optional **freelook** key (hold Left Alt to look around in third person without turning; check the server's rules first).
+- **Damage numbers** (Kill & hit effects): numbers pop out of anything hurt near you, in hearts, rise and fade; gold for big hits, green for healing.
+- **Smooth hotbar** (HUD): the selected-slot highlight glides between slots with a soft glow in your world colour.
+- **Low-health pulse** (HUD) and **Crosshair hit pulse** (Kill & hit effects).
+- **Wraith horns:** they now grow from the top of the head, sweep out and curl up, instead of hanging beside the jaw.
+
 ## New in 0.4.2
 
 - **Install resource packs in one click:** on Minecraft's Resource Packs screen press *Get packs (Vesper)* (or Client → Resource packs), search, and press **Install**. The pack is downloaded, checked against Modrinth's checksum, turned on at the top of your packs and loaded straight away; it stays on next time. Click it again (*Turn off*) to switch it off. Downloads retry by themselves if the connection drops.

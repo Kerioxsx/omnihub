@@ -1,5 +1,13 @@
 ## New in this version
 
+**Vesper 0.5.0: a launcher-style Client menu, a POV camera, damage numbers and more motion.**
+
+- **New Client menu** (in Minecraft): you, live in 3D with your cosmetics, beside the categories; every module as a tile with its switch; options slide in from the right. The panel opens and closes smoothly, tiles come in one after another, the category marker slides, tiles lift and press, and a short note confirms each switch.
+- **POV & camera:** third-person distance, over-the-shoulder offset and height, a smooth F5 glide, F5 without the front view, and an optional freelook key (check each server's rules).
+- **Damage numbers**, a **smooth hotbar** highlight, a **low-health pulse** and a **crosshair hit pulse**.
+- **Wraith horns** now grow from the top of the head and curl up.
+
+
 **Forge installs that keep going, and resource packs that install in one click inside Minecraft.**
 
 - **Fix: "Couldn't load versions … peer closed connection"** on the Loaders tab. Forge's version list now retries (through Windows' proxy, then directly), then uses a mirror of it, and if that fails too, works the list out from Forge's own Maven. NeoForge, Fabric and Minecraft's version lists fall back the same way.

@@ -11,6 +11,7 @@ import dev.vesper.client.module.setting.ColorSetting;
 import dev.vesper.client.module.setting.KeySetting;
 import dev.vesper.client.module.setting.NumberSetting;
 import dev.vesper.client.module.setting.Setting;
+import dev.vesper.client.preview.PlayerPreview;
 import dev.vesper.client.preview.ShowroomScreen;
 import dev.vesper.client.render.Colors;
 import dev.vesper.client.render.Draw;
@@ -23,22 +24,32 @@ import java.util.List;
 import java.util.Map;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
+import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
 /**
- * The client's settings: categories, search, every module with its real
- * options (toggles, sliders, colours, choices, keys), profiles and reset,
- * plus the HUD editor and the showroom. Changes save a second later.
+ * The client's settings, laid out like a launcher: you, live in 3D with
+ * your cosmetics, beside the categories; every module as a tile you can
+ * switch on and off; a drawer that slides in with a module's options
+ * (toggles, sliders, colours, choices, keys); profiles, the HUD editor,
+ * the showroom and resource packs. Motion is quick and eases out: the
+ * panel opens and closes, tiles come in one after another, the category
+ * marker slides, tiles answer hover and clicks, and switching something
+ * shows a short note. Changes save a second later.
  */
 public class ClientScreen extends GuiScreen {
     private final GuiScreen parent;
     private Category category; // null = all
     private GuiTextField search;
     private float scroll, scrollTarget, maxScroll;
-    private final Map<String, Float> expand = new HashMap<String, Float>();
+    private float drawerScroll, drawerScrollTarget, drawerMax;
     private final Map<String, Float> knob = new HashMap<String, Float>();
-    private String open; // expanded module id
+    private final Map<String, Float> hover = new HashMap<String, Float>();
+    private final Map<String, Float> pressedAt = new HashMap<String, Float>();
+    private String open; // module in the drawer
+    private String closingDrawer;
+    private float drawerAt, drawerClosedAt;
     private NumberSetting dragging;
     private float dragX, dragW;
     private KeySetting binding;
@@ -46,7 +57,14 @@ public class ClientScreen extends GuiScreen {
     private ColorSetting picking;
     private float pickX, pickY, pickW, pickH, hueX, hueW;
     private int pickDrag; // 0 none, 1 square, 2 hue
-    private float lastFrame, openedAt;
+    private float lastFrame, openedAt, closingAt = -1;
+    private String gridKey = "";
+    private float gridAt;
+    private float markerY = -1, markerH;
+    private String toast;
+    private boolean toastOn;
+    private float toastAt = -10;
+    private int mouseX, mouseY;
 
     /** Clickable regions from the last frame. */
     private static final class Hit {
@@ -94,6 +112,36 @@ public class ClientScreen extends GuiScreen {
         VesperClient.config().markDirty();
     }
 
+    private void close() {
+        if (closingAt < 0) closingAt = Ease.seconds();
+    }
+
+    private void openDrawer(String id) {
+        if (id.equals(open)) return;
+        if (open != null) {
+            closingDrawer = open;
+            drawerClosedAt = Ease.seconds();
+        }
+        open = id;
+        drawerAt = Ease.seconds();
+        drawerScroll = drawerScrollTarget = 0;
+        picking = null;
+    }
+
+    private void closeDrawer() {
+        if (open == null) return;
+        closingDrawer = open;
+        drawerClosedAt = Ease.seconds();
+        open = null;
+        picking = null;
+    }
+
+    private void note(String text, boolean on) {
+        toast = text;
+        toastOn = on;
+        toastAt = Ease.seconds();
+    }
+
     // ---------- layout ----------
 
     private float u() {
@@ -101,11 +149,11 @@ public class ClientScreen extends GuiScreen {
     }
 
     private float panelX() {
-        return Math.max(8, width * 0.08f);
+        return Math.max(8, width * 0.06f);
     }
 
     private float panelY() {
-        return 8 * u();
+        return 7 * u();
     }
 
     private float panelW() {
@@ -117,11 +165,15 @@ public class ClientScreen extends GuiScreen {
     }
 
     private float sideW() {
-        return Math.max(90, panelW() * 0.2f);
+        return Math.max(100, panelW() * 0.22f);
     }
 
     private float fs(float pct) {
         return Math.max(6f, pct * u());
+    }
+
+    private float drawerW() {
+        return Math.min(Math.max(150, panelW() * 0.42f), panelW() - sideW() - 6 * u());
     }
 
     // ---------- input ----------
@@ -148,7 +200,11 @@ public class ClientScreen extends GuiScreen {
                 return;
             }
             UiSound.press();
-            mc.displayGuiScreen(parent);
+            if (open != null) {
+                closeDrawer();
+                return;
+            }
+            close();
             return;
         }
         if (search.textboxKeyTyped(c, key)) {
@@ -202,7 +258,10 @@ public class ClientScreen extends GuiScreen {
     public void handleMouseInput() throws java.io.IOException {
         super.handleMouseInput();
         int d = Mouse.getEventDWheel();
-        if (d != 0) scrollTarget = Math.max(0, Math.min(maxScroll, scrollTarget - Math.signum(d) * 8 * u()));
+        if (d == 0) return;
+        float step = Math.signum(d) * 8 * u();
+        if (open != null && mouseX >= panelX() + panelW() - drawerW()) drawerScrollTarget = Math.max(0, Math.min(drawerMax, drawerScrollTarget - step));
+        else scrollTarget = Math.max(0, Math.min(maxScroll, scrollTarget - step));
     }
 
     private void pick(int mx, int my) {
@@ -227,137 +286,228 @@ public class ClientScreen extends GuiScreen {
 
     @Override
     public void drawScreen(int mx, int my, float pt) {
+        mouseX = mx;
+        mouseY = my;
         float now = Ease.seconds();
         float dt = Math.min(0.1f, now - lastFrame);
         lastFrame = now;
         scroll = Ease.approach(scroll, scrollTarget, 18, dt);
+        drawerScroll = Ease.approach(drawerScroll, drawerScrollTarget, 18, dt);
         hits.clear();
-        float in = Ease.outCubic(Ease.span(now, openedAt, openedAt + 0.22f));
+        // Opening: 280 ms, eased out. Closing: 160 ms, then back to the menu.
+        float in = Ease.outQuint(Ease.span(now, openedAt, openedAt + 0.28f));
+        if (closingAt >= 0) {
+            float k = Ease.span(now, closingAt, closingAt + 0.16f);
+            in = Math.min(in, 1 - Ease.outCubic(k));
+            if (k >= 1) {
+                mc.displayGuiScreen(parent);
+                return;
+            }
+        }
+        int accent = TitleScreen.accent();
 
         Gl.begin2D();
         Draw.rect(0, 0, width, height, 0xFF000000);
         MenuBackdrop.base(width, height, 1);
         MenuBackdrop.curtains(width, height, now, 0.35f);
         MenuBackdrop.stars(width, height, now, 0.5f);
+        Draw.rect(0, 0, width, height, Colors.withAlpha(0x000000, 0.25f * in));
 
-        float px = panelX(), py = panelY() + (1 - in) * 2 * u(), pw = panelW(), ph = panelH();
-        Draw.roundRect(px, py, pw, ph, 1.6f * u(), Colors.withAlpha(0x0E0F12, 0.92f * in));
-        Draw.roundOutline(px, py, pw, ph, 1.6f * u(), 1, Colors.withAlpha(0xFFFFFF, 0.06f * in));
+        float px = panelX(), py = panelY(), pw = panelW(), ph = panelH();
+        // The panel grows from 97 % and fades in around its centre.
+        GlStateManager.pushMatrix();
+        float sc = 0.97f + 0.03f * in;
+        GlStateManager.translate(px + pw / 2, py + ph / 2, 0);
+        GlStateManager.scale(sc, sc, 1);
+        GlStateManager.translate(-(px + pw / 2), -(py + ph / 2) + (1 - in) * 1.5f * u(), 0);
+        // Soft shadow under the panel, then the panel.
+        for (int i = 1; i <= 4; i++) Draw.roundRect(px - i * 0.6f * u(), py - i * 0.3f * u() + 1.2f * u(), pw + i * 1.2f * u(), ph + i * 0.9f * u(), 2.2f * u(), Colors.withAlpha(0x000000, 0.07f * in));
+        Draw.roundRect(px, py, pw, ph, 1.8f * u(), Colors.withAlpha(0x0D0E11, 0.94f * in));
+        Draw.roundOutline(px, py, pw, ph, 1.8f * u(), 1, Colors.withAlpha(0xFFFFFF, 0.07f * in));
+        // Side bar.
+        float sw = sideW();
+        Draw.roundRect(px, py, sw, ph, 1.8f * u(), Colors.withAlpha(0x121318, 0.95f * in));
+        drawSide(px, py, sw, ph, mx, my, now, dt, in, accent);
 
-        // Side bar: logo, categories, links.
-        float sx = px + 2.4f * u(), sy = py + 3 * u();
-        Sigil.draw(sx, sy, 4 * u(), Colors.withAlpha(0xF2F3F5, in), 1);
-        GlyphFont.draw("Vesper", sx + 5.2f * u(), sy + 0.5f * u(), fs(3f), true, Colors.withAlpha(0xF2F3F5, in));
-        float cy = sy + 8 * u();
-        cy = sideItem("All", category == null, sx, cy, mx, my, new Runnable() {
-            public void run() {
-                category = null;
-                scrollTarget = 0;
-            }
-        });
-        for (final Category c : Category.values()) {
-            if (ModuleRegistry.find(c, null).isEmpty()) continue;
-            cy = sideItem(c.label, category == c, sx, cy, mx, my, new Runnable() {
-                public void run() {
-                    category = c;
-                    scrollTarget = 0;
-                }
-            });
-        }
-        cy += 2 * u();
-        cy = sideItem("Edit HUD layout", false, sx, cy, mx, my, new Runnable() {
-            public void run() {
-                mc.displayGuiScreen(new HudEditorScreen(ClientScreen.this));
-            }
-        });
-        cy = sideItem("Showroom", false, sx, cy, mx, my, new Runnable() {
-            public void run() {
-                mc.displayGuiScreen(new ShowroomScreen(ClientScreen.this));
-            }
-        });
-        cy = sideItem("Resource packs", false, sx, cy, mx, my, new Runnable() {
-            public void run() {
-                mc.displayGuiScreen(new dev.vesper.client.packs.PackBrowserScreen(ClientScreen.this));
-            }
-        });
-
-        // Profiles, bottom of the side bar.
-        float by = py + ph - 13 * u();
-        GlyphFont.draw("PROFILE", sx, by, fs(1.7f), true, Colors.withAlpha(0x7C808A, in));
-        final List<String> profiles = VesperClient.config().profiles();
-        final String active = VesperClient.config().activeProfile();
-        float bw = sideW() - 4.8f * u();
-        pill(sx, by + 2.4f * u(), bw, 3.6f * u(), active + "  ›", mx, my, new Runnable() {
-            public void run() {
-                int i = profiles.indexOf(active);
-                VesperClient.config().switchProfile(profiles.get((i + 1) % profiles.size()));
-            }
-        });
-        float half = (bw - u()) / 2;
-        pill(sx, by + 6.8f * u(), half, 3.2f * u(), "New", mx, my, new Runnable() {
-            public void run() {
-                int n = profiles.size() + 1;
-                while (profiles.contains("Profile " + n)) n++;
-                VesperClient.config().switchProfile("Profile " + n);
-            }
-        });
-        pill(sx + half + u(), by + 6.8f * u(), half, 3.2f * u(), "Reset", mx, my, new Runnable() {
-            public void run() {
-                VesperClient.config().resetProfile();
-            }
-        });
-
-        // Content: header, search, module list.
-        float cx = px + sideW(), cw = pw - sideW() - 2.4f * u();
-        Draw.rect(cx - 1, py + 2 * u(), cx, py + ph - 2 * u(), Colors.withAlpha(0xFFFFFF, 0.05f));
-        float hx = cx + 2.4f * u();
-        GlyphFont.draw(category == null ? "All modules" : category.label, hx, py + 3 * u(), fs(3.4f), true, Colors.withAlpha(0xF2F3F5, in));
-        // Search box.
-        float sw = Math.min(32 * u(), cw * 0.4f), sbx = cx + cw - sw, sby = py + 2.6f * u(), sbh = 3.8f * u();
-        Draw.roundRect(sbx, sby, sw, sbh, sbh / 2, search.isFocused() ? 0x26FFFFFF : 0x14FFFFFF);
+        // Content: title, count, search, tiles.
+        float cx = px + sw + 2.6f * u(), cw = pw - sw - 5.2f * u();
+        String title = category == null ? "All modules" : category.label;
+        GlyphFont.draw(title, cx, py + 3 * u(), fs(3.6f), true, Colors.withAlpha(0xF2F3F5, in));
         String q = search.getText();
-        GlyphFont.draw(q.isEmpty() && !search.isFocused() ? "Search (Ctrl+F)" : q + (search.isFocused() && (now * 2) % 2 < 1 ? "|" : ""), sbx + 1.4f * u(), sby + (sbh - fs(1.9f) * 1.25f) / 2, fs(1.9f), false, q.isEmpty() && !search.isFocused() ? 0xFF7C808A : 0xFFF2F3F5);
+        List<Module> mods = ModuleRegistry.find(category, q.trim());
+        int on = 0;
+        for (Module m : mods) if (m.enabled()) on++;
+        GlyphFont.draw(mods.size() + " modules · " + on + " on", cx, py + 7.4f * u(), fs(1.8f), false, Colors.withAlpha(0x8C909A, in));
+        float sbw = Math.min(34 * u(), cw * 0.42f), sbx = cx + cw - sbw, sby = py + 3 * u(), sbh = 4.2f * u();
+        float focus = Ease.approach(hover.containsKey("#search") ? hover.get("#search") : 0, search.isFocused() ? 1 : 0, 16, dt);
+        hover.put("#search", focus);
+        Draw.roundRect(sbx, sby, sbw, sbh, sbh / 2, Colors.mix(0x14FFFFFF, 0x24FFFFFF, focus));
+        Draw.roundOutline(sbx, sby, sbw, sbh, sbh / 2, 1, Colors.withAlpha(accent, 0.55f * focus));
+        Glyphs.search(sbx + 1.8f * u(), sby + sbh / 2, 0.9f * u(), Colors.mix(0xFF7C808A, 0xFFF2F3F5, focus));
+        boolean empty = q.isEmpty() && !search.isFocused();
+        GlyphFont.draw(empty ? "Search  (Ctrl+F)" : q + (search.isFocused() && (now * 2) % 2 < 1 ? "|" : ""), sbx + 3.4f * u(), sby + (sbh - fs(1.9f) * 1.25f) / 2, fs(1.9f), false, empty ? 0xFF7C808A : 0xFFF2F3F5);
         search.xPosition = (int) sbx;
         search.yPosition = (int) sby;
-        search.width = (int) sw;
+        search.width = (int) sbw;
         search.height = (int) sbh;
-        hits.add(new Hit(sbx, sby, sw, sbh, new Runnable() {
+        hits.add(new Hit(sbx, sby, sbw, sbh, new Runnable() {
             public void run() {
                 search.setFocused(true);
             }
         }));
         String err = VesperClient.config().lastError();
-        float listTop = py + 9 * u();
+        float top = py + 11 * u();
         if (err != null) {
-            GlyphFont.draw(err, hx, py + 7 * u(), fs(1.6f), false, 0xFFFFB86B);
-            listTop += 2 * u();
+            GlyphFont.draw(err, cx, py + 9.4f * u(), fs(1.6f), false, 0xFFFFB86B);
+            top += 2 * u();
         }
+        float bottom = py + ph - 4.5f * u();
 
-        List<Module> mods = ModuleRegistry.find(category, q.trim());
-        float listBottom = py + ph - 4.5f * u();
-        scissor(cx, listTop, cw + 2.4f * u(), listBottom - listTop);
-        float y = listTop - scroll;
-        for (Module m : mods) y = card(m, hx, y, cw - 2.4f * u(), mx, my, listTop, listBottom, dt) + 1.2f * u();
-        if (mods.isEmpty()) GlyphFont.draw("Nothing matches “" + q + "”.", hx, listTop + 2 * u(), fs(2f), false, 0xFF7C808A);
-        maxScroll = Math.max(0, y + scroll - listBottom + 2 * u());
+        // New filter: the tiles come in again, one after another.
+        String key = (category == null ? "all" : category.name()) + "|" + q.trim().toLowerCase();
+        if (!key.equals(gridKey)) {
+            gridKey = key;
+            gridAt = now;
+        }
+        int cols = Math.max(1, Math.min(3, (int) (cw / (40 * u()))));
+        float gap = 1.4f * u(), tw = (cw - gap * (cols - 1)) / cols, th = 10.5f * u();
+        scissor(cx - u(), top, cw + 2 * u(), bottom - top);
+        float y0 = top - scroll;
+        boolean gridLive = open == null && picking == null;
+        for (int i = 0; i < mods.size(); i++) {
+            int c = i % cols, r = i / cols;
+            float tx = cx + c * (tw + gap), ty = y0 + r * (th + gap);
+            if (ty + th < top || ty > bottom) continue;
+            float appear = Ease.outCubic(Ease.span(now, gridAt + Math.min(i, 18) * 0.03f, gridAt + Math.min(i, 18) * 0.03f + 0.3f));
+            tile(mods.get(i), tx, ty + (1 - appear) * 1.6f * u(), tw, th, mx, my, top, bottom, now, dt, appear * in, gridLive, accent);
+        }
+        int rows = (mods.size() + cols - 1) / cols;
+        maxScroll = Math.max(0, rows * (th + gap) - (bottom - top) + u());
         if (scrollTarget > maxScroll) scrollTarget = maxScroll;
         endScissor();
+        if (mods.isEmpty()) GlyphFont.draw("Nothing matches “" + q + "”.", cx, top + 2 * u(), fs(2f), false, 0xFF7C808A);
+        // A fade at the bottom edge when there is more below.
+        if (scroll < maxScroll - 1) Draw.gradientV(cx - u(), bottom - 4 * u(), cx + cw + u(), bottom, 0x000D0E11, Colors.withAlpha(0x0D0E11, in));
+        GlyphFont.draw("Esc to go back · click a tile for its options · saved automatically", cx, py + ph - 1.6f * u() - fs(1.5f), fs(1.5f), false, Colors.withAlpha(0x5C606A, in));
 
-        // Colour picker popup (drawn last, on top).
+        drawDrawer(px, py, pw, ph, mx, my, now, in, accent);
         if (picking != null) drawPicker();
-
-        GlyphFont.draw("Esc to go back · settings save automatically", hx, py + ph - 1.6f * u() - fs(1.5f), fs(1.5f), false, 0xFF5C606A);
+        drawToast(px + sw + (pw - sw) / 2, py + ph, now, in, accent);
+        GlStateManager.popMatrix();
         Gl.end2D();
     }
 
-    private float sideItem(String label, boolean on, float x, float y, int mx, int my, Runnable r) {
-        float w = sideW() - 4.8f * u(), h = 3.6f * u();
-        boolean hov = mx >= x && mx < x + w && my >= y && my < y + h;
-        if (on || hov) Draw.roundRect(x - u(), y, w + u(), h, u(), on ? Colors.withAlpha(TitleScreen.accent(), 0.16f) : 0x0FFFFFFF);
-        if (on) Draw.rect(x - u(), y + h * 0.25f, x - u() + 2, y + h * 0.75f, 0xFF000000 | TitleScreen.accent());
-        GlyphFont.draw(label, x + 0.6f * u(), y + (h - fs(2f) * 1.25f) / 2, fs(2f), on, on ? 0xFFFFFFFF : hov ? 0xFFE3E5EA : 0xFFA9ADB6);
+    private void drawSide(float px, float py, float sw, float ph, int mx, int my, float now, float dt, float in, int accent) {
+        float sx = px + 2.4f * u(), sy = py + 2.8f * u(), iw = sw - 4.8f * u();
+        Sigil.draw(sx, sy, 3.6f * u(), Colors.withAlpha(0xF2F3F5, in), 1);
+        GlyphFont.draw("Vesper", sx + 4.8f * u(), sy + 0.3f * u(), fs(2.8f), true, Colors.withAlpha(0xF2F3F5, in));
+        GlyphFont.draw(VesperClient.VERSION, sx + 4.8f * u() + GlyphFont.width("Vesper", fs(2.8f), true) + u(), sy + 1.1f * u(), fs(1.5f), false, Colors.withAlpha(0x7C808A, in));
+
+        // You, live, with your cosmetics: turns slowly and leans toward the mouse.
+        float cardY = sy + 5.5f * u(), cardH = Math.min(26 * u(), ph * 0.3f);
+        Draw.roundRect(sx - u(), cardY, iw + 2 * u(), cardH, 1.4f * u(), Colors.withAlpha(0x0B0C0F, in));
+        Draw.glow(sx + iw / 2, cardY + cardH * 0.6f, cardH * 0.7f, Colors.withAlpha(accent, (0.34f + 0.06f * (float) Math.sin(now * 1.6f)) * in));
+        Draw.roundOutline(sx - u(), cardY, iw + 2 * u(), cardH, 1.4f * u(), 1, Colors.withAlpha(0xFFFFFF, 0.05f * in));
+        float lean = Math.max(-1, Math.min(1, (mx - (sx + iw / 2)) / (width * 0.4f)));
+        float yaw = 22 * (float) Math.sin(now * 0.45f) + lean * 30;
+        int total = ModuleRegistry.all().size(), on = 0;
+        for (Module m : ModuleRegistry.all()) if (m.enabled()) on++;
+        GlyphFont.draw(mc.getSession().getUsername(), sx, cardY + cardH + 0.8f * u(), fs(2f), true, Colors.withAlpha(0xF2F3F5, in));
+        GlyphFont.draw(on + " of " + total + " modules on", sx, cardY + cardH + 3.6f * u(), fs(1.6f), false, Colors.withAlpha(0x8C909A, in));
+
+        // Categories, with a marker that slides to the chosen one.
+        float cy = cardY + cardH + 7.6f * u();
+        float itemH = 3.4f * u();
+        float targetY = cy;
+        List<Object> items = new ArrayList<Object>();
+        items.add(null);
+        for (Category c : Category.values()) if (!ModuleRegistry.find(c, null).isEmpty()) items.add(c);
+        for (int i = 0; i < items.size(); i++) if (items.get(i) == category) targetY = cy + i * (itemH + 0.5f * u());
+        markerY = markerY < 0 ? targetY : Ease.approach(markerY, targetY, 16, dt);
+        Draw.roundRect(sx - u(), markerY, iw + u(), itemH, u(), Colors.withAlpha(accent, 0.16f * in));
+        Draw.roundRect(sx - u(), markerY + itemH * 0.22f, 2, itemH * 0.56f, 1, Colors.withAlpha(accent, in));
+        for (Object o : items) {
+            final Category c = (Category) o;
+            String label = c == null ? "All" : c.label;
+            int count = ModuleRegistry.find(c, null).size();
+            cy = sideItem(label, String.valueOf(count), category == c, sx, cy, iw, itemH, mx, my, dt, in, new Runnable() {
+                public void run() {
+                    UiSound.hover();
+                    category = c;
+                    scrollTarget = 0;
+                    closeDrawer();
+                }
+            });
+        }
+        cy += 1.4f * u();
+        Draw.rect(sx, cy, sx + iw, cy + 1, Colors.withAlpha(0xFFFFFF, 0.05f * in));
+        cy += 1.4f * u();
+        cy = sideItem("Edit HUD layout", "›", false, sx, cy, iw, itemH, mx, my, dt, in, new Runnable() {
+            public void run() {
+                mc.displayGuiScreen(new HudEditorScreen(ClientScreen.this));
+            }
+        });
+        cy = sideItem("Showroom", "›", false, sx, cy, iw, itemH, mx, my, dt, in, new Runnable() {
+            public void run() {
+                mc.displayGuiScreen(new ShowroomScreen(ClientScreen.this));
+            }
+        });
+        cy = sideItem("Resource packs", "›", false, sx, cy, iw, itemH, mx, my, dt, in, new Runnable() {
+            public void run() {
+                mc.displayGuiScreen(new dev.vesper.client.packs.PackBrowserScreen(ClientScreen.this));
+            }
+        });
+
+        // Profiles at the bottom.
+        float by = py + ph - 11.5f * u();
+        if (by > cy + u()) {
+            GlyphFont.draw("PROFILE", sx, by, fs(1.5f), true, Colors.withAlpha(0x7C808A, in));
+            final List<String> profiles = VesperClient.config().profiles();
+            final String active = VesperClient.config().activeProfile();
+            pill(sx, by + 2.2f * u(), iw, 3.4f * u(), active + "  ›", mx, my, new Runnable() {
+                public void run() {
+                    int i = profiles.indexOf(active);
+                    VesperClient.config().switchProfile(profiles.get((i + 1) % profiles.size()));
+                    note("Profile: " + VesperClient.config().activeProfile(), true);
+                }
+            });
+            float half = (iw - u()) / 2;
+            pill(sx, by + 6.4f * u(), half, 3f * u(), "New", mx, my, new Runnable() {
+                public void run() {
+                    int n = profiles.size() + 1;
+                    while (profiles.contains("Profile " + n)) n++;
+                    VesperClient.config().switchProfile("Profile " + n);
+                    note("New profile: Profile " + n, true);
+                }
+            });
+            pill(sx + half + u(), by + 6.4f * u(), half, 3f * u(), "Reset", mx, my, new Runnable() {
+                public void run() {
+                    VesperClient.config().resetProfile();
+                    note("Profile reset", false);
+                }
+            });
+        }
+
+        // The 3D preview last in the side bar (it needs depth; the rest is flat).
+        Gl.end2D();
+        scissor(sx - u(), cardY, iw + 2 * u(), cardH);
+        PlayerPreview.draw(sx + iw / 2, cardY + cardH - 1.6f * u(), cardH * 0.74f, yaw, in, now);
+        endScissor();
+        Gl.begin2D();
+    }
+
+    private float sideItem(String label, String right, boolean on, float x, float y, float w, float h, int mx, int my, float dt, float in, Runnable r) {
+        boolean hov = mx >= x - u() && mx < x + w && my >= y && my < y + h && open == null;
+        String k = "#side" + label;
+        float t = Ease.approach(hover.containsKey(k) ? hover.get(k) : 0, hov ? 1 : 0, 18, dt);
+        hover.put(k, t);
+        if (!on && t > 0.01f) Draw.roundRect(x - u(), y, w + u(), h, u(), Colors.withAlpha(0xFFFFFF, 0.05f * t * in));
+        float shift = on ? 0.5f * u() : t * 0.3f * u();
+        int col = on ? 0xFFFFFFFF : Colors.mix(0xFFA9ADB6, 0xFFE3E5EA, t);
+        GlyphFont.draw(label, x + 0.6f * u() + shift, y + (h - fs(1.9f) * 1.25f) / 2, fs(1.9f), on, Colors.alpha(col, in));
+        GlyphFont.draw(right, x + w - GlyphFont.width(right, fs(1.6f), false) - 0.6f * u(), y + (h - fs(1.6f) * 1.25f) / 2, fs(1.6f), false, Colors.withAlpha(0x6C707A, in));
         hits.add(new Hit(x - u(), y, w + u(), h, r));
-        return y + h + 0.6f * u();
+        return y + h + 0.5f * u();
     }
 
     private void pill(float x, float y, float w, float h, String label, int mx, int my, Runnable r) {
@@ -367,50 +517,163 @@ public class ClientScreen extends GuiScreen {
         hits.add(new Hit(x, y, w, h, r));
     }
 
-    /** One module card; returns the y below it. */
-    private float card(final Module m, float x, float y, float w, int mx, int my, float top, float bottom, float dt) {
-        float head = 7 * u();
-        float ex = Ease.approach(expand.containsKey(m.id) ? expand.get(m.id) : 0, m.id.equals(open) ? 1 : 0, 14, dt);
-        expand.put(m.id, ex);
-        float bodyH = ex > 0.001f ? settingsHeight(m) * Ease.outCubic(ex) : 0;
-        float hgt = head + bodyH;
-        boolean visible = y + hgt > top && y < bottom;
-        if (visible) {
-            boolean hov = mx >= x && mx < x + w && my >= y && my < y + head && my >= top && my < bottom;
-            Draw.roundRect(x, y, w, hgt, 1.2f * u(), hov ? 0xFF1A1B20 : 0xFF15161A);
-            GlyphFont.draw(m.name, x + 2 * u(), y + 1.3f * u(), fs(2.2f), true, 0xFFF2F3F5);
-            String desc = m.description;
-            float maxW = w - 16 * u();
-            while (desc.length() > 4 && GlyphFont.width(desc, fs(1.7f), false) > maxW) desc = desc.substring(0, desc.length() - 2);
-            if (!desc.equals(m.description)) desc = desc.trim() + "…";
-            GlyphFont.draw(desc, x + 2 * u(), y + 4 * u(), fs(1.7f), false, 0xFF8C909A);
-            if (!m.publicSafe) GlyphFont.draw("opt-in", x + 2.6f * u() + GlyphFont.width(m.name, fs(2.2f), true), y + 1.6f * u(), fs(1.5f), false, 0xFFFFB86B);
-            // Toggle switch.
-            float tw = 5.2f * u(), th = 2.8f * u(), tx = x + w - tw - 2 * u(), ty = y + (head - th) / 2;
-            switchBox(m.id, tx, ty, tw, th, m.enabled(), dt);
-            if (my >= top && my < bottom) {
-                hits.add(new Hit(x, y, w - tw - 4 * u(), head, new Runnable() {
-                    public void run() {
-                        UiSound.hover();
-                        open = m.id.equals(open) ? null : m.id;
-                    }
-                }));
-                hits.add(new Hit(tx - u(), y, tw + 3 * u(), head, new Runnable() {
-                    public void run() {
-                        UiSound.press();
-                        m.toggle();
-                        changed();
-                    }
-                }));
-            }
-            if (bodyH > 0.5f) {
-                scissor(x, Math.max(top, y + head), w, Math.min(bottom, y + hgt) - Math.max(top, y + head));
-                drawSettings(m, x + 2 * u(), y + head, w - 4 * u(), mx, my, top, bottom);
-                endScissor();
-                scissor(panelX() + sideW(), top, panelW() - sideW(), bottom - top);
-            }
+    /** One module tile: name, what it does, its switch; hover lifts it, a click presses it. */
+    private void tile(final Module m, float x, float y, float w, float h, int mx, int my, float top, float bottom, float now, float dt, float alpha, boolean live, int accent) {
+        boolean hov = live && mx >= x && mx < x + w && my >= y && my < y + h && my >= top && my < bottom;
+        float t = Ease.approach(hover.containsKey(m.id) ? hover.get(m.id) : 0, hov ? 1 : 0, 16, dt);
+        hover.put(m.id, t);
+        float press = pressedAt.containsKey(m.id) ? Ease.bell(Ease.span(now, pressedAt.get(m.id), pressedAt.get(m.id) + 0.18f)) : 0;
+        float sel = m.id.equals(open) ? 1 : 0;
+        float k = knob.containsKey(m.id) ? knob.get(m.id) : m.enabled() ? 1 : 0;
+        GlStateManager.pushMatrix();
+        float s = 1 - 0.025f * press;
+        GlStateManager.translate(x + w / 2, y + h / 2, 0);
+        GlStateManager.scale(s, s, 1);
+        GlStateManager.translate(-(x + w / 2), -(y + h / 2) - t * 0.25f * u(), 0);
+        // Lift shadow on hover.
+        if (t > 0.01f) Draw.roundRect(x + 0.3f * u(), y + 0.8f * u(), w - 0.6f * u(), h, 1.4f * u(), Colors.withAlpha(0x000000, 0.35f * t * alpha));
+        Draw.roundRect(x, y, w, h, 1.4f * u(), Colors.alpha(Colors.mix(0xFF15161B, 0xFF1C1D23, t), alpha));
+        // On: a wash of the accent from the top-left.
+        if (k > 0.01f) Draw.gradientV(x + 1, y + 1, x + w - 1, y + h * 0.6f, Colors.withAlpha(accent, 0.10f * k * alpha), Colors.withAlpha(accent, 0));
+        Draw.roundOutline(x, y, w, h, 1.4f * u(), 1, Colors.alpha(Colors.mix(0x10FFFFFF, 0xFF000000 | accent, Math.max(sel, 0.45f * t)), alpha * Math.max(0.6f, Math.max(sel, t))));
+        // Status dot.
+        float dx = x + 2 * u(), dy = y + 2.5f * u();
+        if (k > 0.01f) Draw.glow(dx, dy, 1.6f * u(), Colors.withAlpha(accent, 0.5f * k * alpha));
+        Draw.circle(dx, dy, 0.5f * u(), Colors.alpha(Colors.mix(0xFF4A4D57, 0xFF000000 | accent, k), alpha));
+        GlyphFont.draw(m.name, x + 3.4f * u(), y + 1.3f * u(), fs(2.1f), true, Colors.alpha(0xFFF2F3F5, alpha));
+        // Description: up to two lines.
+        List<String> lines = wrap(m.description, w - 4 * u(), fs(1.6f), 2);
+        for (int i = 0; i < lines.size(); i++) GlyphFont.draw(lines.get(i), x + 2 * u(), y + 4.6f * u() + i * 2.2f * u(), fs(1.6f), false, Colors.alpha(0xFF8C909A, alpha));
+        if (!m.publicSafe) GlyphFont.draw("opt-in", x + 3.8f * u() + GlyphFont.width(m.name, fs(2.1f), true), y + 1.6f * u(), fs(1.4f), false, Colors.alpha(0xFFFFB86B, alpha));
+        float swW = 4.8f * u(), swH = 2.6f * u(), swX = x + w - swW - 1.6f * u(), swY = y + 1.2f * u();
+        switchBox(m.id, swX, swY, swW, swH, m.enabled(), dt);
+        GlStateManager.popMatrix();
+        if (live && my >= top && my < bottom && alpha > 0.5f) {
+            hits.add(new Hit(x, y, w, h, new Runnable() {
+                public void run() {
+                    UiSound.hover();
+                    pressedAt.put(m.id, Ease.seconds());
+                    openDrawer(m.id);
+                }
+            }));
+            hits.add(new Hit(swX - u(), y, swW + 2.6f * u(), swY + swH + u() - y, new Runnable() {
+                public void run() {
+                    UiSound.press();
+                    pressedAt.put(m.id, Ease.seconds());
+                    m.toggle();
+                    changed();
+                    note(m.name + (m.enabled() ? " on" : " off"), m.enabled());
+                }
+            }));
         }
-        return y + hgt;
+    }
+
+    /** The options drawer: slides in from the right over a dimmed grid. */
+    private void drawDrawer(float px, float py, float pw, float ph, int mx, int my, float now, float in, int accent) {
+        String id = open != null ? open : closingDrawer;
+        if (id == null) return;
+        float k = open != null ? Ease.outQuint(Ease.span(now, drawerAt, drawerAt + 0.26f)) : 1 - Ease.outCubic(Ease.span(now, drawerClosedAt, drawerClosedAt + 0.18f));
+        if (open == null && k <= 0) {
+            closingDrawer = null;
+            return;
+        }
+        final Module m = ModuleRegistry.get(id);
+        if (m == null) return;
+        float sw = sideW();
+        Draw.roundRect(px + sw, py, pw - sw, ph, 1.8f * u(), Colors.withAlpha(0x000000, 0.45f * k * in));
+        if (open != null) hits.add(new Hit(px + sw, py, pw - sw - drawerW(), ph, new Runnable() {
+            public void run() {
+                closeDrawer();
+            }
+        }));
+        float dw = drawerW(), dx = px + pw - dw * k, dy = py;
+        Draw.rect(dx - 2 * u(), dy + 1.8f * u(), dx, dy + ph - 1.8f * u(), Colors.withAlpha(0x000000, 0.25f * k));
+        Draw.roundRect(dx, dy, dw, ph, 1.8f * u(), Colors.withAlpha(0x111217, in));
+        Draw.rect(dx, dy + 1.8f * u(), dx + 1, dy + ph - 1.8f * u(), Colors.withAlpha(0xFFFFFF, 0.07f * in));
+        float ix = dx + 2.6f * u(), iw = dw - 5.2f * u();
+        float hy = dy + 2.8f * u();
+        GlyphFont.draw(m.category.label.toUpperCase(), ix, hy, fs(1.5f), true, Colors.withAlpha(accent, in));
+        GlyphFont.draw(m.name, ix, hy + 2.4f * u(), fs(3.2f), true, Colors.withAlpha(0xF2F3F5, in));
+        // Close button.
+        float cbs = 3.4f * u(), cbx = dx + dw - cbs - 1.8f * u();
+        boolean ch = open != null && mx >= cbx && mx < cbx + cbs && my >= hy && my < hy + cbs;
+        Draw.roundRect(cbx, hy, cbs, cbs, cbs / 2, ch ? 0x33FFFFFF : 0x14FFFFFF);
+        Draw.line(cbx + cbs * 0.33f, hy + cbs * 0.33f, cbx + cbs * 0.67f, hy + cbs * 0.67f, 1.2f, 0xFFE3E5EA);
+        Draw.line(cbx + cbs * 0.67f, hy + cbs * 0.33f, cbx + cbs * 0.33f, hy + cbs * 0.67f, 1.2f, 0xFFE3E5EA);
+        if (open != null) hits.add(new Hit(cbx, hy, cbs, cbs, new Runnable() {
+            public void run() {
+                UiSound.press();
+                closeDrawer();
+            }
+        }));
+        List<String> lines = wrap(m.description, iw, fs(1.8f), 3);
+        float ly = hy + 7.2f * u();
+        for (String l : lines) {
+            GlyphFont.draw(l, ix, ly, fs(1.8f), false, Colors.withAlpha(0xA9ADB6, in));
+            ly += 2.5f * u();
+        }
+        // The big switch.
+        float rowY = ly + u();
+        Draw.roundRect(ix, rowY, iw, 5.4f * u(), 1.2f * u(), 0x0CFFFFFF);
+        GlyphFont.draw(m.enabled() ? "On" : "Off", ix + 1.6f * u(), rowY + (5.4f * u() - fs(2.1f) * 1.25f) / 2, fs(2.1f), true, m.enabled() ? 0xFFFFFFFF : 0xFFA9ADB6);
+        switchBox(m.id, ix + iw - 6.2f * u() - 1.4f * u(), rowY + 1.3f * u(), 6.2f * u(), 2.8f * u(), m.enabled(), 0.016f);
+        if (open != null) hits.add(new Hit(ix, rowY, iw, 5.4f * u(), new Runnable() {
+            public void run() {
+                UiSound.press();
+                m.toggle();
+                changed();
+                note(m.name + (m.enabled() ? " on" : " off"), m.enabled());
+            }
+        }));
+        float top = rowY + 7 * u(), bottom = dy + ph - 2 * u();
+        scissor(dx, top, dw, bottom - top);
+        float body = settingsHeight(m);
+        drawerMax = Math.max(0, body - (bottom - top) + u());
+        if (drawerScrollTarget > drawerMax) drawerScrollTarget = drawerMax;
+        int smx = open != null ? mx : -9999;
+        drawSettings(m, ix, top - drawerScroll, iw, smx, my, top, bottom);
+        endScissor();
+        if (drawerScroll < drawerMax - 1) Draw.gradientV(dx, bottom - 4 * u(), dx + dw, bottom, 0x00111217, 0xFF111217);
+    }
+
+    private void drawToast(float cx, float bottomY, float now, float in, int accent) {
+        if (toast == null) return;
+        float t = now - toastAt;
+        if (t > 1.9f) return;
+        float a = Ease.outCubic(Ease.span(now, toastAt, toastAt + 0.22f)) * (1 - Ease.span(now, toastAt + 1.5f, toastAt + 1.9f));
+        float w = GlyphFont.width(toast, fs(1.9f), true) + 6 * u(), h = 4.2f * u();
+        float x = cx - w / 2, y = bottomY - 8 * u() + (1 - a) * 1.6f * u();
+        Draw.roundRect(x, y + 0.6f * u(), w, h, h / 2, Colors.withAlpha(0x000000, 0.4f * a * in));
+        Draw.roundRect(x, y, w, h, h / 2, Colors.withAlpha(0x1C1D23, a * in));
+        Draw.roundOutline(x, y, w, h, h / 2, 1, Colors.withAlpha(0xFFFFFF, 0.08f * a * in));
+        Draw.circle(x + 2 * u(), y + h / 2, 0.55f * u(), toastOn ? Colors.withAlpha(accent, a * in) : Colors.withAlpha(0x6C707A, a * in));
+        GlyphFont.draw(toast, x + 3.6f * u(), y + (h - fs(1.9f) * 1.25f) / 2, fs(1.9f), true, Colors.withAlpha(0xF2F3F5, a * in));
+    }
+
+    private static List<String> wrap(String text, float maxW, float size, int maxLines) {
+        List<String> out = new ArrayList<String>();
+        String[] words = text.split(" ");
+        StringBuilder line = new StringBuilder();
+        for (int i = 0; i < words.length; i++) {
+            String tryLine = line.length() == 0 ? words[i] : line + " " + words[i];
+            if (GlyphFont.width(tryLine, size, false) <= maxW) {
+                line = new StringBuilder(tryLine);
+                continue;
+            }
+            if (line.length() > 0) out.add(line.toString());
+            line = new StringBuilder(words[i]);
+            if (out.size() == maxLines) break;
+        }
+        if (out.size() < maxLines && line.length() > 0) out.add(line.toString());
+        if (out.size() > maxLines) out = out.subList(0, maxLines);
+        // Mark a cut with an ellipsis.
+        String joined = String.join(" ", out);
+        if (joined.length() < text.length() && !out.isEmpty()) {
+            String last = out.get(out.size() - 1);
+            while (last.length() > 3 && GlyphFont.width(last + "…", size, false) > maxW) last = last.substring(0, last.length() - 1);
+            out.set(out.size() - 1, last.trim() + "…");
+        }
+        return out;
     }
 
     private void switchBox(String key, float x, float y, float w, float h, boolean on, float dt) {
@@ -515,7 +778,7 @@ public class ClientScreen extends GuiScreen {
         GlyphFont.draw("Toggle key", x, y + (rowH() - fs(1.9f) * 1.25f) / 2, fs(1.9f), false, 0xFFC9CCD3);
         keyRow(m.toggleKey, m, x, y, w, y + (rowH() - 2.8f * u()) / 2, y + rowH() > top && y < bottom);
         y += rowH();
-        float rw = 12 * u();
+        float rw = GlyphFont.width("Reset module", fs(1.8f), false) + 4 * u();
         pill(x + w - rw, y + (rowH() - 2.8f * u()) / 2, rw, 2.8f * u(), "Reset module", mx, my, new Runnable() {
             public void run() {
                 m.resetAll();
