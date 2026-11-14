@@ -196,11 +196,15 @@ pub struct FortniteOptions {
     /// can't change video settings (Epic's help says so); Restore or
     /// unticking this unlocks it again.
     pub lock_file: bool,
+    /// Fortnite's Brightness, percent (100 = its default); 0 leaves it
+    /// alone. Saved as DisplayGamma (2.2 at 100 %); only changed when the
+    /// file already has that line.
+    pub brightness: u16,
 }
 
 impl Default for FortniteOptions {
     fn default() -> Self {
-        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None, quality: None, width: 0, height: 0, potato: false, lock_file: false }
+        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None, quality: None, width: 0, height: 0, potato: false, lock_file: false, brightness: 0 }
     }
 }
 
@@ -414,6 +418,10 @@ fn fortnite_edits(o: &FortniteOptions) -> Vec<Edit> {
         e.push(edit(s, "bRayTracing", "False", false, "Ray tracing off"));
     }
     let g = Some(FN_SCALABILITY);
+    if o.brightness > 0 {
+        let b = o.brightness.clamp(50, 200);
+        e.push(edit(s, "DisplayGamma", format!("{:.6}", 2.2 * b as f64 / 100.0), false, format!("Brightness: {b}%")));
+    }
     let res = o.resolution_scale.clamp(floor, 100);
     e.push(edit(g, "sg.ResolutionQuality", format!("{res}.000000"), true, format!("3D resolution: {res}%")));
     if o.lowest_quality {
@@ -953,6 +961,11 @@ mod tests {
         apply(ConfigGame::Fortnite, &opts, &paths, &backups).unwrap();
         restore(ConfigGame::Fortnite, &paths, &backups).unwrap();
         assert!(!std::fs::metadata(&path).unwrap().permissions().readonly(), "unlocked by Restore");
+        // Brightness: only where the file has DisplayGamma.
+        let mut doc = Doc::ini(b"[/Script/FortniteGame.FortGameUserSettings]\r\nDisplayGamma=2.200000\r\n");
+        let bright = ConfigOptions { fortnite: FortniteOptions { brightness: 140, ..FortniteOptions::default() }, ..ConfigOptions::default() };
+        apply_to(ConfigGame::Fortnite, &bright, &mut doc);
+        assert_eq!(doc.get(Some(FN_SECTION), "DisplayGamma").as_deref(), Some("3.080000"));
         // Without potato the floor stays 25 %.
         opts.fortnite = FortniteOptions { resolution_scale: 10, ..FortniteOptions::default() };
         let e = fortnite_edits(&opts.fortnite);

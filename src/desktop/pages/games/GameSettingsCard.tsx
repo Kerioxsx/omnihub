@@ -6,7 +6,7 @@
 import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteAdvice, FortniteOptions, FortniteRenderMode, GameConfigs, GameSession, GpuDriver, MinecraftOptions, NetCheck, ProOptions, Replays } from '@shared/types';
 import { formatBytes, formatRelative } from '@shared/format';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, ChevronDown, Eraser, ExternalLink, Film, Gauge, Info, Lightbulb, MonitorCog, RotateCcw, Sparkles, XCircle, Zap, Cpu } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Eraser, ExternalLink, Film, Gauge, Info, Lightbulb, MonitorCog, RotateCcw, Sparkles, XCircle, Zap, Cpu, Sun } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
@@ -185,7 +185,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   ))}
                 </Select>
               </Row>
-              <Row title="Preset" hint="Potato: the blurry low-poly look from the clips, for weak PCs (Performance mode, everything lowest, near view, 3D resolution as low as 10%). Competitive: the most frames (Performance mode, lowest quality, no cap). Balanced: DirectX 12 at medium quality. Pretty: DirectX 12 at epic quality. Press Apply after; your own settings stay backed up.">
+              <Row title="Preset" hint="Clean & bright: the bright, flat pastel look from the clips (Performance mode, everything low, sharp 100% 3D resolution, brightness up). Potato: the blurry low-poly look from the clips, for weak PCs (Performance mode, everything lowest, near view, 3D resolution as low as 10%). Competitive: the most frames (Performance mode, lowest quality, no cap). Balanced: DirectX 12 at medium quality. Pretty: DirectX 12 at epic quality. Press Apply after; your own settings stay backed up.">
                 <div className="flex flex-wrap gap-1.5">
                   {PRESETS.map((p) => (
                     <Button key={p.id} size="sm" variant="secondary" icon={p.icon} onClick={() => fn(p.set)}>
@@ -221,6 +221,15 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   <Switch checked={!!o.fortnite.potato} onChange={(v) => fn({ potato: v })} label="Potato graphics" />
                 </Row>
               )}
+              <Row title="Brightness" hint="Fortnite’s Brightness (100% is its default). Higher gives the light, washed pastel look. Saved as DisplayGamma in its settings; Keep leaves yours.">
+                <Select value={o.fortnite.brightness ?? 0} onChange={(e) => fn({ brightness: Number(e.target.value) })} className="w-28">
+                  {[0, 100, 110, 120, 130, 140, 150, 160].map((b) => (
+                    <option key={b} value={b}>
+                      {b === 0 ? 'Keep' : `${b}%`}
+                    </option>
+                  ))}
+                </Select>
+              </Row>
               <Row title="Lock the settings file" hint="Makes GameUserSettings.ini read-only after Apply so Fortnite can’t put its own values back (what the potato guides do). While locked, Fortnite’s menu can’t change video settings or switch Performance mode; untick and Apply, or Restore, to unlock.">
                 <Switch checked={!!o.fortnite.lockFile} onChange={(v) => fn({ lockFile: v })} label="Lock settings file" />
               </Row>
@@ -364,8 +373,9 @@ function CleanCaches() {
 }
 
 const PRESETS: { id: string; label: string; icon: typeof Zap; set: Partial<FortniteOptions> }[] = [
-  { id: 'potato', label: 'Potato', icon: Cpu, set: { potato: true, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 25 } },
-  { id: 'competitive', label: 'Competitive', icon: Zap, set: { potato: false, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 100 } },
+  { id: 'bright', label: 'Clean & bright', icon: Sun, set: { potato: false, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 100, brightness: 140 } },
+  { id: 'potato', label: 'Potato', icon: Cpu, set: { potato: true, brightness: 0, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 25 } },
+  { id: 'competitive', label: 'Competitive', icon: Zap, set: { potato: false, brightness: 0, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 100 } },
   { id: 'balanced', label: 'Balanced', icon: Gauge, set: { potato: false, lockFile: false, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 1, viewDistance: 2, fullscreen: true, reflex: 2, resolutionScale: 100 } },
   { id: 'pretty', label: 'Pretty', icon: Sparkles, set: { potato: false, lockFile: false, frameLimit: 0, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 3, viewDistance: 3, fullscreen: true, reflex: 1, resolutionScale: 100 } },
 ];

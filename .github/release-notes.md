@@ -1,5 +1,12 @@
 ## New in this version
 
+**Fortnite "Clean & bright": the sharp, flat pastel look from the clips.**
+
+- New **Clean & bright** preset (Games → Optimize → Fortnite): Performance mode, everything at its lowest, near view distance, a sharp 100% 3D resolution and Brightness up to 140%.
+- New **Brightness** choice (Keep, 100–160%), saved as Fortnite's DisplayGamma (2.2 = 100%). OmniHub only changes it when the file already has that line. How Fortnite's slider maps to the value isn't documented anywhere we could find, so if it looks off, move Fortnite's own Brightness slider.
+- For even more colour, like many of the clips: NVIDIA Control Panel → Adjust desktop colour settings → Digital vibrance, or AMD Software → Display → Saturation. That's a graphics-driver setting OmniHub doesn't change.
+
+
 **Potato graphics for Fortnite, and a redesigned OmniHub.**
 
 - **Potato preset** (Games → Optimize → Fortnite): the blurry, low-poly look from the clips, for weak PCs. Performance mode, every quality setting at its lowest, near view distance, and a 3D resolution allowed below the menu's 25% minimum (down to 10%). Fortnite may raise a value it doesn't accept.

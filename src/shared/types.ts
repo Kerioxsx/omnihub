@@ -1563,6 +1563,8 @@ export interface FortniteOptions {
   potato?: boolean;
   /** GameUserSettings.ini read-only after applying, so Fortnite keeps the values. */
   lockFile?: boolean;
+  /** Brightness percent (100 = Fortnite's default); 0 leaves it alone. */
+  brightness?: number;
 }
 
 /** Resolution advice for Fortnite from the monitor and specs. */
