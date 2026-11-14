@@ -1559,6 +1559,10 @@ export interface FortniteOptions {
   /** Display resolution; 0 leaves Fortnite's choice (fullscreen only). */
   width?: number;
   height?: number;
+  /** Potato graphics: Performance mode, everything lowest, near view, 3D resolution down to 10%. */
+  potato?: boolean;
+  /** GameUserSettings.ini read-only after applying, so Fortnite keeps the values. */
+  lockFile?: boolean;
 }
 
 /** Resolution advice for Fortnite from the monitor and specs. */
@@ -1639,6 +1643,8 @@ export interface ConfigStatus {
   settings: ConfigSetting[];
   pending: ConfigChange[];
   backupAt: number | null;
+  /** The settings file is read-only (the potato lock, or your own). */
+  locked?: boolean;
   note: string | null;
 }
 

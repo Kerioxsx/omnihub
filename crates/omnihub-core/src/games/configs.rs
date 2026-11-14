@@ -186,11 +186,21 @@ pub struct FortniteOptions {
     /// fullscreen: windowed fullscreen always uses the desktop's.
     pub width: u32,
     pub height: u32,
+    /// "Potato graphics": Performance mode, everything at its lowest, near
+    /// view distance, and a 3D resolution allowed below the menu's 25 %
+    /// (down to 10 %). The blurry, flat look from the clips, for the most
+    /// frames on a weak PC.
+    pub potato: bool,
+    /// Make GameUserSettings.ini read-only after applying, so Fortnite can't
+    /// put its own values back. While it is locked, Fortnite's own menu
+    /// can't change video settings (Epic's help says so); Restore or
+    /// unticking this unlocks it again.
+    pub lock_file: bool,
 }
 
 impl Default for FortniteOptions {
     fn default() -> Self {
-        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None, quality: None, width: 0, height: 0 }
+        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None, quality: None, width: 0, height: 0, potato: false, lock_file: false }
     }
 }
 
@@ -208,6 +218,9 @@ pub enum RenderMode {
 
 impl FortniteOptions {
     pub fn render(&self) -> RenderMode {
+        if self.potato {
+            return RenderMode::Performance;
+        }
         self.render_mode.unwrap_or(if self.performance_mode { RenderMode::Performance } else { RenderMode::Keep })
     }
 }
@@ -298,6 +311,9 @@ pub struct ConfigStatus {
     pub pending: Vec<Change>,
     /// When the copy of your own settings was taken (Unix seconds).
     pub backup_at: Option<i64>,
+    /// The settings file is read-only (Fortnite's potato lock, or yours).
+    #[serde(default)]
+    pub locked: bool,
     pub note: Option<String>,
 }
 
@@ -332,6 +348,15 @@ const UE_GROUPS: &[(&str, &str)] = &[
 ];
 
 fn fortnite_edits(o: &FortniteOptions) -> Vec<Edit> {
+    // Potato graphics: the lightest of everything, whatever else is picked.
+    let potato;
+    let o = if o.potato {
+        potato = FortniteOptions { lowest_quality: true, quality: None, view_distance: 0, performance_mode: true, ..o.clone() };
+        &potato
+    } else {
+        o
+    };
+    let floor = if o.potato { 10 } else { 25 };
     let s = Some(FN_SECTION);
     let mut e = vec![
         edit(s, "FrameRateLimit", format!("{}.000000", o.frame_limit), true, if o.frame_limit == 0 { "Frame rate limit: unlimited".to_string() } else { format!("Frame rate limit: {} FPS", o.frame_limit) }),
@@ -389,7 +414,8 @@ fn fortnite_edits(o: &FortniteOptions) -> Vec<Edit> {
         e.push(edit(s, "bRayTracing", "False", false, "Ray tracing off"));
     }
     let g = Some(FN_SCALABILITY);
-    e.push(edit(g, "sg.ResolutionQuality", format!("{}.000000", o.resolution_scale.clamp(25, 100)), true, format!("3D resolution: {}%", o.resolution_scale.clamp(25, 100))));
+    let res = o.resolution_scale.clamp(floor, 100);
+    e.push(edit(g, "sg.ResolutionQuality", format!("{res}.000000"), true, format!("3D resolution: {res}%")));
     if o.lowest_quality {
         e.push(edit(s, "bShowGrass", "False", false, "Grass off"));
         e.push(edit(g, "sg.ViewDistanceQuality", o.view_distance.min(3).to_string(), true, format!("View distance: {}", ["near", "medium", "far", "epic"][o.view_distance.min(3) as usize])));
@@ -729,6 +755,7 @@ pub fn status(game: ConfigGame, opts: &ConfigOptions, paths: &[PathBuf], backups
         settings: docs.first().map(|d| settings(game, d)).unwrap_or_default(),
         pending: pending_all,
         backup_at: paths.iter().filter_map(|p| mtime(&backup_path(game, p, backups))).min(),
+        locked: is_locked(paths),
         note: game.note().map(str::to_string),
     }
 }
@@ -783,7 +810,43 @@ pub fn apply(game: ConfigGame, opts: &ConfigOptions, paths: &[PathBuf], backups:
             }
         }
     }
+    if game == ConfigGame::Fortnite {
+        lock(paths, backups, opts.fortnite.lock_file);
+    }
     Ok(all)
+}
+
+fn lock_marker(backups: &Path) -> PathBuf {
+    backups.join("fortnite.locked")
+}
+
+/// Read-only on (remembering OmniHub did it) or off (only when OmniHub had
+/// turned it on, so a lock of your own stays).
+fn lock(paths: &[PathBuf], backups: &Path, on: bool) {
+    let marker = lock_marker(backups);
+    if !on && !marker.exists() {
+        return;
+    }
+    for path in paths {
+        if let Ok(m) = std::fs::metadata(path) {
+            let mut p = m.permissions();
+            if p.readonly() != on {
+                #[allow(clippy::permissions_set_readonly_false)]
+                p.set_readonly(on);
+                let _ = std::fs::set_permissions(path, p);
+            }
+        }
+    }
+    if on {
+        let _ = std::fs::create_dir_all(backups);
+        let _ = std::fs::write(&marker, b"1");
+    } else {
+        let _ = std::fs::remove_file(&marker);
+    }
+}
+
+fn is_locked(paths: &[PathBuf]) -> bool {
+    paths.iter().any(|p| std::fs::metadata(p).map(|m| m.permissions().readonly()).unwrap_or(false))
 }
 
 /// Put your own settings back (the copies from before OmniHub's first change).
@@ -795,6 +858,9 @@ pub fn restore(game: ConfigGame, paths: &[PathBuf], backups: &Path) -> Result<()
         write_keeping_readonly(path, &bytes).or_else(|_| std::fs::write(path, &bytes)).map_err(|e| format!("Could not write {}: {e}", path.display()))?;
         let _ = std::fs::remove_file(&backup);
         restored += 1;
+    }
+    if game == ConfigGame::Fortnite {
+        lock(paths, backups, false);
     }
     if restored == 0 {
         return Err("There is no copy of your own settings to restore.".into());
@@ -864,6 +930,33 @@ mod tests {
         restore(ConfigGame::Fortnite, &paths, &backups).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), FORTNITE);
         assert!(restore(ConfigGame::Fortnite, &paths, &backups).is_err(), "nothing left to restore");
+    }
+
+    #[test]
+    fn fortnite_potato_and_lock() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("GameUserSettings.ini");
+        let paths = vec![path.clone()];
+        let backups = dir.path().join("backups");
+        std::fs::write(&path, FORTNITE).unwrap();
+        let mut opts = ConfigOptions { fortnite: FortniteOptions { potato: true, lock_file: true, resolution_scale: 10, lowest_quality: false, quality: Some(3), view_distance: 3, render_mode: Some(RenderMode::Dx12), ..FortniteOptions::default() }, ..ConfigOptions::default() };
+        apply(ConfigGame::Fortnite, &opts, &paths, &backups).unwrap();
+        let doc = Doc::ini(&std::fs::read(&path).unwrap());
+        assert_eq!(doc.get(Some(FN_SCALABILITY), "sg.ResolutionQuality").as_deref(), Some("10.000000"), "below the menu's 25 %");
+        assert_eq!(doc.get(Some(FN_SCALABILITY), "sg.ViewDistanceQuality").as_deref(), Some("0"));
+        assert_eq!(doc.get(Some(FN_SCALABILITY), "sg.TextureQuality").as_deref(), Some("0"));
+        assert_eq!(doc.get(Some(FN_RHI), "PreferredFeatureLevel").as_deref(), Some("es31"), "potato is always Performance mode");
+        assert!(std::fs::metadata(&path).unwrap().permissions().readonly(), "locked");
+        assert!(status(ConfigGame::Fortnite, &opts, &paths, &backups, false).locked);
+        // Applying again works through the lock; restoring unlocks.
+        opts.fortnite.frame_limit = 120;
+        apply(ConfigGame::Fortnite, &opts, &paths, &backups).unwrap();
+        restore(ConfigGame::Fortnite, &paths, &backups).unwrap();
+        assert!(!std::fs::metadata(&path).unwrap().permissions().readonly(), "unlocked by Restore");
+        // Without potato the floor stays 25 %.
+        opts.fortnite = FortniteOptions { resolution_scale: 10, ..FortniteOptions::default() };
+        let e = fortnite_edits(&opts.fortnite);
+        assert!(e.iter().any(|x| x.key == "sg.ResolutionQuality" && x.value == "25.000000"));
     }
 
     #[test]

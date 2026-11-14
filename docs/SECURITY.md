@@ -455,6 +455,15 @@ and lets a phone do some of that. This is what protects each part.
   `.minecraft\omnihub`; removing a mix removes both. It refuses to run while
   the Minecraft Launcher is open.
 
+## Fortnite settings lock
+
+- The optional lock only sets the Windows read-only attribute on
+  GameUserSettings.ini after OmniHub writes it, and remembers that it did
+  (`fortnite.locked` beside the backups). Unticking it and applying, or
+  Restore, clears the attribute only if OmniHub set it, so a lock you made
+  yourself stays. Nothing else in Fortnite's folder is touched, and no other
+  config file is edited (Epic only supports changing GameUserSettings.ini).
+
 ## Minecraft servers
 
 - Servers OmniHub makes live in `data/mcserver/servers/<name>`, and the Java

@@ -6,7 +6,7 @@
 import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteAdvice, FortniteOptions, FortniteRenderMode, GameConfigs, GameSession, GpuDriver, MinecraftOptions, NetCheck, ProOptions, Replays } from '@shared/types';
 import { formatBytes, formatRelative } from '@shared/format';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, ChevronDown, Eraser, ExternalLink, Film, Gauge, Info, Lightbulb, MonitorCog, RotateCcw, Sparkles, XCircle, Zap } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Eraser, ExternalLink, Film, Gauge, Info, Lightbulb, MonitorCog, RotateCcw, Sparkles, XCircle, Zap, Cpu } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button } from '../../components/ui/Button';
@@ -130,10 +130,15 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
           title={`${label} settings for max FPS`}
           subtitle={SUBTITLE[game] + (accounts ? ` (${accounts} accounts)` : '')}
           actions={
-            status?.backupAt ? (
-              <Button variant="ghost" size="sm" icon={RotateCcw} loading={busy === 'restore'} disabled={!!busy || status.running} onClick={() => void restore()} title={`Your settings from ${formatRelative(status.backupAt)}`}>
-                Put back mine
-              </Button>
+            status?.backupAt || status?.locked ? (
+              <div className="flex items-center gap-2">
+                {status?.locked && <Badge tone="warn">File locked</Badge>}
+                {status?.backupAt ? (
+                  <Button variant="ghost" size="sm" icon={RotateCcw} loading={busy === 'restore'} disabled={!!busy || status.running} onClick={() => void restore()} title={`Your settings from ${formatRelative(status.backupAt)}`}>
+                    Put back mine
+                  </Button>
+                ) : null}
+              </div>
             ) : undefined
           }
         />
@@ -180,7 +185,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   ))}
                 </Select>
               </Row>
-              <Row title="Preset" hint="Competitive: the most frames (Performance mode, lowest quality, no cap). Balanced: DirectX 12 at medium quality. Pretty: DirectX 12 at epic quality. Press Apply after; your own settings stay backed up.">
+              <Row title="Preset" hint="Potato: the blurry low-poly look from the clips, for weak PCs (Performance mode, everything lowest, near view, 3D resolution as low as 10%). Competitive: the most frames (Performance mode, lowest quality, no cap). Balanced: DirectX 12 at medium quality. Pretty: DirectX 12 at epic quality. Press Apply after; your own settings stay backed up.">
                 <div className="flex flex-wrap gap-1.5">
                   {PRESETS.map((p) => (
                     <Button key={p.id} size="sm" variant="secondary" icon={p.icon} onClick={() => fn(p.set)}>
@@ -211,10 +216,18 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   <Segmented size="sm" label="View distance" value={String(o.fortnite.viewDistance)} onChange={(v) => fn({ viewDistance: Number(v) })} options={[{ value: '0', label: 'Near' }, { value: '1', label: 'Medium' }, { value: '2', label: 'Far' }, { value: '3', label: 'Epic' }]} />
                 </Row>
               )}
+              {o.fortnite.potato && (
+                <Row title="Potato graphics" hint="On: Performance mode, everything at its lowest, near view distance and a 3D resolution below Fortnite’s 25% minimum. Fortnite may raise a value it doesn’t accept. Turn off for your other choices.">
+                  <Switch checked={!!o.fortnite.potato} onChange={(v) => fn({ potato: v })} label="Potato graphics" />
+                </Row>
+              )}
+              <Row title="Lock the settings file" hint="Makes GameUserSettings.ini read-only after Apply so Fortnite can’t put its own values back (what the potato guides do). While locked, Fortnite’s menu can’t change video settings or switch Performance mode; untick and Apply, or Restore, to unlock.">
+                <Switch checked={!!o.fortnite.lockFile} onChange={(v) => fn({ lockFile: v })} label="Lock settings file" />
+              </Row>
               <ResolutionAdvice o={o.fortnite} set={fn} />
               <Row title="3D resolution" hint="Below 100% renders fewer pixels: more FPS, softer picture.">
                 <Select value={o.fortnite.resolutionScale} onChange={(e) => fn({ resolutionScale: Number(e.target.value) })} className="w-28">
-                  {[100, 90, 85, 80, 75, 67, 50].map((r) => (
+                  {(o.fortnite.potato ? [100, 75, 50, 40, 33, 25, 20, 15, 10] : [100, 90, 85, 80, 75, 67, 50, 25]).map((r) => (
                     <option key={r} value={r}>
                       {r}%
                     </option>
@@ -351,9 +364,10 @@ function CleanCaches() {
 }
 
 const PRESETS: { id: string; label: string; icon: typeof Zap; set: Partial<FortniteOptions> }[] = [
-  { id: 'competitive', label: 'Competitive', icon: Zap, set: { frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 100 } },
-  { id: 'balanced', label: 'Balanced', icon: Gauge, set: { renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 1, viewDistance: 2, fullscreen: true, reflex: 2, resolutionScale: 100 } },
-  { id: 'pretty', label: 'Pretty', icon: Sparkles, set: { frameLimit: 0, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 3, viewDistance: 3, fullscreen: true, reflex: 1, resolutionScale: 100 } },
+  { id: 'potato', label: 'Potato', icon: Cpu, set: { potato: true, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 25 } },
+  { id: 'competitive', label: 'Competitive', icon: Zap, set: { potato: false, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 100 } },
+  { id: 'balanced', label: 'Balanced', icon: Gauge, set: { potato: false, lockFile: false, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 1, viewDistance: 2, fullscreen: true, reflex: 2, resolutionScale: 100 } },
+  { id: 'pretty', label: 'Pretty', icon: Sparkles, set: { potato: false, lockFile: false, frameLimit: 0, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 3, viewDistance: 3, fullscreen: true, reflex: 1, resolutionScale: 100 } },
 ];
 
 /** How old the graphics driver is; after it changes, clean the shader caches. */

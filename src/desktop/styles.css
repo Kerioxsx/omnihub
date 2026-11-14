@@ -40,13 +40,14 @@ html {
     radial-gradient(800px 520px at 108% 0%, color-mix(in oklab, var(--accent-2) 9%, transparent), transparent 70%);
 }
 
-/* Cards: glassy surface with a hairline top highlight. */
+/* Cards: a slightly lit surface (lighter at the top), a hairline top
+   highlight and a soft offset shadow, so they sit just above the page. */
 .card {
   position: relative;
-  background: var(--surface);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 80%, transparent), var(--surface) 46%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: inset 0 1px 0 var(--card-hi);
+  box-shadow: inset 0 1px 0 var(--card-hi), 0 1px 2px rgba(0, 0, 0, 0.22), 0 14px 34px -24px rgba(0, 0, 0, 0.7);
 }
 
 :root.light .card {
@@ -55,12 +56,17 @@ html {
 }
 
 .card-interactive {
-  transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out), transform 160ms var(--ease-out);
+  transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out), transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
 }
 
 .card-interactive:hover {
   border-color: var(--border-strong);
   background: var(--surface-2);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 var(--card-hi), 0 2px 4px rgba(0, 0, 0, 0.22), 0 20px 40px -24px rgba(0, 0, 0, 0.8);
+}
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .card-interactive:hover { transform: none; }
 }
 
 .glass {

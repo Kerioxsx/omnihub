@@ -15,12 +15,12 @@ export function CardHeader({ icon: Icon, title, subtitle, actions, className }: 
   return (
     <div className={cx('flex items-start gap-3', className)}>
       {Icon && (
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-accent-soft text-accent">
+        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-accent-soft text-accent shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--accent)_24%,transparent)]">
           <Icon size={16} aria-hidden />
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <h3 className="font-display text-[15px] font-semibold leading-tight text-fg">{title}</h3>
+        <h3 className="font-display text-[15.5px] font-semibold leading-tight tracking-[-0.01em] text-fg">{title}</h3>
         {subtitle && <div className="mt-0.5 text-[13px] text-dim">{subtitle}</div>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}

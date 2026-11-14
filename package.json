@@ -2,7 +2,7 @@
   "name": "omnihub",
   "private": true,
   "license": "MIT",
-  "version": "0.54.0",
+  "version": "0.55.0",
   "type": "module",
   "description": "OmniHub: Windows PC companion — storage analysis, apps, screenshots, notes, vault, phone companion and screen sharing",
   "scripts": {

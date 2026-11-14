@@ -32,6 +32,11 @@ store, no cloud.
 | **Phone** | Pair by QR code or PIN. Volume of each app, mute the microphone and control calls (Discord, WhatsApp, Nyxen…), close or quit open apps. Browse shared folders, download with resume, upload big files with resume and checksums, receive files from the PC, lock/sleep/restart/shut down with a cancellable countdown, music with lyrics, tasks, start games with their boost, launch apps, jot ideas, read the vault (opt-in, HTTPS only), text Claude, ChatGPT, Claude Code and Codex, and run your Minecraft servers (players, inventories, the map, console). |
 | **Screen sharing** | PC → phone in any browser (desktop duplication, adaptive JPEG stream, optional mouse/keyboard control, pause or share one window for privacy). For 4K60 it hands off to Sunshine + Moonlight; Android → PC uses scrcpy, and **iPhone → PC** uses AirPlay (a UxPlay add-on OmniHub downloads and checks for you). |
 
+## New in 0.55.0
+
+- **Fortnite potato graphics**: a Potato preset (Performance mode, everything lowest, near view, 3D resolution down to 10%) and an optional read-only lock on GameUserSettings.ini so Fortnite keeps it.
+- **Redesigned UI**: new top bar, side rail, page headers with icons, cards and buttons.
+
 ## New in 0.54.0
 
 - **Vesper 0.6.0**: Right Shift opens the menu in game (Right Ctrl the HUD editor), toggle sprint, 39 HUD readouts, 15 helpers, a 46-piece wardrobe (hats, capes, auras, trails, pets, back items) and 13 new visuals.

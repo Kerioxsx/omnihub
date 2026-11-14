@@ -1,5 +1,12 @@
 ## New in this version
 
+**Potato graphics for Fortnite, and a redesigned OmniHub.**
+
+- **Potato preset** (Games → Optimize → Fortnite): the blurry, low-poly look from the clips, for weak PCs. Performance mode, every quality setting at its lowest, near view distance, and a 3D resolution allowed below the menu's 25% minimum (down to 10%). Fortnite may raise a value it doesn't accept.
+- **Lock the settings file:** makes GameUserSettings.ini read-only after Apply, so Fortnite can't put its own values back (what the potato guides do). While it's locked, Fortnite's menu can't change video settings; untick and Apply, or Restore, to unlock. A "File locked" badge shows when it is.
+- **A new look:** top bar with icon section tabs and a wider search; a new side rail with icon tiles and a sliding accent marker; every page header now shows the page's icon, with a divider that appears as you scroll; deeper cards that lift on hover; solid primary buttons.
+
+
 **Vesper 0.6.0: Right Shift menu, toggle sprint, 54 new functions and 59 new cosmetics and visuals.**
 
 - **Right Shift** opens Vesper's mods menu in game and **Right Ctrl** the HUD editor.
