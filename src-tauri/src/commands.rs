@@ -2187,6 +2187,18 @@ pub async fn games_delete(core: Core<'_>, id: String) -> Res<()> {
 }
 
 #[tauri::command]
+pub async fn games_potato_textures(core: Core<'_>, eighths: Option<u32>) -> Res<Option<u32>> {
+    let core = core.inner().clone();
+    blocking(move || {
+        if let Some(n) = eighths {
+            core.games.set_potato_textures(n)?;
+        }
+        Ok(core.games.potato_textures())
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn games_fps_cap(core: Core<'_>, id: String, fps: u32) -> Res<Option<games::GameState>> {
     let core = core.inner().clone();
     blocking(move || {

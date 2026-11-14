@@ -740,6 +740,8 @@ export const api = {
     state: (id: string) => call<T.GameState | null>('games_state', { id }),
     /** The game's NVIDIA driver frame cap (administrator prompt); 0 removes it. */
     setFpsCap: (id: string, fps: number) => call<T.GameState | null>('games_fps_cap', { id, fps }),
+    /** Fortnite's NVIDIA LOD bias in eighths (null: no NVIDIA card); pass eighths to set it. */
+    potatoTextures: (eighths?: number) => call<number | null>('games_potato_textures', { eighths: eighths ?? null }),
     play: (id: string, launch: boolean) => call<T.GameSession>('games_play', { id, launch }),
     stop: () => call<boolean>('games_stop'),
     ping: (id: string | null, host?: string) => call<T.PingResult[]>('games_ping', { id, host: host ?? null }),

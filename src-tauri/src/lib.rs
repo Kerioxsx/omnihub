@@ -760,6 +760,7 @@ pub fn run(args: Vec<String>) {
             commands::games_delete,
             commands::games_state,
             commands::games_fps_cap,
+            commands::games_potato_textures,
             commands::games_play,
             commands::games_stop,
             commands::games_ping,

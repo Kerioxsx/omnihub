@@ -834,6 +834,20 @@ impl GameHub {
         })
     }
 
+    /// Fortnite's potato textures: the NVIDIA LOD bias on its driver profile
+    /// (eighths of a mip level; 0 gives it back to the driver). None when
+    /// there is no NVIDIA card.
+    pub fn potato_textures(&self) -> Option<u32> {
+        nvidia_available().then(|| nvidia::lod_bias(configs::ConfigGame::Fortnite.process()).unwrap_or(0))
+    }
+
+    pub fn set_potato_textures(&self, eighths: u32) -> Result<(), String> {
+        if !nvidia_available() {
+            return Err("Potato textures need an NVIDIA graphics card (they are a driver setting).".into());
+        }
+        tweaks::run_admin(&[AdminOp::NvLod(configs::ConfigGame::Fortnite.process().to_string(), eighths.min(128))])
+    }
+
     /// Cap the game in its NVIDIA driver profile (0 removes the cap).
     pub fn set_fps_cap(&self, id: &str, fps: u32) -> Result<(), String> {
         let p = self.profile(id).ok_or("That game isn't there")?;

@@ -63,6 +63,8 @@ pub enum AdminOp {
     NvCap(String, u32),
     /// Empty Windows' standby memory list (cached files kept in RAM).
     PurgeStandby,
+    /// The game's NVIDIA texture LOD bias in eighths (0 gives it back).
+    NvLod(String, u32),
 }
 
 impl AdminOp {
@@ -78,6 +80,7 @@ impl AdminOp {
             AdminOp::LimitOff(e) => format!("lim-:{e}"),
             AdminOp::NvCap(e, fps) => format!("nvcap:{fps}:{e}"),
             AdminOp::PurgeStandby => "standby".into(),
+            AdminOp::NvLod(e, n) => format!("nvlod:{n}:{e}"),
         }
     }
 
@@ -90,6 +93,11 @@ impl AdminOp {
             let (n, exe) = exe.split_once(':')?;
             let fps: u32 = n.parse().ok()?;
             return (valid_exe_name(exe) && (fps == 0 || (30..=1000).contains(&fps))).then(|| AdminOp::NvCap(exe.to_string(), fps));
+        }
+        if op == "nvlod" {
+            let (n, exe) = exe.split_once(':')?;
+            let eighths: u32 = n.parse().ok()?;
+            return (valid_exe_name(exe) && eighths <= 128).then(|| AdminOp::NvLod(exe.to_string(), eighths));
         }
         if op == "lim+" {
             let (n, exe) = exe.split_once(':')?;
@@ -321,6 +329,7 @@ mod imp {
                 AdminOp::LimitOn(exe, kbps) => limit_on(exe, *kbps),
                 AdminOp::NvCap(exe, fps) => crate::games::nvidia::set_cap(exe, *fps),
                 AdminOp::PurgeStandby => purge_standby(),
+                AdminOp::NvLod(exe, n) => crate::games::nvidia::set_lod_bias(exe, *n),
                 AdminOp::LimitOff(exe) => run("powershell", &["-NoProfile", "-NonInteractive", "-Command", &format!("Remove-NetQosPolicy -Name '{}' -Confirm:$false", crate::system::netlimit::policy_name(exe))]).map(|_| ()),
             };
             if let Err(e) = r {
@@ -742,6 +751,14 @@ mod imp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nvidia_lod_bias_op_is_checked() {
+        assert_eq!(AdminOp::parse("nvlod:120:FortniteClient-Win64-Shipping.exe"), Some(AdminOp::NvLod("FortniteClient-Win64-Shipping.exe".into(), 120)));
+        assert_eq!(AdminOp::NvLod("a.exe".into(), 16).arg(), "nvlod:16:a.exe");
+        assert!(AdminOp::parse("nvlod:500:a.exe").is_none(), "past +16 is refused");
+        assert!(AdminOp::parse("nvlod:8:../evil.exe").is_none());
+    }
 
     #[test]
     fn powercfg_guids() {

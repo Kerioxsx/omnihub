@@ -1,5 +1,12 @@
 ## New in this version
 
+**Potato textures for Fortnite, the way the potato apps do it.**
+
+- The flat, untextured "potato" look from the clips (and from apps like EMTweaks, whose Potato button works "through the driver") is an NVIDIA driver setting: **Texture filtering – LOD Bias** on Fortnite's profile, with driver-controlled LOD bias off. OmniHub now sets it itself, with no extra tools: Games → Optimize → Fortnite → **Potato textures (NVIDIA)**: Off, Light (+2), Strong (+8) or Max (+15). Windows asks for administrator rights; restart Fortnite to see it. Off gives both settings back to the driver.
+- Nothing in Fortnite's files changes: it is the same driver profile the NVIDIA Control Panel writes. On AMD or Intel there is no such driver setting; the closest is removing Fortnite's High Resolution Textures in the Epic Games Launcher (Fortnite → Options).
+- Combine it with the Clean & bright or Potato preset for the full look.
+
+
 **Fortnite "Clean & bright": the sharp, flat pastel look from the clips.**
 
 - New **Clean & bright** preset (Games → Optimize → Fortnite): Performance mode, everything at its lowest, near view distance, a sharp 100% 3D resolution and Brightness up to 140%.

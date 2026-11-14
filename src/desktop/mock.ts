@@ -12,6 +12,7 @@ import { rig } from './mock/rig';
 import { govee } from './mock/govee';
 import { modsMock as mm } from './mock/mods';
 
+let mockPotato = 0;
 let mockScreen = { width: 2560, height: 1440, hz: 165 };
 let mockScreenBefore: typeof mockScreen | null = null;
 
@@ -239,6 +240,11 @@ const handlers: Record<string, Handler> = {
   games_delete: (a) => games.remove(str(a, 'id')),
   games_state: (a) => games.state(str(a, 'id')),
   games_fps_cap: (a) => games.setFpsCap(str(a, 'id'), num(a, 'fps')),
+  games_potato_textures: (a) => {
+    const n = (a as { eighths?: number | null }).eighths;
+    if (typeof n === 'number') mockPotato = n;
+    return mockPotato;
+  },
   games_play: (a) => games.play(str(a, 'id'), bool(a, 'launch')),
   games_stop: () => games.stop(),
   games_ping: (a) => games.ping(optStr(a, 'id'), optStr(a, 'host')),

@@ -221,6 +221,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   <Switch checked={!!o.fortnite.potato} onChange={(v) => fn({ potato: v })} label="Potato graphics" />
                 </Row>
               )}
+              <PotatoTextures />
               <Row title="Brightness" hint="Fortnite’s Brightness (100% is its default). Higher gives the light, washed pastel look. Saved as DisplayGamma in its settings; Keep leaves yours.">
                 <Select value={o.fortnite.brightness ?? 0} onChange={(e) => fn({ brightness: Number(e.target.value) })} className="w-28">
                   {[0, 100, 110, 120, 130, 140, 150, 160].map((b) => (
@@ -379,6 +380,42 @@ const PRESETS: { id: string; label: string; icon: typeof Zap; set: Partial<Fortn
   { id: 'balanced', label: 'Balanced', icon: Gauge, set: { potato: false, lockFile: false, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 1, viewDistance: 2, fullscreen: true, reflex: 2, resolutionScale: 100 } },
   { id: 'pretty', label: 'Pretty', icon: Sparkles, set: { potato: false, lockFile: false, frameLimit: 0, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 3, viewDistance: 3, fullscreen: true, reflex: 1, resolutionScale: 100 } },
 ];
+
+/** The NVIDIA driver's texture LOD bias on Fortnite's profile: the flat "potato textures" look from the clips. */
+function PotatoTextures() {
+  const [v, setV] = useState<number | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.games.potatoTextures().then(setV, () => setV(null));
+  }, []);
+  const set = async (n: number) => {
+    setBusy(true);
+    try {
+      setV(await api.games.potatoTextures(n));
+    } catch (e) {
+      toast.error('Couldn’t change the driver setting', errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (v === undefined) return null;
+  return (
+    <Row
+      title="Potato textures (NVIDIA)"
+      hint={
+        v === null
+          ? 'The flat, untextured look from the potato clips is an NVIDIA driver setting (texture LOD bias), so it needs an NVIDIA card. On AMD or Intel, the closest you get is removing Fortnite’s High Resolution Textures in the Epic Games Launcher (Fortnite → Options).'
+          : 'Raises the NVIDIA driver’s texture LOD bias for Fortnite only, the setting the potato apps change: Max turns almost every surface into flat colour. Windows asks for administrator rights. Restart Fortnite to see it; Off gives it back to the driver.'
+      }
+    >
+      {v === null ? (
+        <span className="text-[12.5px] text-faint">Needs an NVIDIA card</span>
+      ) : (
+        <Segmented size="sm" label="Potato textures" value={String([0, 16, 64, 120].includes(v) ? v : v > 0 ? 64 : 0)} onChange={(x) => void set(Number(x))} options={[{ value: '0', label: 'Off', disabled: busy }, { value: '16', label: 'Light', disabled: busy }, { value: '64', label: 'Strong', disabled: busy }, { value: '120', label: 'Max', disabled: busy }]} />
+      )}
+    </Row>
+  );
+}
 
 /** How old the graphics driver is; after it changes, clean the shader caches. */
 /** Display resolution, 3D resolution and frame cap for this monitor and these specs. */

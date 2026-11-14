@@ -24,6 +24,16 @@ pub const QUALITY_ENHANCEMENTS_ID: u32 = 0x00CE_2691;
 pub const VSYNCMODE_ID: u32 = 0x00A8_79CF;
 /// "Max Frame Rate" (the driver's own frame cap; 0 is off).
 pub const FRL_FPS_ID: u32 = 0x1083_5002;
+/// "Texture filtering - LOD Bias" (`LODBIASADJUST_ID`): eighths of a mip
+/// level, -128..128. Positive values pick smaller textures: at +15 almost
+/// every surface turns to flat colour, the "potato textures" look.
+pub const LODBIAS_ID: u32 = 0x0073_8E8F;
+/// "Texture filtering - Driver Controlled LOD Bias" (`AUTO_LODBIASADJUST_ID`):
+/// must be off for a manual LOD bias to apply.
+pub const AUTO_LODBIAS_ID: u32 = 0x0063_8E8F;
+
+/// Potato texture strengths, as a LOD bias in eighths (0 = the driver's own).
+pub const POTATO_LEVELS: [(u32, &str); 4] = [(0, "Off"), (16, "Light (+2)"), (64, "Strong (+8)"), (120, "Max (+15)")];
 
 /// One driver setting OmniHub sets for a game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -410,6 +420,32 @@ mod imp {
         Ok(changed)
     }
 
+    /// The game's LOD bias in eighths when OmniHub-style potato textures are
+    /// set (driver-controlled bias off and a positive bias), else 0.
+    pub fn lod_bias(exe: &str) -> Result<u32, String> {
+        let drs = Drs::open()?;
+        let Some(profile) = drs.find(exe)? else { return Ok(0) };
+        let auto_off = drs.get(profile, AUTO_LODBIAS_ID)?.is_some_and(|(v, _)| v == 0);
+        let bias = drs.get(profile, LODBIAS_ID)?.map(|(v, _)| v).filter(|v| *v as i32 > 0).unwrap_or(0);
+        Ok(if auto_off { bias } else { 0 })
+    }
+
+    /// Elevated: set the LOD bias (eighths, 1..=128) with driver control off,
+    /// or 0 to give both back to the driver.
+    pub fn set_lod_bias(exe: &str, eighths: u32) -> Result<(), String> {
+        let drs = Drs::open()?;
+        if eighths == 0 {
+            let Some(profile) = drs.find(exe)? else { return Ok(()) };
+            drs.restore(profile, LODBIAS_ID)?;
+            drs.restore(profile, AUTO_LODBIAS_ID)?;
+        } else {
+            let profile = drs.find_or_create(exe)?;
+            drs.set(profile, AUTO_LODBIAS_ID, 0)?;
+            drs.set(profile, LODBIAS_ID, eighths.min(128))?;
+        }
+        drs.save()
+    }
+
     /// Elevated: put OmniHub's choices back to the driver's defaults.
     pub fn undo(exe: &str) -> Result<(), String> {
         let drs = Drs::open()?;
@@ -446,6 +482,12 @@ mod imp {
     }
     pub fn apply(_exe: &str) -> Result<Vec<String>, String> {
         Err("Windows only".into())
+    }
+    pub fn lod_bias(_exe: &str) -> Result<u32, String> {
+        Err("NVIDIA's driver settings are only on Windows.".into())
+    }
+    pub fn set_lod_bias(_exe: &str, _eighths: u32) -> Result<(), String> {
+        Err("NVIDIA's driver settings are only on Windows.".into())
     }
     pub fn undo(_exe: &str) -> Result<(), String> {
         Err("Windows only".into())

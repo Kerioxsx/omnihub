@@ -464,6 +464,16 @@ and lets a phone do some of that. This is what protects each part.
   yourself stays. Nothing else in Fortnite's folder is touched, and no other
   config file is edited (Epic only supports changing GameUserSettings.ini).
 
+## Fortnite potato textures
+
+- Sets two values on Fortnite's NVIDIA driver profile through NVAPI's
+  driver-settings interface: "Texture filtering - LOD Bias"
+  (`LODBIASADJUST_ID`, 0x00738E8F, from NVIDIA's NvApiDriverSettings.h) to
+  +2, +8 or +15 in eighths, and "Driver Controlled LOD Bias" (0x00638E8F) off
+  so the bias applies. Saving needs administrator rights, so it runs in the
+  elevated helper, which only accepts `nvlod:<0-128>:<exe name>`. Off restores
+  both to the driver's defaults. No game file, memory or process is touched.
+
 ## Minecraft servers
 
 - Servers OmniHub makes live in `data/mcserver/servers/<name>`, and the Java
