@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 dist/
 dist-mobile/
 target/
@@ -7,3 +7,6 @@ src-tauri/gen/schemas/
 *.log
 .DS_Store
 screenshots-out/
+
+# Claude Code agent worktrees
+.claude/worktrees/

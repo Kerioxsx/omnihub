@@ -3,11 +3,11 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Lock, MonitorOff, Moon, Snowflake, LogOut, RotateCcw, Power, ShieldAlert, Timer, X, LoaderCircle } from 'lucide-react';
-import type { PowerAction } from '@shared/types';
+import { Lock, MonitorOff, Moon, Snowflake, LogOut, RotateCcw, Power, ShieldAlert, Timer, X, LoaderCircle, Camera, Siren, Download } from 'lucide-react';
+import type { PowerAction, QuietStatus } from '@shared/types';
 import { client } from '../client';
 import { usePower, secondsLeft, toast, useApp } from '../state';
-import { PageHeader, Ring, Skeleton, ErrorState } from '../ui/common';
+import { PageHeader, Ring, Skeleton, ErrorState, Switch } from '../ui/common';
 import { PullToRefresh } from '../ui/PullToRefresh';
 import { cx, errorMessage, formatCountdown, useNow, vibrate } from '../lib/util';
 import { useEvent } from '../lib/events';
@@ -151,6 +151,7 @@ export function PowerScreen({ active }: { active: boolean }) {
       <PageHeader title="Power" subtitle={info?.name} />
       <div className="px-safe pb-tabbar">
         <PendingPowerCard className="mb-4" />
+        {enabled && <QuietCard active={active} />}
         {!enabled && (
           <div className="mb-4 flex items-start gap-3 rounded-2xl border border-warn/30 bg-warn/10 p-4 text-sm">
             <ShieldAlert size={20} className="mt-0.5 shrink-0 text-warn" />
@@ -209,10 +210,132 @@ export function PowerScreen({ active }: { active: boolean }) {
             <p className="mt-5 px-2 text-center text-xs leading-relaxed text-faint">
               Actions that end your session wait {data.delaySeconds} seconds so you (or anyone at the PC) can cancel.
             </p>
+            <ScreenshotCard />
+            <div className="mb-2.5 mt-6 px-1">
+              <h2 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-faint">Emergency</h2>
+            </div>
+            <PanicCard disabled={!enabled} />
           </>
         )}
       </div>
     </PullToRefresh>
+  );
+}
+
+/** Set by the home-screen "Screenshot" shortcut: take one when the card shows. */
+export const autoScreenshot = { pending: false };
+
+/** Take a screenshot of the PC and look at it here. */
+export function ScreenshotCard() {
+  const [shot, setShot] = useState<{ url: string; name: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const take = async () => {
+    setBusy(true);
+    try {
+      const r = await client.screenshot();
+      setShot({ url: r.url, name: r.name });
+      vibrate(15);
+    } catch (e) {
+      toast.error("Couldn't take a screenshot", errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (autoScreenshot.pending) {
+      autoScreenshot.pending = false;
+      void take();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="card mt-6 p-4">
+      <div className="flex items-center gap-3">
+        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500/15 text-emerald-400">
+          <Camera size={24} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[16px] font-semibold">Screenshot</div>
+          <div className="text-xs text-dim">See the PC's screen right now (saved on the PC too)</div>
+        </div>
+        <button onClick={take} disabled={busy} className="press rounded-full bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+          {busy ? <LoaderCircle size={16} className="animate-spin" /> : 'Take'}
+        </button>
+      </div>
+      {shot && (
+        <div className="mt-3">
+          <a href={`${shot.url}?inline=1`} target="_blank" rel="noreferrer">
+            <img src={`${shot.url}?inline=1`} alt="The PC's screen" className="w-full rounded-xl border border-line" />
+          </a>
+          <a href={shot.url} download={shot.name} className="press mt-2 flex items-center justify-center gap-2 rounded-xl bg-surface py-2.5 text-sm font-semibold">
+            <Download size={16} /> Save to phone
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Hold to lock everything: vault, phone access (this phone too) and the PC. */
+function PanicCard({ disabled }: { disabled: boolean }) {
+  const [p, setP] = useState(0);
+  const raf = useRef(0);
+  const t0 = useRef(0);
+  const holding = useRef(false);
+  const fire = async () => {
+    try {
+      await client.panic();
+      vibrate([40, 60, 40]);
+      toast.success('Everything is locked', 'The vault and the PC are locked; phone access is off until it is turned on again at the PC.');
+    } catch (e) {
+      toast.error("Couldn't lock everything", errorMessage(e));
+    }
+  };
+  const tick = () => {
+    if (!holding.current) return;
+    const v = Math.min(1, (performance.now() - t0.current) / HOLD_MS);
+    setP(v);
+    if (v >= 1) {
+      holding.current = false;
+      void fire();
+      setTimeout(() => setP(0), 450);
+      return;
+    }
+    raf.current = requestAnimationFrame(tick);
+  };
+  const start = () => {
+    if (disabled || holding.current) return;
+    holding.current = true;
+    t0.current = performance.now();
+    vibrate(12);
+    raf.current = requestAnimationFrame(tick);
+  };
+  const stop = () => {
+    holding.current = false;
+    cancelAnimationFrame(raf.current);
+    setP(0);
+  };
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
+  return (
+    <button
+      disabled={disabled}
+      aria-label="Hold to lock everything"
+      onPointerDown={start}
+      onPointerUp={stop}
+      onPointerLeave={stop}
+      onPointerCancel={stop}
+      onContextMenu={(e) => e.preventDefault()}
+      className="press card relative flex w-full items-center gap-3 overflow-hidden p-4 text-left disabled:opacity-45"
+    >
+      <span className="absolute inset-y-0 left-0 bg-rose-500/25" style={{ width: `${p * 100}%` }} aria-hidden />
+      <div className="relative grid h-12 w-12 place-items-center rounded-2xl bg-rose-500/15 text-rose-400">
+        <Siren size={24} />
+      </div>
+      <div className="relative">
+        <div className="text-[16px] font-semibold">Panic: lock everything</div>
+        <div className="text-xs text-dim">Hold: locks the vault and the PC, and cuts phones off</div>
+      </div>
+    </button>
   );
 }
 
@@ -291,4 +414,66 @@ function HoldCard({ action, label, disabled, wide, onConfirm }: { action: PowerA
 export function PowerIcon({ action, size = 20 }: { action: PowerAction; size?: number }): ReactNode {
   const Icon = META[action]?.icon ?? Power;
   return <Icon size={size} />;
+}
+
+/** Quiet mode: the screens off and the fans at their lowest, the PC still on. */
+function QuietCard({ active }: { active: boolean }) {
+  const [q, setQ] = useState<QuietStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (active) client.quiet().then(setQ, () => setQ(null));
+  }, [active]);
+  if (!q) return null;
+  const run = async (f: () => Promise<QuietStatus>) => {
+    setBusy(true);
+    vibrate(15);
+    try {
+      setQ(await f());
+    } catch (e) {
+      toast.error("Couldn't do that", errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const left = q.timer ? Math.max(0, Math.ceil((q.timer - Date.now()) / 60_000)) : null;
+  const sched = q.schedule;
+  return (
+    <div className={cx('mb-4 rounded-[22px] border p-4', q.on ? 'border-indigo-400/50 bg-indigo-500/15' : 'border-white/10 bg-white/[0.04]')}>
+      <button type="button" onClick={() => void run(() => client.setQuiet(!q.on))} disabled={busy} className="flex w-full items-center gap-4 text-left active:scale-[0.99]">
+        <span className={cx('grid h-12 w-12 shrink-0 place-items-center rounded-2xl', q.on ? 'bg-indigo-400 text-black' : 'bg-indigo-500/15 text-indigo-300')}>
+          {busy ? <LoaderCircle size={22} className="animate-spin" /> : <Moon size={22} />}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[16px] font-semibold">{q.on ? 'Quiet mode is on' : 'Quiet mode'}</span>
+          <span className="block text-[13px] text-dim">
+            {q.on ? 'Tap to turn the screens back on and the fans back to normal.' : 'Screens off and fans at their lowest. The PC stays on; fans never fully stop, so it can’t overheat.'}
+          </span>
+        </span>
+      </button>
+      {!q.on && (
+        <div className="mt-3 border-t border-white/10 pt-3">
+          <div className="mb-2 text-[13px] text-dim">{left != null ? `Sleep timer: quiet in ${left} min` : 'Sleep timer'}</div>
+          <div className="flex flex-wrap gap-2">
+            {[15, 30, 60, 90].map((m) => (
+              <button key={m} type="button" disabled={busy} onClick={() => void run(() => client.quietTimer(m))} className="press rounded-full bg-white/[0.08] px-3.5 py-1.5 text-[14px] font-medium">
+                {m < 60 ? `${m} min` : m === 60 ? '1 h' : '1½ h'}
+              </button>
+            ))}
+            {left != null && (
+              <button type="button" disabled={busy} onClick={() => void run(() => client.quietTimer(null))} className="press rounded-full px-3.5 py-1.5 text-[14px] font-medium text-bad">
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3 text-[14px]">
+        <span className="flex-1 text-dim">Every night</span>
+        <input type="time" aria-label="Quiet from" value={sched.start} onChange={(e) => void run(() => client.quietSchedule({ ...sched, start: e.target.value }))} className="rounded-lg bg-white/[0.08] px-2 py-1" />
+        <span className="text-faint">–</span>
+        <input type="time" aria-label="Quiet until" value={sched.end} onChange={(e) => void run(() => client.quietSchedule({ ...sched, end: e.target.value }))} className="rounded-lg bg-white/[0.08] px-2 py-1" />
+        <Switch label="Quiet every night" on={sched.enabled} onChange={(enabled) => void run(() => client.quietSchedule({ ...sched, enabled }))} />
+      </div>
+    </div>
+  );
 }

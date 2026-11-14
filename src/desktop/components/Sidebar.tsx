@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { Command, LockKeyhole, LockOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { ChevronDown, Command, LockKeyhole, LockOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { type ReactNode, useMemo } from 'react';
 import { cx } from '../lib/cx';
+import { useStoredState } from '../lib/hooks';
 import { navigate, useRoute } from '../lib/router';
 import { MOD_LABEL } from '../lib/util';
 import { usePalette } from '../state/dialogs';
@@ -10,11 +11,14 @@ import { useSettings } from '../state/settings';
 import { jobFraction, useStorage } from '../state/storage';
 import { Logo } from './Logo';
 import { NAV, type NavItem } from './nav';
+import { BleachSwitcher } from './BleachSwitcher';
+import { UpdateCard } from './UpdateCard';
 import { Dot, Kbd } from './ui/Card';
 import { ProgressRing } from './ui/Progress';
 
 const GROUPS: { id: NavItem['group']; label: string | null }[] = [
   { id: 'workspace', label: null },
+  { id: 'performance', label: 'Performance' },
   { id: 'security', label: 'Security' },
   { id: 'devices', label: 'Devices' },
 ];
@@ -62,6 +66,9 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
   const devices = useLive((s) => s.devices);
   const viewers = useLive((s) => s.viewers);
   const phones = connectedCount(remote, devices, viewers);
+  // Groups you folded stay folded (the one you're in always shows).
+  const [folded, setFolded] = useStoredState<string[]>('omnihub.navFolded', []);
+  const activeGroup = NAV.find((n) => n.id === route.id)?.group;
 
   const item = (n: NavItem, index: number) => {
     const active = route.id === n.id;
@@ -72,11 +79,11 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
         type="button"
         onClick={() => navigate(n.id)}
         aria-current={active ? 'page' : undefined}
-        title={collapsed ? `${n.label} (${MOD_LABEL}+${index + 1})` : undefined}
+        title={collapsed ? (index < 9 ? `${n.label} (${MOD_LABEL}+${index + 1})` : n.label) : undefined}
         className={cx('group relative flex h-9 w-full items-center gap-3 rounded-[10px] px-2.5 text-[13.5px] font-medium transition-colors', active ? 'text-fg' : 'text-dim hover:bg-surface hover:text-fg', collapsed && 'justify-center px-0')}
       >
-        {active && <motion.span layoutId="nav-active" transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="absolute inset-0 rounded-[10px] border border-line bg-surface-2 shadow-[inset_0_1px_0_var(--card-hi)]" />}
-        {active && <motion.span layoutId="nav-bar" transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="accent-gradient absolute -left-3 top-2 h-5 w-[3px] rounded-r-full" />}
+        {active && <motion.span layoutId="nav-active" transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="nav-active absolute inset-0 rounded-[10px] border border-line bg-surface-2 shadow-[inset_0_1px_0_var(--card-hi)]" />}
+        {active && <motion.span layoutId="nav-bar" transition={{ type: 'spring', stiffness: 500, damping: 40 }} className="nav-bar accent-gradient absolute -left-3 top-2 h-5 w-[3px] rounded-r-full" />}
         <Icon size={17} aria-hidden className={cx('relative z-10 shrink-0 transition-colors', active ? 'text-accent' : 'text-faint group-hover:text-dim')} />
         {!collapsed && <span className="relative z-10 flex-1 truncate text-left">{n.label}</span>}
         {!collapsed && badges[n.id] && <span className="relative z-10">{badges[n.id]}</span>}
@@ -91,7 +98,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       initial={false}
       animate={{ width: collapsed ? 72 : 248 }}
       transition={{ type: 'spring', stiffness: 380, damping: 40 }}
-      className="glass relative z-20 flex h-full shrink-0 flex-col border-r border-line"
+      className="float relative z-20 my-2.5 ml-2.5 flex h-[calc(100%-20px)] shrink-0 flex-col overflow-hidden rounded-[22px]"
     >
       <div className={cx('flex h-[64px] items-center gap-2.5 px-4', collapsed && 'justify-center px-0')}>
         <Logo size={30} />
@@ -124,16 +131,31 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-1">
-        {GROUPS.map((g) => (
-          <div key={g.id} className="mb-2">
-            {g.label && !collapsed && <div className="px-2.5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-faint">{g.label}</div>}
-            {g.label && collapsed && <div className="mx-auto my-2 h-px w-6 bg-line" />}
-            <div className="flex flex-col gap-0.5">{NAV.map((n, i) => (n.group === g.id ? item(n, i) : null))}</div>
-          </div>
-        ))}
+        {GROUPS.map((g) => {
+          const shut = !collapsed && !!g.label && folded.includes(g.id) && activeGroup !== g.id;
+          return (
+            <div key={g.id} className="mb-2">
+              {g.label && !collapsed && (
+                <button
+                  type="button"
+                  onClick={() => setFolded(folded.includes(g.id) ? folded.filter((x) => x !== g.id) : [...folded, g.id])}
+                  aria-expanded={!shut}
+                  className="group/h flex w-full items-center justify-between rounded-md px-2.5 pb-1 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-faint transition-colors hover:text-dim"
+                >
+                  {g.label}
+                  <ChevronDown size={13} aria-hidden className={cx('transition-transform', shut ? '-rotate-90' : 'opacity-0 group-hover/h:opacity-100')} />
+                </button>
+              )}
+              {g.label && collapsed && <div className="mx-auto my-2 h-px w-6 bg-line" />}
+              {!shut && <div className="flex flex-col gap-0.5">{NAV.map((n, i) => (n.group === g.id && n.id !== 'settings' ? item(n, i) : null))}</div>}
+            </div>
+          );
+        })}
       </div>
 
       <div className="border-t border-line p-3">
+        <BleachSwitcher collapsed={collapsed} />
+        <UpdateCard collapsed={collapsed} />
         {!collapsed && (
           <button type="button" onClick={() => navigate('phone')} className="mb-2 flex w-full items-center gap-2.5 rounded-[10px] border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-line-strong">
             <Dot tone={remote?.running ? (phones ? 'good' : 'accent') : 'neutral'} pulse={!!remote?.running && phones > 0} />

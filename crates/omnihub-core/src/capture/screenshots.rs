@@ -30,6 +30,10 @@ pub struct Screenshot {
     pub note: String,
     pub favorite: bool,
     pub exists: bool,
+    /// Text was read from it ("Copy text"); it is then searchable.
+    pub has_text: bool,
+    #[serde(skip)]
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -97,6 +101,8 @@ pub enum ShotError {
     Db(#[from] rusqlite::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("{0}")]
+    Other(String),
 }
 
 pub struct ScreenshotLibrary {
@@ -144,10 +150,12 @@ impl ScreenshotLibrary {
             tags: serde_json::from_str(&tags).unwrap_or_default(),
             note: r.get(9)?,
             favorite: r.get(10)?,
+            text: r.get(11)?,
+            has_text: r.get::<_, Option<String>>(11)?.is_some(),
         })
     }
 
-    const COLS: &'static str = "id, path, created, width, height, bytes, app_exe, app_title, tags, note, favorite";
+    const COLS: &'static str = "id, path, created, width, height, bytes, app_exe, app_title, tags, note, favorite, ocr_text";
 
     pub fn list(&self, f: &ShotFilter) -> Result<Vec<Screenshot>, ShotError> {
         let all = self.db.with(|c| {
@@ -168,6 +176,7 @@ impl ScreenshotLibrary {
                     || s.app_exe.as_ref().is_some_and(|t| t.to_lowercase().contains(&q))
                     || s.tags.iter().any(|t| t.to_lowercase().contains(&q))
                     || s.path.to_lowercase().contains(&q)
+                    || s.text.as_ref().is_some_and(|t| t.to_lowercase().contains(&q))
             })
             .take(f.limit.unwrap_or(usize::MAX))
             .collect())
@@ -252,6 +261,67 @@ impl ScreenshotLibrary {
             let mut f = std::io::BufWriter::new(f);
             let _ = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut f, 80).encode_image(&rgb);
         }
+    }
+
+    /// The text in a screenshot, read once with Windows' OCR and kept (so
+    /// searching finds screenshots by what they show).
+    pub fn text(&self, id: &str) -> Result<String, ShotError> {
+        let shot = self.get(id)?;
+        if let Some(t) = shot.text {
+            return Ok(t);
+        }
+        let text = super::ocr::recognize(Path::new(&shot.path)).map_err(ShotError::Other)?;
+        self.db.with(|c| c.execute("UPDATE screenshots SET ocr_text=?2 WHERE id=?1", params![id, text]))?;
+        Ok(text)
+    }
+
+    /// Read the text in up to `max` screenshots that haven't been read yet,
+    /// newest first, so search finds them by what they show. Returns how
+    /// many were read; stops at the first failure that isn't about one file
+    /// (no recognition language installed, not Windows).
+    pub fn index_text(&self, max: usize, read: impl Fn(&Path) -> Result<String, String>) -> usize {
+        let pending: Vec<(String, String)> = self
+            .db
+            .with(|c| {
+                let mut st = c.prepare("SELECT id, path FROM screenshots WHERE ocr_text IS NULL ORDER BY created DESC LIMIT ?1")?;
+                let rows = st.query_map(params![max as i64 * 3], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()
+            })
+            .unwrap_or_default();
+        let mut done = 0;
+        for (id, path) in pending.into_iter().filter(|(_, p)| Path::new(p).is_file()).take(max) {
+            match read(Path::new(&path)) {
+                Ok(text) => {
+                    let _ = self.db.with(|c| c.execute("UPDATE screenshots SET ocr_text=?2 WHERE id=?1", params![id, text]));
+                    done += 1;
+                }
+                Err(e) if e.starts_with("cannot read the image") => {
+                    // A broken file: remember "no text" so it isn't tried again.
+                    let _ = self.db.with(|c| c.execute("UPDATE screenshots SET ocr_text='' WHERE id=?1", params![id]));
+                }
+                Err(_) => break,
+            }
+        }
+        done
+    }
+
+    /// Save an edited copy (PNG bytes from the markup editor) next to the
+    /// other screenshots, keeping the original's app and tags.
+    pub fn store_edited(&self, source_id: &str, png: &[u8], dir: &Path) -> Result<Screenshot, ShotError> {
+        let orig = self.get(source_id)?;
+        let img = image::load_from_memory_with_format(png, image::ImageFormat::Png)?.to_rgba8();
+        let app = ForegroundApp { exe: orig.app_exe.clone(), title: orig.app_title.clone(), rect: None };
+        let shot = self.store(&img, &app, dir, ImageFormat::Png)?;
+        let note = if orig.note.is_empty() { "Edited copy".to_string() } else { format!("{} (edited copy)", orig.note) };
+        self.update(&shot.id, Some(orig.tags.clone()), Some(note), None)
+    }
+
+    /// [`store_edited`](Self::store_edited) for a `data:image/png;base64,` URL from the editor.
+    pub fn store_edited_data_url(&self, source_id: &str, url: &str, dir: &Path) -> Result<Screenshot, ShotError> {
+        use base64::Engine;
+        let b64 = url.strip_prefix("data:image/png;base64,").ok_or_else(|| ShotError::Other("expected a PNG image".into()))?;
+        let png = base64::engine::general_purpose::STANDARD.decode(b64).map_err(|e| ShotError::Other(e.to_string()))?;
+        self.store_edited(source_id, &png, dir)
     }
 
     /// Thumbnail as a data URL (created on demand for imported files).
@@ -388,6 +458,34 @@ impl ScreenshotLibrary {
         let h = rect.height.clamp(1, img.height() - y);
         let crop = image::imageops::crop_imm(&img, x, y, w, h).to_image();
         self.store(&crop, &app, dir, format)
+    }
+
+    /// The same crop as PNG bytes, without saving it or ending the capture
+    /// (the translator reads several boxes from one frozen screen).
+    pub fn region_png(&self, id: &str, rect: Rect) -> Result<Vec<u8>, ShotError> {
+        let crop = {
+            let guard = self.pending.lock();
+            let (pid, img, _) = guard.as_ref().ok_or(ShotError::NotFound)?;
+            if pid != id {
+                return Err(ShotError::NotFound);
+            }
+            let x = rect.x.min(img.width().saturating_sub(1));
+            let y = rect.y.min(img.height().saturating_sub(1));
+            let w = rect.width.clamp(1, img.width() - x);
+            let h = rect.height.clamp(1, img.height() - y);
+            image::imageops::crop_imm(img, x, y, w, h).to_image()
+        };
+        let mut out = std::io::Cursor::new(Vec::new());
+        crop.write_to(&mut out, image::ImageFormat::Png)?;
+        Ok(out.into_inner())
+    }
+
+    /// One pixel of the frozen screen, exactly (the preview is a JPEG).
+    pub fn region_pixel(&self, x: u32, y: u32) -> Option<[u8; 3]> {
+        let guard = self.pending.lock();
+        let (_, img, _) = guard.as_ref()?;
+        let p = img.get_pixel_checked(x, y)?;
+        Some([p[0], p[1], p[2]])
     }
 
     pub fn pending_region_id(&self) -> Option<String> {
@@ -558,6 +656,49 @@ mod tests {
         std::fs::remove_file(&s.path).unwrap();
         l.sync_folder(&shots).unwrap();
         assert_eq!(l.list(&ShotFilter::default()).unwrap().len(), 1, "missing file dropped");
+    }
+
+    #[test]
+    fn edited_copies_and_text_search() {
+        let tmp = tempfile::tempdir().unwrap();
+        let l = lib(tmp.path());
+        let shots = tmp.path().join("shots");
+        let img = image::RgbaImage::from_pixel(64, 48, image::Rgba([10, 20, 30, 255]));
+        let app = ForegroundApp { exe: Some("C:\\Apps\\bar.exe".into()), title: Some("Bar".into()), rect: None };
+        let s = l.store(&img, &app, &shots, ImageFormat::Png).unwrap();
+        l.update(&s.id, Some(vec!["work".into()]), None, None).unwrap();
+        let mut png = Vec::new();
+        image::RgbaImage::from_pixel(32, 24, image::Rgba([200, 0, 0, 255])).write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png).unwrap();
+        let e = l.store_edited(&s.id, &png, &shots).unwrap();
+        assert_ne!(e.id, s.id);
+        assert_eq!((e.width, e.height, e.app_exe.as_deref(), e.tags.clone()), (32, 24, Some("C:\\Apps\\bar.exe"), vec!["work".to_string()]));
+        assert_eq!(e.note, "Edited copy");
+        assert!(l.store_edited(&s.id, b"not a png", &shots).is_err());
+        // Text read earlier is cached and searchable.
+        l.db.with(|c| c.execute("UPDATE screenshots SET ocr_text='Invoice 4471 total' WHERE id=?1", params![s.id])).unwrap();
+        assert_eq!(l.text(&s.id).unwrap(), "Invoice 4471 total");
+        let found = l.list(&ShotFilter { query: "invoice 4471".into(), ..Default::default() }).unwrap();
+        assert_eq!(found.iter().map(|x| x.id.as_str()).collect::<Vec<_>>(), [s.id.as_str()]);
+        assert!(found[0].has_text);
+    }
+
+    #[test]
+    fn reads_text_in_the_background() {
+        let tmp = tempfile::tempdir().unwrap();
+        let l = lib(tmp.path());
+        let img = image::RgbaImage::from_pixel(40, 30, image::Rgba([255, 255, 255, 255]));
+        let shots = tmp.path().join("shots");
+        let a = l.store(&img, &ForegroundApp::default(), &shots, ImageFormat::Png).unwrap();
+        let b = l.store(&img, &ForegroundApp::default(), &shots, ImageFormat::Png).unwrap();
+        assert_eq!(l.index_text(1, |_| Ok("Victory Royale".into())), 1, "at most one at a time");
+        assert_eq!(l.index_text(5, |_| Ok("Eliminated".into())), 1, "only the unread one is left");
+        assert_eq!(l.index_text(5, |_| Ok("again".into())), 0);
+        let found = l.list(&ShotFilter { query: "victory".into(), ..Default::default() }).unwrap();
+        assert_eq!(found.len(), 1);
+        assert!([a.id.clone(), b.id.clone()].contains(&found[0].id));
+        let c = l.store(&img, &ForegroundApp::default(), &shots, ImageFormat::Png).unwrap();
+        assert_eq!(l.index_text(5, |_| Err("Windows has no text-recognition language".into())), 0, "stops when OCR isn't available");
+        assert!(!l.get(&c.id).unwrap().has_text, "and tries again later");
     }
 
     #[test]

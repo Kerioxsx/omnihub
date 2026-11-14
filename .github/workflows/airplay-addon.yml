@@ -1,0 +1,53 @@
+name: AirPlay add-on
+
+# Builds UxPlay for Windows with MSYS2 and packages it with its GStreamer
+# runtime as the optional "AirPlay add-on" OmniHub downloads for iPhone
+# screen mirroring. The release workflow calls this and publishes the zip.
+
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/airplay-addon/**', '.github/workflows/airplay-addon.yml']
+  pull_request:
+    paths: ['scripts/airplay-addon/**', '.github/workflows/airplay-addon.yml']
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      sha256:
+        description: SHA-256 of OmniHub-AirPlay-addon-x64.zip
+        value: ${{ jobs.build.outputs.sha256 }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test the AirPlay add-on
+    runs-on: windows-latest
+    outputs:
+      sha256: ${{ steps.hash.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: git zip
+          pacboy: >-
+            gcc:p cmake:p ninja:p pkgconf:p libplist:p openssl:p
+            gstreamer:p gst-plugins-base:p gst-plugins-good:p gst-plugins-bad:p gst-libav:p
+      - name: Build UxPlay and package the add-on
+        shell: msys2 {0}
+        run: bash scripts/airplay-addon/build.sh dist
+      - name: Hash
+        id: hash
+        shell: bash
+        run: echo "sha256=$(sha256sum dist/OmniHub-AirPlay-addon-x64.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Smoke test (outside MSYS2, bundled DLLs only)
+        shell: pwsh
+        run: scripts/airplay-addon/test.ps1 -Zip dist/OmniHub-AirPlay-addon-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omnihub-airplay-addon
+          path: dist/*.zip
+          if-no-files-found: error

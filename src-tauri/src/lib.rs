@@ -2,7 +2,18 @@
 //! `omnihub-core`.
 
 mod commands;
+mod extras;
+mod floats;
+mod ambient;
+mod gamemedia;
+mod quick;
+mod govee;
+mod chats;
+mod mcserver;
+mod mods;
 mod overlay;
+mod rest;
+mod rig;
 mod shortcuts;
 mod tray;
 
@@ -12,6 +23,15 @@ use std::time::Duration;
 use omnihub_core::core::{AppCore, CoreOptions};
 use omnihub_core::paths::AppPaths;
 use tauri::{Emitter, Manager, WindowEvent};
+
+/// Panics go to the log file (there is no console), with where they happened.
+fn log_panics() {
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!("panic: {info}\n{}", std::backtrace::Backtrace::force_capture());
+        default(info);
+    }));
+}
 
 fn init_logging(paths: &AppPaths) {
     use tracing_subscriber::prelude::*;
@@ -31,7 +51,46 @@ fn init_logging(paths: &AppPaths) {
 /// Topics worth a desktop notification when the window is hidden.
 fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String, String)> {
     match topic {
+        "iphone:notification" if payload["announce"].as_bool() == Some(true) => {
+            let n = &payload["notif"];
+            let (app, title) = (n["appName"].as_str().unwrap_or("iPhone"), n["title"].as_str().unwrap_or(""));
+            Some((if title.is_empty() { app.to_string() } else { format!("{app}: {title}") }, n["message"].as_str().unwrap_or("").chars().take(240).collect()))
+        }
         "remote:paired" => Some(("Phone paired".into(), format!("{} can now connect to this PC.", payload["name"].as_str().unwrap_or("A phone")))),
+        "guest:received" => Some((format!("{} sent you a file", payload["label"].as_str().unwrap_or("A guest")), format!("{} · saved in Incoming\\Guests", payload["name"].as_str().unwrap_or("file")))),
+        "video:done" => Some((format!("{} is done", payload["label"].as_str().unwrap_or("Video")), payload["output"].as_str().unwrap_or("").rsplit(['\\', '/']).next().unwrap_or("").to_string())),
+        "alert:hot" => Some((format!("{} is hot", payload["part"].as_str().unwrap_or("The PC")), format!("{:.0} °C (your limit is {:.0} °C). Check the fans and airflow.", payload["temp"].as_f64().unwrap_or(0.0), payload["limit"].as_f64().unwrap_or(0.0)))),
+        "screentime:limit" => {
+            let name = payload["name"].as_str().unwrap_or("This app");
+            match payload["left"].as_u64().unwrap_or(0) {
+                0 => Some(("Time's up".into(), format!("{name} is over today's limit."))),
+                n => Some(("Screen time".into(), format!("{n} min left for {name} today."))),
+            }
+        }
+        "watch:live" => Some((format!("{} is live", payload["handle"].as_str().unwrap_or("A creator")), payload["title"].as_str().filter(|t| !t.is_empty()).unwrap_or(if payload["platform"] == "youtube" { "On YouTube" } else { "On Twitch" }).to_string())),
+        "timer:done" => Some(("Time's up".into(), payload["label"].as_str().unwrap_or("Timer").to_string())),
+        "timer:alarm" => Some(("Alarm".into(), payload["label"].as_str().unwrap_or("Alarm").to_string())),
+        "timer:bedtime" => Some(("Bedtime soon".into(), format!("The PC locks in {} min. Save your work.", payload["minutes"].as_u64().unwrap_or(0)))),
+        "watch:free" => Some((format!("Free to keep: {}", payload["title"].as_str().unwrap_or("a game")), format!("On {}{}", payload["store"].as_str().unwrap_or("a store"), payload["until"].as_str().filter(|u| !u.is_empty()).map(|u| format!(" until {u}")).unwrap_or_default()))),
+        "watch:fortnite" => Some((payload["title"].as_str().unwrap_or("Fortnite").to_string(), payload["body"].as_str().unwrap_or("").to_string())),
+        "watch:patch" => Some((format!("{} updated", payload["game"].as_str().unwrap_or("A game")), payload["title"].as_str().unwrap_or("New patch notes").to_string())),
+        "watch:weekly" => Some((payload["title"].as_str().unwrap_or("Your week").to_string(), payload["body"].as_str().unwrap_or("").to_string())),
+        "watch:recap" => Some((payload["title"].as_str().unwrap_or("Your day").to_string(), payload["body"].as_str().unwrap_or("").to_string())),
+        "watch:shop" => Some(("In the item shop today".into(), payload["item"].as_str().unwrap_or("Something you wanted").to_string())),
+        "watch:price" => Some((format!("Price drop: {}", payload["name"].as_str().unwrap_or("a part")), format!("Now {:.2}{}", payload["price"].as_f64().unwrap_or(0.0), payload["currency"].as_str().map(|c| format!(" {c}")).unwrap_or_default()))),
+        "apps:auto-updated" => {
+            let n = payload["updated"].as_array().map_or(0, |a| a.len());
+            let f = payload["failed"].as_array().map_or(0, |a| a.len());
+            (n + f > 0).then(|| ("Apps updated".into(), if f > 0 { format!("{n} updated, {f} couldn't be") } else { format!("{n} updated overnight") }))
+        }
+        "download:done" => Some(("Downloaded".into(), format!("{} · in Downloads\\OmniHub", payload["name"].as_str().unwrap_or("file")))),
+        "scan:saved" => Some((format!("Scan from {}", payload["from"].as_str().unwrap_or("your phone").trim_start_matches("phone:")), payload["path"].as_str().unwrap_or("").rsplit(['\\', '/']).next().unwrap_or("").to_string())),
+        "approval:request" => Some(("Approve on your phone".into(), format!("{} — tap Allow in OmniHub on your phone.", payload["title"].as_str().unwrap_or("OmniHub is waiting")))),
+        "focus:phase" => Some(if payload["phase"] == "break" { ("Time for a break".into(), "Focus round done. Stretch, drink some water.".into()) } else { ("Back to focus".into(), "The break is over.".into()) }),
+        "remote:connected" => Some((
+            format!("{} connected", payload["name"].as_str().unwrap_or("A phone")),
+            format!("From {}. Not you? Open OmniHub → Phone to remove it, or press the panic button.", payload["ip"].as_str().unwrap_or("your network")),
+        )),
         "transfer:done" if payload["direction"] == "upload" => {
             Some((format!("Received from {}", payload["device"].as_str().unwrap_or("phone")), payload["name"].as_str().unwrap_or("file").to_string()))
         }
@@ -39,9 +98,49 @@ fn notification_for(topic: &str, payload: &serde_json::Value) -> Option<(String,
             let by = payload["requestedBy"].as_str().unwrap_or("");
             by.starts_with("phone:").then(|| (format!("{} requested by {}", payload["label"].as_str().unwrap_or("Power action"), by.trim_start_matches("phone:")), "Open OmniHub to cancel.".into()))
         }
+        "backup:done" => Some(if payload["missingDest"].as_bool() == Some(true) {
+            (format!("{} didn't run", payload["name"].as_str().unwrap_or("A backup")), "Its drive or folder isn't there. Plug it in and it runs by itself.".into())
+        } else if payload["failed"].as_u64().unwrap_or(0) > 0 {
+            (format!("{}: {} files couldn't be copied", payload["name"].as_str().unwrap_or("Backup"), payload["failed"].as_u64().unwrap_or(0)), "Usually files that were open. They're tried again next time.".into())
+        } else {
+            (format!("{} is backed up", payload["name"].as_str().unwrap_or("Backup")), format!("{} new or changed files copied.", payload["copied"].as_u64().unwrap_or(0)))
+        }),
+        "battery:low" => Some((format!("{} battery at {}%", payload["name"].as_str().unwrap_or("A"), payload["percent"].as_u64().unwrap_or(0)), "Charge it soon.".into())),
+        "counters:goal" => Some(("Counter goal".into(), payload["message"].as_str().unwrap_or("A goal was reached").to_string())),
+        "games:recap" => Some((format!("{} · {} min", payload["name"].as_str().unwrap_or("Game"), payload["minutes"].as_u64().unwrap_or(0)), "Open OmniHub for your session recap.".into())),
+        "games:sale" => Some((format!("{} is {}% off", payload["name"].as_str().unwrap_or("A game on your wishlist"), payload["discount"].as_u64().unwrap_or(0)), payload["price"].as_str().map(|p| format!("Now {p} on Steam")).unwrap_or_else(|| "On your Steam wishlist".into()))),
+        "games:limit" => Some(if payload["closing"].as_bool() == Some(true) {
+            (format!("Time's up for {}", payload["name"].as_str().unwrap_or("the game")), format!("Today's {} minutes are used, so it was closed.", payload["minutes"].as_u64().unwrap_or(0)))
+        } else {
+            (format!("{} min left", payload["left"].as_u64().unwrap_or(5)), format!("{} closes when today's time is up.", payload["name"].as_str().unwrap_or("The game")))
+        }),
+        "notes:reminder" => Some((
+            format!("Reminder: {}", payload["title"].as_str().filter(|t| !t.is_empty()).unwrap_or("Untitled note")),
+            payload["snippet"].as_str().filter(|s| !s.is_empty()).unwrap_or("Open OmniHub to see the note.").to_string(),
+        )),
+        "storage:low-space" => Some((
+            format!("{} is almost full", payload["root"].as_str().unwrap_or("A drive").trim_end_matches('\\')),
+            format!("Only {} left. Open OmniHub to see what takes the space.", omnihub_core::storage::format_bytes(payload["free"].as_u64().unwrap_or(0))),
+        )),
+        "mcserver:guard" => Some((
+            format!("{} wants in on {}", payload["name"].as_str().unwrap_or("Someone"), payload["server"].as_str().unwrap_or("your server")),
+            "That name is an operator and joined from a new place, so it was kept out. Open OmniHub (Servers → Players) to allow it.".into(),
+        )),
         "screen:viewers" => payload.as_array().filter(|v| !v.is_empty()).map(|v| ("Screen is being shared".into(), format!("{} viewing your screen.", v[0]["device"].as_str().unwrap_or("A phone")))),
         _ => None,
     }
+}
+
+/// Explorer's "Send to → OmniHub (phone)": show the window with the files
+/// ready to send. Returns whether the arguments were a send request.
+fn handle_send_to(app: &tauri::AppHandle, argv: &[String]) -> bool {
+    let Some(paths) = omnihub_core::system::shell::send_to_paths(argv) else { return false };
+    if !paths.is_empty() {
+        app.state::<commands::PendingSend>().0.lock().extend(paths.iter().cloned());
+        tray::show_main(app);
+        let _ = app.emit("send:files", &paths);
+    }
+    true
 }
 
 pub fn run(args: Vec<String>) {
@@ -53,19 +152,61 @@ pub fn run(args: Vec<String>) {
         }
     }
     let start_hidden = args.iter().any(|a| a == "--minimized");
+    let launch_args = args.clone();
 
     let paths = AppPaths::default_for_user().expect("cannot create the OmniHub data folder");
     init_logging(&paths);
+    log_panics();
+    let logs_dir = paths.logs.clone();
+    let last_crash = omnihub_core::crashlog::begin_session(&logs_dir);
+    if last_crash.is_some() {
+        tracing::warn!("the previous run did not end normally; details in logs/last-crash.txt");
+    }
     let core = AppCore::new(paths, CoreOptions::default()).expect("cannot open the OmniHub database");
+    let rig_hub = core.rig.clone();
+    let govee_hub = core.govee.clone();
+    let server_hub = core.mcserver.clone();
+    let play_hub = core.play.clone();
+    #[cfg(windows)]
+    let session_logs = logs_dir.clone();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| tray::show_main(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if !handle_send_to(app, &argv) {
+                tray::show_main(app);
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["overlay"]).build())
+        // Size, place and maximised are remembered; full screen is not (closed or
+        // updated during full-screen Aurora, it would come back full screen
+        // with no player open to leave it).
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::all() & !tauri_plugin_window_state::StateFlags::FULLSCREEN)
+                .with_denylist(&["overlay"])
+                .with_filter(|label| !label.starts_with("ambient-"))
+                .build(),
+        )
         .manage(core.clone())
+        .register_asynchronous_uri_scheme_protocol("gamemedia", {
+            let core = core.clone();
+            move |_ctx, request, responder| {
+                let core = core.clone();
+                std::thread::spawn(move || responder.respond(gamemedia::serve(&core, &request)));
+            }
+        })
+        .register_asynchronous_uri_scheme_protocol("rigmedia", {
+            let core = core.clone();
+            move |_ctx, request, responder| {
+                let core = core.clone();
+                std::thread::spawn(move || responder.respond(rig::serve(&core, &request)));
+            }
+        })
+        .manage(commands::PendingSend::default())
+        .manage(commands::LastCrash(parking_lot::Mutex::new(last_crash)))
         .setup(move |app| {
             let handle = app.handle().clone();
 
@@ -77,15 +218,32 @@ pub fn run(args: Vec<String>) {
                 .spawn(move || loop {
                     match rx.blocking_recv() {
                         Ok(ev) => {
-                            let _ = h.emit(&ev.topic, &ev.payload);
-                            let hidden = h.get_webview_window("main").and_then(|w| w.is_visible().ok()).is_none_or(|v| !v);
-                            if hidden {
+                            // Resting windows get theirs when they wake.
+                            rest::deliver(&h, &ev.topic, &ev.payload);
+                            let hidden = !rest::main_shown();
+                            // Reminders are due now, and a phone connecting is worth
+                            // knowing about: always a Windows notification.
+                            // During a focus round only what matters gets through.
+                            let focusing = h.state::<std::sync::Arc<omnihub_core::core::AppCore>>().focus.state().is_some_and(|f| f.phase == omnihub_core::focus::Phase::Focus);
+                            let important = matches!(ev.topic.as_str(), "notes:reminder" | "remote:connected" | "focus:phase" | "power:pending" | "approval:request" | "counters:goal" | "games:limit" | "games:sale" | "battery:low" | "alert:hot" | "screentime:limit" | "timer:done" | "timer:alarm" | "timer:bedtime" | "iphone:notification");
+                            if (hidden || important) && (!focusing || important) {
                                 if let Some((title, body)) = notification_for(&ev.topic, &ev.payload) {
                                     shortcuts::notify(&h, &title, &body);
                                 }
                             }
                             if matches!(ev.topic.as_str(), "vault:locked" | "vault:unlocked" | "remote:status") {
                                 tray::refresh(&h);
+                            }
+                            if ev.topic == "app:panic" {
+                                tray::hide_main(&h);
+                            }
+                            // The browser extension waits on the user: bring the window up.
+                            // View on the controller while watching: back to Big Picture.
+                            if ev.topic == "couch:home" {
+                                tray::show_main(&h);
+                            }
+                            if matches!(ev.topic.as_str(), "browser:pair-request" | "browser:unlock-request") {
+                                tray::show_main(&h);
                             }
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
@@ -95,19 +253,76 @@ pub fn run(args: Vec<String>) {
 
             tray::create(&handle)?;
             shortcuts::register(&handle);
+            // The installer closes and reopens OmniHub; leave cleanly first.
+            let exit_handle = handle.clone();
+            let servers = core.mcserver.clone();
+            core.updater.set_exit(move || {
+                // Servers running now come back after the update.
+                servers.remember_running();
+                exit_handle.exit(0)
+            });
+            // Automatic updates wait while the window is open (it would close on you).
+            let window_handle = handle.clone();
+            core.updater.set_in_use(move || window_handle.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false)));
             core.start_background();
+            // iPhone notifications over Bluetooth, if they were on.
+            {
+                let ev = core.events.clone();
+                core.iphone.start(std::sync::Arc::new(move |t, v| ev.emit(t, v)));
+            }
+            ambient::start(handle.clone());
+            rig::start(handle.clone());
+            floats::restore(&handle, core.clone());
+            rest::start(handle.clone());
+            // Capri starts with OmniHub while she is switched on.
+            if core.settings.get().chats.capri {
+                let c = core.clone();
+                std::thread::spawn(move || {
+                    if let Err(e) = omnihub_core::companion::start(&c.procs) {
+                        tracing::warn!("capri: {e}");
+                    }
+                });
+            }
 
             // Autostart passes --minimized; "Start minimized" decides whether
             // that start stays in the tray. A normal launch always shows.
             let settings = core.settings.get();
+            // "Launch at login" starts this copy, also after OmniHub moved
+            // folders (say from Program Files to the user's own).
+            if settings.general.launch_at_login {
+                use tauri_plugin_autostart::ManagerExt;
+                let _ = app.autolaunch().enable();
+            }
             if let Some(w) = app.get_webview_window("main") {
                 if !(start_hidden && settings.general.start_minimized) {
-                    let _ = w.show();
+                    rest::show(&w);
+                }
+                // Windows signing out, or an installer closing OmniHub to
+                // replace it: leave (closing would only hide to the tray and
+                // keep omnihub.exe locked).
+                #[cfg(windows)]
+                if let Ok(hwnd) = w.hwnd() {
+                    let (h, c) = (handle.clone(), core.clone());
+                    omnihub_core::system::session_end::watch(hwnd.0 as isize, move || {
+                        tracing::info!("Windows asked OmniHub to close");
+                        c.remote.stop();
+                        // Minecraft servers save their worlds first (Windows waits a few seconds).
+                        c.mcserver.shutdown(Duration::from_secs(8));
+                        omnihub_core::crashlog::end_session(&session_logs);
+                        h.exit(0);
+                    });
                 }
             }
+            handle_send_to(&handle, &launch_args);
             Ok(())
         })
         .on_window_event(|window, event| {
+            // Clicked back to: awake at once, not at the next check.
+            if let WindowEvent::Focused(true) = event {
+                if let Some(w) = window.app_handle().get_webview_window(window.label()) {
+                    rest::wake(&w);
+                }
+            }
             if window.label() != "main" {
                 return;
             }
@@ -147,6 +362,7 @@ pub fn run(args: Vec<String>) {
             commands::storage_open_cached,
             commands::storage_children,
             commands::storage_treemap,
+            commands::storage_thumb,
             commands::storage_top_files,
             commands::storage_extensions,
             commands::storage_search,
@@ -167,6 +383,10 @@ pub fn run(args: Vec<String>) {
             commands::shots_capture,
             commands::shots_region_begin,
             commands::shots_region_pending,
+            commands::shots_tool_begin,
+            commands::shots_region_pixel,
+            commands::shots_region_translate,
+            commands::shots_overlay_mode,
             commands::shots_region_commit,
             commands::shots_region_cancel,
             commands::shots_thumb,
@@ -178,6 +398,8 @@ pub fn run(args: Vec<String>) {
             commands::notes_list,
             commands::notes_get,
             commands::notes_save,
+            commands::notes_read_locked,
+            commands::notes_set_locked,
             commands::notes_delete,
             commands::notes_tags,
             commands::notes_export,
@@ -196,6 +418,248 @@ pub fn run(args: Vec<String>) {
             commands::vault_generate,
             commands::vault_strength,
             commands::vault_change_password,
+            commands::counters_event,
+            commands::counters_undo,
+            commands::counters_clear_log,
+            commands::counters_overlay,
+            commands::library_games,
+            commands::library_detail,
+            commands::library_achievements,
+            commands::library_friends,
+            commands::library_wishlist,
+            commands::library_account,
+            commands::library_set_key,
+            commands::library_patch,
+            commands::library_set_art,
+            commands::library_find_art,
+            commands::library_play,
+            commands::library_backup,
+            commands::library_restore,
+            commands::library_delete_backup,
+            commands::library_sessions,
+            commands::emulators_state,
+            commands::emulators_offers,
+            commands::bios_check,
+            commands::ra_user,
+            commands::ra_connect,
+            commands::ra_summary,
+            commands::emulators_pad_setup,
+            commands::emulator_saves,
+            commands::emulator_saves_backup,
+            commands::emulators_rom_opts,
+            commands::romdat_check,
+            commands::romdat_apply,
+            commands::emulators_install,
+            commands::emulators_refresh,
+            commands::emulators_add,
+            commands::emulators_remove,
+            commands::emulators_set_dirs,
+            commands::emulators_choose,
+            commands::emulators_launch,
+            commands::counters_state,
+            commands::counters_save,
+            commands::counters_delete,
+            commands::counters_bump,
+            commands::counters_set,
+            commands::counters_timer,
+            commands::counters_keys_on,
+            commands::counters_found,
+            commands::counters_forget_found,
+            commands::counters_set_image,
+            commands::counters_image,
+            commands::key_name,
+            commands::counters_popout,
+            quick::quick_state,
+            quick::quick_save,
+            quick::quick_run,
+            quick::quick_hide,
+            quick::quick_open,
+            quick::quick_obs_password,
+            quick::quick_obs_info,
+            quick::presence_status,
+            quick::presence_save,
+            quick::network_status,
+            quick::backups_list,
+            quick::backups_save,
+            quick::backups_delete,
+            quick::backups_run,
+            quick::backups_cancel,
+            quick::wake_targets,
+            quick::open_device_manager,
+            quick::quiet_status,
+            quick::quiet_set,
+            extras::capri_desktop_status,
+            extras::capri_desktop_latest,
+            extras::capri_desktop_install,
+            extras::capri_desktop_open,
+            extras::capri_desktop_close,
+            extras::capri_desktop_settings_set,
+            extras::ollama_pull,
+            extras::quiet_schedule_set,
+            extras::quiet_timer_set,
+            extras::heat_get,
+            extras::heat_set,
+            extras::app_updates_get,
+            extras::app_updates_set,
+            extras::app_updates_run,
+            extras::party_get,
+            extras::party_start,
+            extras::party_stop,
+            extras::party_auto,
+            extras::party_remove,
+            extras::party_bump,
+            extras::party_next,
+            extras::screentime_list,
+            extras::screentime_save,
+            extras::screentime_delete,
+            extras::watch_get,
+            extras::watch_shop_set,
+            extras::watch_shop_check,
+            extras::watch_price_save,
+            extras::watch_price_delete,
+            extras::watch_prices_check,
+            extras::voice_command,
+            extras::pads_set_light,
+            extras::theme_art_get,
+            extras::theme_art_set,
+            extras::sites_list,
+            extras::sites_save,
+            extras::sites_reset,
+            extras::sites_open,
+            extras::audio_outputs,
+            extras::audio_output_set,
+            extras::bt_list,
+            extras::bt_connect,
+            extras::bt_forget,
+            extras::karaoke_get,
+            extras::karaoke_profile,
+            extras::karaoke_session,
+            extras::karaoke_clear,
+            extras::karaoke_track,
+            extras::karaoke_lyrics,
+            extras::audio_inputs,
+            extras::screen_modes,
+            extras::screen_set_resolution,
+            extras::screen_restore,
+            extras::nightlight_get,
+            extras::nightlight_save,
+            extras::nightlight_now,
+            extras::chats_local_models,
+            extras::chats_local_set,
+            extras::ask_pc,
+            extras::watch_streamer_save,
+            extras::watch_streamer_delete,
+            extras::watch_streamers_check,
+            extras::watch_recap_set,
+            extras::watch_recap_now,
+            extras::photos_similar,
+            extras::photos_similar_stop,
+            extras::photos_trash,
+            floats::speedrun_state,
+            floats::speedrun_save,
+            floats::speedrun_press,
+            floats::speedrun_window,
+            floats::crosshair_set,
+            floats::floats_get,
+            floats::widget_add,
+            floats::widget_remove,
+            floats::wallpaper_set,
+            floats::soundboard_get,
+            floats::soundboard_save,
+            floats::soundboard_play,
+            floats::soundboard_stop,
+            extras::phone_limits_get,
+            extras::phone_limits_set,
+            extras::wifi_qr,
+            extras::timers_get,
+            extras::timers_start,
+            extras::timers_cancel,
+            extras::alarm_save,
+            extras::alarm_delete,
+            extras::bedtime_save,
+            extras::bedtime_snooze,
+            extras::watch_game_alerts,
+            extras::drives_health,
+            extras::stress_start,
+            extras::stress_stop,
+            extras::game_ready,
+            extras::windows_list,
+            extras::window_pin,
+            extras::standby_purge,
+            extras::tv_browsers,
+            extras::tv_prefs,
+            extras::tv_set_prefs,
+            extras::tv_continue,
+            extras::tv_open,
+            extras::couch_stop,
+            extras::photo_wall_get,
+            extras::photo_wall_set,
+            extras::photo_wall_gallery,
+            extras::photo_wall_add_folder,
+            extras::photo_wall_select,
+            extras::photo_wall_remove,
+            extras::iphone_get,
+            extras::iphone_paired,
+            extras::iphone_connect,
+            extras::iphone_toasts,
+            extras::iphone_dismiss,
+            extras::iphone_clear,
+            extras::open_bluetooth_settings,
+            extras::home_status,
+            extras::home_connect,
+            extras::home_set_shelly,
+            extras::home_devices,
+            extras::home_run,
+            extras::watch_weekly_set,
+            extras::watch_weekly_now,
+            extras::peers_list,
+            extras::peers_pair,
+            extras::peers_forget,
+            extras::peers_status,
+            extras::peers_action,
+            extras::deals_search,
+            extras::deals_game,
+            extras::bench_results,
+            extras::bench_run,
+            extras::snippets_get,
+            extras::snippets_save,
+            extras::net_limits,
+            extras::net_limit_set,
+            extras::net_limit_remove,
+            extras::after_downloads_get,
+            extras::after_downloads_set,
+            extras::game_move,
+            extras::game_move_stop,
+            quick::clipboard_list,
+            quick::clipboard_copy,
+            quick::clipboard_paste,
+            quick::clipboard_pin,
+            quick::clipboard_delete,
+            quick::clipboard_clear,
+            quick::clipboard_pause,
+            quick::batteries,
+            quick::pc_health,
+            quick::rules_tidy_downloads,
+            commands::autoclick_config,
+            commands::autoclick_set_config,
+            commands::autoclick_status,
+            commands::autoclick_start,
+            commands::autoclick_stop,
+            commands::autoclick_cursor,
+            commands::pkm_tables,
+            commands::pkm_open,
+            commands::pkm_view,
+            commands::pkm_close,
+            commands::pkm_edit,
+            commands::pkm_delete,
+            commands::pkm_trainer,
+            commands::pkm_import,
+            commands::pkm_export,
+            commands::pkm_write,
+            commands::vault_reset_password_hello,
+            commands::vault_set_aside,
+            commands::vault_set_aside_list,
+            commands::vault_put_back,
             commands::vault_hello_enable,
             commands::vault_hello_disable,
             commands::vault_hello_unlock,
@@ -210,9 +674,16 @@ pub fn run(args: Vec<String>) {
             commands::remote_device_rename,
             commands::remote_device_revoke,
             commands::remote_send,
+            commands::remote_send_text,
+            commands::remote_inbox_remove,
+            commands::clipboard_text,
+            commands::take_pending_send,
             commands::remote_inbox,
             commands::remote_stop_viewer,
             commands::remote_stop_all_viewers,
+            commands::remote_diagnostics,
+            commands::remote_fix_firewall,
+            commands::network_make_private,
             commands::power_schedule,
             commands::power_cancel,
             commands::power_pending,
@@ -225,7 +696,367 @@ pub fn run(args: Vec<String>) {
             commands::scrcpy_connect,
             commands::scrcpy_pair,
             commands::sunshine_status,
+            commands::airplay_status,
+            commands::airplay_install,
+            commands::airplay_uninstall,
+            commands::airplay_start,
+            commands::airplay_stop,
+            commands::airplay_keep_on_top,
+            commands::airplay_place,
+            commands::airplay_firewall,
+            commands::airplay_fix_firewall,
+            commands::storage_growth,
+            commands::storage_export_csv,
+            commands::media_state,
+            commands::media_control,
+            commands::media_lyrics,
+            commands::media_video,
+            commands::media_video_stream,
+            commands::media_video_sync,
+            commands::media_mirror,
+            commands::media_mirror_frame,
+            commands::media_motion,
+            commands::aurora_look,
+            commands::aurora_choose_font,
+            commands::aurora_choose_emoji_pack,
+            commands::aurora_emoji_font,
+            commands::aurora_forget_look,
+            commands::aurora_font,
+            commands::aurora_texture,
+            commands::media_stream_status,
+            commands::media_art,
+            commands::media_audio,
+            commands::media_set_volume,
+            commands::visual_hold,
+            commands::visual_release,
+            commands::visual_status,
+            commands::visual_keep_awake,
+            commands::ambient_displays,
+            commands::settings_export,
+            commands::settings_import,
+            commands::screen_share_state,
+            commands::screen_windows,
+            commands::screen_set_paused,
+            commands::screen_set_window,
+            commands::vault_health,
+            commands::vault_breach_check,
+            commands::notes_remind,
+            commands::shots_text,
+            commands::shots_save_edit,
+            commands::startup_list,
+            commands::startup_set,
+            commands::system_processes,
+            commands::system_end_process,
+            commands::system_usage,
+            commands::system_set_priority,
+            commands::storage_scan_task_status,
+            commands::storage_scan_task_set,
+            commands::update_state,
+            commands::update_check,
+            commands::update_install,
+            commands::games_list,
+            commands::games_create,
+            commands::games_save,
+            commands::games_delete,
+            commands::games_state,
+            commands::games_fps_cap,
+            commands::games_potato_textures,
+            commands::games_play,
+            commands::games_stop,
+            commands::games_ping,
+            commands::games_ping_targets,
+            commands::games_roblox_status,
+            commands::games_roblox_write,
+            commands::games_roblox_preview,
+            commands::games_roblox_shaders,
+            commands::games_roblox_shaders_apply,
+            commands::games_roblox_flag_list,
+            commands::games_configs,
+            commands::games_config_options,
+            commands::games_config_apply,
+            commands::games_config_restore,
+            commands::games_fortnite_clean,
+            commands::games_gpu_drivers,
+            commands::games_fortnite_advice,
+            commands::games_fortnite_replays,
+            commands::games_fortnite_clean_replays,
+            commands::games_net_check,
+            commands::games_set_wifi_saving,
+            commands::displays_list,
+            commands::displays_set,
+            commands::shots_pin,
+            commands::vault_wifi_qr,
+            commands::vault_import_file,
+            commands::hidden_list,
+            commands::guests_create,
+            commands::images_inspect,
+            commands::images_run,
+            commands::video_status,
+            commands::video_probe,
+            commands::video_start,
+            commands::video_tasks,
+            commands::video_cancel,
+            commands::video_clear,
+            commands::downloads_start,
+            commands::downloads_list,
+            commands::downloads_cancel,
+            commands::downloads_clear,
+            commands::downloads_folder,
+            commands::board_strokes,
+            commands::board_clear,
+            commands::board_undo,
+            commands::board_save,
+            commands::scans_folder,
+            commands::guests_list,
+            commands::guests_stop,
+            commands::rules_list,
+            commands::rules_save,
+            commands::rules_delete,
+            commands::rules_log,
+            commands::rules_run,
+            commands::focus_state,
+            commands::focus_start,
+            commands::focus_stop,
+            commands::time_report,
+            commands::time_clear,
+            commands::dev_projects,
+            commands::dev_environment,
+            commands::dev_set_path,
+            commands::dev_set_var,
+            commands::dev_remove_var,
+            commands::dev_lan_link,
+            commands::dev_open,
+            commands::music_search,
+            commands::music_artist,
+            commands::music_album,
+            commands::music_up_next,
+            commands::music_play,
+            commands::spotify_status,
+            commands::music_queue,
+            commands::mc_loader_versions,
+            commands::mc_loader_install,
+            commands::mc_mod_search,
+            commands::mc_mod_install,
+            commands::mc_mods_in,
+            commands::app_install_winget,
+            commands::spotify_connect,
+            commands::spotify_disconnect,
+            commands::media_cover_info,
+            commands::media_cover_retry,
+            commands::music_installed,
+            commands::files_hash,
+            commands::files_shred,
+            commands::files_rename_plan,
+            commands::files_rename,
+            commands::files_recent,
+            commands::ports_list,
+            commands::ports_end,
+            commands::layouts_list,
+            commands::layouts_save,
+            commands::layouts_apply,
+            commands::layouts_delete,
+            commands::privacy_list,
+            commands::panic_now,
+            commands::play_status,
+            commands::play_install,
+            commands::play_clip,
+            commands::play_record,
+            commands::play_clips,
+            commands::play_clip_delete,
+            commands::play_hello,
+            commands::hidden_hide,
+            commands::hidden_unhide,
+            commands::hidden_folder_files,
+            commands::hidden_tidy_folder,
+            commands::hidden_save_copy,
+            commands::hidden_open,
+            commands::hidden_delete,
+            commands::hidden_cancel,
+            commands::apps_updates,
+            commands::apps_update,
+            commands::capri_status,
+            commands::capri_set,
+            commands::capri_update,
+            commands::games_load_test,
+            commands::games_fps,
+            commands::games_fps_install,
+            commands::games_fps_allow,
+            commands::games_library,
+            commands::games_add_installed,
+            commands::pc_status,
+            commands::pc_set,
+            commands::browser_status,
+            commands::browser_repair,
+            commands::browser_open_page,
+            commands::browser_pair_respond,
+            commands::browser_revoke,
+            commands::vault_totp,
+            commands::app_last_crash,
+            commands::app_log_error,
+            rig::rig_specs,
+            rig::rig_settings,
+            rig::rig_update,
+            rig::rig_hold,
+            rig::rig_profiles,
+            rig::rig_save_profile,
+            rig::rig_delete_profile,
+            rig::rig_lhm_login,
+            rig::rig_start_openrgb,
+            rig::rig_media,
+            rig::rig_media_add,
+            rig::rig_media_remove,
+            rig::rig_displays,
+            govee::govee_settings,
+            govee::govee_update,
+            govee::govee_update_light,
+            govee::govee_hold,
+            govee::govee_scan,
+            govee::govee_set_key,
+            govee::govee_control,
+            govee::govee_identify,
+            govee::govee_presets,
+            govee::govee_save_preset,
+            govee::govee_delete_preset,
+            govee::govee_apply_preset,
+            govee::govee_save_timer,
+            govee::govee_delete_timer,
+            govee::govee_sleep,
+            govee::govee_monitors,
+            govee::govee_firewall,
+            govee::govee_fix_firewall,
+            chats::chats_list,
+            chats::chats_view,
+            chats::chats_send,
+            chats::chats_create,
+            chats::chats_stop,
+            chats::chats_rename,
+            chats::chats_delete,
+            chats::chats_folders,
+            chats::chats_tools,
+            chats::chats_usage,
+            chats::ideas_list,
+            chats::ideas_save,
+            chats::openai_settings,
+            chats::openai_update,
+            chats::openai_set_key,
+            chats::openai_models,
+            mods::mods_games,
+            mods::mods_list,
+            mods::mods_browse,
+            mods::mods_install_package,
+            mods::mods_install_file,
+            mods::mods_install_loader,
+            mods::mods_set_enabled,
+            mods::mods_set_all,
+            mods::mods_uninstall,
+            mods::mods_update,
+            mods::mods_workshop,
+            mods::mods_add_folder,
+            mods::mods_remove_folder,
+            mods::claude_settings,
+            mods::claude_update,
+            mods::claude_set_key,
+            mods::claude_test,
+            mods::maker_projects,
+            mods::maker_create,
+            mods::maker_send,
+            mods::maker_stop,
+            mods::maker_approve,
+            mods::maker_view,
+            mods::maker_file,
+            mods::maker_delete,
+            mods::maker_rename,
+            mods::maker_install,
+            mods::mc_status,
+            mods::mc_search,
+            mods::mc_versions,
+            mods::mc_add_modrinth,
+            mods::mc_add_file,
+            mods::mc_add_folder,
+            mods::mc_launcher_packs,
+            mods::mc_launcher_icon,
+            mods::mc_add_launcher_pack,
+            mods::mc_add_launcher_place,
+            mods::mc_remove_launcher_place,
+            mods::mc_import_shared,
+            mods::mc_launcher_details,
+            mods::mc_launcher_world_icon,
+            mods::mc_launcher_updates,
+            mods::mc_share_launcher_pack,
+            mods::mc_remove_source,
+            mods::mc_plan,
+            mods::mc_export,
+            mods::mc_install,
+            mods::mc_uninstall,
+            mods::mc_client_status,
+            mods::mc_client_install,
+            mods::mc_client_set_killfx,
+            mods::mc_client_packs,
+            mods::mc_client_add_pack,
+            mods::mc_client_remove_pack,
+            mods::mc_client_uninstall,
+            mods::mc_mixes,
+            mods::mc_cover,
+            mods::mc_remake_cover,
+            mods::mc_ai_cover,
+            mods::mc_save_cover,
+            mods::pollinations_status,
+            mods::pollinations_sign_in,
+            mods::pollinations_check,
+            mods::pollinations_set_key,
+            mods::pollinations_forget,
+            mcserver::srv_list,
+            mcserver::srv_get,
+            mcserver::srv_versions,
+            mcserver::srv_create,
+            mcserver::srv_adopt,
+            mcserver::srv_update,
+            mcserver::srv_delete,
+            mcserver::srv_start,
+            mcserver::srv_stop,
+            mcserver::srv_restart,
+            mcserver::srv_kill,
+            mcserver::srv_console,
+            mcserver::srv_command,
+            mcserver::srv_properties,
+            mcserver::srv_set_properties,
+            mcserver::srv_set_icon,
+            mcserver::srv_players,
+            mcserver::srv_player,
+            mcserver::srv_act,
+            mcserver::srv_whitelist,
+            mcserver::srv_watch,
+            mcserver::srv_map,
+            mcserver::srv_map_tile,
+            mcserver::srv_content,
+            mcserver::srv_identify,
+            mcserver::srv_search,
+            mcserver::srv_install,
+            mcserver::srv_add_file,
+            mcserver::srv_set_content,
+            mcserver::srv_remove_content,
+            mcserver::srv_backups,
+            mcserver::srv_backup,
+            mcserver::srv_restore,
+            mcserver::srv_delete_backup,
+            mcserver::srv_network,
+            mcserver::srv_set_upnp,
+            mcserver::srv_fix_firewall,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running OmniHub");
+        .build(tauri::generate_context!())
+        .expect("error while starting OmniHub")
+        .run(move |_app, event| {
+            // A normal exit (tray Quit, an update): next start is not a crash.
+            if let tauri::RunEvent::Exit = event {
+                // Fans OmniHub drives go back to the hardware's own control.
+                rig_hub.shutdown();
+                // Streaming Govee lights go back to their own modes.
+                govee_hub.shutdown();
+                // The recorder and the microphone stop.
+                play_hub.shutdown();
+                // Minecraft servers save their worlds and stop.
+                server_hub.shutdown(Duration::from_secs(25));
+                omnihub_core::crashlog::end_session(&logs_dir);
+            }
+        });
 }

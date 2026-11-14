@@ -375,6 +375,21 @@ fn render_icon(_app: &AppInfo) -> Option<Vec<u8>> {
     None
 }
 
+/// The icon of an executable as a PNG data URL (open apps on the phone).
+pub fn exe_icon_data_url(path: &str) -> Option<String> {
+    #[cfg(windows)]
+    {
+        use base64::Engine;
+        let png = win::icon_png(path, 64)?;
+        Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        None
+    }
+}
+
 /// The app catalogue with an icon cache on disk.
 pub struct AppLibrary {
     cache_dir: PathBuf,
@@ -419,6 +434,17 @@ impl AppLibrary {
     #[cfg(not(windows))]
     fn enumerate() -> Vec<AppInfo> {
         Vec::new()
+    }
+
+    /// Names of the programs that can be started, if the list was read already.
+    pub fn cached_launchable(&self) -> Option<Vec<String>> {
+        Some(self.apps.lock().as_ref()?.iter().filter(|a| a.aumid.is_some()).map(|a| a.name.clone()).collect())
+    }
+
+    /// The program a spoken name means ("visual studio code").
+    pub fn find_spoken(&self, spoken: &str) -> Option<String> {
+        let clean = crate::play::voice::clean;
+        self.apps.lock().as_ref()?.iter().find(|a| a.aumid.is_some() && clean(&a.name) == spoken).map(|a| a.id.clone())
     }
 
     pub fn get(&self, id: &str) -> Option<AppInfo> {

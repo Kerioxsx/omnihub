@@ -66,13 +66,39 @@ export function useAsync<T>(fn: () => Promise<T>, deps: DependencyList): AsyncSt
   return { data, error, loading, reload: run, setData };
 }
 
+/**
+ * Call `cb` every `ms` while the window shows; nothing while it is hidden
+ * (in the tray or minimised), and once at once when it shows again.
+ */
+export function everyWhileVisible(cb: () => void, ms: number): () => void {
+  let t: ReturnType<typeof setInterval> | null = null;
+  const start = () => {
+    if (t == null) t = setInterval(cb, ms);
+  };
+  const onChange = () => {
+    if (document.hidden) {
+      if (t != null) clearInterval(t);
+      t = null;
+    } else if (t == null) {
+      cb();
+      start();
+    }
+  };
+  if (!document.hidden) start();
+  document.addEventListener('visibilitychange', onChange);
+  return () => {
+    if (t != null) clearInterval(t);
+    document.removeEventListener('visibilitychange', onChange);
+  };
+}
+
+/** `setInterval` for components, paused while the window is hidden. */
 export function useInterval(cb: () => void, ms: number | null): void {
   const ref = useRef(cb);
   ref.current = cb;
   useEffect(() => {
     if (ms == null) return;
-    const t = setInterval(() => ref.current(), ms);
-    return () => clearInterval(t);
+    return everyWhileVisible(() => ref.current(), ms);
   }, [ms]);
 }
 

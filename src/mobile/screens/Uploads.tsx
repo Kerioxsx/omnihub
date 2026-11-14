@@ -25,7 +25,7 @@ export function UploadsPanel({ className }: { className?: string }) {
   return (
     <section className={cx('card mb-4 overflow-hidden', className)} aria-label="Uploads">
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-3 px-4 pb-3 pt-3.5 text-left">
-        <div className={cx('grid h-10 w-10 place-items-center rounded-2xl', active.length ? 'grad-bg text-white' : failed ? 'bg-bad/15 text-bad' : 'bg-good/15 text-good')}>
+        <div className={cx('grid h-10 w-10 place-items-center rounded-2xl', active.length ? 'grad-bg text-on-grad' : failed ? 'bg-bad/15 text-bad' : 'bg-good/15 text-good')}>
           {active.length ? <CloudUpload size={20} /> : failed ? <CircleAlert size={20} /> : <CircleCheck size={20} />}
         </div>
         <div className="min-w-0 flex-1">

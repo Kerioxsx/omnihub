@@ -2,6 +2,8 @@
 @import "../shared/theme.css";
 /* Vite's root is mobile/, so tell Tailwind where the components live. */
 @source "./";
+/* Minecraft heads and item tiles, shared with the desktop app. */
+@source "../shared/minecraft.tsx";
 
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
@@ -15,6 +17,7 @@
   --card: rgba(255, 255, 255, 0.045);
   --card-strong: rgba(255, 255, 255, 0.07);
   --glass: rgba(10, 10, 18, 0.93);
+  --on-grad: #ffffff;
 }
 
 :root.light {
@@ -29,6 +32,7 @@
   --color-card-strong: var(--card-strong);
   --color-sheet: var(--sheet-bg);
   --color-glass: var(--glass);
+  --color-on-grad: var(--on-grad);
 }
 
 /* Unlayered on purpose: they must beat the (unlayered) shared theme. */
@@ -213,3 +217,44 @@ img { -webkit-user-drag: none; }
 
 .num { font-variant-numeric: tabular-nums; }
 }
+
+/* ---------- looks: wallpaper and glass ---------- */
+.m-wall { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.m-wall img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.m-wall .tint { position: absolute; inset: 0; background: var(--m-bg, var(--bg)); }
+.m-wall .veil { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.5)); }
+.m-wall .veil.is-light { background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.4)); }
+/* The look's own background replaces the default glow. */
+html:has(.m-wall) #root::before { display: none; }
+html:has(.m-wall) { background: var(--m-bg, var(--bg)); }
+
+/* Glass: frosted cards, bars and sheets over the wallpaper or colours. */
+:root[data-glass] {
+  --card: rgba(255, 255, 255, 0.075);
+  --card-strong: rgba(255, 255, 255, 0.11);
+  --glass: rgba(14, 14, 22, 0.74);
+  --sheet-bg: rgba(18, 18, 28, 0.72);
+  --border: rgba(255, 255, 255, 0.12);
+}
+:root.light[data-glass] {
+  --card: rgba(255, 255, 255, 0.58);
+  --card-strong: rgba(255, 255, 255, 0.72);
+  --glass: rgba(255, 255, 255, 0.78);
+  --sheet-bg: rgba(255, 255, 255, 0.8);
+  --border: rgba(20, 20, 60, 0.1);
+}
+:root[data-glass] .card {
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 30px -18px rgba(0, 0, 0, 0.6);
+}
+:root[data-glass] .bg-glass, :root[data-glass] .bg-sheet { -webkit-backdrop-filter: blur(22px) saturate(170%); backdrop-filter: blur(22px) saturate(170%); }
+/* Full pages that slide over others: a frosted layer instead of solid. */
+:root[data-glass] .bg-bg { background: color-mix(in srgb, var(--bg) 40%, transparent); -webkit-backdrop-filter: blur(30px) saturate(150%); backdrop-filter: blur(30px) saturate(150%); }
+:root[data-wall][data-glass] .bg-bg { background: rgba(10, 10, 16, 0.35); }
+:root.light[data-wall][data-glass] .bg-bg { background: rgba(255, 255, 255, 0.4); }
+:root[data-glass] .field { background: color-mix(in srgb, var(--surface) 70%, transparent); }
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-glass] .card, :root[data-glass] .bg-glass, :root[data-glass] .bg-sheet, :root[data-glass] .bg-bg { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+

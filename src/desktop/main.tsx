@@ -1,24 +1,43 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, Suspense, lazy, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@shared/theme.css';
 import './styles.css';
+import './themes.css';
 import { inTauri } from './api';
-import { App } from './App';
 import { useRoute } from './lib/router';
-import { RegionOverlay } from './pages/overlay/RegionOverlay';
+
+// Each window loads only what it shows: the glow and case-screen windows
+// never parse the app's pages, and the app never parses theirs.
+const App = lazy(() => import('./App').then((m) => ({ default: m.App })));
+const AmbientOverlay = lazy(() => import('./pages/overlay/AmbientOverlay').then((m) => ({ default: m.AmbientOverlay })));
+const CaseScreen = lazy(() => import('./pages/overlay/CaseScreen').then((m) => ({ default: m.CaseScreen })));
+const CounterPopout = lazy(() => import('./pages/counters/CounterPopout').then((m) => ({ default: m.CounterPopout })));
+const WheelPopup = lazy(() => import('./pages/quick/Popups').then((m) => ({ default: m.WheelPopup })));
+const ClipboardPopup = lazy(() => import('./pages/quick/Popups').then((m) => ({ default: m.ClipboardPopup })));
+const PinView = lazy(() => import('./pages/shots/PinView').then((m) => ({ default: m.PinView })));
+const SpeedrunPopout = lazy(() => import('./pages/floats/SpeedrunPopout').then((m) => ({ default: m.SpeedrunPopout })));
+const CrosshairView = lazy(() => import('./pages/floats/CrosshairView').then((m) => ({ default: m.CrosshairView })));
+const WidgetView = lazy(() => import('./pages/floats/WidgetView').then((m) => ({ default: m.WidgetView })));
+const WallpaperView = lazy(() => import('./pages/floats/WallpaperView').then((m) => ({ default: m.WallpaperView })));
+const SoundboardPlayer = lazy(() => import('./pages/floats/SoundboardPlayer').then((m) => ({ default: m.SoundboardPlayer })));
+const ScreenOverlay = lazy(() => import('./pages/overlay/PickerOverlay').then((m) => ({ default: m.ScreenOverlay })));
 
 /**
  * The region overlay runs in its own borderless window labelled "overlay"
- * (opened at index.html#/overlay). The label check is a fallback in case the
- * hash gets lost; null while it is being resolved.
+ * (opened at index.html#/overlay), the screen glow in windows labelled
+ * "ambient-…" (#/ambient), a case screen in "casescreen" (#/casescreen). The label check is a fallback in case the hash
+ * gets lost; null while it is being resolved.
  */
-function useOverlayWindow(): boolean | null {
-  const [label, setLabel] = useState<boolean | null>(inTauri ? null : false);
+function useOverlayWindow(): 'overlay' | 'ambient' | 'casescreen' | false | null {
+  const [label, setLabel] = useState<'overlay' | 'ambient' | 'casescreen' | false | null>(inTauri ? null : false);
   useEffect(() => {
     if (!inTauri) return;
     let alive = true;
     import('@tauri-apps/api/window')
-      .then(({ getCurrentWindow }) => alive && setLabel(getCurrentWindow().label === 'overlay'))
+      .then(({ getCurrentWindow }) => {
+        const l = getCurrentWindow().label;
+        if (alive) setLabel(l === 'overlay' ? 'overlay' : l === 'casescreen' ? 'casescreen' : l.startsWith('ambient-') ? 'ambient' : false);
+      })
       .catch(() => alive && setLabel(false));
     return () => {
       alive = false;
@@ -30,13 +49,18 @@ function useOverlayWindow(): boolean | null {
 function Root() {
   const route = useRoute();
   const overlayWindow = useOverlayWindow();
-  const overlay = route.id === 'overlay' || overlayWindow === true;
+  const overlay = route.id === 'overlay' || overlayWindow === 'overlay';
+  const ambient = route.id === 'ambient' || overlayWindow === 'ambient';
   useEffect(() => {
     document.documentElement.classList.toggle('overlay-route', overlay);
-  }, [overlay]);
-  if (overlay) return <RegionOverlay />;
-  if (overlayWindow === null) return null;
-  return <App />;
+    document.documentElement.classList.toggle('ambient-route', ambient);
+  }, [overlay, ambient]);
+  const float = route.id === 'speedrun' || route.id === 'crosshair' || route.id === 'widget';
+  useEffect(() => {
+    document.documentElement.classList.toggle('float-route', float);
+  }, [float]);
+  const view = route.id === 'soundboard' ? <SoundboardPlayer /> : route.id === 'speedrun' ? <SpeedrunPopout /> : route.id === 'crosshair' ? <CrosshairView /> : route.id === 'widget' ? <WidgetView /> : route.id === 'wallpaper' ? <WallpaperView /> : route.id === 'pin' ? <PinView /> : route.id === 'counter' ? <CounterPopout /> : route.id === 'wheel' ? <WheelPopup /> : route.id === 'clipboard' ? <ClipboardPopup /> : route.id === 'casescreen' || overlayWindow === 'casescreen' ? <CaseScreen /> : ambient ? <AmbientOverlay /> : overlay ? <ScreenOverlay /> : overlayWindow === null ? null : <App />;
+  return <Suspense fallback={null}>{view}</Suspense>;
 }
 
 createRoot(document.getElementById('root')!).render(

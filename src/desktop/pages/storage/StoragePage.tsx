@@ -1,5 +1,5 @@
 import { formatBytes } from '@shared/format';
-import { ArrowDownWideNarrow, Copy, FolderTree, PieChart, ScanLine, Search, Sparkles, Zap } from 'lucide-react';
+import { ArrowDownWideNarrow, Copy, FolderTree, PieChart, ScanLine, Search, Sparkles, TrendingUp, Zap } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { api } from '../../api';
 import { Page } from '../../components/Page';
@@ -13,10 +13,12 @@ import { useSettings } from '../../state/settings';
 import { type StorageTab, rootKey, useStorage } from '../../state/storage';
 import { CleanupTab } from './CleanupTab';
 import { DuplicatesTab } from './DuplicatesTab';
+import { SimilarPhotos } from './SimilarPhotos';
 import { ExplorerTab } from './ExplorerTab';
 import { LargestTab } from './LargestTab';
 import { DrivePicker, ModeHint, ModeToggle, NeverScanned, ScanProgressView, SummaryCard } from './ScanParts';
 import { SearchTab } from './SearchTab';
+import { GrowthTab } from './GrowthTab';
 import { TypesTab } from './TypesTab';
 
 function CleanupBadge({ scanId }: { scanId: string }) {
@@ -62,6 +64,11 @@ export function StoragePage() {
     else if (!root && volumes.length) void select((volumes.find((v) => v.root.toUpperCase().startsWith('C:')) ?? volumes[0]).root);
     else if (root && !summaries[rootKey(root)]) void select(root);
   }, [loaded, volumes, route.params, root]);
+  // ?tab= opens a tab directly (Home's "Clean up", "See what's big").
+  useEffect(() => {
+    const t = route.params.get('tab') as StorageTab | null;
+    if (t && ['explorer', 'largest', 'types', 'growth', 'cleanup', 'duplicates', 'search'].includes(t)) setTab(t);
+  }, [route.params]);
 
   const key = root ? rootKey(root) : null;
   const volume = key ? (volumes.find((v) => rootKey(v.root) === key) ?? null) : null;
@@ -73,6 +80,7 @@ export function StoragePage() {
     { value: 'explorer', label: 'Explorer', icon: FolderTree },
     { value: 'largest', label: 'Largest files', icon: ArrowDownWideNarrow },
     { value: 'types', label: 'File types', icon: PieChart },
+    { value: 'growth', label: 'What grew', icon: TrendingUp },
     { value: 'cleanup', label: 'Cleanup', icon: Sparkles, badge: summary ? <CleanupBadge scanId={summary.scanId} /> : undefined },
     { value: 'duplicates', label: 'Duplicates', icon: Copy },
     { value: 'search', label: 'Search', icon: Search },
@@ -96,8 +104,14 @@ export function StoragePage() {
           {tab === 'explorer' && <ExplorerTab scanId={summary.scanId} />}
           {tab === 'largest' && <LargestTab scanId={summary.scanId} />}
           {tab === 'types' && <TypesTab scanId={summary.scanId} />}
+          {tab === 'growth' && <GrowthTab scanId={summary.scanId} />}
           {tab === 'cleanup' && <CleanupTab scanId={summary.scanId} />}
-          {tab === 'duplicates' && <DuplicatesTab scanId={summary.scanId} />}
+          {tab === 'duplicates' && (
+            <div className="flex flex-1 flex-col gap-3">
+              <SimilarPhotos />
+              <DuplicatesTab scanId={summary.scanId} />
+            </div>
+          )}
           {tab === 'search' && <SearchTab scanId={summary.scanId} />}
         </div>
       </>

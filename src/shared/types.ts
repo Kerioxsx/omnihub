@@ -106,6 +106,8 @@ export interface ChildrenPage {
 
 export type SortKey = 'size' | 'alloc' | 'name' | 'modified' | 'files';
 
+export type ExplorerView = 'split' | 'list' | 'grid' | 'treemap' | 'sunburst';
+
 export interface TreemapItem {
   /** 4294967295 for the folded "N smaller items" entry */
   id: number;
@@ -240,6 +242,8 @@ export interface Screenshot {
   note: string;
   favorite: boolean;
   exists: boolean;
+  /** text was read from it (Copy text); it is then searchable */
+  hasText: boolean;
 }
 
 export type CaptureKind = 'screen' | 'allScreens' | 'window';
@@ -261,6 +265,149 @@ export interface PendingRegion {
   scale: number;
   /** data: URL of the frozen screen */
   image: string;
+}
+
+/** An emulator OmniHub can install from its official GitHub release. */
+export interface EmuOffer {
+  id: string;
+  name: string;
+  platforms: string[];
+  installed: string | null;
+  latest: string | null;
+}
+
+export interface Cheat {
+  name: string;
+  code: string;
+  on: boolean;
+}
+
+/** How one game starts, and its cheats. */
+export interface RomOpts {
+  fullscreen: boolean;
+  /** A RetroArch shader preset. */
+  shader: string;
+  extra: string;
+  cheats: Cheat[];
+}
+
+export type Netplay = { kind: 'host' } | { kind: 'join'; address: string };
+
+export interface SavePlace {
+  emulator: string;
+  what: string;
+  path: string;
+  files: number;
+  bytes: number;
+}
+
+export interface PadResult {
+  emulator: string;
+  /** set · already · notRun */
+  status: string;
+  file: string;
+}
+
+export interface RaGame {
+  id: number;
+  title: string;
+  console: string;
+  icon: string;
+  lastPlayed: string;
+  achieved: number;
+  total: number;
+}
+
+export interface RaAchievement {
+  title: string;
+  description: string;
+  game: string;
+  badge: string;
+  points: number;
+  date: string;
+  hardcore: boolean;
+}
+
+export interface RaSummary {
+  user: string;
+  points: number;
+  rank: number | null;
+  games: RaGame[];
+  recent: RaAchievement[];
+}
+
+export interface BiosFile {
+  platform: string;
+  name: string;
+  /** good · different · missing · ps2 */
+  status: string;
+  detail: string;
+}
+
+export interface RomCheck {
+  path: string;
+  /** ok · rename · unknown */
+  status: string;
+  proper: string | null;
+}
+
+export interface DatReport {
+  datRoms: number;
+  checked: RomCheck[];
+  duplicates: string[][];
+}
+
+export interface DealGame {
+  id: string;
+  title: string;
+  thumb: string;
+  cheapest: number;
+}
+
+export interface Deal {
+  store: string;
+  price: number;
+  retail: number;
+  savings: number;
+  url: string;
+}
+
+export interface GameDeals {
+  title: string;
+  deals: Deal[];
+  /** [price, unix seconds] */
+  lowestEver: [number, number] | null;
+}
+
+/** Another PC with OmniHub, paired as a device. */
+export interface PeerPc {
+  id: string;
+  name: string;
+  url: string;
+  /** Its certificate's SHA-256 (empty for plain http). */
+  fingerprint: string;
+}
+
+/** A smart-home device: "ha:light.desk" or "shelly:192.168.1.40". */
+export interface HomeDevice {
+  id: string;
+  name: string;
+  kind: string;
+  /** on · off · "" (scenes and scripts) */
+  state: string;
+}
+
+export interface HomeStatus {
+  url: string;
+  connected: boolean;
+  /** [name, IP address] */
+  shelly: [string, string][];
+}
+
+export interface Translation {
+  text: string;
+  translated: string;
+  model: string;
 }
 
 export interface Rect {
@@ -286,6 +433,12 @@ export interface Note {
   updated: number;
   exportedPath: string | null;
   exportedAt: number | null;
+  /** reminder time (Unix seconds), null = none */
+  remindAt: number | null;
+  /** the reminder was shown */
+  reminded: boolean;
+  /** locked with the vault password: `body` is empty here (read it with notes.readLocked) */
+  locked: boolean;
 }
 
 export interface NoteInput {
@@ -296,6 +449,34 @@ export interface NoteInput {
   tags: string[];
   pinned: boolean;
   color?: string | null;
+  /** keep (or make) it locked; needs the vault unlocked */
+  locked?: boolean;
+}
+
+/** A file hidden in the vault (decrypted from its encrypted header). */
+export interface HiddenFile {
+  id: string;
+  name: string;
+  size: number;
+  /** the original file's last change (Unix seconds) */
+  modified: number;
+  hiddenAt: number;
+  /** where it came from: Unhide puts it back there */
+  folder: string;
+}
+
+export interface HiddenResult {
+  file: HiddenFile;
+  /** the original couldn't be removed (open in another app) */
+  originalLeft: boolean;
+}
+
+/** `hidden:progress` */
+export interface HiddenProgress {
+  job: string;
+  name: string;
+  done: number;
+  total: number;
 }
 
 export interface NoteFilter {
@@ -318,6 +499,15 @@ export interface FolderFile {
 // ---------- vault ----------
 
 export type EntryKind = 'login' | 'email' | 'note' | 'card' | 'wifi' | 'other';
+
+/** A vault moved out of the way after its password was forgotten (kept as is). */
+export interface SetAside {
+  id: string;
+  /** Unix seconds. */
+  setAsideAt: number;
+  /** Its Windows Hello file came along. */
+  hello: boolean;
+}
 
 export interface VaultStatus {
   exists: boolean;
@@ -345,6 +535,8 @@ export interface EntrySummary {
   hasNotes: boolean;
   primaryAccount: boolean;
   passwordScore: number;
+  /** A 2FA (TOTP) secret is stored. */
+  hasTotp: boolean;
 }
 
 export interface Entry {
@@ -361,6 +553,8 @@ export interface Entry {
   created: number;
   updated: number;
   passwordChanged: number;
+  /** 2FA secret (otpauth:// link or base32 key), empty when none. */
+  totp: string;
 }
 
 export interface EntryInput {
@@ -375,6 +569,71 @@ export interface EntryInput {
   notes?: string | null;
   tags: string[];
   favorite: boolean;
+  /** null/undefined keeps the current 2FA secret; "" removes it */
+  totp?: string | null;
+}
+
+export interface HealthItem {
+  id: string;
+  title: string;
+  username: string;
+  url: string;
+  /** strength 0–4 (weak), days since changed (old), or times seen in breaches */
+  detail: number;
+}
+
+export interface HealthReport {
+  checked: number;
+  /** 0–100 */
+  score: number;
+  weak: HealthItem[];
+  reused: HealthItem[][];
+  old: HealthItem[];
+  missingTwoFactor: HealthItem[];
+}
+
+export interface TotpCode {
+  code: string;
+  /** seconds until the code changes */
+  remaining: number;
+}
+
+// ---------- browser autofill ----------
+
+export interface BrowserClient {
+  id: string;
+  name: string;
+  created: number;
+  lastSeen: number;
+}
+
+export interface BrowserPairRequest {
+  id: string;
+  name: string;
+  code: string;
+  created: number;
+}
+
+export interface BrowserRegistration {
+  /** 'chrome', 'edge', 'brave', 'opera', 'opera-gx', 'vivaldi', 'chromium', 'firefox' */
+  id: string;
+  browser: string;
+  kind: 'chromium' | 'firefox';
+  installed: boolean;
+  registered: boolean;
+  /** its extensions page, e.g. chrome://extensions */
+  page: string;
+}
+
+export interface BrowserStatus {
+  enabled: boolean;
+  listening: boolean;
+  host: string | null;
+  browsers: BrowserRegistration[];
+  clients: BrowserClient[];
+  pending: BrowserPairRequest | null;
+  extensionDir: string | null;
+  extensionId: string;
 }
 
 export interface GeneratorOptions {
@@ -426,6 +685,25 @@ export interface ServerStatus {
   error: string | null;
   viewers: ViewerInfo[];
   pairingOpen: boolean;
+  /** Devices that reached the server in the last 15 minutes, newest first. */
+  visitors: Visit[];
+}
+
+export interface Visit {
+  ip: string;
+  at: number;
+  userAgent: string;
+  /** False when refused because the address is not on the local network. */
+  allowed: boolean;
+}
+
+export interface LanAddress {
+  interface: string;
+  ip: string;
+  /** The Wi-Fi/Ethernet address Windows uses for its default route. */
+  primary: boolean;
+  /** Hyper-V, WSL, VirtualBox, VPN… — usually not reachable from a phone. */
+  virtualAdapter: boolean;
 }
 
 export interface PairingInfo {
@@ -435,7 +713,51 @@ export interface PairingInfo {
   urls: string[];
   /** SVG markup */
   qrSvg: string;
+  /** One QR code per entry in `urls`. */
+  qrSvgs: string[];
+  addresses: LanAddress[];
   fingerprint: string | null;
+}
+
+export type NetworkCategory = 'public' | 'private' | 'domain';
+
+export interface NetworkInfo {
+  id: string;
+  name: string;
+  category: NetworkCategory;
+}
+
+export type FirewallVerdict = 'allowed' | 'blocked' | 'noRule' | 'off' | 'unknown';
+
+export interface FirewallRuleInfo {
+  name: string;
+  allow: boolean;
+  enabled: boolean;
+  /** Bitmask: 1 domain, 2 private, 4 public. */
+  profiles: number;
+  protocol: string;
+  ports: string;
+}
+
+export interface FirewallReport {
+  supported: boolean;
+  program: string;
+  networks: NetworkInfo[];
+  activeProfiles: number;
+  verdict: FirewallVerdict;
+  rules: FirewallRuleInfo[];
+  message: string;
+}
+
+export interface RemoteDiagnostics {
+  running: boolean;
+  port: number;
+  tls: boolean;
+  addresses: LanAddress[];
+  firewall: FirewallReport;
+  visitors: Visit[];
+  /** This PC connecting to itself on each address (empty when off). */
+  selfTest: { ip: string; ok: boolean; error: string | null }[];
 }
 
 export interface Device {
@@ -448,12 +770,19 @@ export interface Device {
   revoked: boolean;
 }
 
+export type InboxKind = 'file' | 'text';
+
 export interface InboxItem {
   id: string;
   name: string;
   size: number;
   created: number;
   deviceId: string | null;
+  kind: InboxKind;
+  /** The text of a `text` item. */
+  text?: string;
+  /** Name of the folder a zip was made from. */
+  folder?: string;
 }
 
 export type PowerAction = 'shutdown' | 'restart' | 'sleep' | 'hibernate' | 'lock' | 'signOut' | 'displayOff';
@@ -531,6 +860,63 @@ export interface ScrcpyOptions {
   control: boolean;
 }
 
+export interface AirPlayOptions {
+  /** Name the iPhone shows in Screen Mirroring. */
+  name: string;
+  quality: '1080p' | '1440p' | '4k';
+  fps: number;
+  audio: boolean;
+  requirePin: boolean;
+  lowLatency: boolean;
+  fullscreen: boolean;
+  /** Software video decoding: slower, avoids graphics-driver crashes. */
+  safeMode?: boolean;
+}
+
+export interface AirPlayClient {
+  name: string;
+  model: string;
+  deviceId: string;
+}
+
+export interface InstallProgress {
+  phase: 'download' | 'verify' | 'unpack' | string;
+  done: number;
+  total: number;
+}
+
+export interface AirPlayStatus {
+  supported: boolean;
+  installed: boolean;
+  source: 'addon' | 'custom' | 'found' | null;
+  path: string | null;
+  version: string | null;
+  running: boolean;
+  /** An iPhone is mirroring right now (the video window is open). */
+  mirroring: boolean;
+  name: string;
+  pin: string | null;
+  client: AirPlayClient | null;
+  error: string | null;
+  log: string[];
+  install: InstallProgress | null;
+  downloadUrl: string;
+  /** The installed add-on predates a fix this version needs. */
+  outdated: boolean;
+  /** The Wi-Fi/Ethernet address the receiver announces to iPhones. */
+  address: string | null;
+  /** What OmniHub saw looking for the receiver the way an iPhone does. */
+  check: AirPlayCheck | null;
+}
+
+export interface AirPlayCheck {
+  ip: string;
+  /** It answered an mDNS search for AirPlay receivers on that network. */
+  announced: boolean;
+  /** The address in that answer is this one. */
+  rightAddress: boolean;
+}
+
 export interface SunshineStatus {
   installed: boolean;
   path: string | null;
@@ -542,6 +928,9 @@ export interface SunshineStatus {
 
 export type Theme = 'system' | 'dark' | 'light';
 
+/** The app's look: classic, or one of the animated themes. */
+export type Look = 'classic' | 'aurora' | 'synthwave' | 'ocean' | 'galaxy' | 'sakura' | 'ember' | 'minecraft' | 'matrix' | 'rain' | 'snowfall' | 'fireflies' | 'lava' | 'clouds' | 'bankai' | 'hollow' | 'mugetsu' | 'hakka' | 'photo' | 'soul' | 'hueco' | 'karakura' | 'senbon' | 'dangai' | 'sokyoku';
+
 export interface Settings {
   general: {
     theme: Theme;
@@ -551,6 +940,16 @@ export interface Settings {
     startMinimized: boolean;
     closeToTray: boolean;
     onboarded: boolean;
+    /** greeting name; empty = Windows account's first name */
+    displayName: string;
+    /** interface size in percent (80–150) */
+    uiScale: number;
+    /** 'classic' (theme + accent) or an animated theme */
+    look: Look;
+    /** Frosted-glass cards and sidebar over the background. */
+    glass: boolean;
+    /** animated themes move; off = a still picture */
+    animateBackdrop: boolean;
   };
   storage: {
     defaultMode: ScanMode;
@@ -558,6 +957,12 @@ export interface Settings {
     cleanup: { largeFileMin: number; largeFileAgeDays: number; installerAgeDays: number };
     showHidden: boolean;
     sizeMetric: 'size' | 'alloc';
+    /** How the Explorer tab shows a folder. */
+    explorerView: ExplorerView;
+    gridSize: 'sm' | 'md' | 'lg';
+    gridPreviews: boolean;
+    lowSpaceAlert: boolean;
+    lowSpacePercent: number;
   };
   notes: {
     claudeFolder: string | null;
@@ -571,6 +976,12 @@ export interface Settings {
     lockOnSessionLock: boolean;
     allowPhone: boolean;
     helloEnabled: boolean;
+    /** The OmniHub browser extension may fill logins. */
+    browserAutofill: boolean;
+    /** Offer to save logins typed in the browser. */
+    browserOfferSave: boolean;
+    /** Browsers to set up (ids like 'chrome', 'firefox'); empty = every installed one. */
+    browsers: string[];
   };
   remote: {
     enabled: boolean;
@@ -589,6 +1000,16 @@ export interface Settings {
     allowNotes: boolean;
     incomingDir: string | null;
     deviceName: string;
+    /** Paired phones may put text on this PC's clipboard. */
+    allowClipboard: boolean;
+    allowTasks: boolean;
+    allowServers: boolean;
+    /** “Send to → OmniHub (phone)” in Explorer. */
+    sendToMenu: boolean;
+    /** A notification when a paired phone connects after 10 minutes away. */
+    connectAlerts: boolean;
+    /** Where phone scans go (null = Documents\\OmniHub Scans). */
+    scansDir: string | null;
   };
   screenshots: {
     dir: string | null;
@@ -603,7 +1024,270 @@ export interface Settings {
     maxFps: number;
     scrcpyPath: string | null;
     sunshinePath: string | null;
+    airplay: AirPlayOptions;
+    airplayKeepOnTop: boolean;
+    airplayPip: boolean;
+    airplayAutoStart: boolean;
+    uxplayPath: string | null;
   };
+  apps: {
+    /** IDs of apps pinned as favourites */
+    favorites: string[];
+  };
+  media: {
+    allowPhone: boolean;
+    lyricsOnline: boolean;
+    eqEnabled: boolean;
+    bassDb: number;
+    trebleDb: number;
+    /** A folder of your own .lrc files, checked before looking online. */
+    lrcFolder: string | null;
+    /** Sharper covers from the iTunes catalogue (the player's are small). */
+    hiresArt: boolean;
+    /** Serve the playing song's lyrics to games on this PC (Vesper Client). */
+    gameLyrics: boolean;
+  };
+  visuals: VisualSettings;
+  /** Focus timer and time tracking. */
+  focus: { trackTime: boolean; blocked: string[] };
+  /** Developer tools. */
+  dev: { roots: string[] };
+  /** Approve on your phone: which actions wait for a paired phone's yes. */
+  approvals: ApprovalSettings;
+  updates: {
+    check: boolean;
+    autoInstall: boolean;
+  };
+  chats: ChatSettings;
+  play: PlaySettings;
+}
+
+/** Capri and your games: reactions, voice commands, instant replay. */
+export interface PlaySettings {
+  capriReacts: boolean;
+  voice: boolean;
+  voiceOnlyInGames: boolean;
+  /** what Capri calls you */
+  nickname: string;
+  /** your own names for "Capri, call me …" */
+  nicknames: string[];
+  replay: boolean;
+  /** 1–20 */
+  replayMinutes: number;
+  clipSeconds: number;
+  fps: number;
+  quality: 'standard' | 'high';
+  gameAudio: boolean;
+  monitor: number;
+  folder: string | null;
+  autoClip: boolean;
+  /** Clip eliminations in any game, read off the screen (Windows OCR). */
+  elimClips: boolean;
+  elimWords: string[];
+}
+
+export interface PlayStatus {
+  supported: boolean;
+  game: string | null;
+  since: number | null;
+  recorderInstalled: boolean;
+  installing: boolean;
+  replaying: boolean;
+  /** seconds kept so far */
+  buffered: number;
+  recording: boolean;
+  encoder: string | null;
+  replayError: string | null;
+  listening: boolean;
+  voiceError: string | null;
+  capriRunning: boolean;
+  folder: string;
+  heard: string | null;
+}
+
+export interface PlayClip {
+  path: string;
+  name: string;
+  size: number;
+  created: number;
+}
+
+export interface ChatSettings {
+  /** Paired phones may read the chats and send messages. */
+  allowPhone: boolean;
+  /** Paired phones may run Claude Code and Codex on this PC. */
+  phoneAgents: boolean;
+  /** Claude Code's permission mode unless a message picks another. */
+  claudeMode: ClaudeCodeMode;
+  /** Codex's sandbox unless a message picks another. */
+  codexSandbox: CodexSandbox;
+  /** Capri, the desktop companion who narrates Claude Code: started with OmniHub while on. */
+  capri: boolean;
+}
+
+// ---------- Aurora: music-reactive light, scene and lyrics ----------
+
+/** `aurora`: light, scene and floating lyrics; `lyrics`: the Apple Music–style view. */
+export type PlayerView = 'aurora' | 'lyrics';
+export type ColorMode = 'album' | 'duo' | 'multi' | 'single';
+
+/** How strongly each effect plays on the cover, 0–1 (0 = off). */
+export interface Effects {
+  zoom: number;
+  glitch: number;
+  split: number;
+  fisheye: number;
+  ripple: number;
+  kaleidoscope: number;
+  halftone: number;
+  pixelate: number;
+  shake: number;
+  echo: number;
+  scanlines: number;
+  duotone: number;
+  twist: number;
+  bloom: number;
+  /** The colours swinging round for a moment on hard beats. */
+  colorflash: number;
+}
+
+export type SceneStyle = 'visual' | 'fisheye' | 'fisheyeVisual' | 'minimal' | 'ambient';
+export type LyricFont = 'display' | 'condensed' | 'heavy' | 'serif' | 'impact' | 'custom';
+
+export interface VisualSettings {
+  /** Which release's defaults these settings were last brought up to (the core upgrades them). */
+  revision?: number;
+  view: PlayerView;
+  /** Everything Aurora draws (the lyrics stay). */
+  enabled: boolean;
+  /** Listen to what the PC plays so the light follows the music. */
+  audioReactive: boolean;
+  /** 0.2–3 */
+  sensitivity: number;
+  /** 0–2 */
+  bass: number;
+  /** 0–1 */
+  smoothing: number;
+  reducedMotion: boolean;
+  /** No bright pulses on beats. */
+  noFlashes: boolean;
+  /** × animation speed */
+  speed: number;
+  /** keep the screen on while the player shows Aurora and music plays */
+  keepAwake: boolean;
+  color: { mode: ColorMode; primary: string; secondary: string; colors: string[]; vividness: number };
+  glow: { enabled: boolean; animation: 'music' | 'idle' | 'none'; thickness: number; intensity: number; edge: number; highlight: number; glow: number; glowSize: number; bloom: number; bloomSize: number; radius: number };
+  lyrics: {
+    /** stack: one word (or line) at a time, huge; lines: the current line and the next ones */
+    layout: 'stack' | 'lines';
+    emphasis: 'glow' | 'box' | 'color';
+    font: LyricFont;
+    visible: boolean;
+    autoShow: boolean;
+    size: number;
+    weight: number;
+    wordHighlight: boolean;
+    /** Lyrics that only time lines: spread the words over each line by syllables (close, not exact). */
+    estimateWords: boolean;
+    timing: 'auto' | 'line';
+    place: 'auto' | 'center' | 'upper' | 'lower';
+    offsetX: number;
+    offsetY: number;
+    lines: number;
+    backing: number;
+    highlightColor: string | null;
+    glow: number;
+    transition: number;
+    /** 0–1.5: how much the lyrics move with the music (bounce, sway, pop) */
+    motion: number;
+    /** Emojis beside words they match. */
+    emoji: EmojiAmount;
+    emojiStyle: EmojiStyle;
+    /** 0–1: the sung word splits into coloured copies and jolts on hard beats. */
+    glitch: number;
+    /** A new word arrives with fading copies trailing behind it. */
+    echo: boolean;
+  };
+  scene: {
+    enabled: boolean;
+    style: SceneStyle;
+    intensity: number;
+    speed: number;
+    blur: number;
+    saturation: number;
+    opacity: number;
+    artwork: boolean;
+    waveform: boolean;
+    effects: Effects;
+    /** What fills the screen: the music video or the cover (auto), one of them, or the light show. */
+    backdrop: Backdrop;
+    /** Look the song's music video up on YouTube. */
+    musicVideos: boolean;
+    /** When YouTube will not embed a video, play its stream directly (yt-dlp, downloaded once). */
+    directVideos: boolean;
+    /** Match a video whose song starts later to the song, by ear (its soundtrack via yt-dlp). */
+    syncVideos: boolean;
+    /** Show the music app's own Canvas or video, mirrored from its window. */
+    mirrorApp: boolean;
+    /** The album's animated cover from Apple Music, when it has one. */
+    animatedCovers: boolean;
+    /** 'whole': all of the cover, its sides blending into a blurred extension; 'fill': edge to edge, cropped. */
+    coverFit: 'whole' | 'fill';
+    /** 0–1: how much the full-screen cover drifts and breathes. */
+    coverMotion: number;
+    /** 0–1: how much the cover or video is darkened behind the lyrics. */
+    dim: number;
+    /** 0–1: soft light in the song's colours from the corners. */
+    corners: number;
+    videoFit: VideoFit;
+    /** 0 (top) – 1 (bottom): the part of a cropped video that stays. */
+    videoFocus: number;
+    videoQuality: VideoQuality;
+  };
+  desktop: { enabled: boolean; lyrics: boolean; display: string; clearTaskbar: boolean; hideFullscreen: boolean; startWithApp: boolean };
+  /** The music hub: a big clock, search and up next. */
+  hub: { clock: boolean; clock24: boolean; search: boolean; upNext: boolean; source: MusicSource };
+}
+
+export interface VisualStatus {
+  state: 'off' | 'disabled' | 'starting' | 'listening' | 'unavailable';
+  /** What is listened to. */
+  source: string | null;
+  sampleRate: number;
+  error: string | null;
+}
+
+/** A monitor the desktop glow can light. */
+export interface AmbientDisplay {
+  /** Windows' device name (\\.\DISPLAY1) */
+  name: string;
+  /** "Display 1 · 2560×1440 (main)" */
+  label: string;
+  width: number;
+  height: number;
+  scale: number;
+  primary: boolean;
+}
+
+/** One analysis frame of the PC's sound (`audio:frame`, 60 a second while there is sound). */
+export interface AudioFrame {
+  /** PC time, Unix ms */
+  t: number;
+  /** 0–1 loudness (adaptive) */
+  level: number;
+  low: number;
+  mid: number;
+  high: number;
+  /** 1 on a beat, decaying */
+  beat: number;
+  flux: number;
+  /** 16 log-spaced bands, 40 Hz–16 kHz */
+  bands: number[];
+  /** sound is playing */
+  active: boolean;
+  /** beats counted since the track began */
+  beats: number;
+  bpm: number | null;
 }
 
 /** Deep partial used for settings patches (JSON merge patch). */
@@ -620,6 +1304,96 @@ export interface AppInfoDetails {
   cacheDir: string;
   screenshotDir: string;
   incomingDir: string;
+  /** First name of the signed-in user, for greetings. */
+  userName: string;
+}
+
+export interface GrowthItem {
+  path: string;
+  node: number | null;
+  before: number;
+  after: number;
+  delta: number;
+  isNew: boolean;
+}
+
+export interface GrowthReport {
+  /** when the previous scan was made; null = nothing to compare with yet */
+  since: number | null;
+  totalBefore: number;
+  totalAfter: number;
+  grew: GrowthItem[];
+  shrank: GrowthItem[];
+}
+
+export interface WindowInfo {
+  id: number;
+  title: string;
+  app: string;
+  width: number;
+  height: number;
+}
+
+export interface ShareState {
+  paused: boolean;
+  windowId: number | null;
+  /** the shared window, if it still exists */
+  window: WindowInfo | null;
+}
+
+export type StartupLocation = 'runUser' | 'runMachine' | 'runMachine32' | 'folderUser' | 'folderCommon';
+
+export interface StartupItem {
+  id: string;
+  name: string;
+  displayName: string;
+  command: string;
+  target: string | null;
+  location: StartupLocation;
+  enabled: boolean;
+  /** changing it asks for administrator approval */
+  needsAdmin: boolean;
+}
+
+export type ProcessSort = 'cpu' | 'memory' | 'gpu' | 'disk' | 'name';
+export type Priority = 'low' | 'belowNormal' | 'normal' | 'aboveNormal' | 'high';
+
+export interface ProcessGroup {
+  name: string;
+  count: number;
+  /** share of the whole CPU, 0–100 */
+  cpu: number;
+  memory: number;
+  /** busiest GPU engine, 0–100 */
+  gpu: number;
+  gpuMemory: number;
+  /** disk reads + writes, bytes/s */
+  disk: number;
+  exe: string | null;
+  pids: number[];
+  canEnd: boolean;
+  priority: Priority | null;
+}
+
+export interface GpuAdapter {
+  name: string;
+  percent: number;
+  memoryUsed: number;
+  memoryTotal: number;
+}
+
+/** The whole PC and the programs using it. */
+export interface Usage {
+  cpu: number;
+  cpuName: string;
+  cores: number;
+  memoryUsed: number;
+  memoryTotal: number;
+  gpuSupported: boolean;
+  gpus: GpuAdapter[];
+  disk: number;
+  processCount: number;
+  processes: ProcessGroup[];
 }
 
 export interface SystemStats {
@@ -627,4 +1401,3116 @@ export interface SystemStats {
   memory: { used: number; total: number };
   uptime: number;
   os: string;
+}
+
+// ---------- music ----------
+
+export interface MediaState {
+  key: string;
+  app: string;
+  appName: string;
+  title: string;
+  artist: string;
+  album: string;
+  durationMs: number;
+  /** track position at `positionAt` (PC clock, Unix ms) */
+  positionMs: number;
+  positionAt: number;
+  playing: boolean;
+  rate: number;
+  positionSource: 'player' | 'estimated';
+  canPlayPause: boolean;
+  canNext: boolean;
+  canPrevious: boolean;
+  canSeek: boolean;
+  art: string | null;
+}
+
+export interface LyricWord {
+  ms: number;
+  text: string;
+}
+
+export interface LyricLine {
+  ms: number;
+  text: string;
+  words?: LyricWord[];
+  /** Word timings estimated here, not from the lyrics (desktop only). */
+  estimated?: boolean;
+}
+
+export type Backdrop = 'auto' | 'video' | 'cover' | 'visual';
+export type EmojiAmount = 'off' | 'some' | 'more';
+/** 'plain': one colour, the lyrics' own (default); '3d': glossy Fluent 3D; 'system': Windows' emoji font. */
+export type EmojiStyle = 'plain' | '3d' | 'system' | 'textures';
+export type VideoFit = 'fill' | 'fit';
+export type VideoQuality = 'best' | '1080' | '720';
+
+/** A song's music video on YouTube (the artist's own upload). */
+export interface MusicVideo {
+  id: string;
+  title: string;
+  channel: string;
+  durationMs: number;
+  /** "video", or "visualizer": the artist's animated cover. */
+  kind: 'video' | 'visualizer';
+  uhd: boolean;
+  /** As long as the song, so it plays in step with it. */
+  synced: boolean;
+}
+
+export type VideoStatus = { status: 'found'; videos: MusicVideo[] } | { status: 'searching' | 'none' | 'off' | 'nothingPlaying' };
+
+/** The album's animated cover (Apple Music): an HLS playlist, square. */
+export type MotionStatus = { status: 'found'; url: string } | { status: 'searching' | 'none' | 'off' | 'nothingPlaying' };
+
+export type LyricsStatus =
+  | { status: 'ready'; lyrics: { lines: LyricLine[]; plain: string | null; instrumental: boolean; source: string } }
+  | { status: 'searching' | 'none' | 'off' | 'nothingPlaying' };
+
+export interface AudioInfo {
+  volume: { level: number; muted: boolean } | null;
+  eq: { status: { available: boolean; hooked: boolean; configDir: string | null }; enabled: boolean; bass: number; treble: number; maxDb: number };
+}
+
+export type MediaAction = 'play' | 'pause' | 'toggle' | 'next' | 'previous' | 'seek';
+
+export interface EqStatus {
+  /** Equalizer APO is installed */
+  available: boolean;
+  /** OmniHub's include line is in its config */
+  hooked: boolean;
+  configDir: string | null;
+}
+
+// ---------- games ----------
+
+export type GameKind = 'fortnite' | 'roblox' | 'valorant' | 'cs2' | 'apex' | 'overwatch' | 'rocketLeague' | 'gta5' | 'callOfDuty' | 'league' | 'minecraft' | 'cyberpunk' | 'custom';
+
+export type GameLaunch =
+  | { type: 'none' }
+  | { type: 'exe'; path: string; args: string }
+  | { type: 'url'; url: string }
+  | { type: 'steam'; appId: number }
+  | { type: 'epic'; app: string }
+  | { type: 'riot'; product: string }
+  | { type: 'roblox'; placeId: number | null };
+
+export type PowerPlanChoice = 'keep' | 'high' | 'ultimate';
+
+/** competitive: most FPS, also the game's own graphics · quality: nothing that changes the picture · custom: each switch as set. */
+export type BoostMode = 'competitive' | 'quality' | 'custom';
+
+export interface GameBoost {
+  mode: BoostMode;
+  powerPlan: PowerPlanChoice;
+  priority: Priority | null;
+  closeApps: string[];
+  reopenApps: boolean;
+  silenceNotifications: boolean;
+  gameMode: boolean;
+  gpuHighPerformance: boolean;
+  fullscreenOptimizationsOff: boolean;
+  wifiLowLatency: boolean;
+  networkPriority: boolean;
+  startHighPriority: boolean;
+  /** Games OmniHub knows the settings of: write the fastest in-game settings before each launch. */
+  gameSettings: boolean;
+  /** Close cloud sync, Windows extras and updaters for the session. */
+  closeJunk: boolean;
+  /** Browsers, launchers' web views and sync apps at Below normal while playing. */
+  lowerBackground: boolean;
+  /** Before the game starts, background programs hand unused memory back to Windows. */
+  freeMemory: boolean;
+  /** Windows' finest timer (0.5 ms) while playing. */
+  preciseTimer: boolean;
+  /** Windows never slows the game down to save power. */
+  fullSpeed: boolean;
+  /** Measure FPS while playing (PresentMon). */
+  fpsMeter: boolean;
+  /** Per game, admin once: the game's NVIDIA driver profile set for speed. */
+  nvidiaProfile: boolean;
+  /** Programs paused for the game, resumed after it. */
+  freezeApps: string[];
+  /** Core parking off while playing. */
+  coresAwake: boolean;
+}
+
+// ---------- the games' own settings, installed games, PC tweaks ----------
+
+export type ConfigGame = 'fortnite' | 'valorant' | 'cs2' | 'apex' | 'overwatch' | 'roblox' | 'minecraft';
+
+export interface FortniteOptions {
+  /** 0 = unlimited */
+  frameLimit: number;
+  performanceMode: boolean;
+  lowestQuality: boolean;
+  /** 0 near … 3 epic */
+  viewDistance: number;
+  resolutionScale: number;
+  showFps: boolean;
+  fullscreen: boolean;
+  /** NVIDIA Reflex Low Latency: 0 off, 1 on, 2 on + boost. */
+  reflex: number;
+  /** Rendering mode; null follows performanceMode. */
+  renderMode?: FortniteRenderMode | null;
+  /** With lowestQuality off: every quality setting at 1 medium, 2 high or 3 epic; null leaves it alone. */
+  quality?: number | null;
+  /** Display resolution; 0 leaves Fortnite's choice (fullscreen only). */
+  width?: number;
+  height?: number;
+  /** Potato graphics: Performance mode, everything lowest, near view, 3D resolution down to 10%. */
+  potato?: boolean;
+  /** GameUserSettings.ini read-only after applying, so Fortnite keeps the values. */
+  lockFile?: boolean;
+  /** Brightness percent (100 = Fortnite's default); 0 leaves it alone. */
+  brightness?: number;
+}
+
+/** Resolution advice for Fortnite from the monitor and specs. */
+export interface FortniteAdvice {
+  gpu: string;
+  vramGb: number;
+  tier: number;
+  tierLabel: string;
+  nativeWidth: number;
+  nativeHeight: number;
+  hz: number;
+  width: number;
+  height: number;
+  resolutionScale: number;
+  /** 0 = unlimited */
+  frameLimit: number;
+  lowestQuality: boolean;
+  expectedFps: number;
+  reasons: string[];
+  resolutions: [number, number][];
+}
+
+export type FortniteRenderMode = 'performance' | 'dx12' | 'dx11' | 'keep';
+
+export interface CacheClean {
+  freedBytes: number;
+  files: number;
+  /** Files in use, left alone. */
+  skipped: number;
+}
+
+export interface MinecraftOptions {
+  unlimitedFps: boolean;
+  fastGraphics: boolean;
+  minimalParticles: boolean;
+  noClouds: boolean;
+  renderDistance: number | null;
+  simulationDistance: number | null;
+}
+
+/** The switches for games without options of their own. */
+export interface ProOptions {
+  uncapped: boolean;
+  lowestQuality: boolean;
+  lowLatency: boolean;
+}
+
+export interface ConfigOptions {
+  fortnite: FortniteOptions;
+  minecraft: MinecraftOptions;
+  valorant: ProOptions;
+  cs2: ProOptions;
+  apex: ProOptions;
+  overwatch: ProOptions;
+  roblox: ProOptions;
+}
+
+export interface ConfigChange {
+  label: string;
+  key: string;
+  from: string | null;
+  to: string;
+}
+
+export interface ConfigSetting {
+  label: string;
+  value: string;
+  good: boolean;
+}
+
+export interface ConfigStatus {
+  game: ConfigGame;
+  label: string;
+  /** Several for games with one file per account. */
+  paths: string[];
+  found: boolean;
+  running: boolean;
+  settings: ConfigSetting[];
+  pending: ConfigChange[];
+  backupAt: number | null;
+  /** The settings file is read-only (the potato lock, or your own). */
+  locked?: boolean;
+  note: string | null;
+}
+
+export interface GameConfigs {
+  options: ConfigOptions;
+  games: ConfigStatus[];
+}
+
+export interface InstalledGame {
+  key: string;
+  name: string;
+  source: 'epic' | 'steam' | 'riot' | 'roblox' | 'minecraft' | 'gog' | 'ubisoft' | 'ea' | 'battlenet' | 'xbox';
+  kind: GameKind;
+  launch: GameLaunch;
+  process: string;
+  exePath: string | null;
+  installDir: string | null;
+  profileId: string | null;
+}
+
+export type TweakId = 'refreshRate' | 'memorySpeed' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'variableRefresh' | 'gpuScheduling' | 'preciseTimer' | 'networkThrottling' | 'mouseAcceleration' | 'stickyKeys' | 'memoryIntegrity';
+
+export interface PcTweak {
+  id: TweakId;
+  title: string;
+  description: string;
+  impact: 'high' | 'medium' | 'low';
+  available: boolean;
+  optimized: boolean;
+  current: string;
+  admin: boolean;
+  restart: boolean;
+  settingsLink: string | null;
+  canUndo: boolean;
+}
+
+export interface PcDisplay {
+  name: string;
+  width: number;
+  height: number;
+  hz: number;
+  maxHz: number;
+}
+
+export interface PcStatus {
+  tweaks: PcTweak[];
+  machine: { cpu: string; cores: number; threads: number; ramGb: number; gpus: string[]; displays: PcDisplay[] };
+}
+
+export type RobloxPreset = 'maxFps' | 'balanced' | 'quality' | 'custom';
+export type RobloxRenderer = 'auto' | 'd3d11' | 'vulkan' | 'openGl';
+
+export interface RobloxFlags {
+  enabled: boolean;
+  preset: RobloxPreset;
+  renderer: RobloxRenderer;
+  msaa: number | null;
+  textureQuality: number | null;
+  noGrass: boolean;
+  graySky: boolean;
+  lowDetailDistance: boolean;
+  /** Lighting worked out once (voxel lighting stops updating). */
+  pauseVoxelizer: boolean;
+  qualityLevel: number | null;
+  exclusiveFullscreen: boolean;
+  ignoreDisplayScaling: boolean;
+  custom: Record<string, string | number | boolean>;
+  /** custom flags kept but switched off */
+  customOff: string[];
+  shaders: RobloxShaders;
+}
+
+export type ShaderPreset = 'realistic' | 'vivid' | 'cinematic' | 'soft' | 'sharp' | 'custom';
+
+/** Shaders through ReShade, like RoShade or Bloxshade. */
+export interface RobloxShaders {
+  enabled: boolean;
+  preset: ShaderPreset;
+  /** 25–150 % */
+  strength: number;
+}
+
+export interface ShaderStatus {
+  /** ReShade's version once downloaded */
+  version: string | null;
+  /** Roblox folders with OmniHub's ReShade */
+  applied: number;
+  /** Roblox folders with another tool's dxgi.dll, left alone */
+  foreign: string[];
+}
+
+export interface KnownFlag {
+  name: string;
+  /** what Roblox sets it to now */
+  value: string | null;
+  /** on the allowlist: Roblox still reads it */
+  allowed: boolean;
+}
+
+export interface GameProfile {
+  id: string;
+  name: string;
+  kind: GameKind;
+  launch: GameLaunch;
+  process: string;
+  exePath: string | null;
+  boost: GameBoost;
+  pingHost: string | null;
+  roblox: RobloxFlags;
+  lastPlayed: number | null;
+}
+
+export type GamePhase = 'starting' | 'waiting' | 'playing' | 'boosted' | 'restoring' | 'ended';
+
+export interface GameStep {
+  id: string;
+  label: string;
+  status: 'done' | 'skipped' | 'failed' | 'waiting';
+  detail: string;
+}
+
+export interface GameSession {
+  profileId: string;
+  name: string;
+  mode: BoostMode;
+  phase: GamePhase;
+  startedAt: number;
+  endedAt: number | null;
+  launched: boolean;
+  steps: GameStep[];
+  restored: GameStep[];
+  message: string | null;
+  /** Frames per second over the session, when the FPS meter ran. */
+  fps: FpsSummary | null;
+  /** How hot the PC ran (when temperatures can be read). */
+  thermal: ThermalReport | null;
+}
+
+export interface ThermalReport {
+  maxCpu: number | null;
+  maxGpu: number | null;
+  avgCpu: number | null;
+  avgGpu: number | null;
+  /** Share of the game (0–1) at or over the hot point. */
+  hotCpu: number;
+  hotGpu: number;
+  verdict: string;
+}
+
+// ---------- FPS meter, lag under load ----------
+
+export interface FpsLive {
+  fps: number;
+  /** 1% low over the last ten seconds. */
+  low1: number;
+  frameMs: number;
+  worstMs: number;
+  /** Frame handed over → on screen, ms (PresentMon's display latency). */
+  latencyMs: number | null;
+  /** "Hardware: Independent Flip" is the direct path; "Composed…" goes through the desktop. */
+  presentMode: string;
+}
+
+export interface FpsSummary {
+  frames: number;
+  seconds: number;
+  avg: number;
+  low1: number;
+  low01: number;
+  /** Frames over 2.5× the average (and 8 ms). */
+  hitches: number;
+  latencyMs: number | null;
+}
+
+export interface FpsStatus {
+  installed: boolean;
+  allowed: boolean;
+  signOutNeeded: boolean;
+  supported: boolean;
+}
+
+export interface FpsRecord {
+  profileId: string;
+  name: string;
+  mode: BoostMode;
+  at: number;
+  summary: FpsSummary;
+  /** The game's video settings then ("Performance · 240 FPS cap"). */
+  label?: string | null;
+}
+
+export interface FpsOverview {
+  status: FpsStatus;
+  live: FpsLive | null;
+  history: FpsRecord[];
+}
+
+export interface LoadTest {
+  target: string;
+  idleMs: number | null;
+  downloadMs: number | null;
+  uploadMs: number | null;
+  downloadMbps: number | null;
+  uploadMbps: number | null;
+  extraMs: number | null;
+  grade: string | null;
+  advice: string[];
+  error: string | null;
+}
+
+export interface GameState {
+  networkPriority: boolean;
+  startHighPriority: boolean;
+  /** null without an NVIDIA driver. */
+  nvidiaProfile: boolean | null;
+  onWifi: boolean | null;
+  running: boolean;
+  /** The game's NVIDIA driver frame cap, if set. */
+  fpsCap: number | null;
+  /** The cap that suits the fastest monitor; null without an NVIDIA driver. */
+  smartCap: number | null;
+}
+
+export interface PingTarget {
+  id: string;
+  label: string;
+  host: string;
+}
+
+export interface PingResult {
+  id: string;
+  label: string;
+  host: string;
+  address: string | null;
+  sent: number;
+  received: number;
+  avgMs: number | null;
+  minMs: number | null;
+  maxMs: number | null;
+  jitterMs: number | null;
+  loss: number;
+  samples: (number | null)[];
+  error: string | null;
+}
+
+export interface RobloxInstall {
+  found: boolean;
+  player: string | null;
+  version: string | null;
+  versionDirs: string[];
+  bootstrapper: string | null;
+  running: boolean;
+}
+
+// ---------- updates ----------
+
+export interface ReleaseAsset {
+  name: string;
+  url: string;
+  size: number;
+}
+
+export interface Release {
+  version: string;
+  notes: string;
+  pageUrl: string;
+  publishedAt: string | null;
+  setup: ReleaseAsset | null;
+  msi: ReleaseAsset | null;
+  sumsUrl: string | null;
+}
+
+export type UpdateState =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'upToDate'; checkedAt: number }
+  | { state: 'available'; release: Release }
+  | { state: 'downloading'; version: string; done: number; total: number }
+  | { state: 'installing'; version: string }
+  | { state: 'failed'; message: string };
+
+export interface UpdateInfo {
+  current: string;
+  state: UpdateState;
+  /** The version that ran before, on the first start after an update. */
+  updatedFrom?: string | null;
+  /** A version whose update didn't finish last time. */
+  failedVersion?: string | null;
+}
+
+/** yt-dlp and Deno, for videos YouTube will not embed. */
+export interface StreamToolStatus {
+  installed: boolean;
+  installing: boolean;
+}
+
+/** The user's own lyric font and emoji textures, kept on this PC. */
+export interface AuroraLook {
+  /** The font's name (its file name), if one was chosen. */
+  font: string | null;
+  /** The emoji pack's picture names (file names without the extension). */
+  textures: string[];
+  /** The emoji pack, when it is a font: its name. */
+  emojiFont: string | null;
+}
+
+/** What an emoji pack turned out to be. */
+/** The music app's own moving picture, mirrored from its window (see media/mirror.rs). */
+export interface MirrorStatus {
+  state: 'off' | 'looking' | 'mirroring' | 'hidden' | 'none' | 'unavailable';
+  kind: 'canvas' | 'video' | null;
+  app: string | null;
+  width: number;
+  height: number;
+}
+
+/** How far a music video is from being matched to the song (see media/align.rs). */
+export type VideoSync = { state: 'off' } | { state: 'matching'; note: string } | { state: 'matched'; offsetMs: number; score: number } | { state: 'unsure'; note: string };
+
+export type EmojiPack = { kind: 'pictures'; count: number } | { kind: 'font'; name: string };
+
+// ---------- My PC (lighting, fans, screens, specs) ----------
+
+export type LightEffect = 'off' | 'static' | 'breathing' | 'spectrum' | 'wave' | 'gradient' | 'music' | 'temperature' | 'govee';
+
+export interface LightProfile {
+  id: string;
+  name: string;
+  effect: LightEffect;
+  /** "#rrggbb". */
+  colors: string[];
+  /** 0.2 (slow) to 3 (fast). */
+  speed: number;
+  /** 0–100. */
+  brightness: number;
+}
+
+export type FanProfile = 'lowest' | 'silent' | 'auto' | 'fast';
+export type FanRole = 'case' | 'gpu' | 'pump';
+export type CoolerKind = 'unknown' | 'air' | 'aio';
+export type BoardSize = 'eAtx' | 'atx' | 'microAtx' | 'miniItx';
+export type Chassis = 'unknown' | 'desktop' | 'tower' | 'miniTower' | 'smallFormFactor' | 'allInOne' | 'laptop';
+export type DeviceRole = 'other' | 'cooler' | 'hub' | 'screen';
+export type LitKind = 'motherboard' | 'memory' | 'gpu' | 'cooler' | 'ledStrip' | 'keyboard' | 'mouse' | 'mousemat' | 'headset' | 'headsetStand' | 'gamepad' | 'light' | 'speaker' | 'virtual' | 'storage' | 'case' | 'microphone' | 'accessory' | 'keypad' | 'other';
+export type LinkState = 'off' | 'on' | 'missing' | 'error';
+
+export interface RamStick {
+  slot: string;
+  sizeGb: number;
+  speed: number;
+  /** The stick's own (standard) speed; EXPO/XMP kits run at it until turned on. */
+  rated: number;
+  maker: string;
+  part: string;
+  kind: string;
+}
+
+export interface KnownDevice {
+  vendorId: number;
+  productId: number;
+  name: string;
+  role: DeviceRole;
+  radiatorMm: number | null;
+  lcd: boolean;
+}
+
+export interface Specs {
+  cpu: string;
+  cores: number;
+  threads: number;
+  gpus: string[];
+  ram: RamStick[];
+  ramGb: number;
+  boardMaker: string;
+  board: string;
+  boardSize: BoardSize;
+  system: string;
+  chassis: Chassis;
+  cooler: CoolerKind;
+  coolerName: string;
+  radiatorMm: number | null;
+  devices: KnownDevice[];
+  disks: { name: string; nvme: boolean }[];
+  displays: PcDisplay[];
+}
+
+export type ScreenShow = { kind: 'off' } | { kind: 'media'; id: string } | { kind: 'stats' } | { kind: 'nowPlaying' } | { kind: 'liquid' };
+
+export interface RigSettings {
+  lighting: { enabled: boolean; profile: string; custom: LightProfile[]; port: number; peripherals: boolean; skip: string[] };
+  fans: { profile: FanProfile; lhmUrl: string; lhmUser: string; lhmSecret: string; skip: string[]; coolers: boolean; liquidctlPath: string | null };
+  screens: { monitor: string; monitorShow: ScreenShow; fill: boolean; lcd: string; lcdShow: ScreenShow; lcdBrightness: number };
+  model: { caseColor: 'black' | 'white'; glass: boolean; cooler: CoolerKind | null; radiatorMm: number | null; frontFans: number; topFans: number; rearFans: number; bottomFans: number; ramRgb: boolean; verticalGpu: boolean; caseScreen: boolean };
+}
+
+export interface LitDevice {
+  key: string;
+  name: string;
+  kind: LitKind;
+  leds: number;
+  zones: string[];
+  on: boolean;
+}
+
+export interface FanControl {
+  id: string;
+  name: string;
+  hardware: string;
+  role: FanRole | null;
+  percent: number | null;
+  skipped: boolean;
+}
+
+export interface CoolerReading {
+  key: string;
+  value: number;
+  unit: string;
+}
+
+export interface CoolerDevice {
+  description: string;
+  vendorId: number;
+  productId: number;
+  address: string;
+  driver: string;
+  lcd: boolean;
+  status: CoolerReading[];
+}
+
+export interface RigStatus {
+  lighting: LinkState;
+  lightingMessage: string | null;
+  /** other lighting programs running (they fight over the same lights) */
+  lightingRivals: string[];
+  devices: LitDevice[];
+  openrgbInstalled: string | null;
+  fans: LinkState;
+  fansMessage: string | null;
+  controls: FanControl[];
+  /** [name, rpm]. */
+  rpm: [string, number][];
+  cpuTemp: number | null;
+  gpuTemp: number | null;
+  coolers: LinkState;
+  coolersMessage: string | null;
+  coolerDevices: CoolerDevice[];
+  liquidTemp: number | null;
+  lcdMessage: string | null;
+}
+
+export interface RigMedia {
+  id: string;
+  name: string;
+  kind: 'picture' | 'gif' | 'video';
+  mime: string;
+  bytes: number;
+}
+
+export interface RigDisplay {
+  name: string;
+  label: string;
+  width: number;
+  height: number;
+  scale: number;
+  primary: boolean;
+}
+
+// ---------- Govee lights ----------
+
+export type GoveeMode = 'color' | 'white' | 'effect' | 'screen' | 'music' | 'scene' | 'deviceMusic';
+export type GoveeZone = 'whole' | 'left' | 'right' | 'top' | 'bottom' | 'around' | 'across';
+export type MusicStyle = 'pulse' | 'spectrum' | 'flow';
+
+/** What lights show. */
+export interface GoveeLook {
+  mode: GoveeMode;
+  /** color: "#rrggbb" */
+  color: string;
+  /** white: 2000–9000 K */
+  kelvin: number;
+  effect: LightEffect;
+  colors: string[];
+  speed: number;
+  /** screen: the monitor's name ('' = the main one) */
+  monitor: string;
+  smoothness: number;
+  saturation: number;
+  skipDark: boolean;
+  /** screen: 0 = as bright as on screen, 100 = dim colours lifted to full */
+  boost: number;
+  style: MusicStyle;
+  albumColors: boolean;
+  sensitivity: number;
+  /** scene: each light's own scene of this name */
+  scene: string;
+  /** deviceMusic: the light's own music mode by name */
+  deviceMusic: string;
+}
+
+export interface GoveeLightSettings {
+  id: string;
+  name: string;
+  control: boolean;
+  follow: boolean;
+  look: GoveeLook;
+  on: boolean;
+  brightness: number;
+  /** 0 = what Govee says (or 10) */
+  segments: number;
+  /** auto: per segment when Govee's account (or the model) says the light streams them, else one colour */
+  stream: 'auto' | 'segments' | 'segmentsLite' | 'single';
+  zone: GoveeZone;
+  reverse: boolean;
+  gradient: boolean;
+}
+
+export interface GoveePreset {
+  id: string;
+  name: string;
+  look: GoveeLook;
+  brightness: number | null;
+}
+
+export type TimerAction = 'on' | 'off' | 'preset' | 'brightness';
+
+export interface GoveeTimer {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** "07:30" */
+  at: string;
+  /** 1 = Monday … 7 = Sunday; empty = every day */
+  days: number[];
+  action: TimerAction;
+  preset: string;
+  brightness: number;
+  /** device ids; empty = all */
+  lights: string[];
+  /** minutes to fade in or out */
+  fade: number;
+}
+
+export interface GoveeSettings {
+  enabled: boolean;
+  on: boolean;
+  brightness: number;
+  look: GoveeLook;
+  lights: GoveeLightSettings[];
+  presets: GoveePreset[];
+  preset: string;
+  timers: GoveeTimer[];
+  /** always empty in the window */
+  apiSecret: string;
+  manual: string[];
+}
+
+export interface GoveeChoice {
+  name: string;
+  value: unknown;
+}
+
+export interface GoveeExtra {
+  kind: 'toggle' | 'range' | 'choice';
+  type: string;
+  instance: string;
+  label: string;
+  min: number | null;
+  max: number | null;
+  unit: string | null;
+  choices: GoveeChoice[];
+  /** volume, speaker, white noise */
+  sound: boolean;
+}
+
+export interface GoveeLight {
+  id: string;
+  sku: string;
+  name: string;
+  ip: string | null;
+  lan: boolean;
+  cloud: boolean;
+  on: boolean | null;
+  brightness: number | null;
+  color: string | null;
+  kelvin: number | null;
+  segments: number | null;
+  kelvinRange: [number, number] | null;
+  scenes: GoveeChoice[];
+  diyScenes: GoveeChoice[];
+  snapshots: GoveeChoice[];
+  musicModes: GoveeChoice[];
+  extras: GoveeExtra[];
+  values: Record<string, unknown>;
+  streaming: boolean;
+  /** a colour per segment (else one colour) */
+  perSegment: boolean;
+  message: string | null;
+}
+
+export interface GoveeStatus {
+  lan: LinkState;
+  lanMessage: string | null;
+  cloud: LinkState;
+  cloudMessage: string | null;
+  hasKey: boolean;
+  lights: GoveeLight[];
+  screenMessage: string | null;
+  musicMessage: string | null;
+  palette: string[];
+  sleepUntil: number | null;
+}
+
+// ---------- Mods (0.10.0) ----------
+
+export type ModEngine = 'unityMono' | 'unityIl2cpp' | 'unreal' | 'love' | 'rage' | 'source' | 'source2' | 'godot' | 'gameMaker' | 'renPy' | 'rpgMaker' | 'creation' | 'unknown';
+export type LoaderKind = 'bepInEx' | 'bepInExIl2cpp' | 'melonLoader' | 'lovely' | 'scriptHookV' | 'scriptHookVDotNet' | 'ue4ss';
+export type ModMethod = 'bepInEx' | 'bepInExIl2cpp' | 'melon' | 'melonLegacy' | 'lovely' | 'gta' | 'unreal' | 'files' | 'none';
+export type MakerKind = 'steamodded' | 'lovely' | 'shvdnScript' | 'ue4ssLua' | 'bepInExPlugin' | 'melonMod' | 'files' | 'datapack' | 'paperPlugin';
+export type ModRoot = 'game' | 'data';
+export type ModSort = 'downloads' | 'rating' | 'updated' | 'name';
+
+export interface ModNote {
+  tone: 'info' | 'warn' | 'bad';
+  text: string;
+  link: string | null;
+}
+
+export interface ModLoaderInfo {
+  kind: LoaderKind;
+  label: string;
+  installed: boolean;
+  managed: boolean;
+  auto: boolean;
+  link: string | null;
+}
+
+export interface MakerInfo {
+  available: boolean;
+  kind: MakerKind | null;
+  label: string;
+  why: string | null;
+}
+
+export interface ModGame {
+  key: string;
+  name: string;
+  source: 'steam' | 'epic' | 'folder';
+  appId: number | null;
+  dir: string;
+  exe: string | null;
+  engine: ModEngine;
+  engineLabel: string;
+  antiCheat: string[];
+  onlineOnly: boolean;
+  method: ModMethod;
+  methodLabel: string;
+  loaders: ModLoaderInfo[];
+  thunderstore: string | null;
+  tsLoader: string | null;
+  tsInstalls: boolean;
+  dataDir: string | null;
+  mods: number;
+  enabledMods: number;
+  image: string | null;
+  notes: ModNote[];
+  maker: MakerInfo;
+}
+
+export type ModSource = { type: 'thunderstore'; fullName: string; url: string } | { type: 'file'; name: string } | { type: 'claude'; project: string } | { type: 'github'; repo: string };
+
+export interface ModDeployed {
+  root: ModRoot;
+  path: string;
+  size: number;
+  replaced: boolean;
+}
+
+export interface InstalledMod {
+  id: string;
+  game: string;
+  name: string;
+  version: string;
+  author: string;
+  description: string;
+  icon: string;
+  source: ModSource;
+  enabled: boolean;
+  loader: LoaderKind | null;
+  dependency: boolean;
+  installedAt: number;
+  gameDir: string;
+  dataDir: string | null;
+  files: ModDeployed[];
+  created: [ModRoot, string][];
+  moved: [ModRoot, string][];
+  update: string | null;
+}
+
+export interface TsPackage {
+  fullName: string;
+  name: string;
+  owner: string;
+  description: string;
+  icon: string;
+  version: string;
+  downloadUrl: string;
+  dependencies: string[];
+  downloads: number;
+  rating: number;
+  categories: string[];
+  updated: string;
+  deprecated: boolean;
+  nsfw: boolean;
+  pinned: boolean;
+  website: string;
+  size: number;
+  url: string;
+}
+
+export interface BrowsePackage extends TsPackage {
+  installed: string | null;
+  isLoader: boolean;
+  managerLink: string;
+}
+
+export interface ModBrowse {
+  packages: BrowsePackage[];
+  total: number;
+  loading: boolean;
+  progress: [number, number] | null;
+  error: string | null;
+  categories: string[];
+}
+
+export interface WorkshopItem {
+  id: string;
+  title: string;
+  image: string;
+  size: number;
+  updated: number;
+  url: string;
+}
+
+export interface ClaudeSettings {
+  apiSecret: string;
+  model: string;
+  effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  web: boolean;
+  hasKey: boolean;
+}
+
+export interface ClaudeUsage {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  webSearches: number;
+}
+
+export type MakerStatus = 'idle' | 'working' | 'waiting' | 'error';
+
+export interface MakerProject {
+  id: string;
+  game: string;
+  gameName: string;
+  name: string;
+  kind: MakerKind;
+  created: number;
+  updated: number;
+  status: MakerStatus;
+  ready: boolean;
+  version: number;
+  summary: string;
+  howToUse: string;
+  installed: string | null;
+  installedVersion: number;
+  usage: ClaudeUsage;
+  cost: number;
+  model: string;
+  web: boolean;
+  approval: { id: string; what: string } | null;
+  error: string | null;
+}
+
+export interface MakerItem {
+  kind: 'user' | 'text' | 'note' | 'tool' | 'web' | 'notice';
+  text: string;
+  detail?: string;
+  tone?: 'info' | 'warn' | 'bad' | 'good';
+  at: number;
+}
+
+export interface MakerView {
+  project: MakerProject;
+  items: MakerItem[];
+  files: { path: string; size: number }[];
+}
+
+export interface MakerDelta {
+  project: string;
+  kind: 'text' | 'note' | 'tool' | 'web' | 'fallback';
+  text: string;
+}
+
+export type McLoader = 'fabric' | 'quilt' | 'forge' | 'neoforge';
+
+export interface McPackFile {
+  path: string;
+  sha1: string;
+  sha512: string;
+  size: number;
+  urls: string[];
+  client: boolean;
+  local: string | null;
+}
+
+export interface McSource {
+  id: string;
+  name: string;
+  kind: { type: 'modrinth'; project: string; version: string } | { type: 'file'; path: string } | { type: 'folder'; path: string } | { type: 'launcher'; launcher: string; path: string };
+  icon: string | null;
+  mc: string;
+  loader: string;
+  loaderVersion: string;
+  files: McPackFile[];
+  overrides: number;
+}
+
+export type McLauncher = 'prism' | 'curseforge' | 'modrinth' | 'minecraft';
+
+/** A mod in an installed modpack, as its jar describes itself. */
+export interface McModInfo {
+  file: string;
+  id: string;
+  name: string;
+  version: string;
+  /** client: only runs in the game itself; server; or '' (both, or it doesn't say). */
+  side: '' | 'client' | 'server';
+  disabled: boolean;
+  size: number;
+}
+
+/** A single-player world in an installed modpack. */
+export interface McWorld {
+  folder: string;
+  name: string;
+  version: string;
+  lastPlayed: number | null;
+  gameMode: string;
+  hardcore: boolean;
+  difficulty: string;
+  cheats: boolean;
+  size: number;
+  /** It keeps the single player's things, which can become yours on a server. */
+  hasPlayer: boolean;
+  hasIcon: boolean;
+}
+
+export interface McLauncherDetails {
+  mods: McModInfo[];
+  worlds: McWorld[];
+  size: number;
+}
+
+export type McPackFormat = 'mrpack' | 'curseforge';
+
+/** A server put in a shared pack's server list. */
+export interface McServerEntry {
+  name: string;
+  address: string;
+}
+
+export interface McShared {
+  mods: number;
+  fromModrinth: number;
+  included: number;
+  bytes: number;
+}
+
+/** A modpack Prism Launcher (or PolyMC/MultiMC), CurseForge or the Modrinth App installed. */
+export interface McLauncherPack {
+  id: string;
+  launcher: McLauncher;
+  /** "Prism Launcher", "PolyMC", "MultiMC", "CurseForge", "Modrinth App". */
+  launcherName: string;
+  name: string;
+  path: string;
+  /** Where its mods/ and config/ are. */
+  gameDir: string;
+  mc: string;
+  /** Empty for plain Minecraft. */
+  loader: string;
+  loaderVersion: string;
+  mods: number;
+  /** Turned off in the launcher. */
+  disabled: number;
+  /** The modpack it was installed from, with its version. */
+  pack: string | null;
+  /** Unix seconds. */
+  lastPlayed: number | null;
+  hasIcon: boolean;
+}
+
+export interface McLauncherPacks {
+  packs: McLauncherPack[];
+  /** Folders the user added to look in. */
+  places: string[];
+}
+
+export type McEntryStatus = 'kept' | 'updated' | 'dependency' | 'asIs' | 'missing' | 'conflict';
+
+export interface McEntry {
+  project: string | null;
+  title: string;
+  icon: string | null;
+  folder: string;
+  version: string;
+  file: McPackFile | null;
+  from: string[];
+  status: McEntryStatus;
+  note: string | null;
+}
+
+export interface McMix {
+  id: string;
+  name: string;
+  mc: string;
+  loader: string;
+  loaderVersion: string;
+  sources: string[];
+  entries: McEntry[];
+  clashes: string[];
+  problems: string[];
+  installable: boolean;
+  /** The packs' ids, in the same order as `sources`. */
+  sourceIds: string[];
+  /** How its cover was made: blended here, or painted by Pollinations. */
+  /** blend: made here; ai: painted by Pollinations; shared: the picture a friend's pack came with. */
+  cover: 'blend' | 'ai' | 'shared' | null;
+}
+
+/** The user's own Pollinations account, for painted mix covers. */
+export interface PollStatus {
+  connected: boolean;
+  user: string | null;
+  via: 'signIn' | 'key' | null;
+  connectedAt: number | null;
+  /** A sign-in is waiting to be approved on Pollinations' site. */
+  waiting: boolean;
+}
+
+export interface PollSignIn {
+  userCode: string;
+  /** Pollinations' approval page with the code filled in. */
+  url: string;
+  expiresIn: number;
+  interval: number;
+}
+
+export interface McPackHit {
+  project: string;
+  slug: string;
+  title: string;
+  description: string;
+  icon: string | null;
+  downloads: number;
+  versions: string[];
+  loaders: string[];
+}
+
+export interface McPackVersion {
+  id: string;
+  name: string;
+  number: string;
+  mc: string[];
+  loaders: string[];
+  date: string;
+}
+
+export interface McInstalled {
+  name: string;
+  profile: string;
+  dir: string;
+  versionId: string;
+  mc: string;
+  loader: string;
+  mods: number;
+  at: number;
+}
+
+export interface McStatus {
+  found: boolean;
+  dir: string | null;
+  sources: McSource[];
+  installed: McInstalled[];
+}
+
+export interface ModProgress {
+  game: string;
+  text: string;
+  done: number;
+  total: number;
+}
+
+// ---------- Chats ----------
+
+/** OmniHub's own chats, Claude Code's and Codex's conversations on this PC. */
+export type ChatSource = 'omni' | 'claudeCode' | 'codex';
+export type ChatRole = 'user' | 'assistant' | 'tools' | 'notice';
+export type ClaudeCodeMode = 'plan' | 'default' | 'acceptEdits' | 'auto';
+export type CodexSandbox = 'read-only' | 'workspace-write';
+export type NewChatKind = 'claude' | 'openai' | 'local' | 'claudeCode' | 'codex';
+
+export interface ChatMessage {
+  role: ChatRole;
+  text: string;
+  /** Unix seconds */
+  at: number;
+  tools?: string[];
+  tone?: 'info' | 'warn' | 'bad';
+}
+
+export interface ChatSummary {
+  source: ChatSource;
+  id: string;
+  title: string;
+  preview: string;
+  updated: number;
+  /** The folder a Claude Code or Codex conversation works in. */
+  folder: string | null;
+  model: string | null;
+  /** OmniHub's own chats: claude or openai. */
+  provider: 'claude' | 'openai' | 'ollama' | null;
+  branch: string | null;
+  running: boolean;
+}
+
+export interface ChatLive {
+  prompt: string;
+  text: string;
+  tools: string[];
+  note: string;
+  started: number;
+}
+
+export interface ChatView {
+  summary: ChatSummary;
+  messages: ChatMessage[];
+  /** Older messages weren't included. */
+  earlier: boolean;
+  live: ChatLive | null;
+  /** Changed in the last two minutes, not through OmniHub: probably open on the PC. */
+  busyElsewhere: boolean;
+}
+
+export interface ChatDelta {
+  source: ChatSource;
+  id: string;
+  kind: 'text' | 'tool' | 'note' | 'notice' | 'done' | 'error';
+  text: string;
+}
+
+export interface ChatFolder {
+  path: string;
+  name: string;
+  last: number;
+  claudeCode: boolean;
+  codex: boolean;
+}
+
+export interface ChatTool {
+  installed: boolean;
+  path: string | null;
+  version: string | null;
+  hasChats: boolean;
+}
+
+export interface ChatTools {
+  claudeCode: ChatTool;
+  codex: ChatTool;
+  claudeKey: boolean;
+  openaiKey: boolean;
+}
+
+export interface OpenAiSettings {
+  model: string;
+  effort: 'default' | 'low' | 'medium' | 'high';
+  web: boolean;
+  hasKey: boolean;
+}
+
+export interface UsageTokens {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  /** US dollars (Claude Code: what the same tokens would cost on the API). */
+  cost: number;
+}
+
+export interface UsageDay extends UsageTokens {
+  date: string;
+}
+
+export interface UsagePeriod {
+  today: UsageTokens;
+  week: UsageTokens;
+  month: UsageTokens;
+  days: UsageDay[];
+}
+
+export interface UsageLimit {
+  name: string;
+  usedPercent: number | null;
+  reached: boolean;
+  resetsAt: number | null;
+}
+
+export interface AgentUsage {
+  found: boolean;
+  period: UsagePeriod;
+  window: { start: number; end: number; tokens: UsageTokens } | null;
+  limits: UsageLimit[];
+  limitsAt: number | null;
+  plan: string | null;
+}
+
+export interface UsageReport {
+  omni: { claude: UsagePeriod; openai: UsagePeriod; maker: UsageTokens };
+  claudeCode: AgentUsage;
+  codex: AgentUsage;
+}
+
+// ---------- Minecraft servers ----------
+
+export type SrvFlavor = 'vanilla' | 'paper' | 'fabric' | 'quilt' | 'forge' | 'neoForge';
+export type SrvState = 'stopped' | 'installing' | 'starting' | 'running' | 'stopping' | 'crashed';
+export type SrvKind = 'mod' | 'plugin' | 'datapack';
+export type SrvGamemode = 'survival' | 'creative' | 'adventure' | 'spectator';
+export type SrvDifficulty = 'peaceful' | 'easy' | 'normal' | 'hard';
+
+export interface SrvServer {
+  id: string;
+  name: string;
+  flavor: SrvFlavor;
+  mc: string;
+  /** Paper build, or the Fabric, Quilt, Forge or NeoForge version. */
+  loader: string;
+  dir: string;
+  launch: { type: 'jar'; jar: string } | { type: 'args'; args: string } | null;
+  javaMajor: number;
+  javaPath: string | null;
+  flags: string[];
+  memoryMb: number;
+  autoStart: boolean;
+  autoRestart: boolean;
+  keepAwake: boolean;
+  backupHours: number;
+  backupKeep: number;
+  lastBackup: number;
+  upnp: boolean;
+  from: string | null;
+  created: number;
+  eulaAt: number | null;
+  owned: boolean;
+}
+
+export interface SrvOnline {
+  name: string;
+  uuid: string | null;
+  since: number;
+  pos: [number, number, number] | null;
+  dimension: string | null;
+}
+
+export interface SrvView extends SrvServer {
+  state: SrvState;
+  since: number;
+  online: SrvOnline[];
+  maxPlayers: number;
+  port: number;
+  motd: string;
+  whitelist: boolean;
+  onlineMode: boolean;
+  problem: string | null;
+  work: { text: string; done: number; total: number } | null;
+  memoryUsedMb: number;
+  cpu: number;
+  restartNeeded: boolean;
+  /** server-icon.png as a data: address. */
+  icon: string | null;
+  /** This PC's address on the home network, with the port. */
+  lan: string | null;
+}
+
+export type SrvFrom = { type: 'modrinth'; project: string; version: string } | { type: 'mix'; id: string } | { type: 'file'; path: string } | { type: 'launcher'; id: string };
+
+export interface SrvNew {
+  name: string;
+  flavor: SrvFlavor;
+  mc: string;
+  loader?: string;
+  memoryMb?: number;
+  port?: number;
+  eula: boolean;
+  onlineMode: boolean;
+  maxPlayers?: number;
+  motd?: string;
+  whitelist: boolean;
+  seed?: string;
+  gamemode?: SrvGamemode;
+  difficulty?: SrvDifficulty;
+  from?: SrvFrom;
+  /** A single-player world to start from, in an installed modpack. */
+  world?: { pack: string; folder: string; owner?: string };
+  start: boolean;
+}
+
+export interface SrvPatch {
+  name?: string;
+  memoryMb?: number;
+  /** "" for OmniHub's own Java. */
+  javaPath?: string;
+  flags?: string[];
+  autoStart?: boolean;
+  autoRestart?: boolean;
+  keepAwake?: boolean;
+  backupHours?: number;
+  backupKeep?: number;
+  upnp?: boolean;
+  eula?: boolean;
+}
+
+export interface SrvLine {
+  n: number;
+  at: number;
+  text: string;
+  level: 'info' | 'warn' | 'error' | 'chat' | 'cmd';
+}
+
+export type SrvAction =
+  | { type: 'give'; item: string; count: number }
+  | { type: 'clear'; item: string | null; count: number | null }
+  | { type: 'clearSlot'; slot: number }
+  | { type: 'teleport'; x: number; y: number; z: number; dimension: string | null }
+  | { type: 'teleportTo'; player: string }
+  | { type: 'spawn' }
+  | { type: 'gamemode'; mode: SrvGamemode }
+  | { type: 'heal' }
+  | { type: 'feed' }
+  | { type: 'message'; text: string }
+  | { type: 'kick'; reason: string | null }
+  | { type: 'ban'; reason: string | null }
+  | { type: 'pardon' }
+  | { type: 'op' }
+  | { type: 'deop' }
+  | { type: 'whitelist'; on: boolean }
+  /** An operator's name may join from this place (servers that don't check accounts). */
+  | { type: 'allow'; place: string }
+  | { type: 'refuse'; place: string };
+
+export interface SrvKnown {
+  name: string;
+  uuid: string;
+  online: boolean;
+  op: boolean;
+  whitelisted: boolean;
+  banned: boolean;
+  banReason: string | null;
+}
+
+/** An operator's name that joined from a new place and was kept out. */
+export interface SrvWaiting {
+  name: string;
+  place: string;
+  at: number;
+}
+
+export interface SrvPlayers {
+  online: SrvOnline[];
+  known: SrvKnown[];
+  whitelistOn: boolean;
+  enforce: boolean;
+  maxPlayers: number;
+  /** false: players without a paid account can join too (operators guarded). */
+  onlineMode: boolean;
+  waiting: SrvWaiting[];
+}
+
+export interface SrvItem {
+  /** 0–8 hotbar, 9–35 inventory, 100–103 armour (feet to head), -106 off hand. */
+  slot: number;
+  id: string;
+  label: string;
+  count: number;
+  custom: string | null;
+  enchanted: boolean;
+}
+
+export interface SrvPlayer {
+  name: string;
+  uuid: string | null;
+  online: boolean;
+  /** Read now from the server, or from the player's saved file. */
+  live: boolean;
+  pos: [number, number, number] | null;
+  dimension: string | null;
+  health: number | null;
+  food: number | null;
+  xpLevel: number | null;
+  gamemode: SrvGamemode | null;
+  selected: number | null;
+  items: SrvItem[];
+  ender: SrvItem[];
+}
+
+export interface SrvMap {
+  regions: [number, number][];
+  spawn: [number, number, number] | null;
+  players: SrvOnline[];
+  supported: boolean;
+}
+
+export interface SrvContent {
+  file: string;
+  kind: SrvKind;
+  title: string;
+  version: string;
+  icon: string | null;
+  project: string | null;
+  source: 'modrinth' | 'pack' | 'mix' | 'claude' | 'file';
+  from: string | null;
+  dependency: boolean;
+  enabled: boolean;
+  size: number;
+  sha1: string;
+}
+
+export interface SrvHit {
+  project: string;
+  slug: string;
+  title: string;
+  description: string;
+  author: string;
+  icon: string | null;
+  downloads: number;
+  categories: string[];
+  serverSide: string;
+  clientSide: string;
+  installed: boolean;
+}
+
+export interface SrvBackup {
+  name: string;
+  at: number;
+  size: number;
+  auto: boolean;
+}
+
+export interface SrvNet {
+  port: number;
+  lan: string[];
+  publicIp: string | null;
+  router: string | null;
+  routerIp: string | null;
+  upnp: boolean;
+  portOpen: boolean;
+  upnpError: string | null;
+  /** The internet provider shares one public address between homes. */
+  cgnat: boolean;
+  java: string | null;
+  firewall: FirewallReport | null;
+}
+
+/** A monitor whose brightness OmniHub can set (DDC/CI, or Windows for a laptop screen). */
+export interface Display {
+  id: string;
+  name: string;
+  primary: boolean;
+  builtin: boolean;
+  /** 0–100; null when the monitor doesn't answer (DDC/CI off in its menu). */
+  brightness: number | null;
+  contrast: number | null;
+}
+
+export type DisplaySetting = 'brightness' | 'contrast';
+
+/** Capri (github.com/mochiiwuff/capri-desktop), installed and run by OmniHub on request. */
+export interface CapriStatus {
+  installed: boolean;
+  version: string | null;
+  running: boolean;
+  /** The newest release on her page, when asked for. */
+  latest: string | null;
+}
+
+/** An installed app winget has a newer version of. */
+export interface AppUpdate {
+  name: string;
+  id: string;
+  version: string;
+  available: string;
+  source: string;
+}
+
+// ---------- 0.20: file tools, ports, layouts, privacy ----------
+
+export type HashKind = 'sha256' | 'sha1' | 'sha512';
+export type RenameCase = 'keep' | 'lower' | 'upper' | 'title';
+
+export interface RenameRule {
+  pattern: string;
+  find: string;
+  replace: string;
+  case: RenameCase;
+  start: number;
+}
+
+export interface RenameItem {
+  from: string;
+  to: string;
+  /** Why it can't be renamed ("" when it can). */
+  problem: string;
+}
+
+export interface RecentFile {
+  path: string;
+  name: string;
+  size: number;
+  /** Unix seconds. */
+  used: number;
+}
+
+export interface PortUse {
+  proto: 'TCP' | 'UDP';
+  local: string;
+  port: number;
+  remote: string | null;
+  remotePort: number | null;
+  state: string;
+  pid: number;
+  process: string;
+}
+
+export interface LayoutWindow {
+  key: string;
+  name: string;
+  title: string;
+  path: string;
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  state: 'normal' | 'maximized' | 'minimized';
+}
+
+export interface WindowLayout {
+  name: string;
+  windows: LayoutWindow[];
+  savedAt: number;
+}
+
+export interface LayoutApplied {
+  placed: number;
+  launched: string[];
+  missing: string[];
+}
+
+export interface PrivacyUse {
+  what: 'microphone' | 'webcam' | 'location';
+  app: string;
+  id: string;
+  started: number | null;
+  stopped: number | null;
+  inUse: boolean;
+}
+
+// ---------- Aurora's music hub ----------
+
+/** Where a song picked in Aurora plays. */
+export type MusicSource = 'auto' | 'spotify' | 'spotifyWeb' | 'appleMusic' | 'youtubeMusic' | 'soundcloud' | 'amazonMusic';
+
+export interface CatTrack {
+  id: string;
+  title: string;
+  artist: string;
+  artistId: string;
+  album: string;
+  albumId: string;
+  cover: string;
+  durationMs: number;
+  explicit: boolean;
+}
+
+export interface CatAlbum {
+  id: string;
+  title: string;
+  artist: string;
+  artistId: string;
+  cover: string;
+  year: string;
+  /** "album", "single", "ep" or "compile". */
+  kind: string;
+  tracks: number;
+}
+
+export interface CatArtist {
+  id: string;
+  name: string;
+  picture: string;
+  fans: number;
+  albums: number;
+}
+
+export type CatTop = { kind: 'artist'; item: CatArtist } | { kind: 'track'; item: CatTrack } | { kind: 'album'; item: CatAlbum };
+
+export interface CatResults {
+  top: CatTop | null;
+  tracks: CatTrack[];
+  albums: CatAlbum[];
+  artists: CatArtist[];
+}
+
+export interface CatArtistPage {
+  artist: CatArtist;
+  bio: string | null;
+  top: CatTrack[];
+  albums: CatAlbum[];
+}
+
+export interface CatAlbumPage {
+  album: CatAlbum;
+  tracks: CatTrack[];
+}
+
+export interface CatUpNext {
+  track: CatTrack | null;
+  album: CatAlbumPage | null;
+  more: CatTrack[];
+  artist: CatArtist | null;
+}
+
+export type PlayItem = { kind: 'track'; title: string; artist: string; album: string } | { kind: 'album'; title: string; artist: string } | { kind: 'artist'; name: string };
+
+export interface MusicInstalled {
+  spotify: boolean;
+  appleMusic: boolean;
+}
+
+/** Where a song went: `started` when it plays already, else the app was opened on it. */
+export interface MusicPlayed {
+  to: MusicSource;
+  started: boolean;
+  /** Why Spotify couldn't start it straight away (then it was opened instead). */
+  note: string | null;
+}
+
+/** Spotify Connect: play straight away without opening Spotify. */
+export interface SpotifyStatus {
+  clientId: string;
+  connected: boolean;
+  name: string;
+  /** The redirect URI to add to the Spotify app. */
+  redirect: string;
+}
+
+/** A loader installed as a Minecraft Launcher profile by OmniHub. */
+export interface McLoaderMade {
+  profile: string;
+  versionId: string;
+  loaderVersion: string;
+  gameDir: string;
+}
+
+/** How sharp the current cover is. */
+export interface CoverInfo {
+  width: number;
+  height: number;
+  /** "player", "Apple Music" or "Deezer". */
+  from: string;
+  hd: boolean;
+  looking: boolean;
+}
+
+// ---------- 0.21: guests, folder rules, focus and time, dev tools ----------
+
+export interface GuestLink {
+  code: string;
+  label: string;
+  created: number;
+  /** Unix seconds. */
+  expiresAt: number;
+  maxBytes: number;
+  usedBytes: number;
+  files: number;
+}
+
+export interface GuestCreated {
+  link: GuestLink;
+  urls: string[];
+  qrSvgs: string[];
+}
+
+export type RuleAction = { kind: 'move'; to: string } | { kind: 'copy'; to: string } | { kind: 'recycle'; days: number };
+
+export interface FolderRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  folder: string;
+  extensions: string[];
+  contains: string[];
+  action: RuleAction;
+}
+
+export interface RuleDone {
+  at: number;
+  rule: string;
+  file: string;
+  what: string;
+  ok: boolean;
+}
+
+export interface AppTime {
+  app: string;
+  name: string;
+  seconds: number;
+}
+
+export interface TimeReport {
+  tracking: boolean;
+  day: string;
+  apps: AppTime[];
+  week: { day: string; seconds: number }[];
+  focusMinutesToday: number;
+  sessionsToday: number;
+}
+
+export interface FocusState {
+  phase: 'focus' | 'break';
+  /** Unix ms. */
+  endsAt: number;
+  focusMinutes: number;
+  breakMinutes: number;
+  rounds: number;
+  blocked: string[];
+  closed: string[];
+}
+
+export interface DevProject {
+  path: string;
+  name: string;
+  branch: string;
+  changes: number;
+  ahead: number;
+  behind: number;
+  upstream: boolean;
+  lastCommit: number | null;
+  lastMessage: string;
+  note: string | null;
+}
+
+export interface PathEntry {
+  path: string;
+  exists: boolean;
+}
+
+export interface DevEnvironment {
+  userPath: PathEntry[];
+  systemPath: PathEntry[];
+  userVars: [string, string][];
+}
+
+export interface LanLink {
+  urls: string[];
+  qrSvgs: string[];
+  /** Why a phone can't reach it ("" when it can). */
+  note: string;
+}
+
+// ---------- 0.22: phone as a sensor, downloads, image and video tools ----------
+
+export interface ApprovalSettings {
+  enabled: boolean;
+  vault: boolean;
+  admin: boolean;
+  shred: boolean;
+  environment: boolean;
+}
+
+export type ApprovalKind = 'vaultReveal' | 'vaultReset' | 'admin' | 'shred' | 'environment' | 'settings';
+
+export interface ApprovalRequest {
+  id: string;
+  kind: ApprovalKind;
+  title: string;
+  detail: string;
+  /** Unix seconds. */
+  expiresAt: number;
+}
+
+export type ImageJob = { kind: 'clean' } | { kind: 'resize'; maxSide: number } | { kind: 'compress'; quality: number } | { kind: 'toJpg' };
+
+export interface ImageInfo {
+  path: string;
+  bytes: number;
+  width: number;
+  height: number;
+  hasLocation: boolean;
+  taken: string | null;
+  camera: string | null;
+}
+
+export interface ImageDone {
+  source: string;
+  output: string;
+  before: number;
+  after: number;
+  note: string | null;
+}
+
+export interface ImageResult {
+  source: string;
+  done: ImageDone | null;
+  error: string | null;
+}
+
+export type VideoSize = 'small' | 'balanced' | 'high';
+export type VideoJob =
+  | { kind: 'compress'; size: VideoSize; maxHeight: number | null; targetMb: number | null }
+  | { kind: 'convert'; to: 'mp4' | 'webm' | 'gif' }
+  | { kind: 'trim'; start: number; end: number; exact: boolean }
+  | { kind: 'audio'; to: 'mp3' | 'm4a' | 'wav' };
+
+export interface VideoMedia {
+  duration: number;
+  width: number;
+  height: number;
+  fps: number;
+  videoCodec: string | null;
+  audioCodec: string | null;
+  bitrate: number | null;
+}
+
+export interface VideoTask {
+  id: string;
+  source: string;
+  output: string;
+  label: string;
+  percent: number;
+  state: JobState;
+  error: string | null;
+  before: number;
+  after: number;
+  startedAt: number;
+}
+
+export type DownloadMode = 'auto' | 'audio';
+
+export interface DownloadItem {
+  id: string;
+  url: string;
+  name: string | null;
+  path: string | null;
+  state: JobState;
+  percent: number | null;
+  bytes: number;
+  error: string | null;
+  from: string;
+  startedAt: number;
+}
+
+export interface BoardStroke {
+  /** 0–1 across the board. */
+  points: [number, number][];
+  color: string;
+  /** Fraction of the board's width. */
+  width: number;
+  eraser?: boolean;
+}
+
+export type ScanKind = 'document' | 'receipt' | 'card';
+export type ScanTarget = 'folder' | 'notes';
+
+export interface Scanned {
+  title: string;
+  files: string[];
+  text: string;
+  fields: [string, string][];
+  noteId: string | null;
+}
+
+// ---------- Counters, shiny hunts, auto clicker ----------
+
+/** A key that changes a counter: its Windows virtual-key code and its name. */
+export interface KeyBind {
+  vk: number;
+  label: string;
+}
+
+export interface Hunt {
+  /** National Pokédex number. */
+  species: number;
+  name: string;
+  /** 2–9: generations 2–5 roll 1/8192, 6 and later 1/4096. */
+  generation: number;
+  masuda: boolean;
+  charm: boolean;
+  /** 1 in this many instead (another method). */
+  customOdds: number | null;
+  method: string;
+}
+
+export interface Counter {
+  id: string;
+  name: string;
+  count: number;
+  step: number;
+  image: string | null;
+  key: KeyBind | null;
+  minusKey: KeyBind | null;
+  timerMs: number;
+  /** Unix ms when the timer started, while it runs. */
+  timerSince: number | null;
+  hunt: Hunt | null;
+  created: number;
+  updated: number;
+  events: EventKind[];
+  log: LogEntry[];
+  phaseBase: number;
+  phases: number;
+  goals: number[];
+  oddsAlerts: boolean;
+  alerted: string[];
+}
+
+/** Something that happens during a count, with its own key; a phase starts a new phase count. */
+export interface EventKind {
+  id: string;
+  name: string;
+  key: KeyBind | null;
+  phase: boolean;
+}
+
+export interface LogEntry {
+  at: number;
+  count: number;
+  name: string;
+  phase: boolean;
+}
+
+export interface GoalHit {
+  counter: string;
+  name: string;
+  count: number;
+  message: string;
+}
+
+export interface Found {
+  id: string;
+  counter: string;
+  name: string;
+  species: number | null;
+  count: number;
+  timerMs: number;
+  at: number;
+  odds: string | null;
+}
+
+export interface CountersState {
+  counters: Counter[];
+  found: Found[];
+  keysOn: boolean;
+  overlayOn: boolean;
+  overlayPort: number;
+}
+
+export interface CounterInput {
+  id?: string | null;
+  name: string;
+  step: number;
+  key: KeyBind | null;
+  minusKey: KeyBind | null;
+  hunt: Hunt | null;
+  events: EventKind[];
+  goals: number[];
+  oddsAlerts: boolean;
+}
+
+export interface ClickConfig {
+  button: 'left' | 'right' | 'middle';
+  double: boolean;
+  intervalMs: number;
+  jitterMs: number;
+  maxClicks: number;
+  maxSeconds: number;
+  at: [number, number] | null;
+  toggleKey: number;
+}
+
+export interface ClickStatus {
+  running: boolean;
+  clicks: number;
+  rate: number;
+  seconds: number;
+  stopped: string | null;
+}
+
+// ---------- Pokémon save editor (Game Boy Advance games) ----------
+
+export interface PkmTrainer {
+  name: string;
+  gender: number;
+  tid: number;
+  sid: number;
+  money: number;
+  hours: number;
+  minutes: number;
+}
+
+export interface MonView {
+  species: number;
+  dex: number;
+  speciesName: string;
+  nickname: string;
+  level: number;
+  exp: number;
+  nature: number;
+  shiny: boolean;
+  gender: 'male' | 'female' | 'none';
+  abilitySlot: number;
+  ability: string;
+  item: number;
+  friendship: number;
+  moves: number[];
+  pp: number[];
+  ppUps: number[];
+  ivs: number[];
+  evs: number[];
+  stats: number[];
+  otName: string;
+  tid: number;
+  sid: number;
+  ball: number;
+  metLevel: number;
+  egg: boolean;
+  pid: number;
+  valid: boolean;
+}
+
+export type MonEdit = Partial<Pick<MonView, 'species' | 'nickname' | 'level' | 'nature' | 'shiny' | 'abilitySlot' | 'item' | 'friendship' | 'moves' | 'ppUps' | 'ivs' | 'evs' | 'otName' | 'tid' | 'sid' | 'ball'>>;
+
+/** The party (`box` null, index 0–5) or a PC box (0–13, index 0–29). */
+export interface PkmSlot {
+  box: number | null;
+  index: number;
+}
+
+export interface PkmSave {
+  path: string;
+  game: string;
+  trainer: PkmTrainer;
+  party: MonView[];
+  boxes: { name: string; mons: (MonView | null)[] }[];
+  changed: boolean;
+  checksumsOk: boolean;
+}
+
+export interface PkmNamed {
+  id: number;
+  name: string;
+  /** Species: National Dex number; moves: base PP. */
+  dex: number;
+}
+
+export interface PkmTables {
+  species: PkmNamed[];
+  moves: PkmNamed[];
+  items: PkmNamed[];
+  natures: string[];
+  balls: string[];
+  abilities: [string, string][];
+}
+
+// ---------- Game library ----------
+
+export interface GameArt {
+  cover: string | null;
+  hero: string | null;
+  logo: string | null;
+  header: string | null;
+}
+
+export type ShelfStatus = '' | 'playing' | 'backlog' | 'finished' | 'dropped';
+
+export interface LibraryGame {
+  key: string;
+  name: string;
+  source: string;
+  app: number | null;
+  process: string;
+  art: GameArt;
+  status: ShelfStatus;
+  favorite: boolean;
+  minutes: number;
+  lastPlayed: number;
+  profileId: string | null;
+  canLaunch: boolean;
+}
+
+export interface ShelfEntry {
+  status: ShelfStatus;
+  favorite: boolean;
+  notes: string;
+  cover: string | null;
+  hero: string | null;
+  logo: string | null;
+  saveDirs: string[];
+  autoBackup: boolean;
+  dailyLimit: number;
+}
+
+export type ShelfPatch = Partial<Pick<ShelfEntry, 'status' | 'favorite' | 'notes' | 'autoBackup' | 'saveDirs' | 'dailyLimit'>>;
+
+export interface GameMedia {
+  src: string;
+  name: string;
+  at: number;
+}
+
+export interface SessionRec {
+  key: string;
+  name: string;
+  start: number;
+  end: number;
+}
+
+export interface SaveBackup {
+  id: string;
+  at: number;
+  bytes: number;
+  files: number;
+}
+
+export interface GameDetail {
+  key: string;
+  players: number | null;
+  screenshots: GameMedia[];
+  soundtrack: GameMedia[];
+  sessions: SessionRec[];
+  entry: ShelfEntry;
+  suggestedDirs: string[];
+  backups: SaveBackup[];
+  minutesToday: number;
+  installDir: string | null;
+}
+
+export interface GameRecap {
+  key: string;
+  name: string;
+  start: number;
+  end: number;
+  minutes: number;
+  avgFps: number | null;
+  lowFps: number | null;
+  clips: GameMedia[];
+  screenshots: GameMedia[];
+  backup: string | null;
+  art: GameArt;
+}
+
+export interface SteamAchievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  iconGray: string;
+  unlocked: boolean;
+  unlockedAt: number;
+  percent: number;
+  hidden: boolean;
+}
+
+export interface SteamFriend {
+  steamid: string;
+  name: string;
+  avatar: string;
+  state: number;
+  game: string | null;
+  gameId: number | null;
+}
+
+export interface WishItem {
+  app: number;
+  name: string;
+  discount: number;
+  price: string | null;
+  original: string | null;
+}
+
+export interface SteamAccount {
+  user: { steamid: string; accountId: number; name: string } | null;
+  hasKey: boolean;
+  hasSgdb: boolean;
+}
+
+export interface Emulator {
+  id: string;
+  name: string;
+  exe: string;
+  platforms: string[];
+  args: string;
+  found: boolean;
+}
+
+export interface Rom {
+  id: string;
+  path: string;
+  name: string;
+  platform: string;
+  cover: string | null;
+  save: string | null;
+}
+
+export interface EmuState {
+  emulators: Emulator[];
+  romDirs: string[];
+  chosen: Record<string, string>;
+  /** Per game, by ROM path. */
+  romOpts: Record<string, RomOpts>;
+  roms: Rom[];
+}
+
+// ---------- quick actions: clipboard history, wheel, macro deck ----------
+
+export type QuickAction =
+  | { kind: 'open'; target: string }
+  | { kind: 'game'; key: string }
+  | { kind: 'keys'; keys: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'media'; what: 'playPause' | 'next' | 'previous' | 'volumeUp' | 'volumeDown' | 'mute' }
+  | { kind: 'mic' }
+  | { kind: 'counter'; id: string; event?: string | null }
+  | { kind: 'screenshot' }
+  | { kind: 'lock' }
+  | { kind: 'clipboard' }
+  | { kind: 'obs'; what: 'scene' | 'stream' | 'record' | 'replay' | 'mute'; target?: string | null }
+  | { kind: 'quiet' }
+  | { kind: 'capriDesktop' }
+  | { kind: 'scene'; id: string }
+  | { kind: 'lights'; on: boolean; preset?: string | null; brightness?: number | null }
+  | { kind: 'fans'; profile: 'lowest' | 'silent' | 'auto' | 'fast' }
+  | { kind: 'notifications'; on: boolean }
+  | { kind: 'discord'; on: boolean }
+  | { kind: 'sound'; output: string }
+  | { kind: 'input'; input: string }
+  | { kind: 'screen'; width: number; height: number; hz: number }
+  | { kind: 'hdr'; on: boolean }
+  | { kind: 'pinWindow' }
+  | { kind: 'music'; query: string }
+  | { kind: 'playSound'; id: string }
+  | { kind: 'home'; device: string; action: 'on' | 'off' | 'toggle' };
+
+/** One tap, several things: lights, fans, notifications, Discord, sound… */
+export interface Scene {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  steps: QuickAction[];
+  /** Runs by itself when this game (library key) starts. */
+  game?: string;
+  /** When that game closes: the screen goes back, and this scene runs. */
+  after?: string;
+}
+
+export interface ScreenMode {
+  width: number;
+  height: number;
+  hz: number;
+}
+
+export interface ScreenModes {
+  current: ScreenMode | null;
+  modes: ScreenMode[];
+  hdr: boolean | null;
+}
+
+export interface NightSettings {
+  enabled: boolean;
+  from: string;
+  to: string;
+  kelvin: number;
+  dim: number;
+  fade: number;
+  screenBrightness: number | null;
+}
+
+export interface NightInfo {
+  settings: NightSettings;
+  status: { level: number; kelvin: number; manual: boolean | null };
+}
+
+export interface QuickButton {
+  id: string;
+  label: string;
+  /** A Lucide icon name ("gamepad-2"). */
+  icon: string;
+  color: string;
+  action: QuickAction | null;
+}
+
+export interface QuickState {
+  scenes: Scene[];
+  clipOn: boolean;
+  clipHotkey: string;
+  clipIgnore: string[];
+  clipMax: number;
+  wheelOn: boolean;
+  wheelHotkey: string;
+  wheel: QuickButton[];
+  deck: QuickButton[];
+  deckColumns: number;
+  /** OBS's WebSocket server ("ws://127.0.0.1:4455"). */
+  obsUrl: string;
+}
+
+export interface ObsInfo {
+  hasPassword: boolean;
+  scenes: string[];
+  inputs: string[];
+}
+
+export interface ClipItem {
+  id: string;
+  at: number;
+  /** Empty for a picture. */
+  text: string;
+  thumb?: string | null;
+  width: number;
+  height: number;
+  pinned: boolean;
+  app?: string | null;
+}
+
+export interface ClipList {
+  items: ClipItem[];
+  paused: boolean;
+}
+
+// ---------- batteries and PC health ----------
+
+export interface Battery {
+  id: string;
+  name: string;
+  kind: 'pc' | 'controller' | 'bluetooth';
+  percent: number | null;
+  charging: boolean | null;
+  wired: boolean;
+  minutesLeft: number | null;
+  /** [unix ms, percent], oldest first. */
+  history: [number, number][];
+}
+
+export interface HealthCheck {
+  id: string;
+  title: string;
+  status: 'ok' | 'warn' | 'bad';
+  detail: string;
+  fix: string | null;
+  route: string | null;
+}
+
+export interface PcHealth {
+  score: number;
+  checks: HealthCheck[];
+  at: number;
+}
+
+// ---------- Fortnite helpers ----------
+
+export interface GpuDriver {
+  name: string;
+  version: string;
+  date: number | null;
+  daysOld: number | null;
+  updateUrl: string | null;
+  /** Changed since the shader caches were last cleaned. */
+  changed: boolean;
+}
+
+export interface Replays {
+  dir: string | null;
+  list: { name: string; bytes: number; at: number }[];
+  bytes: number;
+}
+
+export interface NetCheck {
+  onWifi: boolean | null;
+  /** Wi-Fi power saving while plugged in: 0 max performance … 3 max saving. */
+  wifiSaving: number | null;
+}
+
+// ---------- Discord status ----------
+
+export interface PresenceSettings {
+  enabled: boolean;
+  /** The Discord Application ID. */
+  clientId: string;
+  showGame: boolean;
+  showHunt: boolean;
+}
+
+export interface PresenceStatus {
+  settings: PresenceSettings;
+  connected: boolean;
+  showing: { details: string; state: string | null; start: number | null } | null;
+  error: string | null;
+}
+
+// ---------- network ----------
+
+export interface NetStatus {
+  down: number;
+  up: number;
+  /** [unix ms, down, up] bytes per second. */
+  history: [number, number, number][];
+  days: { date: string; down: number; up: number }[];
+  apps: { process: string; pid: number; connections: number; remotes: string[] }[];
+  supported: boolean;
+}
+
+// ---------- backups ----------
+
+export type BackupSchedule = 'manual' | 'daily' | 'weekly' | 'whenConnected';
+
+export interface BackupJob {
+  id: string;
+  name: string;
+  sources: string[];
+  dest: string;
+  schedule: BackupSchedule;
+  enabled: boolean;
+  lastRun: number | null;
+  lastResult: string | null;
+  lastOk: boolean;
+}
+
+export interface BackupRun {
+  job: string;
+  name: string;
+  copied: number;
+  bytes: number;
+  same: number;
+  failed: number;
+  missingDest: boolean;
+}
+
+export interface WakeTarget {
+  name: string;
+  mac: string;
+  ip: string;
+  broadcast: string;
+  wifi: boolean;
+}
+
+export interface QuietSchedule {
+  enabled: boolean;
+  /** "23:00" */
+  start: string;
+  end: string;
+}
+
+export interface QuietStatus {
+  schedule: QuietSchedule;
+  /** The sleep timer, when set (unix ms). */
+  timer: number | null;
+  on: boolean;
+  since: number | null;
+  /** OmniHub can set this PC's fans; otherwise quiet mode only turns the screens off. */
+  fans: boolean;
+}
+
+// ---------- 0.30 ----------
+
+export interface OllamaStatus {
+  installed: boolean;
+  running: boolean;
+  models: string[];
+  hasModel: boolean;
+}
+
+export interface CapriDesktopSettings {
+  startWithOmnihub: boolean;
+}
+
+export interface CapriDesktopStatus {
+  installed: boolean;
+  exe: string | null;
+  version: string | null;
+  running: boolean;
+  settings: CapriDesktopSettings;
+  ollama: OllamaStatus;
+  supported: boolean;
+}
+
+export interface CapriDesktopLatest {
+  version: string;
+  url: string;
+  size: number;
+  sha256: string | null;
+  notes: string;
+}
+
+export interface HeatSettings {
+  enabled: boolean;
+  cpu: number;
+  gpu: number;
+}
+
+export interface AutoUpdateSettings {
+  enabled: boolean;
+  time: string;
+  skip: string[];
+  lastRun: number | null;
+  lastResult: string | null;
+}
+
+export interface AutoUpdateState {
+  settings: AutoUpdateSettings;
+  running: boolean;
+}
+
+export interface PartySong {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  cover: string;
+  by: string;
+  at: number;
+}
+
+export interface PartyState {
+  code: string | null;
+  queue: PartySong[];
+  playing: PartySong | null;
+  auto: boolean;
+  played: number;
+}
+
+export interface PartyView {
+  state: PartyState;
+  urls: string[];
+  qrSvgs: string[];
+}
+
+export type LimitKind = 'app' | 'site';
+
+export interface ScreenLimit {
+  id: string;
+  kind: LimitKind;
+  target: string;
+  minutes: number;
+  enabled: boolean;
+}
+
+export interface LimitUse {
+  limit: ScreenLimit;
+  usedMinutes: number;
+  over: boolean;
+}
+
+export interface PriceWatch {
+  id: string;
+  name: string;
+  url: string;
+  target: number | null;
+  price: number | null;
+  currency: string | null;
+  lowest: number | null;
+  history: [number, number][];
+  checked: number | null;
+  error: string | null;
+}
+
+export interface Streamer {
+  id: string;
+  platform: 'twitch' | 'youtube';
+  handle: string;
+  live: boolean;
+  title: string;
+}
+
+export interface WatchStore {
+  freeAlerts: boolean;
+  freeSeen: string[];
+  patchAlerts: boolean;
+  /** Fortnite updates and server downtime. */
+  fortniteAlerts: boolean;
+  /** A summary of the week every Sunday evening. */
+  weeklyOn: boolean;
+  patchSeen: Record<string, string>;
+  streamers: Streamer[];
+  /** "21:00", or "" for off. */
+  recapTime: string;
+  recapDate: string;
+  shopWanted: string[];
+  shopAlerts: boolean;
+  shopSeen: string[];
+  shopDate: string;
+  shopNow: string[];
+  prices: PriceWatch[];
+}
+
+export interface LightResult {
+  set: number;
+  skippedBluetooth: number;
+  failed: number;
+}
+
+export interface Site {
+  id: string;
+  name: string;
+  url: string;
+  color: string;
+}
+
+/** A notification from your iPhone (over Bluetooth). */
+export interface IphoneNotif {
+  uid: number;
+  app: string;
+  appName: string;
+  title: string;
+  message: string;
+  /** Unix ms. */
+  at: number;
+  category: string;
+}
+
+export interface PairedPhone {
+  id: string;
+  name: string;
+}
+
+export interface IphoneState {
+  prefs: { enabled: boolean; deviceId: string; deviceName: string; toasts: boolean };
+  status: { state: 'off' | 'connecting' | 'connected' | 'waiting' | 'unsupported'; message: string };
+  notifs: IphoneNotif[];
+}
+
+/** A browser on this PC that channels can open in. */
+export interface Browser {
+  /** "edge", "chrome", "brave", "firefox", "vivaldi", "opera", "operagx". */
+  id: string;
+  name: string;
+  exe: string;
+  kind: 'chromium' | 'firefox' | string;
+}
+
+export interface TvPrefs {
+  /** The browser id; empty until picked. */
+  browser: string;
+  /** Show "Continue watching" (reads the browser's history for streaming watch pages only). */
+  continueWatching: boolean;
+  /** The controller works inside the browser while a channel is open. */
+  remote: boolean;
+}
+
+/** A series or video you were part way through. */
+export interface Watching {
+  /** The quick site it belongs to ("netflix"). */
+  site: string;
+  service: string;
+  /** "" when the site's history doesn't name it. */
+  show: string;
+  episode: string;
+  url: string;
+  /** Unix ms. */
+  at: number;
+  thumb: string | null;
+}
+
+export interface AudioOutput {
+  id: string;
+  name: string;
+  default: boolean;
+}
+
+export interface BtDevice {
+  address: string;
+  name: string;
+  connected: boolean;
+  kind: 'audio' | 'keyboard' | 'mouse' | 'gamepad' | 'phone' | 'computer' | 'other';
+  audio: boolean;
+}
+
+// ---------- Karaoke Studio ----------
+
+export interface KaraokeSession {
+  at: number;
+  title: string;
+  artist: string;
+  /** 'song' (follow the song) or 'voice' (follow my voice). */
+  mode: 'song' | 'voice';
+  seconds: number;
+  lines: number;
+  steadinessCents: number | null;
+  timingMs: number | null;
+  lowNote: number | null;
+  highNote: number | null;
+  retry: string[];
+}
+
+export interface KaraokeData {
+  profile: { lang: string } | null;
+  sessions: KaraokeSession[];
+}
+
+export interface KaraokeTrack {
+  path: string;
+  title: string;
+  artist: string;
+  /** Where the page plays it from. */
+  url: string;
+}
+
+export interface KaraokeLyrics {
+  lines: LyricLine[];
+  plain: string | null;
+  instrumental: boolean;
+  source: string;
+}
+
+export interface AskAnswer {
+  title: string;
+  points: string[];
+  tips: string[];
+  route: string | null;
+}
+
+export interface AskReply {
+  answers: AskAnswer[];
+  words: string | null;
+}
+
+export interface SimilarPhoto {
+  path: string;
+  bytes: number;
+  width: number;
+  height: number;
+  modified: number;
+}
+
+export interface SimilarGroup {
+  photos: SimilarPhoto[];
+  keep: number;
+}
+
+export interface SpeedrunSplit {
+  name: string;
+  pb: number | null;
+  gold: number | null;
+}
+
+export interface SpeedrunSettings {
+  game: string;
+  category: string;
+  splits: SpeedrunSplit[];
+  keySplit: number;
+  keyReset: number;
+  keyPause: number;
+  keyUndo: number;
+  attempts: number;
+}
+
+export interface SpeedrunState {
+  settings: SpeedrunSettings;
+  run: { since: number | null; banked: number; times: number[]; finished: boolean; newPb: boolean };
+  now: number;
+}
+
+export type WidgetKind = 'temps' | 'music' | 'counter' | 'battery' | 'network' | 'clock';
+
+export interface Floats {
+  widgets: { id: string; kind: WidgetKind; x: number; y: number }[];
+  crosshair: boolean;
+  wallpaper: boolean;
+}
+
+export interface WifiQr {
+  ssid: string;
+  security: string;
+  password: string | null;
+  svg: string;
+}
+
+export interface CountdownTimer {
+  id: string;
+  label: string;
+  endsAt: number;
+  minutes: number;
+}
+
+export interface Alarm {
+  id: string;
+  label: string;
+  time: string;
+  days: number[];
+  enabled: boolean;
+  fired: string;
+}
+
+export interface Bedtime {
+  enabled: boolean;
+  from: string;
+  to: string;
+  warnMinutes: number;
+  days: number[];
+}
+
+export interface TimersState {
+  timers: CountdownTimer[];
+  alarms: Alarm[];
+  bedtime: Bedtime;
+  snoozedUntil: number;
+}
+
+export interface DriveHealth {
+  name: string;
+  media: string;
+  bus: string;
+  health: 'Healthy' | 'Warning' | 'Unhealthy' | 'Unknown';
+  size: number;
+  temperature: number | null;
+  wear: number | null;
+  powerOnHours: number | null;
+  readErrors: number | null;
+  writeErrors: number | null;
+  verdict: string;
+}
+
+export interface StressResult {
+  seconds: number;
+  startTemp: number | null;
+  maxTemp: number | null;
+  endTemp: number | null;
+  throttled: boolean;
+  verdict: string;
+}
+
+export interface ReadyItem {
+  title: string;
+  status: 'ok' | 'warn' | 'bad';
+  detail: string;
+  route: string | null;
+}
+
+export interface PinWindow {
+  handle: number;
+  title: string;
+  app: string;
+  pinned: boolean;
+}
+
+/** One benchmark run (the same work every time). */
+export interface BenchResult {
+  at: number;
+  /** MB/s of SHA-256 on one core. */
+  single: number;
+  multi: number;
+  /** GB/s of memory copy. */
+  memory: number;
+  threads: number;
+  cpuTemp: number | null;
+}
+
+/** Saved text typed into the app in front when its key is pressed. */
+export interface Snippet {
+  id: string;
+  name: string;
+  text: string;
+  /** Windows virtual-key code, 0 = none. */
+  key: number;
+}
+
+export interface SnippetSettings {
+  snippets: Snippet[];
+  keysOn: boolean;
+}
+
+/** A cap on how fast a program uploads (a Windows QoS policy). */
+export interface AppLimit {
+  exe: string;
+  /** Kilobits per second. */
+  kbps: number;
+  /** Windows has the policy now. */
+  active: boolean;
+}
+
+export interface SoundboardSound {
+  id: string;
+  name: string;
+  path: string;
+  key: number;
+  volume: number;
+}
+
+export interface SoundboardSettings {
+  sounds: SoundboardSound[];
+  output: string;
+  keysOn: boolean;
+}
+
+// ---------- OmniHub Client (Minecraft 1.8.9) ----------
+
+export interface McClientMod {
+  slug: string;
+  name: string;
+  what: string;
+  /** visuals, hud, performance, packs, movement */
+  group: string;
+  defaultOn: boolean;
+  license: string;
+  installed: boolean;
+}
+
+export type KillEffect = 'lightning' | 'blood' | 'flames' | 'firework' | 'souls' | 'hearts' | 'explosion' | 'random';
+
+export interface KillFx {
+  enabled: boolean;
+  effect: KillEffect;
+  sound: string;
+  /** 1 subtle … 3 big */
+  intensity: number;
+  /** "#RRGGBB" */
+  color: string;
+  playersOnly: boolean;
+  killMark: boolean;
+}
+
+export interface McClientStatus {
+  minecraftFound: boolean;
+  installed: boolean;
+  dir: string;
+  mods: McClientMod[];
+  killfxInstalled: boolean;
+  /** Vesper Client (OmniHub's own 1.8.9 PvP client mod) is in the mods folder. */
+  vesperInstalled: boolean;
+  killfx: KillFx;
+  /** Resource pack files in the client's folder. */
+  packs: string[];
+  installedAt: number;
+}
+
+export interface McPackSearchHit {
+  project: string;
+  slug: string;
+  title: string;
+  description: string;
+  author: string;
+  icon: string | null;
+  downloads: number;
+  categories: string[];
+  serverSide: string;
+  clientSide: string;
 }

@@ -1,6 +1,6 @@
-import type { AdbDevice, ScrcpyOptions } from '@shared/types';
+import type { AdbDevice, ScrcpyOptions, ShareState, WindowInfo } from '@shared/types';
 import { motion } from 'motion/react';
-import { Apple, Cable, Copy, ExternalLink, Gamepad2, Gauge, Link2, Monitor, MonitorSmartphone, MousePointer2, Play, RefreshCw, ScreenShare, Smartphone, Square, Wifi, Zap } from 'lucide-react';
+import { AppWindow, Cable, Copy, ExternalLink, Eye, EyeOff, Gamepad2, Gauge, Link2, Monitor, MonitorSmartphone, MousePointer2, Pause, Play, RefreshCw, ScreenShare, Smartphone, Square, Wifi, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Page } from '../../components/Page';
@@ -9,19 +9,21 @@ import { Badge, Card, CardHeader, Dot, Skeleton } from '../../components/ui/Card
 import { Checkbox, Field, Segmented, Select, Switch, TextInput } from '../../components/ui/Form';
 import { Callout } from '../../components/ui/States';
 import { cx } from '../../lib/cx';
-import { useAsync, useStoredState } from '../../lib/hooks';
+import { useAsync, useEvent, useStoredState } from '../../lib/hooks';
 import { navigate } from '../../lib/router';
 import { copyText } from '../../lib/util';
 import { useLive } from '../../state/live';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
+import { IPhoneMirror } from './IPhoneMirror';
 
 const LATENCY: { label: string; min: number; max: number; note: string; color: string }[] = [
   { label: 'Sunshine + Moonlight', min: 10, max: 40, note: 'up to 4K60, hardware encoder', color: 'var(--accent-2)' },
   { label: 'scrcpy (Android → PC)', min: 35, max: 70, note: 'USB or Wi-Fi', color: 'var(--accent)' },
   { label: 'Built-in browser stream', min: 40, max: 90, note: 'any phone browser, good Wi-Fi', color: 'color-mix(in oklab, var(--accent) 55%, var(--accent-2))' },
+  { label: 'AirPlay (iPhone → PC)', min: 100, max: 250, note: 'iPhone or iPad, same Wi-Fi; watch-only', color: 'color-mix(in oklab, var(--accent-2) 60%, var(--text-faint))' },
 ];
-const AXIS = 120;
+const AXIS = 250;
 
 function PcToPhone() {
   const settings = useSettings((s) => s.settings);
@@ -43,6 +45,7 @@ function PcToPhone() {
           Set up the phone companion
         </Button>
       )}
+      <SharePrivacy />
       <div className="mt-4 divide-y divide-line rounded-xl border border-line bg-surface">
         <div className="flex items-center gap-3 px-4 py-3">
           <Monitor size={16} className="text-dim" />
@@ -117,7 +120,7 @@ function Expectations() {
       <p className="mt-3 text-[13px] leading-relaxed text-dim">
         No stream is zero-latency: every frame is <span className="text-fg">captured, encoded, sent over the network and decoded</span>. Wi-Fi quality matters more than anything else — 5 GHz, close to the router, or a cable for the PC.
       </p>
-      <div className="mt-5 space-y-4" role="img" aria-label="Latency ranges: Sunshine plus Moonlight 10 to 40 ms, scrcpy 35 to 70 ms, built-in stream 40 to 90 ms">
+      <div className="mt-5 space-y-4" role="img" aria-label="Latency ranges: Sunshine plus Moonlight 10 to 40 ms, scrcpy 35 to 70 ms, built-in stream 40 to 90 ms, AirPlay 100 to 250 ms">
         {LATENCY.map((l, i) => (
           <div key={l.label}>
             <div className="mb-1.5 flex items-baseline justify-between text-[12.5px]">
@@ -133,7 +136,7 @@ function Expectations() {
           </div>
         ))}
         <div className="relative h-4 text-[10.5px] text-faint tabular">
-          {[0, 30, 60, 90, 120].map((t) => (
+          {[0, 50, 100, 150, 200, 250].map((t) => (
             <span key={t} className="absolute -translate-x-1/2" style={{ left: `${(t / AXIS) * 100}%` }}>
               {t}
             </span>
@@ -368,7 +371,7 @@ function Scrcpy() {
 
 export function ScreenPage() {
   return (
-    <Page title="Screen share" subtitle="Stream this PC to your phone, or mirror an Android phone on this PC.">
+    <Page title="Screen share" subtitle="Stream this PC to your phone, or mirror an iPhone or Android phone on this PC.">
       <div className="space-y-3">
         <div className="grid grid-cols-12 items-start gap-3">
           <div className="col-span-12 xl:col-span-7">
@@ -379,11 +382,54 @@ export function ScreenPage() {
             <Sunshine />
           </div>
         </div>
+        <IPhoneMirror />
         <Scrcpy />
-        <Callout tone="info" icon={Apple} title="iPhone and iPad">
-          iOS has no public API for low-level screen mirroring or input, so scrcpy-style control isn't possible. The built-in browser stream works on iPhone (PC → phone). For phone → PC, AirPlay receiver apps exist, but they are limited (no control, variable latency).
-        </Callout>
       </div>
     </Page>
+  );
+}
+
+/** Pause every share, or show viewers a single window instead of the display. */
+function SharePrivacy() {
+  const [st, setSt] = useState<ShareState | null>(null);
+  const [wins, setWins] = useState<WindowInfo[]>([]);
+  const viewers = useLive((s) => s.viewers);
+  const loadWindows = () => void api.screen.windows().then(setWins, () => undefined);
+  useEffect(() => {
+    void api.screen.shareState().then(setSt, () => undefined);
+    loadWindows();
+  }, []);
+  useEvent<ShareState>('screen:share-state', setSt);
+  if (!st) return null;
+  const run = (p: Promise<ShareState>) => void p.then(setSt, (e: unknown) => toast.error('Could not change sharing', errorText(e)));
+  const gone = st.windowId != null && !st.window;
+  return (
+    <div className={cx('mt-4 rounded-xl border px-4 py-3', st.paused ? 'border-warn/40 bg-warn/8' : 'border-line bg-surface')}>
+      <div className="flex items-center gap-3">
+        {st.paused ? <EyeOff size={16} className="text-warn" /> : <Eye size={16} className="text-dim" />}
+        <div className="flex-1">
+          <div className="text-[13.5px] font-medium text-fg">{st.paused ? 'Sharing is paused' : 'Pause sharing'}</div>
+          <div className="text-[12px] text-faint">{st.paused ? 'Nothing is captured; viewers see a “paused” notice and cannot control the PC.' : `Hide the screen for a moment (a password, a message)${viewers.length ? ` — ${viewers.length} watching now` : ''}.`}</div>
+        </div>
+        <Button size="sm" variant={st.paused ? 'primary' : 'secondary'} icon={st.paused ? Play : Pause} onClick={() => run(api.screen.setPaused(!st.paused))}>
+          {st.paused ? 'Resume' : 'Pause'}
+        </Button>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <AppWindow size={16} className="shrink-0 text-dim" />
+        <span className="shrink-0 text-[12.5px] text-dim">Viewers see</span>
+        <Select value={st.windowId == null ? '' : String(st.windowId)} onChange={(e) => run(api.screen.setWindow(e.target.value ? Number(e.target.value) : null))} onFocus={loadWindows} className="min-w-0 flex-1" aria-label="What viewers see">
+          <option value="">The whole display they pick</option>
+          {gone && <option value={String(st.windowId)}>(closed window)</option>}
+          {wins.map((w) => (
+            <option key={w.id} value={String(w.id)}>
+              Only: {w.title.length > 60 ? `${w.title.slice(0, 57)}…` : w.title}
+            </option>
+          ))}
+        </Select>
+        <IconButton icon={RefreshCw} label="Refresh the window list" size="sm" onClick={loadWindows} />
+      </div>
+      {gone && <div className="mt-2 text-[12px] text-warn">The shared window was closed — viewers can't connect until you pick another one or the whole display.</div>}
+    </div>
   );
 }
