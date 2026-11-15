@@ -762,6 +762,7 @@ pub fn run(args: Vec<String>) {
             commands::games_fps_cap,
             commands::games_potato_textures,
             commands::games_fortnite_textures,
+            commands::games_fortnite_crash,
             commands::games_play,
             commands::games_stop,
             commands::games_ping,

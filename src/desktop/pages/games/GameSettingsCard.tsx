@@ -3,7 +3,7 @@
 // and Minecraft. Shows what the file says now, what Optimize changes, and
 // puts your own settings back.
 
-import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteAdvice, FortniteOptions, FortniteTextures, FortniteRenderMode, GameConfigs, GameSession, GpuDriver, MinecraftOptions, NetCheck, ProOptions, Replays } from '@shared/types';
+import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteAdvice, FortniteCrash, FortniteOptions, FortniteTextures, FortniteRenderMode, GameConfigs, GameSession, GpuDriver, MinecraftOptions, NetCheck, ProOptions, Replays } from '@shared/types';
 import { formatBytes, formatRelative } from '@shared/format';
 import { AnimatePresence, motion } from 'motion/react';
 import { CheckCircle2, ChevronDown, Eraser, ExternalLink, Film, Gauge, Info, Lightbulb, MonitorCog, RotateCcw, Sparkles, XCircle, Zap, Cpu, Sun } from 'lucide-react';
@@ -85,6 +85,11 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
     clearTimeout(saving.current);
     saving.current = setTimeout(() => void api.games.setConfigOptions(o).then(setAll, (e: unknown) => toast.error('Not saved', errorText(e))), 250);
   };
+  // The monitor's refresh rate, for the presets' frame cap.
+  const [hz, setHz] = useState(0);
+  useEffect(() => {
+    if (game === 'fortnite') void api.games.fortniteAdvice().then((a) => setHz(a.hz), () => setHz(0));
+  }, [game]);
   const fn = (p: Partial<FortniteOptions>) => all && setOptions({ ...all.options, fortnite: { ...all.options.fortnite, ...p } });
   const mc = (p: Partial<MinecraftOptions>) => all && setOptions({ ...all.options, minecraft: { ...all.options.minecraft, ...p } });
   const pro = (g: ProGame, p: Partial<ProOptions>) => all && setOptions({ ...all.options, [g]: { ...all.options[g], ...p } });
@@ -176,7 +181,8 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
         <div className="divide-y divide-line border-t border-line">
           {game === 'fortnite' && (
             <>
-              <Row title="Frame rate limit" hint="Unlimited lets Fortnite draw as many frames as your PC can. A cap a little above your monitor’s refresh rate gives steadier frame times.">
+              <LastCrash />
+              <Row title="Frame rate limit" hint="Unlimited lets Fortnite draw as many frames as your PC can, but at low settings that can mean several hundred FPS, heat and crashes after a while. A cap a little above your monitor’s refresh rate gives steadier frame times.">
                 <Select value={o.fortnite.frameLimit} onChange={(e) => fn({ frameLimit: Number(e.target.value) })} className="w-36">
                   {FPS_CAPS.map((c) => (
                     <option key={c} value={c}>
@@ -185,10 +191,10 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   ))}
                 </Select>
               </Row>
-              <Row title="Preset" hint="Clean & bright: the bright, flat pastel look from the clips (Performance mode, everything low, sharp 100% 3D resolution, brightness up). Potato: the blurry low-poly look from the clips, for weak PCs (Performance mode, everything lowest, near view, 3D resolution as low as 10%). Competitive: the most frames (Performance mode, lowest quality, no cap). Balanced: DirectX 12 at medium quality. Pretty: DirectX 12 at epic quality. Press Apply after; your own settings stay backed up.">
+              <Row title="Preset" hint="Clean & bright: the bright, flat pastel look from the clips (Performance mode, everything low, sharp 100% 3D resolution, brightness up). Potato: the blurry low-poly look from the clips, for weak PCs (Performance mode, everything lowest, near view, 3D resolution as low as 10%). Competitive: the most frames (Performance mode, lowest quality). These three cap the frame rate just above your monitor’s refresh rate: running uncapped at several hundred FPS can overheat a PC and crash Fortnite after a while. Balanced: DirectX 12 at medium quality. Pretty: DirectX 12 at epic quality. Press Apply after; your own settings stay backed up.">
                 <div className="flex flex-wrap gap-1.5">
                   {PRESETS.map((p) => (
-                    <Button key={p.id} size="sm" variant="secondary" icon={p.icon} onClick={() => fn(p.set)}>
+                    <Button key={p.id} size="sm" variant="secondary" icon={p.icon} onClick={() => fn(p.set.frameLimit === 0 ? { ...p.set, frameLimit: presetCap(hz) } : p.set)}>
                       {p.label}
                     </Button>
                   ))}
@@ -221,7 +227,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   <Switch checked={!!o.fortnite.potato} onChange={(v) => fn({ potato: v })} label="Potato graphics" />
                 </Row>
               )}
-              <PotatoTextures />
+              <PotatoTextures dx12={!o.fortnite.potato && o.fortnite.renderMode === 'dx12'} />
               <TexturePacks />
               <Row title="Brightness" hint="Fortnite’s Brightness (100% is its default). Higher gives the light, washed pastel look. Saved as DisplayGamma in its settings; Keep leaves yours.">
                 <Select value={o.fortnite.brightness ?? 0} onChange={(e) => fn({ brightness: Number(e.target.value) })} className="w-28">
@@ -374,6 +380,33 @@ function CleanCaches() {
   );
 }
 
+/** The smallest frame cap at or above the monitor's refresh rate (240 when unknown). */
+function presetCap(hz: number): number {
+  if (!hz) return 240;
+  return [...FPS_CAPS].filter((c) => c >= hz).sort((a, b) => a - b)[0] ?? 0;
+}
+
+/** Fortnite's last crash (from its own crash reports) in the past week, with the likely cause. */
+function LastCrash() {
+  const [c, setC] = useState<FortniteCrash | null>(null);
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    void api.games.fortniteCrash().then(setC, () => setC(null));
+  }, []);
+  if (!c || hidden || Date.now() - c.at > 7 * 86_400_000) return null;
+  return (
+    <div className="px-5 py-4">
+      <Callout tone="warn" icon={Info} title={`${c.title} (${formatRelative(c.at)})`}>
+        <p>{c.advice}</p>
+        <p className="mt-1.5 break-words font-mono text-[11.5px] text-faint">{c.message}</p>
+        <Button size="sm" variant="ghost" className="mt-2" onClick={() => setHidden(true)}>
+          Hide
+        </Button>
+      </Callout>
+    </div>
+  );
+}
+
 const PRESETS: { id: string; label: string; icon: typeof Zap; set: Partial<FortniteOptions> }[] = [
   { id: 'bright', label: 'Clean & bright', icon: Sun, set: { potato: false, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 100, brightness: 140 } },
   { id: 'potato', label: 'Potato', icon: Cpu, set: { potato: true, brightness: 0, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 25 } },
@@ -382,8 +415,14 @@ const PRESETS: { id: string; label: string; icon: typeof Zap; set: Partial<Fortn
   { id: 'pretty', label: 'Pretty', icon: Sparkles, set: { potato: false, lockFile: false, frameLimit: 0, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 3, viewDistance: 3, fullscreen: true, reflex: 1, resolutionScale: 100 } },
 ];
 
+/**
+ * Texture LOD bias steps in eighths: +1, +3, +5, +8 mip levels. Past about
+ * +8 every texture is already at its smallest mip, so higher looks the same.
+ */
+const LOD_LEVELS = [0, 8, 24, 40, 64];
+
 /** The NVIDIA driver's texture LOD bias on Fortnite's profile: the flat "potato textures" look from the clips. */
-function PotatoTextures() {
+function PotatoTextures({ dx12 }: { dx12: boolean }) {
   const [v, setV] = useState<number | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -406,13 +445,15 @@ function PotatoTextures() {
       hint={
         v === null
           ? 'The flat, untextured look from the potato clips is an NVIDIA driver setting (texture LOD bias), so it needs an NVIDIA card. On AMD or Intel, the closest you get is removing Fortnite’s High Resolution Textures in the Epic Games Launcher (Fortnite → Options).'
-          : 'Raises the NVIDIA driver’s texture LOD bias for Fortnite only, the setting the potato apps change: Max turns almost every surface into flat colour. Windows asks for administrator rights. Restart Fortnite to see it; Off gives it back to the driver.'
+          : dx12
+            ? 'NVIDIA’s driver doesn’t apply this setting to DirectX 12, so with Fortnite on DirectX 12 it changes nothing. Pick Performance (or DirectX 11) as the rendering mode, or the Potato preset, then choose a level here.'
+            : 'Raises the NVIDIA driver’s texture LOD bias for Fortnite only, the setting the potato apps change. Each step is blurrier: Light softens, Medium and Strong flatten, Extreme turns almost every surface into flat colour (beyond that nothing changes). Works in Performance and DirectX 11 modes. Windows asks for administrator rights. Restart Fortnite to see it; Off gives it back to the driver.'
       }
     >
       {v === null ? (
         <span className="text-[12.5px] text-faint">Needs an NVIDIA card</span>
       ) : (
-        <Segmented size="sm" label="Potato textures" value={String([0, 16, 64, 120].includes(v) ? v : v > 0 ? 64 : 0)} onChange={(x) => void set(Number(x))} options={[{ value: '0', label: 'Off', disabled: busy }, { value: '16', label: 'Light', disabled: busy }, { value: '64', label: 'Strong', disabled: busy }, { value: '120', label: 'Max', disabled: busy }]} />
+        <Segmented size="sm" label="Potato textures" value={String(LOD_LEVELS.reduce((best, l) => (Math.abs(l - v) < Math.abs(best - v) ? l : best), 0))} onChange={(x) => void set(Number(x))} options={LOD_LEVELS.map((l, i) => ({ value: String(l), label: ['Off', 'Light', 'Medium', 'Strong', 'Extreme'][i], disabled: busy }))} />
       )}
     </Row>
   );
@@ -458,13 +499,13 @@ function TexturePacks() {
   const out = t.stashed > 0;
   return (
     <Row
-      title="Play without texture packs"
+      title="Play without texture packs (experimental)"
       hint={
         out
           ? `${t.stashed} texture file${t.stashed === 1 ? '' : 's'} (${formatBytes(t.stashedBytes)}) are out for this session. They go back once Fortnite closes.`
           : t.files === 0
             ? 'Fortnite has no optional texture packs installed (High Resolution Textures is off), so there is nothing to remove: it is already as light as it gets this way.'
-            : `Takes Fortnite’s optional texture packs (${formatBytes(t.bytes)}, ${t.files} files) out for one session, for flatter textures on any graphics card, then puts every file back when Fortnite closes. Nothing is deleted.`
+            : `Takes Fortnite’s optional texture packs (${formatBytes(t.bytes)}, ${t.files} files) out for one session, for flatter textures on any graphics card, then puts every file back when Fortnite closes. Nothing is deleted. Experimental: some parts of the game may still ask for these packs and crash; if that happens OmniHub shows it here.`
       }
     >
       {out ? (

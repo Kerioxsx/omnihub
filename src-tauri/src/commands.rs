@@ -2209,6 +2209,13 @@ pub async fn games_fortnite_textures(core: Core<'_>, action: Option<String>) -> 
     .await
 }
 
+/// Fortnite's last crash report and its likely cause.
+#[tauri::command]
+pub async fn games_fortnite_crash(core: Core<'_>) -> Res<Option<omnihub_core::games::fortnite::Crash>> {
+    let core = core.inner().clone();
+    blocking(move || Ok(core.games.fortnite_crash())).await
+}
+
 #[tauri::command]
 pub async fn games_potato_textures(core: Core<'_>, eighths: Option<u32>) -> Res<Option<u32>> {
     let core = core.inner().clone();

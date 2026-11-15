@@ -1306,3 +1306,11 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   DiagTrack service's `Start` value go through the existing elevated helper
   (`pthrottle <1|->`, `diag <2|3|4>`, nothing else accepted), which also runs
   `sc.exe stop|start DiagTrack`. Each records the previous values for Undo.
+
+## 0.59.0
+
+- **Fortnite crash notice** reads only `%LOCALAPPDATA%\FortniteGame\Saved\Crashes\*\CrashContext.runtime-xml`
+  (the first 256 KB of the newest, the `ErrorMessage` tag, shortened to 300
+  characters) and shows it locally. Nothing is uploaded. When OmniHub last
+  had the texture packs out is kept in `fortnite-textures.json` in its data
+  folder (two timestamps).

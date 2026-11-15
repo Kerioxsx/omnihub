@@ -743,6 +743,8 @@ export const api = {
     /** Fortnite's NVIDIA LOD bias in eighths (null: no NVIDIA card); pass eighths to set it. */
     potatoTextures: (eighths?: number) => call<number | null>('games_potato_textures', { eighths: eighths ?? null }),
     /** Fortnite's optional texture packs: take out ("play" also starts Fortnite), put back, or just look. */
+    /** Fortnite's last crash with its likely cause (null: none found). */
+    fortniteCrash: () => call<T.FortniteCrash | null>('games_fortnite_crash'),
     fortniteTextures: (action?: 'out' | 'play' | 'back') => call<T.FortniteTextures>('games_fortnite_textures', { action: action ?? null }),
     play: (id: string, launch: boolean) => call<T.GameSession>('games_play', { id, launch }),
     stop: () => call<boolean>('games_stop'),

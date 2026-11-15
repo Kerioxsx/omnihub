@@ -1579,6 +1579,15 @@ export interface FortniteTextures {
   stashedBytes: number;
 }
 
+/** Fortnite's last crash, from its own crash reports. */
+export interface FortniteCrash {
+  at: number;
+  message: string;
+  cause: 'gpu' | 'vram' | 'memory' | 'files' | 'textures' | 'other';
+  title: string;
+  advice: string;
+}
+
 export interface FortniteAdvice {
   gpu: string;
   vramGb: number;

@@ -244,6 +244,78 @@ mod imp {
     }
 }
 
+// ---------- crashes ----------
+
+/// Fortnite's last crash, read from its own crash reports, with the likely
+/// cause in plain words.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Crash {
+    /// When (milliseconds since 1970).
+    pub at: i64,
+    /// Fortnite's own message (shortened).
+    pub message: String,
+    /// gpu | vram | memory | files | textures | other
+    pub cause: String,
+    pub title: String,
+    pub advice: String,
+}
+
+fn tag(xml: &str, name: &str) -> Option<String> {
+    let open = format!("<{name}>");
+    let a = xml.find(&open)? + open.len();
+    let b = xml[a..].find(&format!("</{name}>"))? + a;
+    let t = xml[a..b].replace("&apos;", "'").replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
+    Some(t.trim().to_string()).filter(|t| !t.is_empty())
+}
+
+fn mtime_ms(p: &Path) -> Option<i64> {
+    let t = std::fs::metadata(p).ok()?.modified().ok()?;
+    Some(t.duration_since(std::time::UNIX_EPOCH).ok()?.as_millis() as i64)
+}
+
+/// What a crash message most likely means. `textures_out` is when OmniHub
+/// had Fortnite's optional texture packs out (start, end in ms).
+pub fn classify(message: &str, at: i64, textures_out: Option<(i64, i64)>) -> (String, String, String) {
+    let m = message.to_ascii_lowercase();
+    let has = |ws: &[&str]| ws.iter().any(|w| m.contains(w));
+    let (cause, title, advice) = if textures_out.is_some_and(|(a, b)| at >= a - 60_000 && at <= b + 60_000) {
+        ("textures", "Fortnite crashed while its texture packs were out", "Parts of the game can still ask for the optional texture packs, so playing without them can crash after a while. They are back now. Don’t use Remove & play for now; for flat textures use Potato textures (NVIDIA) or the Potato preset instead.")
+    } else if has(&["out of video memory", "video memory", "outofvideomemory"]) {
+        ("vram", "The graphics card ran out of memory", "Lower Textures and View distance (or use the Potato preset), close other programs that use the graphics card (browsers, recording), and cap the frame rate.")
+    } else if has(&["device removed", "device_removed", "device hung", "device_hung", "gpu crash", "dxgi_error", "d3d12", "d3d11", "nvwgf", "nvlddmkm", "atidxx", "amdxx", "igdumd", "gpu has crashed", "d3ddevicelost"]) {
+        ("gpu", "The graphics driver stopped responding", "Usually heat or an unstable overclock while the card runs flat out at very high frame rates, or the driver itself. Cap the frame rate near your monitor’s refresh rate, set Potato textures to Off to rule it out, undo any graphics overclock, and clean-install the latest driver.")
+    } else if has(&["out of memory", "ran out of memory", "outofmemory", "failed to allocate", "malloc"]) {
+        ("memory", "Windows ran out of memory", "Close browsers and other programs while you play, and make sure Windows’ page file is on (System → About → Advanced system settings → Performance → Advanced → Virtual memory: automatic).")
+    } else if has(&[".pak", ".utoc", ".ucas", "pakchunk", "corrupt", "missing", "couldn't find", "could not find", "failed to load", "signature", "pak file"]) {
+        ("files", "Fortnite couldn’t read some of its files", "If texture packs are out, put them back. Then run Verify in the Epic Games launcher (Library → Fortnite → ⋯ → Manage → Verify).")
+    } else {
+        ("other", "Fortnite crashed", "If it keeps happening, cap the frame rate, set Potato textures to Off, put your own settings back (Put back mine) and see whether it stops; that tells which change it was.")
+    };
+    (cause.into(), title.into(), advice.into())
+}
+
+/// The newest crash report under `<local>\FortniteGame\Saved\Crashes`.
+pub fn last_crash(local: &Path, textures_out: Option<(i64, i64)>) -> Option<Crash> {
+    let dir = local.join("FortniteGame").join("Saved").join("Crashes");
+    let (at, message) = std::fs::read_dir(&dir)
+        .ok()?
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .filter_map(|e| {
+            let f = e.path().join("CrashContext.runtime-xml");
+            let at = mtime_ms(&f)?;
+            let bytes = std::fs::read(&f).ok()?;
+            let xml = String::from_utf8_lossy(&bytes[..bytes.len().min(256 * 1024)]).into_owned();
+            let msg = tag(&xml, "ErrorMessage").or_else(|| tag(&xml, "CrashType")).unwrap_or_else(|| "No message".into());
+            Some((at, msg))
+        })
+        .max_by_key(|(at, _)| *at)?;
+    let message: String = message.lines().next().unwrap_or("").chars().take(300).collect();
+    let (cause, title, advice) = classify(&message, at, textures_out);
+    Some(Crash { at, message, cause, title, advice })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,5 +351,22 @@ mod tests {
         assert!(update_url("NVIDIA GeForce RTX 4070").unwrap().contains("nvidia"));
         assert!(update_url("AMD Radeon RX 7800 XT").unwrap().contains("amd"));
         assert_eq!(update_url("Microsoft Basic Display Adapter"), None);
+    }
+
+    #[test]
+    fn reads_and_explains_the_last_crash() {
+        let t = tempfile::tempdir().unwrap();
+        let d = t.path().join("FortniteGame/Saved/Crashes/UECC-Windows-1_0000");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("CrashContext.runtime-xml"), "<FGenericCrashContext><RuntimeProperties><ErrorMessage>LowLevelFatalError [File:Unknown] D3D Device Removed: DXGI_ERROR_DEVICE_HUNG</ErrorMessage><CrashType>GPUCrash</CrashType></RuntimeProperties></FGenericCrashContext>").unwrap();
+        let c = last_crash(t.path(), None).unwrap();
+        assert_eq!(c.cause, "gpu");
+        assert!(c.message.contains("DEVICE_HUNG"));
+        let c = last_crash(t.path(), Some((c.at - 1000, c.at + 1000))).unwrap();
+        assert_eq!(c.cause, "textures", "a crash while the packs were out points at them");
+        assert_eq!(classify("Ran out of memory allocating 12 bytes", 0, None).0, "memory");
+        assert_eq!(classify("Corrupt pak file pakchunk10optional", 0, None).0, "files");
+        assert_eq!(classify("Unhandled Exception: EXCEPTION_ACCESS_VIOLATION", 0, None).0, "other");
+        assert!(last_crash(tempfile::tempdir().unwrap().path(), None).is_none());
     }
 }

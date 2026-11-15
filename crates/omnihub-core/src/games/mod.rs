@@ -887,7 +887,28 @@ impl GameHub {
         let dir = self.fortnite_install().ok_or("Fortnite (from the Epic Games launcher) wasn't found on this PC.")?;
         let s = fntextures::stash(&dir, self.fortnite_running())?;
         *self.fn_stash.lock() = Some((std::time::Instant::now(), false));
+        self.textures_window(true);
         Ok(s)
+    }
+
+    /// When the texture packs were last out (start, end in ms), kept so a
+    /// crash in that time can be put down to them.
+    fn textures_window(&self, start: bool) {
+        let path = self.store_path.with_file_name("fortnite-textures.json");
+        let now = chrono::Utc::now().timestamp_millis();
+        let (a, _) = self.textures_out_window().unwrap_or((now, now));
+        let w = if start { (now, i64::MAX) } else { (a, now) };
+        let _ = write_json(&path, &w);
+    }
+
+    fn textures_out_window(&self) -> Option<(i64, i64)> {
+        let b = std::fs::read(self.store_path.with_file_name("fortnite-textures.json")).ok()?;
+        serde_json::from_slice(&b).ok()
+    }
+
+    /// Fortnite's last crash with its likely cause (None: no crash report).
+    pub fn fortnite_crash(&self) -> Option<fortnite::Crash> {
+        fortnite::last_crash(&Self::local_app_data().ok()?, self.textures_out_window())
     }
 
     /// Take the packs out and start Fortnite through the Epic launcher.
@@ -901,6 +922,7 @@ impl GameHub {
         let dir = self.fortnite_install().ok_or("Fortnite wasn't found on this PC.")?;
         let n = fntextures::restore(&dir, self.fortnite_running())?;
         *self.fn_stash.lock() = None;
+        self.textures_window(false);
         Ok(n)
     }
 
@@ -932,6 +954,7 @@ impl GameHub {
         match fntextures::restore(&dir, false) {
             Ok(n) => {
                 *self.fn_stash.lock() = None;
+                self.textures_window(false);
                 if n > 0 {
                     self.events.emit("games:textures", serde_json::json!({ "restored": n }));
                 }

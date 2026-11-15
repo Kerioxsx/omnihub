@@ -1,5 +1,13 @@
 ## New in this version
 
+**Fortnite crash help, potato levels that each look different, and capped presets.**
+
+- **Last crash, explained**: if Fortnite crashed in the past week, Games → Optimize → Fortnite now shows when, Fortnite's own error message (from its crash report) and the likely cause: graphics driver stopped responding, out of graphics or system memory, unreadable game files, or a crash while the texture packs were out. Each comes with what to try.
+- **Presets no longer run uncapped**: Potato, Clean & bright and Competitive used to set the frame rate to Unlimited. At these settings that can mean several hundred FPS, a PC running flat out and a crash after a while. They now cap just above your monitor's refresh rate. Unlimited is still there under Frame rate limit.
+- **Potato textures (NVIDIA)** now has five steps that each look different: Off, Light (+1), Medium (+3), Strong (+5) and Extreme (+8). The old Max (+15) looked the same as +8, because every texture is already at its smallest size by then, so it's gone.
+- NVIDIA's driver doesn't apply this setting to **DirectX 12**, which is why it seemed to do nothing with the Balanced or Pretty presets. The row now says so when Fortnite is on DirectX 12. It works in Performance mode (the Potato preset) and DirectX 11.
+- **Play without texture packs** is marked experimental. Parts of the game may still ask for the packs and crash. If Fortnite crashes while they're out, the crash notice says so.
+
 **Fortnite without its texture packs, on any graphics card, and every file goes back.**
 
 - The other half of the potato apps' trick: on AMD and Intel they "remove texture packs". OmniHub now does it the careful way: Games → Optimize → Fortnite → **Play without texture packs → Remove & play**. Fortnite's *optional* packs (the files in `FortniteGame/Content/Paks` with "optional" in their name: High Resolution Textures and the like) are **moved, never deleted**, into a folder beside the game on the same drive, and Fortnite starts.
