@@ -2186,6 +2186,29 @@ pub async fn games_delete(core: Core<'_>, id: String) -> Res<()> {
     blocking(move || core.games.delete(&id)).await
 }
 
+/// Fortnite's optional texture packs: `action` "out" takes them out until
+/// it closes ("play" also starts it), "back" returns them now, none reports.
+#[tauri::command]
+pub async fn games_fortnite_textures(core: Core<'_>, action: Option<String>) -> Res<omnihub_core::games::fntextures::TextureStatus> {
+    let core = core.inner().clone();
+    blocking(move || {
+        match action.as_deref() {
+            Some("out") => {
+                core.games.fortnite_textures_out()?;
+            }
+            Some("play") => {
+                core.games.fortnite_textures_play()?;
+            }
+            Some("back") => {
+                core.games.fortnite_textures_back()?;
+            }
+            _ => {}
+        }
+        Ok(core.games.fortnite_textures())
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn games_potato_textures(core: Core<'_>, eighths: Option<u32>) -> Res<Option<u32>> {
     let core = core.inner().clone();

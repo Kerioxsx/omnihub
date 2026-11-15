@@ -3,7 +3,7 @@
 // and Minecraft. Shows what the file says now, what Optimize changes, and
 // puts your own settings back.
 
-import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteAdvice, FortniteOptions, FortniteRenderMode, GameConfigs, GameSession, GpuDriver, MinecraftOptions, NetCheck, ProOptions, Replays } from '@shared/types';
+import type { ConfigGame, ConfigOptions, ConfigStatus, FortniteAdvice, FortniteOptions, FortniteTextures, FortniteRenderMode, GameConfigs, GameSession, GpuDriver, MinecraftOptions, NetCheck, ProOptions, Replays } from '@shared/types';
 import { formatBytes, formatRelative } from '@shared/format';
 import { AnimatePresence, motion } from 'motion/react';
 import { CheckCircle2, ChevronDown, Eraser, ExternalLink, Film, Gauge, Info, Lightbulb, MonitorCog, RotateCcw, Sparkles, XCircle, Zap, Cpu, Sun } from 'lucide-react';
@@ -222,6 +222,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                 </Row>
               )}
               <PotatoTextures />
+              <TexturePacks />
               <Row title="Brightness" hint="Fortnite’s Brightness (100% is its default). Higher gives the light, washed pastel look. Saved as DisplayGamma in its settings; Keep leaves yours.">
                 <Select value={o.fortnite.brightness ?? 0} onChange={(e) => fn({ brightness: Number(e.target.value) })} className="w-28">
                   {[0, 100, 110, 120, 130, 140, 150, 160].map((b) => (
@@ -412,6 +413,68 @@ function PotatoTextures() {
         <span className="text-[12.5px] text-faint">Needs an NVIDIA card</span>
       ) : (
         <Segmented size="sm" label="Potato textures" value={String([0, 16, 64, 120].includes(v) ? v : v > 0 ? 64 : 0)} onChange={(x) => void set(Number(x))} options={[{ value: '0', label: 'Off', disabled: busy }, { value: '16', label: 'Light', disabled: busy }, { value: '64', label: 'Strong', disabled: busy }, { value: '120', label: 'Max', disabled: busy }]} />
+      )}
+    </Row>
+  );
+}
+
+/**
+ * Fortnite without its optional texture packs for one session (the AMD and
+ * Intel take on potato textures). The files are moved aside, never deleted,
+ * and go back on their own once Fortnite closes.
+ */
+function TexturePacks() {
+  const [t, setT] = useState<FortniteTextures | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => api.games.fortniteTextures().then(setT, () => setT(null));
+  useEffect(() => {
+    void load();
+  }, []);
+  useEvent<{ restored: number }>('games:textures', (p) => {
+    void load();
+    toast.success('Fortnite’s textures are back', `${p.restored} file${p.restored === 1 ? '' : 's'} returned after Fortnite closed.`);
+  });
+  const act = async (a: 'play' | 'back') => {
+    if (a === 'play') {
+      const ok = await confirm({
+        title: 'Remove textures and play?',
+        description: 'OmniHub moves Fortnite’s optional texture packs into a folder next to the game (nothing is deleted), then starts Fortnite. They go back by themselves when Fortnite closes, or when OmniHub next starts. Don’t run Verify in the Epic launcher while they are out: it would download them again. Works best on a Fortnite that isn’t mid-update.',
+        confirmLabel: 'Remove and play',
+      });
+      if (!ok) return;
+    }
+    setBusy(true);
+    try {
+      setT(await api.games.fortniteTextures(a));
+      if (a === 'back') toast.success('Textures are back in Fortnite');
+    } catch (e) {
+      toast.error(a === 'play' ? 'Couldn’t remove the textures' : 'Couldn’t put the textures back', errorText(e));
+      void load();
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!t?.found) return null;
+  const out = t.stashed > 0;
+  return (
+    <Row
+      title="Play without texture packs"
+      hint={
+        out
+          ? `${t.stashed} texture file${t.stashed === 1 ? '' : 's'} (${formatBytes(t.stashedBytes)}) are out for this session. They go back once Fortnite closes.`
+          : t.files === 0
+            ? 'Fortnite has no optional texture packs installed (High Resolution Textures is off), so there is nothing to remove: it is already as light as it gets this way.'
+            : `Takes Fortnite’s optional texture packs (${formatBytes(t.bytes)}, ${t.files} files) out for one session, for flatter textures on any graphics card, then puts every file back when Fortnite closes. Nothing is deleted.`
+      }
+    >
+      {out ? (
+        <Button size="sm" variant="secondary" icon={RotateCcw} loading={busy} onClick={() => void act('back')}>
+          Put back now
+        </Button>
+      ) : (
+        <Button size="sm" icon={Zap} disabled={t.files === 0} loading={busy} onClick={() => void act('play')}>
+          Remove &amp; play
+        </Button>
       )}
     </Row>
   );

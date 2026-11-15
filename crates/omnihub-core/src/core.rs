@@ -965,6 +965,8 @@ impl AppCore {
                         }
                     }
                     core.pad.sweep(&crate::capture::stream::input::key_state);
+                    // Fortnite's texture packs go back once it has closed.
+                    core.games.textures_tick();
                     // Temperatures during a boosted game, for its heat report.
                     if core.games.session().is_some_and(|s| s.active()) {
                         if n % 4 == 1 {

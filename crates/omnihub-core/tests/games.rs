@@ -274,3 +274,30 @@ fn boost_modes() {
     let back = cs.boost.with_mode(BoostMode::Quality);
     assert!(back.precise_timer && !back.game_settings);
 }
+
+#[test]
+fn fortnite_textures_stay_out_until_it_runs_and_come_back_at_start() {
+    let game = tempfile::tempdir().unwrap();
+    let paks = game.path().join("FortniteGame").join("Content").join("Paks");
+    std::fs::create_dir_all(&paks).unwrap();
+    for n in ["pakchunk0-WindowsClient.pak", "pakchunk10optional-WindowsClient.ucas", "pakchunk10optional-WindowsClient.utoc"] {
+        std::fs::write(paks.join(n), b"x").unwrap();
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let hub = GameHub::with_test_timing(dir.path(), EventBus::new(), Arc::new(ProcessMonitor::new()), Duration::from_millis(100), Duration::from_secs(10));
+    hub.set_fortnite_install(game.path().to_path_buf());
+    hub.textures_tick(); // start: nothing out
+    let s = hub.fortnite_textures_out().unwrap();
+    assert_eq!((s.files, s.stashed), (0, 2));
+    // Fortnite hasn't started yet: the packs wait for it.
+    hub.textures_tick();
+    assert_eq!(hub.fortnite_textures().stashed, 2);
+    // OmniHub closed mid-session: the next start puts them back.
+    let dir2 = tempfile::tempdir().unwrap();
+    let hub2 = GameHub::with_test_timing(dir2.path(), EventBus::new(), Arc::new(ProcessMonitor::new()), Duration::from_millis(100), Duration::from_secs(10));
+    hub2.set_fortnite_install(game.path().to_path_buf());
+    hub2.textures_tick();
+    let s = hub2.fortnite_textures();
+    assert_eq!((s.files, s.stashed), (2, 0));
+    assert!(paks.join("pakchunk10optional-WindowsClient.ucas").is_file());
+}

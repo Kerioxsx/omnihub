@@ -742,6 +742,8 @@ export const api = {
     setFpsCap: (id: string, fps: number) => call<T.GameState | null>('games_fps_cap', { id, fps }),
     /** Fortnite's NVIDIA LOD bias in eighths (null: no NVIDIA card); pass eighths to set it. */
     potatoTextures: (eighths?: number) => call<number | null>('games_potato_textures', { eighths: eighths ?? null }),
+    /** Fortnite's optional texture packs: take out ("play" also starts Fortnite), put back, or just look. */
+    fortniteTextures: (action?: 'out' | 'play' | 'back') => call<T.FortniteTextures>('games_fortnite_textures', { action: action ?? null }),
     play: (id: string, launch: boolean) => call<T.GameSession>('games_play', { id, launch }),
     stop: () => call<boolean>('games_stop'),
     ping: (id: string | null, host?: string) => call<T.PingResult[]>('games_ping', { id, host: host ?? null }),

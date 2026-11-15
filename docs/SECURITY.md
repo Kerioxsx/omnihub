@@ -1286,3 +1286,23 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   Bleach-inspired themes are drawn with CSS shapes. Gallery ids are checked
   (`g` + digits) before any file is read or removed.
 
+## 0.58.0
+
+- **Fortnite texture packs** (`games/fntextures.rs`) only ever touch files in
+  `<Fortnite>/FortniteGame/Content/Paks` whose name contains "optional" and
+  ends in `.pak`, `.utoc`, `.ucas` or `.sig` (no path separators or `..`).
+  The Fortnite folder comes from the Epic launcher's own manifests. Files are
+  renamed (never copied or deleted) into `FortniteGame/OmniHub-stashed-textures`
+  with a `moved.json` list written first; names read back from that list are
+  checked the same way. Nothing moves while `FortniteClient-Win64-Shipping.exe`
+  runs; a failed move is rolled back. Restoring never overwrites a pack the
+  launcher re-downloaded (the stashed copy is removed instead). OmniHub
+  restores after Fortnite has run and closed, at start for leftovers, or
+  after 20 minutes if Fortnite never started. Fortnite's anti-cheat and the
+  launcher's Verify have not been tested against a session without the packs.
+- **New PC tweaks**: background apps and transparency are per-user registry
+  values (`GlobalUserDisabled`, `BackgroundAppGlobalToggle`,
+  `EnableTransparency`); power throttling (`PowerThrottlingOff`) and the
+  DiagTrack service's `Start` value go through the existing elevated helper
+  (`pthrottle <1|->`, `diag <2|3|4>`, nothing else accepted), which also runs
+  `sc.exe stop|start DiagTrack`. Each records the previous values for Undo.

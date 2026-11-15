@@ -13,6 +13,7 @@ import { govee } from './mock/govee';
 import { modsMock as mm } from './mock/mods';
 
 let mockPotato = 0;
+let mockTexturesOut = false;
 let mockScreen = { width: 2560, height: 1440, hz: 165 };
 let mockScreenBefore: typeof mockScreen | null = null;
 
@@ -244,6 +245,13 @@ const handlers: Record<string, Handler> = {
     const n = (a as { eighths?: number | null }).eighths;
     if (typeof n === 'number') mockPotato = n;
     return mockPotato;
+  },
+  games_fortnite_textures: (a) => {
+    const act = (a as { action?: string | null }).action;
+    if (act === 'out' || act === 'play') mockTexturesOut = true;
+    if (act === 'back') mockTexturesOut = false;
+    const size = 9_400_000_000;
+    return { found: true, files: mockTexturesOut ? 0 : 8, bytes: mockTexturesOut ? 0 : size, stashed: mockTexturesOut ? 8 : 0, stashedBytes: mockTexturesOut ? size : 0 };
   },
   games_play: (a) => games.play(str(a, 'id'), bool(a, 'launch')),
   games_stop: () => games.stop(),

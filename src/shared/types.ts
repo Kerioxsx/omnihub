@@ -1568,6 +1568,17 @@ export interface FortniteOptions {
 }
 
 /** Resolution advice for Fortnite from the monitor and specs. */
+/** Fortnite's optional texture packs (High Resolution Textures and the like). */
+export interface FortniteTextures {
+  found: boolean;
+  /** Packs in place, that could be taken out. */
+  files: number;
+  bytes: number;
+  /** Packs out right now, going back when Fortnite closes. */
+  stashed: number;
+  stashedBytes: number;
+}
+
 export interface FortniteAdvice {
   gpu: string;
   vramGb: number;
@@ -1667,7 +1678,7 @@ export interface InstalledGame {
   profileId: string | null;
 }
 
-export type TweakId = 'refreshRate' | 'memorySpeed' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'variableRefresh' | 'gpuScheduling' | 'preciseTimer' | 'networkThrottling' | 'mouseAcceleration' | 'stickyKeys' | 'memoryIntegrity';
+export type TweakId = 'refreshRate' | 'memorySpeed' | 'powerPlan' | 'gameDvr' | 'gameMode' | 'windowedGames' | 'variableRefresh' | 'gpuScheduling' | 'preciseTimer' | 'networkThrottling' | 'mouseAcceleration' | 'stickyKeys' | 'memoryIntegrity' | 'backgroundApps' | 'transparency' | 'powerThrottling' | 'telemetry';
 
 export interface PcTweak {
   id: TweakId;

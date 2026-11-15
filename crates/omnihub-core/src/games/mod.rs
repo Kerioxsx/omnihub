@@ -13,6 +13,7 @@ pub mod emuinstall;
 pub mod emulators;
 pub mod emusaves;
 pub mod fnres;
+pub mod fntextures;
 pub mod fortnite;
 pub mod fps;
 pub mod ini;
@@ -592,6 +593,12 @@ pub struct GameHub {
     admin_wait: Duration,
     /// Runs the administrator changes (a stand-in in tests).
     run_admin: AdminRunner,
+    /// Fortnite's texture packs taken out for a session: where the game is,
+    /// and when they went out and whether Fortnite has run since (None:
+    /// nothing out from this run; OmniHub restores leftovers at start).
+    fn_install: Mutex<Option<PathBuf>>,
+    fn_stash: Mutex<Option<(std::time::Instant, bool)>>,
+    fn_started: AtomicBool,
 }
 
 type AdminRunner = Arc<dyn Fn(&[AdminOp]) -> Result<(), String> + Send + Sync>;
@@ -658,6 +665,9 @@ impl GameHub {
             wait_limit: Duration::from_secs(600),
             admin_wait: Duration::from_secs(25),
             run_admin: Arc::new(tweaks::run_admin),
+            fn_install: Mutex::new(None),
+            fn_stash: Mutex::new(None),
+            fn_started: AtomicBool::new(false),
         })
     }
 
@@ -846,6 +856,88 @@ impl GameHub {
             return Err("Potato textures need an NVIDIA graphics card (they are a driver setting).".into());
         }
         tweaks::run_admin(&[AdminOp::NvLod(configs::ConfigGame::Fortnite.process().to_string(), eighths.min(128))])
+    }
+
+    fn fortnite_install(&self) -> Option<PathBuf> {
+        let mut g = self.fn_install.lock();
+        if g.is_none() {
+            *g = tweaks::epic_install("Fortnite");
+        }
+        g.clone()
+    }
+
+    fn fortnite_running(&self) -> bool {
+        !self.procs.pids_named(configs::ConfigGame::Fortnite.process()).is_empty()
+    }
+
+    /// For tests: Fortnite in a temporary folder.
+    pub fn set_fortnite_install(&self, dir: PathBuf) {
+        *self.fn_install.lock() = Some(dir);
+    }
+
+    pub fn fortnite_textures(&self) -> fntextures::TextureStatus {
+        // Look again if Fortnite moved or was uninstalled.
+        self.fn_install.lock().take_if(|d| !d.is_dir());
+        fntextures::status(self.fortnite_install().as_deref())
+    }
+
+    /// Take Fortnite's optional texture packs out until it has run and
+    /// closed (or 20 minutes pass without it starting).
+    pub fn fortnite_textures_out(&self) -> Result<fntextures::TextureStatus, String> {
+        let dir = self.fortnite_install().ok_or("Fortnite (from the Epic Games launcher) wasn't found on this PC.")?;
+        let s = fntextures::stash(&dir, self.fortnite_running())?;
+        *self.fn_stash.lock() = Some((std::time::Instant::now(), false));
+        Ok(s)
+    }
+
+    /// Take the packs out and start Fortnite through the Epic launcher.
+    pub fn fortnite_textures_play(&self) -> Result<fntextures::TextureStatus, String> {
+        let s = self.fortnite_textures_out()?;
+        start("com.epicgames.launcher://apps/Fortnite?action=launch&silent=true", "").map_err(|e| format!("Textures are out, but the Epic Games launcher didn't start ({e}). Start Fortnite yourself; they go back when it closes."))?;
+        Ok(s)
+    }
+
+    pub fn fortnite_textures_back(&self) -> Result<usize, String> {
+        let dir = self.fortnite_install().ok_or("Fortnite wasn't found on this PC.")?;
+        let n = fntextures::restore(&dir, self.fortnite_running())?;
+        *self.fn_stash.lock() = None;
+        Ok(n)
+    }
+
+    /// Called every few seconds: puts the textures back once Fortnite has
+    /// closed, and at start for any left from before.
+    pub fn textures_tick(&self) {
+        let first = !self.fn_started.swap(true, Ordering::Relaxed);
+        if self.fn_stash.lock().is_none() {
+            // Only at start: packs left out by an earlier run (OmniHub or
+            // the PC closed mid-game) go back as soon as Fortnite is closed.
+            if !first || !self.fortnite_install().is_some_and(|d| fntextures::has_stash(&d)) {
+                return;
+            }
+            *self.fn_stash.lock() = Some((std::time::Instant::now(), true));
+        }
+        let running = self.fortnite_running();
+        {
+            let mut g = self.fn_stash.lock();
+            let Some((at, seen)) = g.as_mut() else { return };
+            if running {
+                *seen = true;
+                return;
+            }
+            if !*seen && at.elapsed() < Duration::from_secs(20 * 60) {
+                return;
+            }
+        }
+        let Some(dir) = self.fortnite_install() else { return };
+        match fntextures::restore(&dir, false) {
+            Ok(n) => {
+                *self.fn_stash.lock() = None;
+                if n > 0 {
+                    self.events.emit("games:textures", serde_json::json!({ "restored": n }));
+                }
+            }
+            Err(e) => tracing::warn!("games: Fortnite textures not back yet: {e}"),
+        }
     }
 
     /// Cap the game in its NVIDIA driver profile (0 removes the cap).

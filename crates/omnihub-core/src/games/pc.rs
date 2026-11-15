@@ -35,12 +35,16 @@ pub enum TweakId {
     MouseAcceleration,
     StickyKeys,
     MemoryIntegrity,
+    BackgroundApps,
+    Transparency,
+    PowerThrottling,
+    Telemetry,
 }
 
 impl TweakId {
-    pub fn all() -> [TweakId; 13] {
+    pub fn all() -> [TweakId; 17] {
         use TweakId::*;
-        [RefreshRate, MemorySpeed, PowerPlan, GameDvr, GameMode, WindowedGames, VariableRefresh, GpuScheduling, PreciseTimer, NetworkThrottling, MouseAcceleration, StickyKeys, MemoryIntegrity]
+        [RefreshRate, MemorySpeed, PowerPlan, GameDvr, GameMode, WindowedGames, VariableRefresh, GpuScheduling, PreciseTimer, NetworkThrottling, PowerThrottling, BackgroundApps, Telemetry, Transparency, MouseAcceleration, StickyKeys, MemoryIntegrity]
     }
 
     fn key(self) -> &'static str {
@@ -58,6 +62,10 @@ impl TweakId {
             TweakId::MouseAcceleration => "mouseAcceleration",
             TweakId::StickyKeys => "stickyKeys",
             TweakId::MemoryIntegrity => "memoryIntegrity",
+            TweakId::BackgroundApps => "backgroundApps",
+            TweakId::Transparency => "transparency",
+            TweakId::PowerThrottling => "powerThrottling",
+            TweakId::Telemetry => "telemetry",
         }
     }
 }
@@ -173,6 +181,10 @@ fn describe(id: TweakId) -> (&'static str, &'static str, Impact, bool, bool) {
         TweakId::NetworkThrottling => ("No network throttling during media", "Windows slows network handling while audio or video plays and keeps 20% of the processor for background work. This lifts the limit and keeps 10%. Takes effect after a restart.", Impact::Low, true, true),
         TweakId::StickyKeys => ("Sticky Keys shortcut off", "Pressing Shift five times no longer pops the Sticky Keys box over your game. Sticky Keys itself stays in Settings → Accessibility.", Impact::Low, false, false),
         TweakId::MouseAcceleration => ("Mouse acceleration off", "“Enhance pointer precision” off, so the same hand movement always turns the same amount — for aim, not frames.", Impact::Low, false, false),
+        TweakId::BackgroundApps => ("Background apps off", "Store apps (Mail, Weather, Xbox and the like) stop running and refreshing in the background, freeing a little processor time and memory while you play. They still work when you open them.", Impact::Low, false, false),
+        TweakId::Transparency => ("Transparency effects off", "The see-through blur in the taskbar, Start and windows: a little less work for the graphics card when Windows draws over or beside the game.", Impact::Low, false, false),
+        TweakId::PowerThrottling => ("Power throttling off", "Windows slows programs it thinks are in the background to save power, which can catch game helpers, launchers and overlays. Off keeps everything at full speed (on a laptop, battery life drops). Takes effect after a restart.", Impact::Low, true, true),
+        TweakId::Telemetry => ("Windows telemetry service off", "The Connected User Experiences and Telemetry service (DiagTrack) stops sending usage data in the background. Windows Update and the Store keep working.", Impact::Low, true, false),
         TweakId::MemoryIntegrity => ("Memory Integrity", "A Windows security feature that Microsoft says can lower game performance. Your choice, in Windows Security → Core isolation.", Impact::High, false, true),
     }
 }
@@ -230,9 +242,18 @@ fn helper_value(v: &str) -> Option<Option<u32>> {
 }
 
 /// Admin-only changes, run by the elevated helper ("hags+", "hags-",
-/// "timer <1|->", "mm <index|-> <responsiveness|->").
+/// "timer <1|->", "mm <index|-> <responsiveness|->", "pthrottle <1|->",
+/// "diag <2|3|4>").
 pub fn helper_admin(args: &[String]) -> i32 {
     match args {
+        [a, v] if a == "pthrottle" => match helper_value(v) {
+            Some(v) => i32::from(imp::set_power_throttling(v).is_err()),
+            None => 64,
+        },
+        [a, v] if a == "diag" => match v.parse::<u32>() {
+            Ok(start @ 2..=4) => i32::from(imp::set_telemetry(start).is_err()),
+            _ => 64,
+        },
         [a] if a == "hags+" => i32::from(imp::set_hags(true).is_err()),
         [a] if a == "hags-" => i32::from(imp::set_hags(false).is_err()),
         [a, v] if a == "timer" => match helper_value(v) {
@@ -274,7 +295,7 @@ mod imp {
     use super::*;
     use crate::games::tweaks;
     use serde_json::json;
-    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_SET_VALUE};
     use winreg::RegKey;
 
     fn read_dword(root: winreg::HKEY, path: &str, name: &str) -> Option<u32> {
@@ -311,6 +332,11 @@ mod imp {
     const MULTIMEDIA: &str = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile";
     /// NetworkThrottlingIndex: no limit.
     const NO_THROTTLING: u32 = 0xFFFF_FFFF;
+    const BG_APPS: &str = r"Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications";
+    const SEARCH: &str = r"Software\Microsoft\Windows\CurrentVersion\Search";
+    const PERSONALIZE: &str = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+    const POWER_THROTTLING: &str = r"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling";
+    const DIAGTRACK: &str = r"SYSTEM\CurrentControlSet\Services\DiagTrack";
 
     // ---------- displays ----------
 
@@ -501,6 +527,22 @@ mod imp {
                 None => st(false, false, "Unknown".into()),
             },
             TweakId::MemorySpeed => memory_state(&crate::rig::specs::memory()),
+            TweakId::BackgroundApps => {
+                let off = read_dword(HKEY_CURRENT_USER, BG_APPS, "GlobalUserDisabled") == Some(1) || read_dword(HKEY_CURRENT_USER, SEARCH, "BackgroundAppGlobalToggle") == Some(0);
+                st(true, off, if off { "Off".into() } else { "Allowed".into() })
+            }
+            TweakId::Transparency => {
+                let off = read_dword(HKEY_CURRENT_USER, PERSONALIZE, "EnableTransparency") == Some(0);
+                st(true, off, if off { "Off".into() } else { "On".into() })
+            }
+            TweakId::PowerThrottling => {
+                let off = read_dword(HKEY_LOCAL_MACHINE, POWER_THROTTLING, "PowerThrottlingOff") == Some(1);
+                st(true, off, if off { "Off".into() } else { "On".into() })
+            }
+            TweakId::Telemetry => match read_dword(HKEY_LOCAL_MACHINE, DIAGTRACK, "Start") {
+                Some(v) => st(true, v == 4, if v == 4 { "Disabled".into() } else { "Running".into() }),
+                None => st(false, true, "Not on this PC".into()),
+            },
             TweakId::MemoryIntegrity => {
                 let on = read_dword(HKEY_LOCAL_MACHINE, HVCI, "Enabled") == Some(1);
                 st(true, !on, if on { "On".into() } else { "Off".into() })
@@ -574,6 +616,27 @@ mod imp {
                 set_sticky_flags(before & !SKF_HOTKEYACTIVE)?;
                 Ok((json!(before), None))
             }
+            TweakId::BackgroundApps => {
+                let before = json!({ "global": read_dword(HKEY_CURRENT_USER, BG_APPS, "GlobalUserDisabled"), "toggle": read_dword(HKEY_CURRENT_USER, SEARCH, "BackgroundAppGlobalToggle") });
+                hkcu_set_dword(BG_APPS, "GlobalUserDisabled", Some(1))?;
+                hkcu_set_dword(SEARCH, "BackgroundAppGlobalToggle", Some(0))?;
+                Ok((before, None))
+            }
+            TweakId::Transparency => {
+                let before = json!(read_dword(HKEY_CURRENT_USER, PERSONALIZE, "EnableTransparency"));
+                hkcu_set_dword(PERSONALIZE, "EnableTransparency", Some(0))?;
+                Ok((before, None))
+            }
+            TweakId::PowerThrottling => {
+                let before = json!(read_dword(HKEY_LOCAL_MACHINE, POWER_THROTTLING, "PowerThrottlingOff"));
+                run_admin(&["pthrottle", "1"])?;
+                Ok((before, None))
+            }
+            TweakId::Telemetry => {
+                let before = read_dword(HKEY_LOCAL_MACHINE, DIAGTRACK, "Start").ok_or("The telemetry service isn't on this PC.")?;
+                run_admin(&["diag", "4"])?;
+                Ok((json!(before), None))
+            }
             TweakId::MemoryIntegrity => Err("Memory Integrity is changed in Windows Security → Core isolation.".into()),
             TweakId::MemorySpeed => Err("EXPO or XMP is turned on in the BIOS (UEFI Firmware Settings).".into()),
         }
@@ -629,6 +692,14 @@ mod imp {
                 let p = before.as_array().and_then(|a| (a.len() == 3).then(|| [a[0].as_i64().unwrap_or(6) as i32, a[1].as_i64().unwrap_or(10) as i32, a[2].as_i64().unwrap_or(1) as i32])).unwrap_or([6, 10, 1]);
                 set_mouse(p)
             }
+            TweakId::BackgroundApps => {
+                let n = |k: &str| before.get(k).and_then(Value::as_u64).map(|v| v as u32);
+                hkcu_set_dword(BG_APPS, "GlobalUserDisabled", n("global"))?;
+                hkcu_set_dword(SEARCH, "BackgroundAppGlobalToggle", n("toggle"))
+            }
+            TweakId::Transparency => hkcu_set_dword(PERSONALIZE, "EnableTransparency", before.as_u64().map(|v| v as u32).or(Some(1))),
+            TweakId::PowerThrottling => run_admin(&["pthrottle", &before.as_u64().map_or("-".to_string(), |v| v.to_string())]),
+            TweakId::Telemetry => run_admin(&["diag", &before.as_u64().filter(|v| (2..=4).contains(v)).unwrap_or(2).to_string()]),
             TweakId::MemoryIntegrity | TweakId::MemorySpeed => Ok(()),
         }
     }
@@ -668,6 +739,26 @@ mod imp {
         hklm_set_dword(MULTIMEDIA, "NetworkThrottlingIndex", index)?;
         hklm_set_dword(MULTIMEDIA, "SystemResponsiveness", responsiveness)
     }
+
+    pub fn set_power_throttling(v: Option<u32>) -> Result<(), String> {
+        hklm_set_dword(POWER_THROTTLING, "PowerThrottlingOff", v)
+    }
+
+    /// The telemetry service's start type (2 automatic, 3 manual, 4 off);
+    /// stopped when turned off, started again when put back to automatic.
+    pub fn set_telemetry(start: u32) -> Result<(), String> {
+        let k = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey_with_flags(DIAGTRACK, KEY_SET_VALUE).map_err(|e| e.to_string())?;
+        k.set_value("Start", &start).map_err(|e| e.to_string())?;
+        let action = if start == 4 { "stop" } else if start == 2 { "start" } else { return Ok(()) };
+        let mut c = std::process::Command::new("sc.exe");
+        c.args([action, "DiagTrack"]);
+        {
+            use std::os::windows::process::CommandExt;
+            c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        let _ = c.output();
+        Ok(())
+    }
 }
 
 #[cfg(not(windows))]
@@ -699,6 +790,14 @@ mod imp {
     }
 
     pub fn set_multimedia(_index: Option<u32>, _responsiveness: Option<u32>) -> Result<(), String> {
+        Err("Windows only".into())
+    }
+
+    pub fn set_power_throttling(_v: Option<u32>) -> Result<(), String> {
+        Err("Windows only".into())
+    }
+
+    pub fn set_telemetry(_start: u32) -> Result<(), String> {
         Err("Windows only".into())
     }
 }

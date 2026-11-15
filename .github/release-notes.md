@@ -1,5 +1,20 @@
 ## New in this version
 
+**Fortnite without its texture packs, on any graphics card, and every file goes back.**
+
+- The other half of the potato apps' trick: on AMD and Intel they "remove texture packs". OmniHub now does it the careful way: Games → Optimize → Fortnite → **Play without texture packs → Remove & play**. Fortnite's *optional* packs (the files in `FortniteGame/Content/Paks` with "optional" in their name: High Resolution Textures and the like) are **moved, never deleted**, into a folder beside the game on the same drive, and Fortnite starts.
+- They **go back by themselves as soon as Fortnite closes**. If OmniHub or the PC closes mid-game, they go back the next time OmniHub starts. If Fortnite never starts, they go back after 20 minutes. **Put back now** returns them at any time (with Fortnite closed).
+- Nothing moves while Fortnite runs, a half-finished move is undone, and a pack the Epic launcher downloaded again in the meantime is kept. Don't run Verify in the Epic launcher while the packs are out: it would download them again.
+- If Fortnite has no optional packs installed, OmniHub says so: there is nothing to remove.
+
+**Four more Windows tweaks (Games → Optimize → This PC), each with Undo:**
+
+- **Background apps off**: Store apps stop running and refreshing in the background.
+- **Transparency effects off**: no see-through blur in the taskbar, Start and windows.
+- **Power throttling off** (administrator, restart): Windows stops slowing programs it thinks are in the background.
+- **Windows telemetry service off** (administrator): the DiagTrack service is stopped and disabled; Undo puts back how it started before.
+- EMTweaks' TCP/Nagle "ping" tweaks were left out on purpose: Fortnite's gameplay traffic is UDP, so they don't change in-game ping.
+
 **Potato textures for Fortnite, the way the potato apps do it.**
 
 - The flat, untextured "potato" look from the clips (and from apps like EMTweaks, whose Potato button works "through the driver") is an NVIDIA driver setting: **Texture filtering – LOD Bias** on Fortnite's profile, with driver-controlled LOD bias off. OmniHub now sets it itself, with no extra tools: Games → Optimize → Fortnite → **Potato textures (NVIDIA)**: Off, Light (+2), Strong (+8) or Max (+15). Windows asks for administrator rights; restart Fortnite to see it. Off gives both settings back to the driver.
