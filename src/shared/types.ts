@@ -1565,6 +1565,8 @@ export interface FortniteOptions {
   lockFile?: boolean;
   /** Brightness percent (100 = Fortnite's default); 0 leaves it alone. */
   brightness?: number;
+  /** Grass: false removes it, true shows it, null follows lowest quality. */
+  showGrass?: boolean | null;
 }
 
 /** Resolution advice for Fortnite from the monitor and specs. */

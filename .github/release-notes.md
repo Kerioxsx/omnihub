@@ -1,5 +1,11 @@
 ## New in this version
 
+**Fortnite: a Grass switch, for the clean potato look.**
+
+- New **Grass** choice (Games → Optimize → Fortnite): Off removes the grass on the ground (Fortnite's own Show Grass setting), On shows it, Auto turns it off with lowest quality. OmniHub now writes it even when Fortnite's settings file has no line for it yet.
+- The **Potato** and **Clean & bright** presets turn grass off, Pretty turns it on, and Balanced leaves it on Auto.
+- For the flat, untextured walls and floors from the clips, combine the Potato preset with **Potato textures (NVIDIA)** at Strong or Extreme. On AMD or Intel there is no safe equivalent: the driver setting is NVIDIA's, and removing game files gets you kicked by Fortnite's anti-cheat.
+
 **Kicked out of Fortnite matches? OmniHub now tells you why, and texture pack removal is gone.**
 
 - **Kicks explained**: Fortnite writes the reason whenever it removes you from a match (connection timeout, anti-cheat, mismatched game files, being idle). OmniHub reads its newest logs and shows the last one in Games → Optimize → Fortnite, next to crashes, with what to try.

@@ -191,7 +191,7 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   ))}
                 </Select>
               </Row>
-              <Row title="Preset" hint="Clean & bright: the bright, flat pastel look from the clips (Performance mode, everything low, sharp 100% 3D resolution, brightness up). Potato: the blurry low-poly look from the clips, for weak PCs (Performance mode, everything lowest, near view, 3D resolution as low as 10%). Competitive: the most frames (Performance mode, lowest quality). These three cap the frame rate just above your monitor’s refresh rate: running uncapped at several hundred FPS can overheat a PC and crash Fortnite after a while. Balanced: DirectX 12 at medium quality. Pretty: DirectX 12 at epic quality. Press Apply after; your own settings stay backed up.">
+              <Row title="Preset" hint="Clean & bright: the bright, flat pastel look from the clips (Performance mode, everything low, sharp 100% 3D resolution, brightness up). Potato: the blurry low-poly look from the clips, for weak PCs (Performance mode, everything lowest, near view, 3D resolution as low as 10%). Competitive: the most frames (Performance mode, lowest quality). These three cap the frame rate just above your monitor’s refresh rate: running uncapped at several hundred FPS can overheat a PC and crash Fortnite after a while. Balanced: DirectX 12 at medium quality. Pretty: DirectX 12 at epic quality. Potato and Clean & bright also remove the grass. For the flat, untextured walls and floors from the clips, add Potato textures (NVIDIA) at Strong or Extreme below. Press Apply after; your own settings stay backed up.">
                 <div className="flex flex-wrap gap-1.5">
                   {PRESETS.map((p) => (
                     <Button key={p.id} size="sm" variant="secondary" icon={p.icon} onClick={() => fn(p.set.frameLimit === 0 ? { ...p.set, frameLimit: presetCap(hz) } : p.set)}>
@@ -227,6 +227,9 @@ export function GameSettingsCard({ game, beforeLaunch, onBeforeLaunch, locked }:
                   <Switch checked={!!o.fortnite.potato} onChange={(v) => fn({ potato: v })} label="Potato graphics" />
                 </Row>
               )}
+              <Row title="Grass" hint="Off removes the grass on the ground (Fortnite’s Show Grass): a cleaner, flatter look and a few more frames. Auto turns it off with lowest quality. Potato and Clean & bright turn it off.">
+                <Segmented size="sm" label="Grass" value={o.fortnite.showGrass == null ? 'auto' : o.fortnite.showGrass ? 'on' : 'off'} onChange={(v) => fn({ showGrass: v === 'auto' ? null : v === 'on' })} options={[{ value: 'auto', label: 'Auto' }, { value: 'off', label: 'Off' }, { value: 'on', label: 'On' }]} />
+              </Row>
               <PotatoTextures dx12={!o.fortnite.potato && o.fortnite.renderMode === 'dx12'} />
               <TexturePacks />
               <Row title="Brightness" hint="Fortnite’s Brightness (100% is its default). Higher gives the light, washed pastel look. Saved as DisplayGamma in its settings; Keep leaves yours.">
@@ -408,11 +411,11 @@ function LastCrash() {
 }
 
 const PRESETS: { id: string; label: string; icon: typeof Zap; set: Partial<FortniteOptions> }[] = [
-  { id: 'bright', label: 'Clean & bright', icon: Sun, set: { potato: false, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 100, brightness: 140 } },
-  { id: 'potato', label: 'Potato', icon: Cpu, set: { potato: true, brightness: 0, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 25 } },
+  { id: 'bright', label: 'Clean & bright', icon: Sun, set: { showGrass: false, potato: false, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 100, brightness: 140 } },
+  { id: 'potato', label: 'Potato', icon: Cpu, set: { showGrass: false, potato: true, brightness: 0, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 25 } },
   { id: 'competitive', label: 'Competitive', icon: Zap, set: { potato: false, brightness: 0, frameLimit: 0, renderMode: 'performance', performanceMode: true, lowestQuality: true, quality: null, viewDistance: 0, fullscreen: true, reflex: 2, showFps: true, resolutionScale: 100 } },
-  { id: 'balanced', label: 'Balanced', icon: Gauge, set: { potato: false, lockFile: false, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 1, viewDistance: 2, fullscreen: true, reflex: 2, resolutionScale: 100 } },
-  { id: 'pretty', label: 'Pretty', icon: Sparkles, set: { potato: false, lockFile: false, frameLimit: 0, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 3, viewDistance: 3, fullscreen: true, reflex: 1, resolutionScale: 100 } },
+  { id: 'balanced', label: 'Balanced', icon: Gauge, set: { showGrass: null, potato: false, lockFile: false, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 1, viewDistance: 2, fullscreen: true, reflex: 2, resolutionScale: 100 } },
+  { id: 'pretty', label: 'Pretty', icon: Sparkles, set: { showGrass: true, potato: false, lockFile: false, frameLimit: 0, renderMode: 'dx12', performanceMode: false, lowestQuality: false, quality: 3, viewDistance: 3, fullscreen: true, reflex: 1, resolutionScale: 100 } },
 ];
 
 /**

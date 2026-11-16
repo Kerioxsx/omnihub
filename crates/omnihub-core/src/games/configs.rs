@@ -200,11 +200,14 @@ pub struct FortniteOptions {
     /// alone. Saved as DisplayGamma (2.2 at 100 %); only changed when the
     /// file already has that line.
     pub brightness: u16,
+    /// Grass: Some(false) removes it, Some(true) shows it, None follows
+    /// "lowest quality" (off there, when the file has the line).
+    pub show_grass: Option<bool>,
 }
 
 impl Default for FortniteOptions {
     fn default() -> Self {
-        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None, quality: None, width: 0, height: 0, potato: false, lock_file: false, brightness: 0 }
+        FortniteOptions { frame_limit: 0, performance_mode: true, lowest_quality: true, view_distance: 1, resolution_scale: 100, show_fps: true, fullscreen: true, reflex: 2, render_mode: None, quality: None, width: 0, height: 0, potato: false, lock_file: false, brightness: 0, show_grass: None }
     }
 }
 
@@ -355,7 +358,7 @@ fn fortnite_edits(o: &FortniteOptions) -> Vec<Edit> {
     // Potato graphics: the lightest of everything, whatever else is picked.
     let potato;
     let o = if o.potato {
-        potato = FortniteOptions { lowest_quality: true, quality: None, view_distance: 0, performance_mode: true, ..o.clone() };
+        potato = FortniteOptions { lowest_quality: true, quality: None, view_distance: 0, performance_mode: true, show_grass: Some(false), ..o.clone() };
         &potato
     } else {
         o
@@ -424,8 +427,13 @@ fn fortnite_edits(o: &FortniteOptions) -> Vec<Edit> {
     }
     let res = o.resolution_scale.clamp(floor, 100);
     e.push(edit(g, "sg.ResolutionQuality", format!("{res}.000000"), true, format!("3D resolution: {res}%")));
+    match o.show_grass {
+        Some(false) => e.push(edit(s, "bShowGrass", "False", true, "Grass off")),
+        Some(true) => e.push(edit(s, "bShowGrass", "True", true, "Grass on")),
+        None if o.lowest_quality => e.push(edit(s, "bShowGrass", "False", false, "Grass off")),
+        None => {}
+    }
     if o.lowest_quality {
-        e.push(edit(s, "bShowGrass", "False", false, "Grass off"));
         e.push(edit(g, "sg.ViewDistanceQuality", o.view_distance.min(3).to_string(), true, format!("View distance: {}", ["near", "medium", "far", "epic"][o.view_distance.min(3) as usize])));
         for (key, what) in UE_GROUPS {
             e.push(edit(g, key, "0", true, format!("{what}: low")));
@@ -963,6 +971,11 @@ mod tests {
         assert!(!std::fs::metadata(&path).unwrap().permissions().readonly(), "unlocked by Restore");
         // Brightness: only where the file has DisplayGamma.
         let mut doc = Doc::ini(b"[/Script/FortniteGame.FortGameUserSettings]\r\nDisplayGamma=2.200000\r\n");
+        // Grass off is written even when the file has no line for it.
+        let mut d = Doc::ini(b"[/Script/FortniteGame.FortGameUserSettings]\r\nbUseVSync=True\r\n");
+        let no_grass = ConfigOptions { fortnite: FortniteOptions { show_grass: Some(false), lowest_quality: false, ..FortniteOptions::default() }, ..ConfigOptions::default() };
+        apply_to(ConfigGame::Fortnite, &no_grass, &mut d);
+        assert_eq!(d.get(Some(FN_SECTION), "bShowGrass").as_deref(), Some("False"));
         let bright = ConfigOptions { fortnite: FortniteOptions { brightness: 140, ..FortniteOptions::default() }, ..ConfigOptions::default() };
         apply_to(ConfigGame::Fortnite, &bright, &mut doc);
         assert_eq!(doc.get(Some(FN_SECTION), "DisplayGamma").as_deref(), Some("3.080000"));
