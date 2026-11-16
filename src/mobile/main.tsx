@@ -3,14 +3,18 @@ import { createRoot } from 'react-dom/client';
 import { MotionConfig } from 'motion/react';
 import './styles.css';
 import { App } from './App';
-import { applyTheme, watchSystemTheme } from './lib/theme';
+import { applyLook, refreshLook, watchLook } from './lib/look';
+import { WallLayer } from './ui/WallLayer';
 
-applyTheme();
-watchSystemTheme();
+// The saved look first (no flash), then the PC's latest.
+applyLook();
+watchLook();
+void refreshLook();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MotionConfig reducedMotion="user">
+      <WallLayer />
       <App />
     </MotionConfig>
   </StrictMode>,

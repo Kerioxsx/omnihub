@@ -6,6 +6,7 @@
 // flight, so slow links drop frames instead of piling up delay.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   MonitorPlay,
@@ -34,10 +35,11 @@ import {
   ArrowUp,
   ArrowDown,
   ChevronRight,
+  Command,
 } from 'lucide-react';
 import type { MonitorInfo, Preset } from '@shared/types';
 import { client, openScreen, parseFrame, type FrameHeader, type ScreenStats, type ViewerMessage } from '../client';
-import { useApp } from '../state';
+import { toast, useApp } from '../state';
 import { Button, Empty, ErrorState, PageHeader, Skeleton } from '../ui/common';
 import { Sheet } from '../ui/Sheet';
 import { useBackHandler } from '../lib/back';
@@ -169,19 +171,23 @@ export function ScreenScreen({ active }: { active: boolean }) {
           </>
         )}
       </div>
-      <AnimatePresence>
-        {viewing && si && (
-          <Viewer
-            key="viewer"
-            monitor={si.monitors.find((m) => m.index === monitor) ?? si.monitors[0]}
-            presets={si.presets}
-            preset={preset}
-            onPreset={choosePreset}
-            allowControl={control}
-            onExit={() => setViewing(false)}
-          />
-        )}
-      </AnimatePresence>
+      {/* On top of the whole app (tab bar included), not inside this tab's layer. */}
+      {createPortal(
+        <AnimatePresence>
+          {viewing && si && (
+            <Viewer
+              key="viewer"
+              monitor={si.monitors.find((m) => m.index === monitor) ?? si.monitors[0]}
+              presets={si.presets}
+              preset={preset}
+              onPreset={choosePreset}
+              allowControl={control}
+              onExit={() => setViewing(false)}
+            />
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }
@@ -263,6 +269,10 @@ async function decodeJpeg(jpeg: Uint8Array): Promise<CanvasImageSource & { close
   }
 }
 
+/** iPhone Safari has no Fullscreen API for pages; a Home Screen app has no browser bars. */
+const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
+let fsTipShown = false;
+
 const fsEnabled = () => !!(document.fullscreenEnabled || (document as unknown as { webkitFullscreenEnabled?: boolean }).webkitFullscreenEnabled);
 const fsElement = () => document.fullscreenElement ?? (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement ?? null;
 
@@ -300,12 +310,13 @@ function Viewer({
   const [frame, setFrame] = useState<{ w: number; h: number } | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [hud, setHud] = useState(true);
+  const [showStats, setShowStats] = useState(false);
   const [mode, setModeState] = useState<Mode>(() => {
     try {
       const m = localStorage.getItem(MODE_KEY) as Mode | null;
-      return m === 'trackpad' || m === 'touch' ? m : 'view';
+      return m === 'trackpad' || m === 'touch' || m === 'view' ? m : 'touch';
     } catch {
-      return 'view';
+      return 'touch';
     }
   });
   const [kbOpen, setKbOpen] = useState(false);
@@ -315,6 +326,27 @@ function Viewer({
   const [isFs, setIsFs] = useState(false);
   const [rotateHint, setRotateHint] = useState(true);
   const [ripple, setRipple] = useState<{ x: number; y: number; id: number; right?: boolean } | null>(null);
+  // The next tap is a right click (a button, instead of a two-finger tap).
+  const [rightNext, setRightNext] = useState(false);
+  const rightNextRef = useRef(false);
+  rightNextRef.current = rightNext;
+  // Trackpad: the left button held down, so moving drags.
+  const [held, setHeld] = useState(false);
+  const [shortcuts, setShortcutsState] = useState(() => {
+    try {
+      return localStorage.getItem('omnihub.screenShortcuts') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const setShortcuts = (v: boolean) => {
+    setShortcutsState(v);
+    try {
+      localStorage.setItem('omnihub.screenShortcuts', v ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  };
 
   const control = allowControl && (stats ? stats.control : true);
   const effMode: Mode = control ? mode : 'view';
@@ -727,10 +759,12 @@ function Viewer({
         }
       } else if (effMode === 'touch') {
         const at = pointerAt(e.clientX, e.clientY);
-        if (at) click(at, 0, screen);
+        if (at) click(at, rightNextRef.current ? 2 : 0, screen);
+        if (rightNextRef.current) setRightNext(false);
       } else {
         const v = vpRef.current;
-        click(v, 0, vpScreen(v));
+        click(v, rightNextRef.current ? 2 : 0, vpScreen(v));
+        if (rightNextRef.current) setRightNext(false);
       }
     } else if (s.max === 2 && s.mode === 'two' && dur < 320) {
       // Two-finger tap.
@@ -756,6 +790,16 @@ function Viewer({
   // ----- HUD values -----
   const latency = stats ? Math.round(stats.rtt / 2 + stats.encodeMs + decodeMs.current) : null;
   const toggleFs = async () => {
+    if (!fsEnabled()) {
+      // No Fullscreen API (iPhone): hide every control so the picture has the whole screen.
+      setHud(false);
+      setShowStats(false);
+      if (!isStandalone() && !fsTipShown) {
+        fsTipShown = true;
+        toast.info('Full screen on iPhone', 'Turn the phone sideways for the biggest picture. To hide Safari’s bars too: Share → Add to Home Screen, then open OmniHub from there. Tap the eye to bring the controls back.');
+      }
+      return;
+    }
     try {
       if (fsElement()) await document.exitFullscreen?.();
       else {
@@ -836,6 +880,15 @@ function Viewer({
         </AnimatePresence>
       </div>
 
+      {control && effMode !== 'view' && conn === 'live' && !kbOpen && <ScrollStrip onScroll={(dy) => queueWheel(0, dy)} />}
+
+      {/* The PC paused sharing: cover the last frame. */}
+      {conn === 'live' && stats?.paused && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black px-8 text-center">
+          <div className="text-[17px] font-semibold text-white">Sharing paused on the PC</div>
+          <div className="text-[13px] text-white/60">The picture comes back when it is resumed. Control is off meanwhile.</div>
+        </div>
+      )}
       {/* Connection overlays */}
       {conn !== 'live' && (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center p-6">
@@ -871,33 +924,34 @@ function Viewer({
               <HudButton label="Exit viewer" onClick={onExit}>
                 <X size={20} />
               </HudButton>
-              <div className="hud-glass flex min-w-0 flex-1 items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-semibold">
+              <button type="button" onClick={() => setShowStats((v) => !v)} aria-pressed={showStats} aria-label={showStats ? 'Hide stream stats' : 'Show stream stats'} className="hud-glass flex min-w-0 flex-1 items-center gap-2 rounded-full px-3.5 py-2 text-left text-[13px] font-semibold">
                 <span className={cx('h-2 w-2 shrink-0 rounded-full', conn === 'live' ? 'dot-live bg-emerald-400' : conn === 'connecting' || conn === 'paused' ? 'bg-amber-400' : 'bg-rose-400')} />
                 <span className="truncate">
                   {conn === 'live' ? 'Live' : conn === 'connecting' ? 'Connecting' : conn === 'paused' ? 'Paused' : 'Offline'} · {monitor.name}
                 </span>
-              </div>
-              {fsEnabled() && (
-                <HudButton label={isFs ? 'Exit full screen' : 'Full screen'} onClick={toggleFs}>
-                  {isFs ? <Minimize size={18} /> : <Maximize size={18} />}
-                </HudButton>
-              )}
+                {stats && conn === 'live' && <span className="ml-auto shrink-0 font-mono text-[11.5px] font-medium text-white/60">{stats.fps} fps</span>}
+              </button>
+              <HudButton label={isFs ? 'Exit full screen' : 'Full screen'} onClick={toggleFs}>
+                {isFs ? <Minimize size={18} /> : <Maximize size={18} />}
+              </HudButton>
               <HudButton label="Hide controls" onClick={() => setHud(false)}>
                 <EyeOff size={18} />
               </HudButton>
             </div>
 
-            <div className="pointer-events-auto hud-glass absolute left-[max(12px,var(--safe-left))] top-[calc(var(--safe-top)+64px)] rounded-2xl px-3.5 py-2.5" data-testid="hud-stats">
-              <div className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5 font-mono text-[11.5px] leading-[1.55]">
-                <Stat k="fps" v={stats ? `${stats.fps}` : '—'} />
-                <Stat k="rtt" v={stats ? `${stats.rtt} ms` : '—'} />
-                <Stat k="latency" v={latency != null ? `≈${latency} ms` : '—'} hl />
-                <Stat k="rate" v={stats ? (stats.kbps >= 1000 ? `${(stats.kbps / 1000).toFixed(1)} Mbps` : `${stats.kbps} kbps`) : '—'} />
-                <Stat k="quality" v={stats ? `${stats.quality}` : '—'} />
-                <Stat k="size" v={frame ? `${frame.w}×${frame.h}` : '—'} />
-                <Stat k="decode" v={decodeMs.current ? `${decodeMs.current.toFixed(1)} ms` : '—'} />
+            {showStats && (
+              <div className="pointer-events-auto hud-glass absolute left-[max(12px,var(--safe-left))] top-[calc(var(--safe-top)+64px)] rounded-2xl px-3.5 py-2.5" data-testid="hud-stats">
+                <div className="grid grid-cols-[auto_auto] gap-x-4 gap-y-0.5 font-mono text-[11.5px] leading-[1.55]">
+                  <Stat k="fps" v={stats ? `${stats.fps}` : '—'} />
+                  <Stat k="rtt" v={stats ? `${stats.rtt} ms` : '—'} />
+                  <Stat k="latency" v={latency != null ? `≈${latency} ms` : '—'} hl />
+                  <Stat k="rate" v={stats ? (stats.kbps >= 1000 ? `${(stats.kbps / 1000).toFixed(1)} Mbps` : `${stats.kbps} kbps`) : '—'} />
+                  <Stat k="quality" v={stats ? `${stats.quality}` : '—'} />
+                  <Stat k="size" v={frame ? `${frame.w}×${frame.h}` : '—'} />
+                  <Stat k="decode" v={decodeMs.current ? `${decodeMs.current.toFixed(1)} ms` : '—'} />
+                </div>
               </div>
-            </div>
+            )}
 
             {portraitForLandscape && rotateHint && !isFs && !kbOpen && (
               <div className="pointer-events-auto absolute inset-x-0 bottom-[calc(var(--safe-bottom)+112px)] flex justify-center px-4">
@@ -908,6 +962,31 @@ function Viewer({
             )}
 
             <div className="pointer-events-auto absolute inset-x-0 bottom-0 px-[max(12px,var(--safe-left))] pb-[calc(var(--safe-bottom)+12px)]" style={{ display: kbOpen ? 'none' : undefined }}>
+              {control && effMode !== 'view' && shortcuts && <Shortcuts send={send} rightNext={rightNext} setRightNext={setRightNext} />}
+              {control && effMode === 'trackpad' && (
+                <div className="mx-auto mb-2 flex max-w-[560px] gap-2">
+                  <button onPointerDown={(e) => e.stopPropagation()} onClick={() => click(vpRef.current, 0, vpScreen(vpRef.current))} className="press hud-glass h-14 flex-[3] rounded-2xl text-[13px] font-semibold active:bg-white/20">
+                    Left click
+                  </button>
+                  <button
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => {
+                      const v = vpRef.current;
+                      flushMove();
+                      send({ t: 'pointer', kind: held ? 'up' : 'down', x: v.x, y: v.y, button: 0 });
+                      vibrate(held ? 8 : [10, 20, 10]);
+                      setHeld(!held);
+                    }}
+                    aria-pressed={held}
+                    className={cx('press h-14 flex-[2] rounded-2xl text-[13px] font-semibold', held ? 'bg-white text-black' : 'hud-glass')}
+                  >
+                    {held ? 'Let go' : 'Hold & drag'}
+                  </button>
+                  <button onPointerDown={(e) => e.stopPropagation()} onClick={() => click(vpRef.current, 2, vpScreen(vpRef.current))} className="press hud-glass h-14 flex-[3] rounded-2xl text-[13px] font-semibold active:bg-white/20">
+                    Right click
+                  </button>
+                </div>
+              )}
               <div className="mx-auto flex max-w-[560px] items-center gap-2">
                 {control ? (
                   <div className="hud-glass flex flex-1 rounded-2xl p-1">
@@ -934,6 +1013,11 @@ function Viewer({
                     <Keyboard size={20} />
                   </HudButton>
                 )}
+                {control && effMode !== 'view' && (
+                  <HudButton label={shortcuts ? 'Hide shortcuts' : 'Show shortcuts'} onClick={() => setShortcuts(!shortcuts)} big>
+                    <Command size={19} className={shortcuts ? 'text-cyan-300' : ''} />
+                  </HudButton>
+                )}
                 <HudButton label="Quality" onClick={() => setPresetOpen(true)} big>
                   <Gauge size={20} />
                 </HudButton>
@@ -944,7 +1028,7 @@ function Viewer({
                 )}
               </div>
               <div className="mt-2 text-center text-[11px] text-white/45">
-                {effMode === 'view' ? 'Pinch to zoom · drag to pan · double-tap to reset · tap to hide controls' : effMode === 'trackpad' ? 'Drag to move · tap to click · two-finger tap = right click · two fingers to scroll' : 'Tap to click · long-press = right click · drag to drag · two fingers to scroll'}
+                {effMode === 'view' ? 'Pinch to zoom · drag to pan · double-tap to reset · tap to hide controls' : effMode === 'trackpad' ? 'Drag to move · tap to click · the strip on the right scrolls' : 'Tap to click · long-press = right click · drag to drag · the strip on the right scrolls'}
               </div>
             </div>
           </motion.div>
@@ -1023,6 +1107,93 @@ const KEYS: { label: ReactNode; key: string; aria: string }[] = [
   { label: 'Alt+Tab', key: 'Alt+Tab', aria: 'Switch windows' },
   { label: 'Del', key: 'Delete', aria: 'Delete' },
 ];
+
+/** One-tap shortcuts: the things a mouse and keyboard would do in a second. */
+const SHORTCUTS: { label: string; key: string; confirm?: boolean }[] = [
+  { label: 'Esc', key: 'Escape' },
+  { label: 'Enter', key: 'Enter' },
+  { label: 'Start', key: 'Win' },
+  { label: 'Switch app', key: 'Alt+Tab' },
+  { label: 'All windows', key: 'Win+Tab' },
+  { label: 'Desktop', key: 'Win+D' },
+  { label: 'Copy', key: 'Ctrl+C' },
+  { label: 'Paste', key: 'Ctrl+V' },
+  { label: 'Undo', key: 'Ctrl+Z' },
+  { label: 'Select all', key: 'Ctrl+A' },
+  { label: 'Play/pause', key: 'MediaPlayPause' },
+  { label: 'Vol −', key: 'VolumeDown' },
+  { label: 'Vol +', key: 'VolumeUp' },
+  { label: 'Mute', key: 'VolumeMute' },
+  { label: 'Close window', key: 'Alt+F4', confirm: true },
+];
+
+function Shortcuts({ send, rightNext, setRightNext }: { send: (m: ViewerMessage) => void; rightNext: boolean; setRightNext: (v: boolean) => void }) {
+  const [arm, setArm] = useState<string | null>(null);
+  useEffect(() => {
+    if (!arm) return;
+    const t = setTimeout(() => setArm(null), 2500);
+    return () => clearTimeout(t);
+  }, [arm]);
+  return (
+    <div className="hscroll -mx-1 mb-2 flex gap-1.5 px-1" onPointerDown={(e) => e.stopPropagation()}>
+      <button onClick={() => setRightNext(!rightNext)} aria-pressed={rightNext} className={cx('press h-10 shrink-0 rounded-xl px-3 text-[12.5px] font-semibold', rightNext ? 'bg-cyan-300 text-black' : 'hud-glass')}>
+        {rightNext ? 'Tap = right click' : 'Right click'}
+      </button>
+      {SHORTCUTS.map((k) => (
+        <button
+          key={k.key}
+          onClick={() => {
+            if (k.confirm && arm !== k.key) {
+              setArm(k.key);
+              vibrate(10);
+              return;
+            }
+            setArm(null);
+            send({ t: 'key', key: k.key });
+            vibrate(6);
+          }}
+          className={cx('press h-10 shrink-0 rounded-xl px-3 text-[12.5px] font-semibold', arm === k.key ? 'bg-rose-400 text-black' : 'hud-glass active:bg-white/20')}
+        >
+          {arm === k.key ? 'Tap again to close' : k.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A strip on the right edge: drag it to scroll the PC (content follows the finger). */
+function ScrollStrip({ onScroll }: { onScroll: (dy: number) => void }) {
+  const last = useRef<number | null>(null);
+  return (
+    <div
+      className="absolute right-[max(4px,var(--safe-right))] top-1/2 z-20 flex h-[38%] w-9 -translate-y-1/2 touch-none flex-col items-center justify-center gap-1 rounded-full border border-white/10 bg-black/25 backdrop-blur-sm"
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+        last.current = e.clientY;
+      }}
+      onPointerMove={(e) => {
+        e.stopPropagation();
+        if (last.current == null) return;
+        const dy = e.clientY - last.current;
+        last.current = e.clientY;
+        onScroll(-dy * 4);
+      }}
+      onPointerUp={(e) => {
+        e.stopPropagation();
+        last.current = null;
+      }}
+      onPointerCancel={() => (last.current = null)}
+      aria-label="Scroll"
+      role="scrollbar"
+      aria-valuenow={0}
+    >
+      {[0, 1, 2].map((i) => (
+        <span key={i} className="h-0.5 w-3.5 rounded-full bg-white/50" />
+      ))}
+    </div>
+  );
+}
 
 function KeyboardPanel({ send, onClose }: { send: (m: ViewerMessage) => void; onClose: () => void }) {
   const [val, setVal] = useState('');

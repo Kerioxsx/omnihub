@@ -8,12 +8,15 @@ import { Card } from '../../components/ui/Card';
 import { TextInput } from '../../components/ui/Form';
 import { useNow } from '../../lib/hooks';
 import { useLive } from '../../state/live';
+import { ForgotPasswordDialog } from './ForgotPassword';
 
-export function LockScreen({ status }: { status: VaultStatus }) {
+/** The vault's unlock form; Notes shows it too, for locked notes (`title`, `subtitle`, `compact`). */
+export function LockScreen({ status, title, subtitle, compact }: { status: VaultStatus; title?: string; subtitle?: string; compact?: boolean }) {
   const [pw, setPw] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
   const [retryUntil, setRetryUntil] = useState(() => (status.retryAfter ? Date.now() + status.retryAfter * 1000 : 0));
   const now = useNow(250);
   const shake = useAnimationControls();
@@ -42,17 +45,15 @@ export function LockScreen({ status }: { status: VaultStatus }) {
   };
 
   return (
-    <div className="flex h-full items-center justify-center pb-10">
+    <div className={compact ? 'flex h-full items-center justify-center p-4' : 'flex h-full items-center justify-center pb-10'}>
       <motion.div animate={shake} className="w-full max-w-[440px]">
         <Card className="relative overflow-hidden px-8 pb-8 pt-10 text-center">
           <div className="pointer-events-none absolute inset-x-0 -top-28 mx-auto h-64 w-64 rounded-full bg-[radial-gradient(circle,var(--accent-glow),transparent_68%)] opacity-60" />
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 18 }} className="relative mx-auto flex h-20 w-20 items-center justify-center rounded-[26px] border border-line-strong bg-surface-2 shadow-[0_20px_50px_-20px_var(--accent-glow)]">
             {busy ? <LockOpen size={34} className="text-accent" aria-hidden /> : <LockKeyhole size={34} className="text-accent" aria-hidden />}
           </motion.div>
-          <h2 className="relative mt-5 font-display text-[22px] font-semibold tracking-tight text-fg">Vault is locked</h2>
-          <p className="relative mt-1 text-[13.5px] text-dim">
-            {status.entries} {status.entries === 1 ? 'entry' : 'entries'} · locks after {status.autoLockMinutes} min of inactivity
-          </p>
+          <h2 className="relative mt-5 font-display text-[22px] font-semibold tracking-tight text-fg">{title ?? 'Vault is locked'}</h2>
+          <p className="relative mt-1 text-[13.5px] text-dim">{subtitle ?? `Passwords and hidden files · locks after ${status.autoLockMinutes} min of inactivity`}</p>
           <form
             className="relative mt-6 space-y-3 text-left"
             onSubmit={(e) => {
@@ -90,7 +91,13 @@ export function LockScreen({ status }: { status: VaultStatus }) {
                 Unlock with Windows Hello
               </Button>
             )}
+            <div className="pt-1 text-center">
+              <button type="button" onClick={() => setForgot(true)} className="rounded text-[12.5px] font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent">
+                Forgot your master password?
+              </button>
+            </div>
           </form>
+          <ForgotPasswordDialog open={forgot} onClose={() => setForgot(false)} status={status} />
           <p className="relative mt-5 text-[12px] text-faint">Encrypted with Argon2id + AES-256-GCM, bound to your Windows account.</p>
         </Card>
       </motion.div>

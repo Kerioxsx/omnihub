@@ -57,7 +57,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       <motion.div initial={{ scale: 0.8, rotate: -8, opacity: 0 }} animate={{ scale: 1, rotate: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 16 }} className="mb-6 inline-block">
         <Logo size={72} />
       </motion.div>
-      <Step title={<span className="gradient-text">Welcome to OmniHub</span>}>Your PC, organised: see what fills your drives, keep screenshots and ideas findable, store secrets safely and use your phone as a remote. Everything stays on this PC.</Step>
+      <Step title="Welcome to OmniHub">Your PC, organised: see what fills your drives, keep screenshots and ideas findable, store secrets safely and use your phone as a remote. Everything stays on this PC.</Step>
       <div className="mt-6 grid grid-cols-3 gap-2.5">
         {FEATURES.map(([I, t, d], i) => (
           <motion.div key={t} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.15 + i * 0.05 } }} className="rounded-xl border border-line bg-surface px-3 py-2.5">

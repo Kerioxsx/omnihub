@@ -1,0 +1,12 @@
+[{
+  "modid": "omnihubkillfx",
+  "name": "OmniHub Kill Effects",
+  "description": "Effects when something you hit dies: lightning, blood, flames, fireworks, souls, hearts or an explosion. Set it up in OmniHub on your PC.",
+  "version": "${version}",
+  "mcversion": "1.8.9",
+  "url": "https://github.com/Kerioxsx/omnihub",
+  "authorList": ["OmniHub"],
+  "credits": "",
+  "logoFile": "",
+  "dependencies": []
+}]

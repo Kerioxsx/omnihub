@@ -17,7 +17,7 @@ export function Button({
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: 'sm' | 'md' | 'lg'; loading?: boolean; icon?: ReactNode }) {
   const v: Record<Variant, string> = {
-    primary: 'grad-bg text-white shadow-[0_8px_24px_-10px_var(--accent-glow)]',
+    primary: 'grad-bg text-on-grad shadow-[0_8px_24px_-10px_var(--accent-glow)]',
     soft: 'bg-accent-soft text-accent',
     ghost: 'bg-surface-2 text-fg',
     danger: 'bg-bad text-white shadow-[0_8px_24px_-12px_rgba(248,113,113,.7)]',

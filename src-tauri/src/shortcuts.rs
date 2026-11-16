@@ -30,6 +30,7 @@ pub fn register(app: &AppHandle) {
             tracing::warn!("could not register hotkey {spec}: {e}");
         }
     }
+    crate::quick::register_hotkeys(&core, gs);
 }
 
 #[derive(Clone, Copy)]

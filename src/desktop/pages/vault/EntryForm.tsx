@@ -19,9 +19,10 @@ interface Form {
   notes: string;
   tags: string;
   favorite: boolean;
+  totp: string;
 }
 
-const EMPTY: Form = { kind: 'login', title: '', username: '', email: '', password: '', url: '', notes: '', tags: '', favorite: false };
+const EMPTY: Form = { kind: 'login', title: '', username: '', email: '', password: '', url: '', notes: '', tags: '', favorite: false, totp: '' };
 
 const LABELS: Partial<Record<EntryKind, { username?: string; password?: string; url?: string }>> = {
   card: { username: 'Name on card', password: 'PIN' },
@@ -31,13 +32,15 @@ const LABELS: Partial<Record<EntryKind, { username?: string; password?: string; 
 export function EntryForm({ open, entry, onClose, onSaved }: { open: boolean; entry: Entry | null; onClose: () => void; onSaved: (id: string) => void }) {
   const [f, setF] = useState<Form>(EMPTY);
   const [show, setShow] = useState(false);
+  const [showTotp, setShowTotp] = useState(false);
   const [busy, setBusy] = useState(false);
   const strength = useStrength(f.password);
 
   useEffect(() => {
     if (!open) return;
     setShow(false);
-    setF(entry ? { kind: entry.kind, title: entry.title, username: entry.username, email: entry.email, password: entry.password, url: entry.url, notes: entry.notes, tags: entry.tags.join(', '), favorite: entry.favorite } : EMPTY);
+    setShowTotp(false);
+    setF(entry ? { kind: entry.kind, title: entry.title, username: entry.username, email: entry.email, password: entry.password, url: entry.url, notes: entry.notes, tags: entry.tags.join(', '), favorite: entry.favorite, totp: entry.totp } : EMPTY);
   }, [open, entry]);
 
   const set = (p: Partial<Form>) => setF((x) => ({ ...x, ...p }));
@@ -61,6 +64,7 @@ export function EntryForm({ open, entry, onClose, onSaved }: { open: boolean; en
           .map((t) => t.trim())
           .filter(Boolean),
         favorite: f.favorite,
+        totp: entry && f.totp === entry.totp ? null : f.totp.trim(),
       };
       const s = await api.vault.save(input);
       toast.success(entry ? 'Entry updated' : 'Entry added', s.primaryAccount ? 'This looks like a primary account — consider a passkey instead.' : undefined);
@@ -166,6 +170,24 @@ export function EntryForm({ open, entry, onClose, onSaved }: { open: boolean; en
         {f.kind !== 'note' && f.kind !== 'card' && f.kind !== 'wifi' && (
           <Field label="Website" htmlFor="e-url">
             <TextInput id="e-url" value={f.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://" />
+          </Field>
+        )}
+        {(f.kind === 'login' || f.kind === 'email' || f.kind === 'other') && (
+          <Field label="2FA secret (optional)" htmlFor="e-totp" hint="The setup key or otpauth:// link a site shows when you turn on an authenticator app. OmniHub then shows — and the browser extension fills — the 6-digit codes.">
+            <TextInput
+              id="e-totp"
+              type={showTotp ? 'text' : 'password'}
+              value={f.totp}
+              onChange={(e) => set({ totp: e.target.value })}
+              autoComplete="off"
+              placeholder="JBSW Y3DP EHPK 3PXP"
+              className="[&_input]:font-mono"
+              right={
+                <button type="button" onClick={() => setShowTotp(!showTotp)} aria-label={showTotp ? 'Hide 2FA secret' : 'Show 2FA secret'} className="flex h-7 w-7 items-center justify-center rounded-lg text-faint hover:bg-surface-3 hover:text-fg">
+                  {showTotp ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              }
+            />
           </Field>
         )}
         <Field label={f.kind === 'note' ? 'Secure note' : 'Notes'} htmlFor="e-notes" hint="Encrypted like the password.">

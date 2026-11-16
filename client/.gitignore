@@ -1,0 +1,10 @@
+# Reference media (phone recordings of another client) are kept out of the repo.
+references/video/
+references/frames/
+.gradle/
+build/
+run/
+.vscode/
+.idea/
+*.iml
+docs/screenshots/

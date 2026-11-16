@@ -7,11 +7,13 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowLeft,
   ChevronRight,
+  LoaderCircle,
   Search,
   LayoutGrid,
   List,
   ArrowUpDown,
   Download,
+  Printer,
   ExternalLink,
   X,
   Check,
@@ -35,7 +37,9 @@ import {
   ArrowUpAZ,
 } from 'lucide-react';
 import { formatBytes, formatDate, formatDateTime, formatRelative } from '@shared/format';
-import { client, type FsEntry } from '../client';
+import type { VideoJob, VideoTask } from '@shared/types';
+import { client, type FoundFile, type FsEntry } from '../client';
+import { useEvent } from '../lib/events';
 import { useApp, toast } from '../state';
 import { useUploads } from '../uploads';
 import { PullToRefresh } from '../ui/PullToRefresh';
@@ -58,6 +62,12 @@ interface FilesPrefs {
   showHidden: boolean;
   /** Per-folder view choice; folders without one pick automatically. */
   views: Record<string, 'list' | 'grid'>;
+  /** Tiles per row in the grid. */
+  gridCols: 2 | 3 | 4;
+  /** Smaller list rows, more files on screen. */
+  compact: boolean;
+  setGridCols: (n: 2 | 3 | 4) => void;
+  setCompact: (v: boolean) => void;
   setPath: (p: string | null) => void;
   setSort: (k: SortKey, desc: boolean) => void;
   setShowHidden: (v: boolean) => void;
@@ -74,7 +84,7 @@ function loadPrefs(): Partial<FilesPrefs> {
 }
 function savePrefs(s: FilesPrefs) {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ sort: s.sort, desc: s.desc, showHidden: s.showHidden }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ sort: s.sort, desc: s.desc, showHidden: s.showHidden, gridCols: s.gridCols, compact: s.compact }));
   } catch {
     /* ignore */
   }
@@ -86,7 +96,17 @@ export const useFiles = create<FilesPrefs>((set, get) => ({
   desc: false,
   showHidden: false,
   views: {},
+  gridCols: 3,
+  compact: false,
   ...loadPrefs(),
+  setGridCols: (gridCols) => {
+    set({ gridCols });
+    savePrefs(get());
+  },
+  setCompact: (compact) => {
+    set({ compact });
+    savePrefs(get());
+  },
   setPath: (path) => set({ path }),
   setSort: (sort, desc) => {
     set({ sort, desc });
@@ -149,6 +169,7 @@ function crumbsFor(path: string, roots: RootT[]): { name: string; path: string }
 }
 
 export function FilesScreen({ active }: { active: boolean }) {
+  useVideoDone();
   const prefs = useFiles();
   const { path, setPath } = prefs;
   const features = useApp((s) => s.info?.features);
@@ -358,6 +379,7 @@ export function FilesScreen({ active }: { active: boolean }) {
         <div className="px-safe pb-tabbar">
           <UploadsPanel className={path ? 'mt-3' : ''} />
 
+          {!path && <PcSearch onOpenFolder={setPath} />}
           {!path ? (
             rootsError && !roots ? (
               <ErrorState message={rootsError} onRetry={loadRoots} />
@@ -369,7 +391,7 @@ export function FilesScreen({ active }: { active: boolean }) {
               <div className="card mt-1 overflow-hidden">
                 {roots.map((r, i) => (
                   <button key={r.path} onClick={() => setPath(r.path)} className={cx('press flex w-full items-center gap-3.5 px-4 py-3.5 text-left active:bg-surface-2', i > 0 && 'border-t border-line')}>
-                    <div className={cx('grid h-11 w-11 place-items-center rounded-2xl', r.name === 'From phone' ? 'grad-bg text-white' : 'bg-violet-500/15 text-violet-400')}>{rootIcon(r.name)}</div>
+                    <div className={cx('grid h-11 w-11 place-items-center rounded-2xl', r.name === 'From phone' ? 'grad-bg text-on-grad' : 'bg-violet-500/15 text-violet-400')}>{rootIcon(r.name)}</div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-[16px] font-semibold">{r.name}</div>
                       <div className="truncate text-xs text-faint">{r.name === 'From phone' ? 'Where uploads from this phone go' : shortPath(r.path)}</div>
@@ -403,7 +425,7 @@ export function FilesScreen({ active }: { active: boolean }) {
                   <Empty icon={<FolderOpen size={30} />} title="This folder is empty" body={uploadsOn ? 'Tap + to send files from your phone here.' : undefined} />
                 )
               ) : view === 'grid' ? (
-                <div className="mt-3 grid grid-cols-3 gap-1.5">
+                <div className={cx('mt-3 grid gap-1.5', prefs.gridCols === 2 ? 'grid-cols-2' : prefs.gridCols === 4 ? 'grid-cols-4' : 'grid-cols-3')}>
                   {entries.map((e) => (
                     <GridTile key={e.path} entry={e} selected={selected.has(e.path)} selecting={selecting} onOpen={() => openEntry(e)} onLongPress={() => startSelect(e)} />
                   ))}
@@ -411,7 +433,7 @@ export function FilesScreen({ active }: { active: boolean }) {
               ) : (
                 <div className="mt-2 -mx-2">
                   {entries.map((e) => (
-                    <EntryRow key={e.path} entry={e} selected={selected.has(e.path)} selecting={selecting} onOpen={() => openEntry(e)} onLongPress={() => startSelect(e)} />
+                    <EntryRow key={e.path} entry={e} compact={prefs.compact} selected={selected.has(e.path)} selecting={selecting} onOpen={() => openEntry(e)} onLongPress={() => startSelect(e)} />
                   ))}
                 </div>
               )}
@@ -430,7 +452,7 @@ export function FilesScreen({ active }: { active: boolean }) {
           whileTap={{ scale: 0.92 }}
           aria-label="Send files to the PC"
           onClick={() => setUploadOpen(true)}
-          className="grad-bg fixed right-[max(16px,var(--safe-right))] z-30 grid h-[58px] w-[58px] place-items-center rounded-[20px] text-white shadow-[0_14px_34px_-10px_var(--accent-glow)] bottom-tabbar"
+          className="grad-bg fixed right-[max(16px,var(--safe-right))] z-30 grid h-[58px] w-[58px] place-items-center rounded-[20px] text-on-grad shadow-[0_14px_34px_-10px_var(--accent-glow)] bottom-tabbar"
         >
           <Plus size={28} strokeWidth={2.4} />
         </motion.button>
@@ -522,15 +544,21 @@ function Thumb({ path, size, className, fallback }: { path: string; size: number
   );
 }
 
-function EntryRow({ entry: e, selected, selecting, onOpen, onLongPress }: { entry: FsEntry; selected: boolean; selecting: boolean; onOpen: () => void; onLongPress: () => void }) {
+function EntryRow({ entry: e, compact, selected, selecting, onOpen, onLongPress }: { entry: FsEntry; compact: boolean; selected: boolean; selecting: boolean; onOpen: () => void; onLongPress: () => void }) {
   const lp = useLongPress(onLongPress, onOpen);
   const isImage = kindOf(e.name, e.kind) === 'image';
   return (
-    <button {...lp} className={cx('press flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left', selected ? 'bg-accent-soft' : 'active:bg-surface-2', selecting && e.isDir && 'opacity-40')}>
-      {isImage ? <Thumb path={e.path} size={128} className="h-11 w-11 shrink-0 rounded-xl" fallback={<FileIcon name={e.name} kind={e.kind} />} /> : <FileIcon name={e.name} kind={e.kind} />}
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[15px] font-semibold">{e.name}</div>
-        <div className="truncate text-[13px] text-dim">
+    <button {...lp} className={cx('press flex w-full items-center rounded-2xl px-2 text-left', compact ? 'gap-2.5 py-1' : 'gap-3 py-2', selected ? 'bg-accent-soft' : 'active:bg-surface-2', selecting && e.isDir && 'opacity-40')}>
+      {compact ? (
+        <FileIcon name={e.name} kind={e.kind} size={22} />
+      ) : isImage ? (
+        <Thumb path={e.path} size={128} className="h-11 w-11 shrink-0 rounded-xl" fallback={<FileIcon name={e.name} kind={e.kind} />} />
+      ) : (
+        <FileIcon name={e.name} kind={e.kind} />
+      )}
+      <div className={cx('min-w-0 flex-1', compact && 'flex items-baseline gap-2')}>
+        <div className={cx('truncate font-semibold', compact ? 'min-w-0 flex-1 text-[14px]' : 'text-[15px]')}>{e.name}</div>
+        <div className={cx('truncate text-dim', compact ? 'shrink-0 text-[12px] tabular-nums' : 'text-[13px]')}>
           {e.isDir ? (e.size != null ? `${formatBytes(e.size)} · ` : '') : `${formatBytes(e.size)} · `}
           {formatRelative(e.modified)}
         </div>
@@ -567,14 +595,55 @@ function GridTile({ entry: e, selected, selecting, onOpen, onLongPress }: { entr
 
 // ---------- sheets ----------
 
+/** Video jobs this phone started (to say when they're done). */
+const myVideoJobs = new Set<string>();
+
+/** "Fit in 10 MB is done" with a Download button, for jobs started here. */
+function useVideoDone() {
+  useEvent<VideoTask>('video:changed', (t) => {
+    if (!t?.id || !myVideoJobs.has(t.id) || t.state === 'running') return;
+    myVideoJobs.delete(t.id);
+    const name = t.output.split(/[\\/]/).pop() ?? '';
+    if (t.state === 'done') toast.success(`${t.label}: done`, name, { label: 'Download', run: () => void client.download(t.output).catch((e) => toast.error("Couldn't download", errorMessage(e))) });
+    else if (t.state === 'failed') toast.error(`${t.label} failed`, t.error ?? undefined);
+  });
+}
+
 function PreviewSheet({ entry, onClose }: { entry: FsEntry | null; onClose: () => void }) {
   const [last, setLast] = useState<FsEntry | null>(entry);
   useEffect(() => {
     if (entry) setLast(entry);
   }, [entry]);
   const e = entry ?? last;
-  const [busy, setBusy] = useState<'dl' | 'open' | null>(null);
+  const [busy, setBusy] = useState<'dl' | 'open' | 'print' | 'video' | null>(null);
   const isImage = e ? kindOf(e.name, e.kind) === 'image' : false;
+  const isVideo = !!e && /\.(mp4|mov|mkv|webm|avi|m4v|ts)$/i.test(e.name);
+  const video = async (job: VideoJob, what: string) => {
+    if (!e) return;
+    setBusy('video');
+    try {
+      const { id } = await client.videoStart(e.path, job);
+      myVideoJobs.add(id);
+      toast.info(`${what}: working on it on the PC`, 'You’ll get a note here when it’s done.');
+    } catch (err) {
+      toast.error('Couldn’t start', errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+  const printable = !!e && /\.(pdf|docx?|txt|rtf|xlsx?|pptx?|png|jpe?g|gif|bmp|tiff?|webp)$/i.test(e.name);
+  const print = async () => {
+    if (!e) return;
+    setBusy('print');
+    try {
+      await client.print(e.path);
+      toast.success('Printing on the PC', e.name);
+    } catch (err) {
+      toast.error("Couldn't print", errorMessage(err));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const act = async (inline: boolean) => {
     if (!e) return;
@@ -597,13 +666,30 @@ function PreviewSheet({ entry, onClose }: { entry: FsEntry | null; onClose: () =
       subtitle={e ? `${formatBytes(e.size)} · ${formatDate(e.modified)}` : undefined}
       footer={
         e && (
-          <div className="flex gap-2.5">
-            <Button className="flex-1" icon={<Download size={18} />} loading={busy === 'dl'} onClick={() => act(false)}>
-              Download
-            </Button>
-            <Button variant="ghost" className="flex-1" icon={<ExternalLink size={18} />} loading={busy === 'open'} onClick={() => act(true)}>
-              Open
-            </Button>
+          <div>
+            <div className="flex gap-2.5">
+              <Button className="flex-1" icon={<Download size={18} />} loading={busy === 'dl'} onClick={() => act(false)}>
+                Download
+              </Button>
+              <Button variant="ghost" className="flex-1" icon={<ExternalLink size={18} />} loading={busy === 'open'} onClick={() => act(true)}>
+                Open
+              </Button>
+              {printable && (
+                <Button variant="ghost" className="flex-1" icon={<Printer size={18} />} loading={busy === 'print'} onClick={print}>
+                  Print
+                </Button>
+              )}
+            </div>
+            {isVideo && (
+              <div className="mt-2.5 flex gap-2.5">
+                <Button variant="soft" className="flex-1" size="sm" loading={busy === 'video'} onClick={() => void video({ kind: 'compress', size: 'balanced', maxHeight: null, targetMb: 10 }, 'Fit in 10 MB')}>
+                  Fit in 10 MB
+                </Button>
+                <Button variant="soft" className="flex-1" size="sm" loading={busy === 'video'} onClick={() => void video({ kind: 'audio', to: 'mp3' }, 'Sound only')}>
+                  Sound only (MP3)
+                </Button>
+              </div>
+            )}
           </div>
         )
       }
@@ -689,6 +775,26 @@ function OptionsSheet({ open, onClose, view, path }: { open: boolean; onClose: (
             />
           </div>
         )}
+        {view === 'grid' ? (
+          <div>
+            <div className="mb-2 text-[13px] font-semibold text-dim">Tiles per row</div>
+            <Segmented
+              value={String(p.gridCols) as '2' | '3' | '4'}
+              onChange={(v) => p.setGridCols(Number(v) as 2 | 3 | 4)}
+              options={[
+                { value: '2', label: 'Big · 2' },
+                { value: '3', label: '3' },
+                { value: '4', label: 'Small · 4' },
+              ]}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3">
+            <List size={18} className="text-dim" />
+            <div className="flex-1 text-[15px] font-medium">Compact list</div>
+            <Switch on={p.compact} onChange={p.setCompact} label="Compact list" />
+          </div>
+        )}
         <div className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3">
           {p.showHidden ? <Eye size={18} className="text-dim" /> : <EyeOff size={18} className="text-dim" />}
           <div className="flex-1 text-[15px] font-medium">Show hidden files</div>
@@ -768,5 +874,57 @@ function DestOption({ active, onClick, icon, title, sub }: { active: boolean; on
         )}
       </AnimatePresence>
     </button>
+  );
+}
+
+/** Search every shared folder by name (the PC walks them; a few seconds at most). */
+function PcSearch({ onOpenFolder }: { onOpenFolder: (path: string) => void }) {
+  const [q, setQ] = useState('');
+  const [res, setRes] = useState<{ items: FoundFile[]; more: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    if (q.trim().length < 2) return;
+    setBusy(true);
+    try {
+      setRes(await client.searchFiles(q.trim()));
+    } catch (e) {
+      toast.error("Couldn't search", errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const parent = (p: string) => p.replace(/[\\/][^\\/]*$/, '') || p;
+  return (
+    <div className="mb-3">
+      <form
+        className="relative mt-1"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run();
+        }}
+      >
+        <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint" />
+        <input className="field h-11 py-0 pl-10 pr-10" placeholder="Search the PC by name" value={q} onChange={(e) => (setQ(e.target.value), e.target.value === '' && setRes(null))} enterKeyHint="search" type="search" />
+        {busy && <LoaderCircle size={17} className="spin absolute right-3.5 top-1/2 -translate-y-1/2 text-faint" />}
+      </form>
+      {res && (
+        <div className="card mt-2 overflow-hidden">
+          {res.items.length === 0 ? (
+            <div className="px-4 py-4 text-center text-[14px] text-dim">Nothing named like “{q}” in the shared folders.</div>
+          ) : (
+            res.items.map((f, i) => (
+              <button key={f.path} onClick={() => onOpenFolder(f.dir ? f.path : parent(f.path))} className={cx('press flex w-full items-center gap-3 px-4 py-3 text-left active:bg-surface-2', i > 0 && 'border-t border-line')}>
+                {f.dir ? <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-500/15 text-violet-400"><FolderOpen size={17} /></div> : <FileIcon name={f.name} size={36} />}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[15px] font-medium">{f.name}</div>
+                  <div className="truncate text-xs text-faint">{shortPath(f.dir ? f.path : parent(f.path))}</div>
+                </div>
+              </button>
+            ))
+          )}
+          {res.more && <div className="border-t border-line px-4 py-2.5 text-center text-xs text-faint">Showing the first matches. Type more of the name to narrow it down.</div>}
+        </div>
+      )}
+    </div>
   );
 }

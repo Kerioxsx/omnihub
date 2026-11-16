@@ -146,7 +146,7 @@ export function ScreenshotsPage() {
       }
       headerExtra={
         <div className="flex flex-wrap items-center gap-2">
-          <SearchInput value={q} onChange={setQ} placeholder="Search titles, notes, tags" className="w-64" aria-label="Search screenshots" />
+          <SearchInput value={q} onChange={setQ} placeholder="Search titles, notes, tags, text in the picture" className="w-72" aria-label="Search screenshots" />
           <Select value={app} onChange={(e) => setApp(e.target.value)} aria-label="App" className="w-[170px]">
             <option value="">All apps</option>
             {apps.map((a) => (
@@ -255,6 +255,10 @@ export function ScreenshotsPage() {
         }}
         onNavigate={setOpenId}
         onChange={(s) => shots.setData((prev) => (prev ?? []).map((x) => (x.id === s.id ? s : x)))}
+        onCreated={(s) => {
+          shots.setData((prev) => [s, ...(prev ?? []).filter((x) => x.id !== s.id)]);
+          setOpenId(s.id);
+        }}
       />
     </Page>
   );

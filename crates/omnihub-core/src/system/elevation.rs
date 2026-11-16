@@ -75,6 +75,47 @@ pub fn quote_arg(arg: &str) -> String {
     out
 }
 
+/// OmniHub's own window in front, if any. Windows opens a UAC prompt owned
+/// by it in front of everything; one without an owner, asked for from a
+/// background thread, often only blinks in the taskbar while the caller
+/// waits for an answer that never comes.
+#[cfg(windows)]
+pub fn own_window() -> windows::Win32::Foundation::HWND {
+    use windows::core::BOOL;
+    use windows::Win32::Foundation::{HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetForegroundWindow, GetWindow, GetWindowLongW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, GWL_EXSTYLE, GW_OWNER, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT};
+
+    // A normal window of ours (not the click-through overlays).
+    fn ours(hwnd: HWND) -> bool {
+        let mut pid = 0u32;
+        unsafe {
+            GetWindowThreadProcessId(hwnd, Some(&mut pid));
+            let ex = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+            pid == std::process::id()
+                && IsWindowVisible(hwnd).as_bool()
+                && !IsIconic(hwnd).as_bool()
+                && !GetWindow(hwnd, GW_OWNER).is_ok_and(|o| !o.is_invalid())
+                && ex & (WS_EX_TOOLWINDOW.0 | WS_EX_TRANSPARENT.0) == 0
+        }
+    }
+    unsafe extern "system" fn each(hwnd: HWND, found: LPARAM) -> BOOL {
+        if ours(hwnd) {
+            unsafe { *(found.0 as *mut HWND) = hwnd };
+            return BOOL(0);
+        }
+        BOOL(1)
+    }
+    let front = unsafe { GetForegroundWindow() };
+    if !front.is_invalid() && ours(front) {
+        return front;
+    }
+    let mut found = HWND::default();
+    unsafe {
+        let _ = EnumWindows(Some(each), LPARAM(&mut found as *mut HWND as isize));
+    }
+    found
+}
+
 /// Start `exe` with `args` through UAC and wait for it. Returns the exit code.
 /// Fails with `PermissionDenied` when the user declines the prompt.
 #[cfg(windows)]
@@ -91,6 +132,7 @@ pub fn run_elevated_and_wait(exe: &std::path::Path, args: &[String], visible: bo
     let params = wide(&args.iter().map(|a| quote_arg(a)).collect::<Vec<_>>().join(" "));
     let mut info = SHELLEXECUTEINFOW {
         cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        hwnd: own_window(),
         fMask: SEE_MASK_NOCLOSEPROCESS,
         lpVerb: PCWSTR(verb.as_ptr()),
         lpFile: PCWSTR(file.as_ptr()),
@@ -117,6 +159,48 @@ pub fn run_elevated_and_wait(exe: &std::path::Path, args: &[String], visible: bo
     }
 }
 
+/// Start `exe` through UAC with `params` exactly as given (no quoting) and
+/// return without waiting. `PermissionDenied` when the prompt is declined.
+#[cfg(windows)]
+pub fn start_elevated(exe: &std::path::Path, params: &str) -> io::Result<()> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{CloseHandle, ERROR_CANCELLED};
+    use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW};
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+    let verb = wide("runas");
+    let file = wide(&exe.to_string_lossy());
+    let params = wide(params);
+    let mut info = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        hwnd: own_window(),
+        fMask: SEE_MASK_NOCLOSEPROCESS,
+        lpVerb: PCWSTR(verb.as_ptr()),
+        lpFile: PCWSTR(file.as_ptr()),
+        lpParameters: PCWSTR(params.as_ptr()),
+        nShow: SW_SHOWNORMAL.0,
+        ..Default::default()
+    };
+    unsafe {
+        if let Err(e) = ShellExecuteExW(&mut info) {
+            if e.code() == ERROR_CANCELLED.to_hresult() {
+                return Err(io::Error::new(io::ErrorKind::PermissionDenied, "administrator approval was declined"));
+            }
+            return Err(io::Error::other(e.message()));
+        }
+        if !info.hProcess.is_invalid() {
+            let _ = CloseHandle(info.hProcess);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn start_elevated(_exe: &std::path::Path, _params: &str) -> io::Result<()> {
+    Err(io::Error::new(io::ErrorKind::Unsupported, "elevation is only implemented on Windows"))
+}
+
 #[cfg(not(windows))]
 pub fn run_elevated_and_wait(_exe: &std::path::Path, _args: &[String], _visible: bool) -> io::Result<i32> {
     Err(io::Error::new(io::ErrorKind::Unsupported, "elevation is only implemented on Windows"))
@@ -135,6 +219,7 @@ pub fn relaunch_elevated(args: &[String]) -> io::Result<()> {
     let params = wide(&args.iter().map(|a| quote_arg(a)).collect::<Vec<_>>().join(" "));
     let mut info = SHELLEXECUTEINFOW {
         cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        hwnd: own_window(),
         lpVerb: PCWSTR(verb.as_ptr()),
         lpFile: PCWSTR(file.as_ptr()),
         lpParameters: PCWSTR(params.as_ptr()),

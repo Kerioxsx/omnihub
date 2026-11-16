@@ -2,7 +2,7 @@
 // (crates/omnihub-core/src/remote/api.rs). The phone app is served by that
 // server, so every URL is same-origin.
 
-import type { Device, Note, NoteKind, PendingPower, PowerAction, InboxItem, EntrySummary, MonitorInfo, Preset } from '@shared/types';
+import type { SrvAction, SrvLine, SrvMap, SrvPlayer, SrvPlayers, SrvView, ChatFolder, ChatSource, ChatSummary, ChatTools, ChatView, ClaudeCodeMode, CodexSandbox, Device, NewChatKind, Note, NoteKind, PendingPower, PowerAction, InboxItem, EntrySummary, MonitorInfo, Preset, UsageReport } from '@shared/types';
 
 const TOKEN_KEY = 'omnihub.token';
 const NAME_KEY = 'omnihub.deviceName';
@@ -85,6 +85,29 @@ export function isDeviceAuthFailure(path: string, _message: string): boolean {
   return path !== '/api/pair';
 }
 
+/** A PC counter, as the phone sees it. */
+/** A macro deck button made on the PC (the phone only sees how it looks). */
+export interface DeckButton {
+  id: string;
+  label: string;
+  icon: string;
+  color: string;
+}
+
+export interface PhoneCounter {
+  id: string;
+  name: string;
+  count: number;
+  phaseCount: number;
+  phases: number;
+  timerMs: number;
+  running: boolean;
+  odds: string | null;
+  chance: number | null;
+  sprite: string | null;
+  events: { id: string; name: string; phase: boolean }[];
+}
+
 export interface ServerInfo {
   name: string;
   app: string;
@@ -93,7 +116,21 @@ export interface ServerInfo {
   tls: boolean;
   paired: boolean;
   pairingOpen: boolean;
-  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean };
+  features: { uploads: boolean; power: boolean; screen: boolean; control: boolean; apps: boolean; notes: boolean; vault: boolean; clipboard?: boolean; media?: boolean; tasks?: boolean; games?: boolean; chats?: boolean; chatAgents?: boolean; servers?: boolean };
+}
+
+export interface PhoneAlarm {
+  id: string;
+  label: string;
+  time: string;
+  days: number[];
+  enabled: boolean;
+  fired: string;
+}
+
+export interface PhoneTimers {
+  timers: { id: string; label: string; endsAt: number; minutes: number }[];
+  alarms: PhoneAlarm[];
 }
 
 export interface FsEntry {
@@ -116,6 +153,87 @@ export interface Status {
   pendingPower: PendingPower | null;
   vaultUnlocked: boolean;
 }
+
+// ---------- music ----------
+
+export interface FoundFile {
+  name: string;
+  path: string;
+  dir: boolean;
+  size: number;
+  kind: string;
+}
+
+export interface LiveStats {
+  fps: FpsLive | null;
+  cpuTemp: number | null;
+  gpuTemp: number | null;
+  cpu: number;
+  gpu: number | null;
+  memoryUsed: number;
+  memoryTotal: number;
+  game: string | null;
+}
+
+export type { AudioOutput, BtDevice, QuietSchedule, QuietStatus, Site } from '@shared/types';
+export type { AudioInfo, FpsLive, GameKind, GameSession, GameStep, LyricLine, LyricsStatus, LyricWord, MediaAction, MediaState, PingResult, Priority, ProcessGroup, ProcessSort, Usage } from '@shared/types';
+import type { AudioOutput, BtDevice, Site, QuietSchedule, QuietStatus, ApprovalRequest, BoardStroke, DownloadItem, DownloadMode, Scanned, ScanKind, ScanTarget, VideoJob, VideoTask, AudioInfo, FpsLive, GameKind, GameSession, LyricsStatus, MediaAction, MediaState, PingResult, Priority, ProcessSort, Usage } from '@shared/types';
+
+/** One app in the PC's volume mixer. */
+export interface AppVolume {
+  key: string;
+  name: string;
+  level: number;
+  muted: boolean;
+  active: boolean;
+}
+
+/** An app using the PC's microphone right now. */
+export interface Call {
+  key: string;
+  name: string;
+  sinceMs: number | null;
+}
+
+/** A PC monitor whose brightness can be set (DDC/CI, or Windows for a laptop screen). */
+export interface Display {
+  id: string;
+  name: string;
+  primary: boolean;
+  builtin: boolean;
+  /** 0–100; null when the monitor doesn't answer. */
+  brightness: number | null;
+  contrast: number | null;
+}
+export type DisplaySetting = 'brightness' | 'contrast';
+
+export interface Mixer {
+  master: { level: number; muted: boolean } | null;
+  mic: { muted: boolean; devices: number } | null;
+  apps: AppVolume[];
+  calls: Call[];
+  /** Other apps recording from a microphone right now (a game's voice chat). */
+  micApps: string[];
+}
+
+/** A program with a window open on the PC. */
+export interface OpenApp {
+  key: string;
+  exeName: string;
+  name: string;
+  titles: string[];
+  canQuit: boolean;
+}
+
+export interface PhoneGame {
+  id: string;
+  name: string;
+  kind: GameKind;
+  lastPlayed: number | null;
+  canLaunch: boolean;
+  process: string;
+}
+
 
 export const client = {
   info: () => request<ServerInfo>('GET', '/api/info'),
@@ -159,19 +277,134 @@ export const client = {
     const t = await request<{ url: string; name: string }>('POST', `/api/inbox/${item.id}/ticket`);
     triggerDownload(t.url, t.name, false);
   },
+  /** Fetch an offered file into memory so it can go to the share sheet (Save to Photos/Files). */
+  fetchForShare: async (item: InboxItem): Promise<File> => {
+    const t = await request<{ url: string; name: string }>('POST', `/api/inbox/${item.id}/ticket`);
+    const res = await fetch(t.url);
+    if (!res.ok) throw new Error(`The PC answered ${res.status}`);
+    const blob = await res.blob();
+    return new File([blob], t.name, { type: blob.type || 'application/octet-stream' });
+  },
+  sendClipboard: (text: string) => request<void>('POST', '/api/clipboard', { text }),
+  pcClipboard: () => request<{ text: string | null }>('GET', '/api/clipboard'),
+  openLink: (url: string) => request<void>('POST', '/api/open-link', { url }),
   dismiss: (id: string) => request<void>('DELETE', `/api/inbox/${id}`),
 
   power: () => request<{ enabled: boolean; actions: { action: PowerAction; label: string; destructive: boolean }[]; pending: PendingPower | null; delaySeconds: number }>('GET', '/api/power'),
   requestPower: (action: PowerAction) => request<{ pending: PendingPower }>('POST', '/api/power', { action, confirm: true }),
   cancelPower: () => request<{ cancelled: boolean }>('POST', '/api/power/cancel'),
+  quiet: () => request<QuietStatus>('GET', '/api/quiet'),
+  setQuiet: (on: boolean) => request<QuietStatus>('POST', '/api/quiet', { on }),
+  quietTimer: (minutes: number | null) => request<QuietStatus>('POST', '/api/quiet/timer', { minutes }),
+  quietSchedule: (s: QuietSchedule) => request<QuietStatus>('POST', '/api/quiet/schedule', s),
+  searchFiles: (q: string) => request<{ items: FoundFile[]; more: boolean }>('GET', `/api/fs/search?q=${encodeURIComponent(q)}`),
+  live: () => request<LiveStats>('GET', '/api/live'),
+  voice: (text: string) => request<{ said: string }>('POST', '/api/voice', { text }),
+  photosCheck: (files: { name: string; size: number }[]) => request<{ have: boolean[]; dest: string }>('POST', '/api/photos/check', { files }),
+  capriDesktop: () => request<{ installed: boolean; running: boolean }>('GET', '/api/capri-desktop'),
+  setCapriDesktop: (open: boolean) => request<{ running: boolean }>('POST', '/api/capri-desktop', { open }),
+  sites: () => request<{ sites: Site[] }>('GET', '/api/sites'),
+  openSite: (id: string, fullScreen = true) => request<void>('POST', '/api/sites/open', { id, fullScreen }),
+  outputs: () => request<{ outputs: AudioOutput[] }>('GET', '/api/sound/outputs'),
+  setOutput: (id: string) => request<{ outputs: AudioOutput[] }>('POST', '/api/sound/outputs', { id }),
+  bluetooth: () => request<{ devices: BtDevice[] }>('GET', '/api/bluetooth'),
+  btConnect: (address: string, name: string, on: boolean) => request<{ devices: BtDevice[] }>('POST', '/api/bluetooth/connect', { address, name, on }),
+  btForget: (address: string, name: string) => request<{ devices: BtDevice[] }>('POST', '/api/bluetooth/forget', { address, name }),
+  party: () => request<{ code: string | null; queue: number; playing: { title: string; artist: string } | null }>('GET', '/api/party'),
+  /** Lock the vault, cut phones off (this one too) and lock the PC. */
+  panic: () => request<void>('POST', '/api/panic'),
+  /** A screenshot of the PC's screen (saved on the PC too); a link to get it. */
+  screenshot: () => request<{ url: string; name: string; width: number; height: number }>('POST', '/api/screenshot'),
+  /** Print a file on the PC's default printer. */
+  print: (path: string) => request<void>('POST', '/api/print', { path }),
+  /** Things the PC is waiting for this phone to approve. */
+  approvals: () => request<ApprovalRequest[]>('GET', '/api/approvals'),
+  answerApproval: (id: string, approve: boolean) => request<void>('POST', `/api/approvals/${encodeURIComponent(id)}`, { approve }),
+  /** Pages (JPEG, base64) to the PC: saved, read, and made a note when asked. */
+  scan: (body: { kind: ScanKind; title: string; target: ScanTarget; pages: string[] }) => request<Scanned>('POST', '/api/scan', body),
+  /** Type text on the PC where the cursor is (needs mouse and keyboard control on). */
+  typeText: (text: string, enter: boolean) => request<void>('POST', '/api/type', { text, enter }),
+  board: () => request<BoardStroke[]>('GET', '/api/board'),
+  boardAdd: (strokes: BoardStroke[]) => request<void>('POST', '/api/board', { strokes }),
+  boardUndo: () => request<void>('POST', '/api/board/undo'),
+  boardClear: () => request<void>('DELETE', '/api/board'),
+  /** The PC downloads a link into Downloads\\OmniHub. */
+  downloadOnPc: (url: string, mode: DownloadMode) => request<{ id: string }>('POST', '/api/downloads', { url, mode }),
+  downloads: () => request<DownloadItem[]>('GET', '/api/downloads'),
+  cancelDownload: (id: string) => request<void>('POST', `/api/downloads/${encodeURIComponent(id)}/cancel`),
+  /** Compress, convert, cut or take the sound out of a video on the PC. */
+  videoStart: (path: string, job: VideoJob) => request<{ id: string }>('POST', '/api/video', { path, job }),
+  videoTasks: () => request<{ ready: boolean; tasks: VideoTask[] }>('GET', '/api/video'),
 
   apps: () => request<{ apps: { id: string; name: string; publisher: string; source: string }[] }>('GET', '/api/apps'),
   appIcon: (id: string) => request<{ icon: string | null }>('GET', `/api/apps/${id}/icon`),
+  counters: () => request<{ counters: PhoneCounter[] }>('GET', '/api/counters'),
+  bumpCounter: (id: string, times: number) => request<{ count: number }>('POST', `/api/counters/${encodeURIComponent(id)}/bump`, { times }),
+  counterEvent: (id: string, event: string) => request<{ count: number }>('POST', `/api/counters/${encodeURIComponent(id)}/event`, { event }),
+  counterTimer: (id: string, run: boolean) => request<{ running: boolean }>('POST', `/api/counters/${encodeURIComponent(id)}/timer`, { run }),
+  deck: () => request<{ columns: number; buttons: DeckButton[]; scenes?: DeckButton[] }>('GET', '/api/deck'),
+  timers: () => request<PhoneTimers>('GET', '/api/timers'),
+  /** The phone as a controller: hold or let go of a button's key on the PC. */
+  pad: (button: string, down: boolean) => request<void>('POST', '/api/pad', { button, down }),
+  startTimer: (minutes: number, label = '') => request<PhoneTimers>('POST', '/api/timers', { minutes, label }),
+  cancelTimer: (id: string) => request<PhoneTimers>('DELETE', `/api/timers/${encodeURIComponent(id)}`),
+  saveAlarm: (alarm: PhoneAlarm) => request<PhoneTimers>('POST', '/api/alarms', alarm),
+  deleteAlarm: (id: string) => request<PhoneTimers>('DELETE', `/api/alarms/${encodeURIComponent(id)}`),
+  runScene: (id: string) => request<{ said: string }>('POST', `/api/scenes/${encodeURIComponent(id)}`),
+  runDeck: (id: string) => request<{ said: string }>('POST', `/api/deck/${encodeURIComponent(id)}`),
+  games: () => request<{ profiles: PhoneGame[]; session: GameSession | null; fps?: FpsLive | null }>('GET', '/api/games'),
+  playGame: (id: string, launch: boolean) => request<{ session: GameSession }>('POST', `/api/games/${encodeURIComponent(id)}/play`, { launch }),
+  stopGame: () => request<{ stopped: boolean }>('POST', '/api/games/stop'),
+  pingGame: (id: string) => request<{ results: PingResult[] }>('POST', '/api/games/ping', { id }),
+  servers: () => request<SrvView[]>('GET', '/api/servers'),
+  serverRun: (id: string, what: 'start' | 'stop' | 'restart') => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/${what}`),
+  serverPlayers: (id: string) => request<SrvPlayers>('GET', `/api/servers/${encodeURIComponent(id)}/players`),
+  serverPlayer: (id: string, name: string) => request<SrvPlayer>('GET', `/api/servers/${encodeURIComponent(id)}/player/${encodeURIComponent(name)}`),
+  serverAct: (id: string, name: string, action: SrvAction) => request<{ reply: string }>('POST', `/api/servers/${encodeURIComponent(id)}/act`, { name, action }),
+  serverWhitelist: (id: string, on: boolean) => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/whitelist`, { on }),
+  serverJoin: (id: string, everyone: boolean) => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/join`, { everyone }),
+  serverMaxPlayers: (id: string, players: number) => request<SrvView>('POST', `/api/servers/${encodeURIComponent(id)}/max-players`, { players }),
+  serverConsole: (id: string, after?: number) => request<SrvLine[]>('GET', `/api/servers/${encodeURIComponent(id)}/console${after != null ? `?after=${after}` : ''}`),
+  serverCommand: (id: string, text: string) => request<{ ok: boolean }>('POST', `/api/servers/${encodeURIComponent(id)}/command`, { text }),
+  serverMap: (id: string, dim: string) => request<SrvMap>('GET', `/api/servers/${encodeURIComponent(id)}/map?dim=${dim}`),
+  serverTile: (id: string, dim: string, x: number, z: number) => request<{ url: string }>('GET', `/api/servers/${encodeURIComponent(id)}/map/tile?dim=${dim}&x=${x}&z=${z}`),
+  tasks: (sort: ProcessSort = 'cpu', limit = 80) => request<Usage>('GET', `/api/tasks?sort=${sort}&limit=${limit}`),
+  endTask: (name: string) => request<{ ended: number }>('POST', '/api/tasks/end', { name }),
+  setTaskPriority: (name: string, priority: Priority) => request<{ changed: number }>('POST', '/api/tasks/priority', { name, priority }),
+  media: () => request<{ state: MediaState | null; nowMs: number; audio: AudioInfo }>('GET', '/api/media'),
+  mediaControl: (action: MediaAction, positionMs = 0) => request<{ ok: boolean }>('POST', '/api/media/control', { action, positionMs: Math.max(0, Math.round(positionMs)) }),
+  mediaLyrics: () => request<{ key: string | null; lyrics: LyricsStatus }>('GET', '/api/media/lyrics'),
+  mediaAudio: (patch: { level?: number; muted?: boolean; bass?: number; treble?: number; eqEnabled?: boolean }) => request<AudioInfo>('POST', '/api/media/audio', patch),
+  sound: () => request<Mixer>('GET', '/api/sound'),
+  soundMaster: (patch: { level?: number; muted?: boolean }) => request<Mixer>('POST', '/api/sound/master', patch),
+  soundApp: (key: string, patch: { level?: number; muted?: boolean }) => request<Mixer>('POST', '/api/sound/app', { key, ...patch }),
+  soundMic: (muted: boolean) => request<Mixer>('POST', '/api/sound/mic', { muted }),
+  displays: () => request<Display[]>('GET', '/api/displays'),
+  displaySet: (id: string, setting: DisplaySetting, value: number) => request<void>('POST', '/api/displays/set', { id, setting, value }),
+  openApps: () => request<{ apps: OpenApp[] }>('GET', '/api/open-apps'),
+  closeApp: (key: string) => request<{ windows: number }>('POST', '/api/open-apps/close', { key }),
+  openAppIcon: (key: string) => request<{ icon: string | null }>('GET', `/api/open-apps/icon?key=${encodeURIComponent(key)}`),
+  /** Object URL of the cover art (revoke when done). */
+  mediaArt: async (id: string): Promise<string> => {
+    const res = await fetch(`/api/media/art?id=${encodeURIComponent(id)}`, { headers: { authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) throw new Error('no artwork');
+    return URL.createObjectURL(await res.blob());
+  },
   launch: (id: string) => request<{ launched: string }>('POST', `/api/apps/${id}/launch`),
 
   notes: (kind?: NoteKind, q = '') => request<{ notes: Note[]; claudeFolder: boolean }>('GET', `/api/notes?${kind ? `kind=${kind}&` : ''}q=${encodeURIComponent(q)}`),
   note: (id: string) => request<Note>('GET', `/api/notes/${id}`),
   createNote: (n: { title: string; body: string; kind: NoteKind; tags?: string[]; sendToClaude?: boolean }) => request<Note>('POST', '/api/notes', n),
+
+  chats: () => request<{ chats: ChatSummary[]; tools: ChatTools; agents: boolean; claudeMode: ClaudeCodeMode; codexSandbox: CodexSandbox }>('GET', '/api/chats'),
+  chat: (source: ChatSource, id: string) => request<ChatView>('GET', `/api/chats/${source}/${encodeURIComponent(id)}`),
+  chatSend: (source: ChatSource, id: string, text: string, mode = '') => request<{ ok: boolean }>('POST', `/api/chats/${source}/${encodeURIComponent(id)}/send`, { text, mode }),
+  chatStop: (source: ChatSource, id: string) => request<{ ok: boolean }>('POST', `/api/chats/${source}/${encodeURIComponent(id)}/stop`),
+  chatNew: (kind: NewChatKind, text: string, folder: string | null, mode = '') => request<ChatSummary>('POST', '/api/chats/new', { kind, text, folder, mode }),
+  chatFolders: () => request<ChatFolder[]>('GET', '/api/chats/folders'),
+  chatUsage: () => request<UsageReport>('GET', '/api/chats/usage'),
+  ideas: () => request<Note[]>('GET', '/api/ideas'),
+  saveIdea: (text: string, from: string | null = null) => request<Note>('POST', '/api/ideas', { text, from }),
 
   screenInfo: () => request<{ monitors: MonitorInfo[]; presets: Preset[]; allowControl: boolean; defaultPreset: string }>('GET', '/api/screen/info'),
 
@@ -363,6 +596,9 @@ function putChunk(url: string, chunk: Uint8Array, crc: number, signal: AbortSign
  * chunk). Call `controller.abort()` to pause (the chunk in flight stops at
  * once); call again with `resumeId` to continue a paused upload.
  */
+/** Upload destination meaning "Pictures\\Phone\\<month>" on the PC. */
+export const PHOTOS_DIR = '@photos';
+
 export async function uploadFile(
   file: File,
   onProgress: (u: UploadHandle) => void,
@@ -374,7 +610,9 @@ export async function uploadFile(
   if (id) {
     offset = (await request<{ offset: number }>('GET', `/api/upload/${id}`)).offset;
   } else {
-    const st = await request<{ id: string; offset: number }>('POST', '/api/upload', { name: file.name, size: file.size, dir: opts.dir ?? null });
+    // "@photos": a camera-roll photo, kept in Pictures\Phone\<month> on the PC.
+    const photos = opts.dir === PHOTOS_DIR;
+    const st = await request<{ id: string; offset: number }>('POST', '/api/upload', { name: file.name, size: file.size, dir: photos ? null : (opts.dir ?? null), photos });
     id = st.id;
   }
   const h: UploadHandle = { id, name: file.name, size: file.size, offset, sent: offset, state: 'uploading' };
@@ -485,6 +723,10 @@ export interface ScreenStats {
   maxWidth: number;
   control: boolean;
   monitor: MonitorInfo | null;
+  /** the PC paused sharing (nothing is captured) */
+  paused?: boolean;
+  /** the PC shares a single window instead of the display */
+  window?: boolean;
 }
 
 /** Messages the viewer sends (see capture/stream.rs `ViewerMessage`). */

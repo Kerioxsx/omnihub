@@ -119,10 +119,11 @@ mod imp {
 /// was copied in the meantime.
 pub fn copy_secret(text: &str, clear_after: Duration) -> std::io::Result<()> {
     imp::set_secret(text)?;
+    let fingerprint = blake3::hash(text.as_bytes());
+    *LAST_SECRET.lock() = Some(fingerprint);
     if clear_after.is_zero() {
         return Ok(());
     }
-    let fingerprint = blake3::hash(text.as_bytes());
     std::thread::spawn(move || {
         std::thread::sleep(clear_after);
         if imp::get_text().is_some_and(|t| blake3::hash(t.as_bytes()) == fingerprint) {
@@ -130,6 +131,19 @@ pub fn copy_secret(text: &str, clear_after: Duration) -> std::io::Result<()> {
         }
     });
     Ok(())
+}
+
+/// Fingerprint of the last secret OmniHub copied, so it is never read back
+/// out (for example into "send clipboard to phone").
+static LAST_SECRET: parking_lot::Mutex<Option<blake3::Hash>> = parking_lot::Mutex::new(None);
+
+/// Text on the clipboard, unless it is a secret OmniHub copied from the vault.
+pub fn get_text() -> Option<String> {
+    let t = imp::get_text()?;
+    if LAST_SECRET.lock().is_some_and(|f| f == blake3::hash(t.as_bytes())) {
+        return None;
+    }
+    Some(t)
 }
 
 /// Copy ordinary text (no history exclusion, no timeout).

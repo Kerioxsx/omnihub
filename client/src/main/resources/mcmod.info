@@ -1,0 +1,12 @@
+[{
+  "modid": "vesper",
+  "name": "Vesper Client",
+  "description": "A PvP client for 1.8.9: an animated title and menus, celestial cosmetics, original kill effects and a custom HUD. Everything is visual and client-side.",
+  "version": "${version}",
+  "mcversion": "1.8.9",
+  "url": "https://github.com/Kerioxsx/omnihub",
+  "authorList": ["Vesper"],
+  "credits": "Original code and assets.",
+  "logoFile": "",
+  "dependencies": []
+}]

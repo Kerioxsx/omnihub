@@ -1,6 +1,7 @@
 // Storage commands of the mock backend.
 
 import type {
+  GrowthReport,
   ChildrenPage,
   CleanupCategory,
   DeleteResult,
@@ -538,4 +539,37 @@ export function dupesCancel(jobId: string): void {
   const j = dupeJobs.get(jobId);
   if (j?.timer) clearInterval(j.timer);
   dupeJobs.delete(jobId);
+}
+
+/** A believable "what grew" report: some big folders grew, a couple shrank. */
+export function growth(scanId: string, limit: number): GrowthReport {
+  const s = getScan(scanId);
+  const root = s.tree.node(s.rootId);
+  const depth = (id: number) => {
+    let d = 0;
+    for (let n = s.tree.node(id); n.parent >= 0 && n.id !== s.rootId; n = s.tree.node(n.parent)) d++;
+    return d;
+  };
+  const dirs = s.tree.nodes.filter((n) => n.isDir && !n.deleted && n.id !== s.rootId && n.size > 300 * 1024 ** 2 && depth(n.id) >= 2 && depth(n.id) <= 4);
+  const picked = dirs.filter((n) => hashString(`${scanId}:${n.id}`) % 5 === 0).slice(0, limit + 3);
+  const items = picked.map((n, i) => {
+    const h = hashString(`${n.name}:${i}`);
+    const shrink = h % 4 === 0;
+    const frac = 0.06 + (h % 30) / 100;
+    const delta = Math.round(n.size * frac) * (shrink ? -1 : 1);
+    const isNew = !shrink && h % 7 === 0;
+    return { path: s.tree.path(n.id), node: n.id, before: isNew ? 0 : n.size - delta, after: n.size, delta: isNew ? n.size : delta, isNew };
+  });
+  const grew = items.filter((i) => i.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, limit);
+  const shrank = items.filter((i) => i.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, limit);
+  const net = items.reduce((t, i) => t + i.delta, 0);
+  return { since: s.scannedAt - Math.round(6.2 * DAY), totalBefore: root.size - net, totalAfter: root.size, grew, shrank };
+}
+
+export function exportCsv(scanId: string, node: number, kind: string, path: string): number {
+  const s = getScan(scanId);
+  const n = resolve(s, node);
+  const rows = kind === 'largest' ? s.tree.topFiles(n, 5000).length : s.tree.children(n, 'size', true, 0, 1e9).total;
+  audit('desktop', 'storage.export', `Exported ${rows} rows to ${path}`);
+  return rows;
 }

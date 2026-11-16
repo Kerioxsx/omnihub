@@ -5,7 +5,9 @@
   --font: "Inter", "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", "Liberation Sans", Arial, system-ui, sans-serif;
   --font-display: "Inter Display", "Segoe UI Variable Display", "Segoe UI", "Helvetica Neue", "Liberation Sans", Arial, system-ui, sans-serif;
   --sidebar-w: 248px;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --glass: color-mix(in oklab, var(--bg-elev) 72%, transparent);
   --card-hi: rgba(255, 255, 255, 0.05);
   --hatch: rgba(255, 255, 255, 0.06);
@@ -38,13 +40,14 @@ html {
     radial-gradient(800px 520px at 108% 0%, color-mix(in oklab, var(--accent-2) 9%, transparent), transparent 70%);
 }
 
-/* Cards: glassy surface with a hairline top highlight. */
+/* Cards: a slightly lit surface (lighter at the top), a hairline top
+   highlight and a soft offset shadow, so they sit just above the page. */
 .card {
   position: relative;
-  background: var(--surface);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 80%, transparent), var(--surface) 46%);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: inset 0 1px 0 var(--card-hi);
+  box-shadow: inset 0 1px 0 var(--card-hi), 0 1px 2px rgba(0, 0, 0, 0.22), 0 14px 34px -24px rgba(0, 0, 0, 0.7);
 }
 
 :root.light .card {
@@ -53,12 +56,17 @@ html {
 }
 
 .card-interactive {
-  transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out), transform 160ms var(--ease-out);
+  transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out), transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
 }
 
 .card-interactive:hover {
   border-color: var(--border-strong);
   background: var(--surface-2);
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 var(--card-hi), 0 2px 4px rgba(0, 0, 0, 0.22), 0 20px 40px -24px rgba(0, 0, 0, 0.8);
+}
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .card-interactive:hover { transform: none; }
 }
 
 .glass {
@@ -329,10 +337,36 @@ input[type="number"]::-webkit-inner-spin-button {
   font-variant-numeric: tabular-nums;
 }
 
+/* Controller mode: a clear ring on whatever the gamepad has selected. */
+html.pad-mode :focus {
+  outline: 3px solid var(--accent) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--accent-soft) !important;
+}
+
+@keyframes wheel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Region overlay route: nothing behind the frozen screen. */
 html.overlay-route,
 html.overlay-route body {
   background: #000;
+}
+
+/* The screen glow's windows are see-through (and click-through). */
+html.ambient-route,
+html.ambient-route body,
+html.ambient-route #root {
+  background: transparent !important;
+  overflow: hidden;
 }
 
 /* Text fields draw their own focus state (border + glow); keep the accent
@@ -341,4 +375,100 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
+}
+
+/* Full-screen player: the cover art, blurred into slowly drifting light
+   (each blob is rasterised once and only moved, so it stays cheap). */
+.ambient-blob {
+  position: absolute;
+  width: 75vmax;
+  height: 75vmax;
+  border-radius: 50%;
+  object-fit: cover;
+  filter: blur(72px) saturate(1.7) brightness(0.9);
+  opacity: 0.85;
+  will-change: transform;
+}
+.ambient-blob.a { left: -25vmax; top: -30vmax; animation: ambient-a 46s linear infinite; }
+.ambient-blob.b { right: -28vmax; top: -18vmax; animation: ambient-b 58s linear infinite; }
+.ambient-blob.c { left: -10vmax; bottom: -38vmax; animation: ambient-c 64s linear infinite; }
+.ambient-blob.d { right: -20vmax; bottom: -30vmax; animation: ambient-d 52s linear infinite; opacity: 0.7; }
+@keyframes ambient-a { from { transform: rotate(0deg) translate(6vmax) rotate(0deg) scale(1.1); } to { transform: rotate(360deg) translate(6vmax) rotate(-360deg) scale(1.1); } }
+@keyframes ambient-b { from { transform: rotate(360deg) translate(8vmax) rotate(0deg) scaleX(-1); } to { transform: rotate(0deg) translate(8vmax) rotate(360deg) scaleX(-1); } }
+@keyframes ambient-c { from { transform: rotate(0deg) translate(10vmax) rotate(180deg); } to { transform: rotate(360deg) translate(10vmax) rotate(-180deg); } }
+@keyframes ambient-d { from { transform: rotate(180deg) translate(7vmax) rotate(0deg) scale(0.9); } to { transform: rotate(-180deg) translate(7vmax) rotate(360deg) scale(0.9); } }
+@keyframes lyric-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) {
+  .ambient-blob { animation: none !important; }
+}
+
+/* Aurora: an emoji beside the sung word floats a little. */
+@keyframes aurora-bob {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-0.07em) rotate(4deg); }
+}
+
+/* Big Picture (full-screen library) */
+.bp-ease { transition: transform 420ms cubic-bezier(0.2, 0.85, 0.2, 1), opacity 320ms ease, box-shadow 320ms ease; }
+.bp-in { animation: bp-in 380ms cubic-bezier(0.2, 0.85, 0.2, 1) both; }
+.bp-out { animation: bp-out 200ms var(--ease-out) both; }
+.bp-fade { animation: bp-fade 900ms ease both; }
+.bp-drift { animation: bp-drift 28s ease-in-out infinite alternate; transform-origin: 60% 40%; }
+.bp-rise { animation: bp-rise 520ms cubic-bezier(0.2, 0.85, 0.2, 1) both; }
+.bp-card { animation: bp-card 560ms cubic-bezier(0.2, 0.85, 0.2, 1) both; }
+.bp-pulse { animation: bp-pulse 1.4s ease-in-out infinite; }
+.bp-shine { background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.22) 45%, transparent 60%); background-size: 250% 100%; animation: bp-shine 2.6s ease-in-out infinite; }
+@keyframes bp-in { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+@keyframes bp-out { to { opacity: 0; transform: scale(1.03); } }
+@keyframes bp-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bp-drift { from { transform: scale(1.04) translate(0, 0); } to { transform: scale(1.16) translate(-2.5%, -1.5%); } }
+@keyframes bp-rise { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+@keyframes bp-card { from { opacity: 0; translate: 0 40px; } to { opacity: 1; translate: 0 0; } }
+@keyframes bp-pulse { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 var(--accent-glow); } 50% { transform: scale(1.05); box-shadow: 0 0 60px 10px var(--accent-glow); } }
+@keyframes bp-shine { 0% { background-position: 150% 0; } 60%, 100% { background-position: -100% 0; } }
+/* Big Picture (ORBIT look): colours come from the chosen background. */
+.bp2 { --bp-panel: #111727; --bp-stroke: rgba(191, 202, 248, 0.15); --bp-muted: #9ba8c6; --bp-mint: #86e8c6; font-family: Inter, 'Segoe UI', system-ui, sans-serif; }
+.bp2-card { transition: transform 220ms cubic-bezier(0.2, 0.85, 0.2, 1), box-shadow 220ms ease, border-color 220ms ease, background-color 220ms ease; scroll-margin: 110px 80px 130px; }
+.bp2-on { box-shadow: 0 0 0 3px rgba(var(--bp-accent-rgb), 0.95), 0 0 0 10px rgba(var(--bp-accent-rgb), 0.13), 0 22px 50px -18px rgba(var(--bp-accent-rgb), 0.55); border-color: transparent !important; position: relative; z-index: 1; }
+.bp2-page { animation: bp2-page 300ms ease both; }
+.bp2-hero { animation: bp-fade 420ms ease both; }
+.bp2-rise { animation: bp-rise 480ms cubic-bezier(0.2, 0.85, 0.2, 1) both; }
+.bp2-fade { animation: bp-fade 700ms ease both; }
+.bp2-drift { animation: bp-drift 30s ease-in-out infinite alternate; transform-origin: 60% 40%; }
+@keyframes bp2-page { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.bp2-calm *, .bp2-calm *::before, .bp2-calm *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .bp-ease, .bp-in, .bp-out, .bp-fade, .bp-drift, .bp-rise, .bp-card, .bp-pulse, .bp-shine, .bp2-card, .bp2-page, .bp2-hero, .bp2-rise, .bp2-fade, .bp2-drift { animation: none !important; transition: none !important; }
+}
+
+/* Floating windows (speedrun timer, crosshair, desktop widgets) are see-through. */
+html.float-route,
+html.float-route body,
+html.float-route #root {
+  background: transparent !important;
+}
+html.float-route .app-backdrop {
+  display: none;
+}
+
+/* Settings search: sections with no matching row step aside. */
+.settings-body[data-finding] section:not(:has([data-row])) { display: none; }
+
+
+/* Browser surfaces the shared tokens don't cover: caret, native controls,
+   heading and paragraph wrapping, numbers and link underlines. */
+:root {
+  accent-color: var(--accent);
+  caret-color: var(--accent);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+td, .num, time { font-variant-numeric: tabular-nums; }
+a { text-underline-offset: 3px; }
+
+/* Pressable cards answer a click with a small press. */
+.card-interactive:active { transform: scale(0.99); }
+@media (prefers-reduced-motion: reduce) {
+  .card-interactive:active { transform: none; }
 }

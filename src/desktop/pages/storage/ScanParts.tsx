@@ -233,7 +233,7 @@ export function SummaryCard({ summary, volume, onRefresh, refreshing }: { summar
           )}
         </div>
         <div className="mt-1 flex items-baseline gap-3">
-          <span className="gradient-text font-display text-[26px] font-semibold leading-none tracking-tight tabular">{formatBytes(summary.size)}</span>
+          <span className="font-display text-fg text-[26px] font-semibold leading-none tracking-tight tabular">{formatBytes(summary.size)}</span>
           <span className="text-[13px] text-dim tabular">
             {formatNumber(summary.files)} files · {formatNumber(summary.dirs)} folders
           </span>

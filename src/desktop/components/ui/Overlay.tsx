@@ -111,7 +111,7 @@ export function Modal({ open, onClose, title, description, icon: Icon, iconTone 
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 6 }}
             transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-            className={cx('relative w-full outline-none', !bare && 'max-h-[calc(100vh-48px)] overflow-hidden rounded-[20px] border border-line-strong bg-elev shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)]', !bare && SIZES[size], className)}
+            className={cx('relative w-full outline-none', !bare && 'float max-h-[calc(100vh-48px)] overflow-hidden rounded-[20px]', !bare && SIZES[size], className)}
           >
             {bare ? (
               children

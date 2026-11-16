@@ -1,6 +1,6 @@
 import type { Device, PairingInfo } from '@shared/types';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, Copy, QrCode, ShieldCheck, Smartphone } from 'lucide-react';
+import { Check, Copy, QrCode, ShieldCheck, Smartphone, Stethoscope } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, errorText } from '../../api';
 import { Button, IconButton } from '../../components/ui/Button';
@@ -8,8 +8,10 @@ import { Spinner } from '../../components/ui/Card';
 import { Modal } from '../../components/ui/Overlay';
 import { ProgressRing } from '../../components/ui/Progress';
 import { ErrorState } from '../../components/ui/States';
+import { cx } from '../../lib/cx';
 import { useEvent, useNow } from '../../lib/hooks';
 import { copyText, formatCountdown } from '../../lib/util';
+import { navigate } from '../../lib/router';
 import { useLive } from '../../state/live';
 import { useSettings } from '../../state/settings';
 import { toast } from '../../state/toasts';
@@ -18,6 +20,7 @@ export function PairDialog({ open, onClose }: { open: boolean; onClose: () => vo
   const [info, setInfo] = useState<PairingInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paired, setPaired] = useState<Device | null>(null);
+  const [which, setWhich] = useState(0);
   const running = useLive((s) => !!s.remote?.running);
   const update = useSettings((s) => s.update);
   const pairedRef = useRef(false);
@@ -28,6 +31,7 @@ export function PairDialog({ open, onClose }: { open: boolean; onClose: () => vo
     setInfo(null);
     setError(null);
     setPaired(null);
+    setWhich(0);
     pairedRef.current = false;
     if (!running) return;
     let alive = true;
@@ -92,7 +96,7 @@ export function PairDialog({ open, onClose }: { open: boolean; onClose: () => vo
           <motion.div key="pair" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-[300px_minmax(0,1fr)] gap-8 pb-4 pt-2">
             <div className="flex flex-col items-center">
               <div className="relative rounded-[22px] bg-white p-4 shadow-[0_20px_50px_-20px_var(--accent-glow)]">
-                <div className="qr h-[244px] w-[244px]" aria-label="Pairing QR code" role="img" dangerouslySetInnerHTML={{ __html: info.qrSvg }} />
+                <div className="qr h-[244px] w-[244px]" aria-label="Pairing QR code" role="img" dangerouslySetInnerHTML={{ __html: info.qrSvgs[which] ?? info.qrSvg }} />
                 {expired && <div className="absolute inset-0 flex items-center justify-center rounded-[22px] bg-white/90 text-[13px] font-semibold text-black">Expired</div>}
               </div>
               <div className="mt-4 flex items-center gap-2.5 text-[12.5px] text-dim">
@@ -118,17 +122,27 @@ export function PairDialog({ open, onClose }: { open: boolean; onClose: () => vo
               </div>
               <div>
                 <div className="text-[12px] font-medium uppercase tracking-wider text-faint">Or open on your phone</div>
-                <div className="mt-2 space-y-1.5">
-                  {info.urls.map((u) => {
+                <div className="mt-2 space-y-1.5" role="radiogroup" aria-label="Address for the QR code">
+                  {info.urls.map((u, i) => {
                     const base = u.split('/#')[0];
+                    const a = info.addresses[i];
                     return (
-                      <div key={u} className="flex items-center gap-2 rounded-xl border border-line bg-surface py-1 pl-3 pr-1">
-                        <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-fg">{base}</span>
+                      <div key={u} className={cx('flex items-center gap-2 rounded-xl border bg-surface py-1 pl-3 pr-1 transition-colors', i === which ? 'border-accent/50' : 'border-line')}>
+                        <button type="button" role="radio" aria-checked={i === which} onClick={() => setWhich(i)} className="min-w-0 flex-1 text-left" title="Use this address in the QR code">
+                          <span className="block truncate font-mono text-[13px] text-fg">{base}</span>
+                          {a && (
+                            <span className="block truncate text-[11px] text-faint">
+                              {a.interface}
+                              {a.primary ? ' · recommended' : a.virtualAdapter ? ' · virtual adapter, phones usually cannot reach it' : ''}
+                            </span>
+                          )}
+                        </button>
                         <IconButton icon={Copy} label="Copy address" size="sm" onClick={() => void copyText(base).then(() => toast.success('Address copied'))} />
                       </div>
                     );
                   })}
                 </div>
+                {info.urls.length > 1 && <p className="mt-1.5 text-[11.5px] text-faint">Pick an address to show its QR code.</p>}
               </div>
               {info.fingerprint && (
                 <div className="flex gap-3 rounded-xl border border-info/25 bg-info/8 px-4 py-3">
@@ -138,8 +152,21 @@ export function PairDialog({ open, onClose }: { open: boolean; onClose: () => vo
                   </div>
                 </div>
               )}
-              <div className="flex items-center gap-2 text-[12.5px] text-faint">
-                <Spinner size={13} /> Waiting for your phone…
+              <div className="flex items-center justify-between gap-3 text-[12.5px] text-faint">
+                <span className="flex items-center gap-2">
+                  <Spinner size={13} /> Waiting for your phone…
+                </span>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  icon={Stethoscope}
+                  onClick={() => {
+                    close();
+                    navigate('phone', { check: '1' });
+                  }}
+                >
+                  Phone says “can't be reached”?
+                </Button>
               </div>
             </div>
           </motion.div>

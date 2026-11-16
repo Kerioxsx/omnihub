@@ -23,7 +23,7 @@ function ToastView({ t }: { t: Toast }) {
       exit={{ opacity: 0, x: 40, transition: { duration: 0.18 } }}
       transition={{ type: 'spring', stiffness: 420, damping: 32 }}
       role={t.tone === 'error' ? 'alert' : 'status'}
-      className={cx('glass pointer-events-auto flex w-[360px] items-start gap-3 rounded-2xl border border-line-strong px-4 shadow-[0_18px_50px_-14px_rgba(0,0,0,0.55)]', compact ? 'py-2.5' : 'py-3')}
+      className={cx('float pointer-events-auto flex w-[360px] items-start gap-3 rounded-2xl px-4', compact ? 'py-2.5' : 'py-3')}
     >
       <Icon size={18} className={cx('mt-px shrink-0', TONES[t.tone])} aria-hidden />
       <div className="min-w-0 flex-1">

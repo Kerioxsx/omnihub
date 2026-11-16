@@ -38,23 +38,63 @@ fn is_allowed_v4(ip: Ipv4Addr, allow_tailscale: bool) -> bool {
 pub struct LanAddress {
     pub interface: String,
     pub ip: String,
+    /// The address Windows uses for its default route: the Wi-Fi or
+    /// Ethernet connection phones on the same network can reach.
+    pub primary: bool,
+    /// Hyper-V, WSL, VirtualBox, VPN and similar adapters phones usually
+    /// cannot reach.
+    pub virtual_adapter: bool,
 }
 
-/// IPv4 addresses phones can reach, most likely first (Wi-Fi/Ethernet
-/// private ranges before virtual adapters).
+/// Adapter names (Windows friendly names, Linux interface names) of
+/// connections a phone on the Wi-Fi cannot reach.
+fn is_virtual_adapter(name: &str) -> bool {
+    let n = name.to_lowercase();
+    // Windows names Wi-Fi Direct and hotspot adapters "Local Area Connection* 2".
+    n.contains('*')
+        || [
+            "vethernet", "virtualbox", "vmware", "docker", "wsl", "hyper-v", "default switch", "vbox", "br-", "veth", "virbr", "zt", "zerotier",
+            "tailscale", "hamachi", "radmin", "vpn", "tap-", "tun", "wireguard", "wg", "npcap", "loopback", "bluetooth", "teredo", "isatap", "utun",
+        ]
+        .iter()
+        .any(|v| n.contains(v))
+}
+
+/// The local IPv4 address the OS would use to reach the internet, found by
+/// "connecting" a UDP socket (no packet is sent).
+pub fn primary_ipv4() -> Option<Ipv4Addr> {
+    let sock = std::net::UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).ok()?;
+    sock.connect((Ipv4Addr::new(192, 0, 2, 1), 9)).ok()?;
+    match sock.local_addr().ok()?.ip() {
+        IpAddr::V4(v4) if !v4.is_unspecified() && !v4.is_loopback() => Some(v4),
+        _ => None,
+    }
+}
+
+/// IPv4 addresses phones can reach, most likely first: the default-route
+/// address, then other Wi-Fi/Ethernet addresses, then virtual adapters.
 pub fn lan_addresses() -> Vec<LanAddress> {
+    let primary = primary_ipv4();
     let mut out: Vec<(u8, LanAddress)> = if_addrs::get_if_addrs()
         .unwrap_or_default()
         .into_iter()
         .filter(|i| !i.is_loopback())
         .filter_map(|i| match i.ip() {
             IpAddr::V4(v4) if v4.is_private() || v4.octets()[0] == 100 => {
-                let name = i.name.to_lowercase();
-                let virtualish = ["vethernet", "virtualbox", "vmware", "docker", "wsl", "hyper-v", "vbox", "br-", "veth", "zt"]
-                    .iter()
-                    .any(|v| name.contains(v));
-                let rank = if virtualish { 3 } else if v4.octets()[0] == 192 { 0 } else if v4.octets()[0] == 10 { 1 } else { 2 };
-                Some((rank, LanAddress { interface: i.name.clone(), ip: v4.to_string() }))
+                let virtual_adapter = is_virtual_adapter(&i.name);
+                let is_primary = primary == Some(v4) && !virtual_adapter;
+                let rank = if is_primary {
+                    0
+                } else if virtual_adapter {
+                    4
+                } else if v4.octets()[0] == 192 {
+                    1
+                } else if v4.octets()[0] == 10 {
+                    2
+                } else {
+                    3
+                };
+                Some((rank, LanAddress { interface: i.name.clone(), ip: v4.to_string(), primary: is_primary, virtual_adapter }))
             }
             _ => None,
         })
@@ -62,6 +102,27 @@ pub fn lan_addresses() -> Vec<LanAddress> {
     out.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.ip.cmp(&b.1.ip)));
     out.dedup_by(|a, b| a.1.ip == b.1.ip);
     out.into_iter().map(|(_, a)| a).collect()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SelfTest {
+    pub ip: String,
+    pub ok: bool,
+    pub error: Option<String>,
+}
+
+/// Connect from this PC to the companion on each LAN address. If even this
+/// fails, phones cannot get in either, whatever the Wi-Fi or firewall does.
+pub fn self_test(addresses: &[LanAddress], port: u16) -> Vec<SelfTest> {
+    addresses
+        .iter()
+        .filter(|a| !a.virtual_adapter)
+        .map(|a| {
+            let r = a.ip.parse::<IpAddr>().map_err(|e| e.to_string()).and_then(|ip| std::net::TcpStream::connect_timeout(&std::net::SocketAddr::new(ip, port), std::time::Duration::from_secs(2)).map_err(|e| e.to_string()));
+            SelfTest { ip: a.ip.clone(), ok: r.is_ok(), error: r.err() }
+        })
+        .collect()
 }
 
 /// Host header check against DNS rebinding: only IP literals and this
@@ -154,6 +215,32 @@ pub fn qr_svg(text: &str) -> String {
     }
 }
 
+/// Listen on `ip:port`. For the unspecified IPv6 address the socket is made
+/// dual-stack explicitly: Windows makes IPv6 sockets IPv6-only by default,
+/// which would leave phones connecting to 192.168.x.x with "site can't be
+/// reached". Falls back to IPv4 only when IPv6 is unavailable.
+pub fn listen(ip: IpAddr, port: u16) -> std::io::Result<std::net::TcpListener> {
+    use socket2::{Domain, Protocol, Socket, Type};
+    let open = |ip: IpAddr| -> std::io::Result<std::net::TcpListener> {
+        let addr = std::net::SocketAddr::new(ip, port);
+        let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
+        if ip.is_ipv6() {
+            socket.set_only_v6(false)?;
+        }
+        // Like std: lets a restart reuse the port at once. (On Windows the
+        // option means something else — letting others take the port.)
+        #[cfg(not(windows))]
+        socket.set_reuse_address(true)?;
+        socket.bind(&addr.into())?;
+        socket.listen(1024)?;
+        Ok(socket.into())
+    };
+    match open(ip) {
+        Err(e) if ip == unspecified() && e.kind() != std::io::ErrorKind::AddrInUse => open(IpAddr::V4(Ipv4Addr::UNSPECIFIED)),
+        r => r,
+    }
+}
+
 pub fn localhost() -> IpAddr {
     IpAddr::V4(Ipv4Addr::LOCALHOST)
 }
@@ -182,6 +269,36 @@ mod tests {
         assert!(!ok("100.100.1.1", false));
         assert!(ok("100.100.1.1", true));
         assert!(!ok("100.128.1.1", true));
+    }
+
+    #[test]
+    fn lan_listener_takes_ipv4_and_ipv6() {
+        let l = listen(unspecified(), 0).unwrap();
+        let port = l.local_addr().unwrap().port();
+        // IPv4 must work everywhere — that is how phones connect.
+        std::net::TcpStream::connect(("127.0.0.1", port)).expect("IPv4 connection to the LAN listener");
+        if std::net::TcpListener::bind("[::1]:0").is_ok() && l.local_addr().unwrap().is_ipv6() {
+            std::net::TcpStream::connect(("::1", port)).expect("IPv6 connection to the LAN listener");
+        }
+    }
+
+    #[test]
+    fn virtual_adapters() {
+        for name in ["vEthernet (WSL)", "VirtualBox Host-Only Network", "Local Area Connection* 10", "Tailscale", "docker0", "ProtonVPN TUN", "Bluetooth Network Connection"] {
+            assert!(is_virtual_adapter(name), "{name}");
+        }
+        for name in ["Wi-Fi", "Ethernet", "Ethernet 2", "wlan0", "eth0", "enp3s0", "Local Area Connection"] {
+            assert!(!is_virtual_adapter(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn lan_addresses_put_the_primary_first() {
+        let list = lan_addresses();
+        if let Some(i) = list.iter().position(|a| a.primary) {
+            assert_eq!(i, 0);
+        }
+        assert!(list.iter().filter(|a| a.primary).count() <= 1);
     }
 
     #[test]
