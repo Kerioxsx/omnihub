@@ -599,6 +599,8 @@ pub struct GameHub {
     fn_install: Mutex<Option<PathBuf>>,
     fn_stash: Mutex<Option<(std::time::Instant, bool)>>,
     fn_started: AtomicBool,
+    /// Off in the app (anti-cheat kicks); on in tests.
+    allow_texture_removal: bool,
 }
 
 type AdminRunner = Arc<dyn Fn(&[AdminOp]) -> Result<(), String> + Send + Sync>;
@@ -668,6 +670,7 @@ impl GameHub {
             fn_install: Mutex::new(None),
             fn_stash: Mutex::new(None),
             fn_started: AtomicBool::new(false),
+            allow_texture_removal: cfg!(test),
         })
     }
 
@@ -870,9 +873,12 @@ impl GameHub {
         !self.procs.pids_named(configs::ConfigGame::Fortnite.process()).is_empty()
     }
 
-    /// For tests: Fortnite in a temporary folder.
-    pub fn set_fortnite_install(&self, dir: PathBuf) {
-        *self.fn_install.lock() = Some(dir);
+    /// For tests: Fortnite in a temporary folder, with texture removal allowed.
+    pub fn with_fortnite_install(self: Arc<Self>, dir: PathBuf) -> Arc<Self> {
+        let mut h = Arc::try_unwrap(self).unwrap_or_else(|_| unreachable!());
+        *h.fn_install.get_mut() = Some(dir);
+        h.allow_texture_removal = true;
+        Arc::new(h)
     }
 
     pub fn fortnite_textures(&self) -> fntextures::TextureStatus {
@@ -884,6 +890,9 @@ impl GameHub {
     /// Take Fortnite's optional texture packs out until it has run and
     /// closed (or 20 minutes pass without it starting).
     pub fn fortnite_textures_out(&self) -> Result<fntextures::TextureStatus, String> {
+        if !self.allow_texture_removal {
+            return Err("Taking Fortnite’s texture packs out is turned off: its anti-cheat checks the game’s files during a match and can remove you from it. Use Potato textures (NVIDIA) or the Potato preset instead.".into());
+        }
         let dir = self.fortnite_install().ok_or("Fortnite (from the Epic Games launcher) wasn't found on this PC.")?;
         let s = fntextures::stash(&dir, self.fortnite_running())?;
         *self.fn_stash.lock() = Some((std::time::Instant::now(), false));
@@ -906,9 +915,9 @@ impl GameHub {
         serde_json::from_slice(&b).ok()
     }
 
-    /// Fortnite's last crash with its likely cause (None: no crash report).
+    /// Fortnite's last crash or kick from a match, with its likely cause.
     pub fn fortnite_crash(&self) -> Option<fortnite::Crash> {
-        fortnite::last_crash(&Self::local_app_data().ok()?, self.textures_out_window())
+        fortnite::last_problem(&Self::local_app_data().ok()?, self.textures_out_window())
     }
 
     /// Take the packs out and start Fortnite through the Epic launcher.

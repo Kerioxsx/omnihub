@@ -1314,3 +1314,14 @@ the tray). The installer is not code-signed yet, so SmartScreen will warn.
   characters) and shows it locally. Nothing is uploaded. When OmniHub last
   had the texture packs out is kept in `fortnite-textures.json` in its data
   folder (two timestamps).
+
+## 0.60.0
+
+- **Fortnite kick notice** reads the last 16 MB of the four newest
+  `%LOCALAPPDATA%\FortniteGame\Saved\Logs\FortniteGame*.log` files, keeps
+  only the last line about a network or travel failure, kick or anti-cheat
+  (shortened to 300 characters), and shows it locally. Nothing is uploaded.
+- **Texture pack removal is off** in the app (`allow_texture_removal`, on
+  only in tests), because Fortnite's anti-cheat checks game files during a
+  match. Restoring packs left out by 0.58/0.59 still works, automatically
+  and with Put back now.

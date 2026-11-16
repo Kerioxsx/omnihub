@@ -246,7 +246,7 @@ const handlers: Record<string, Handler> = {
     if (typeof n === 'number') mockPotato = n;
     return mockPotato;
   },
-  games_fortnite_crash: () => ({ at: Date.now() - 3_600_000, message: 'LowLevelFatalError [File:Unknown] D3D Device Removed: DXGI_ERROR_DEVICE_HUNG', cause: 'gpu', title: 'The graphics driver stopped responding', advice: 'Usually heat or an unstable overclock while the card runs flat out at very high frame rates, or the driver itself. Cap the frame rate near your monitor’s refresh rate, set Potato textures to Off to rule it out, undo any graphics overclock, and clean-install the latest driver.' }),
+  games_fortnite_crash: () => ({ kind: 'crash', at: Date.now() - 3_600_000, message: 'LowLevelFatalError [File:Unknown] D3D Device Removed: DXGI_ERROR_DEVICE_HUNG', cause: 'gpu', title: 'The graphics driver stopped responding', advice: 'Usually heat or an unstable overclock while the card runs flat out at very high frame rates, or the driver itself. Cap the frame rate near your monitor’s refresh rate, set Potato textures to Off to rule it out, undo any graphics overclock, and clean-install the latest driver.' }),
   games_fortnite_textures: (a) => {
     const act = (a as { action?: string | null }).action;
     if (act === 'out' || act === 'play') mockTexturesOut = true;

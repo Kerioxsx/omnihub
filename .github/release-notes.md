@@ -1,5 +1,10 @@
 ## New in this version
 
+**Kicked out of Fortnite matches? OmniHub now tells you why, and texture pack removal is gone.**
+
+- **Kicks explained**: Fortnite writes the reason whenever it removes you from a match (connection timeout, anti-cheat, mismatched game files, being idle). OmniHub reads its newest logs and shows the last one in Games → Optimize → Fortnite, next to crashes, with what to try.
+- **"Remove & play" is removed.** Fortnite's anti-cheat checks the game's files during a match, and playing with the optional texture packs taken out can get you removed from it. Any packs still out go back as soon as Fortnite is closed (or with **Put back now**). For flat textures use Potato textures (NVIDIA) or the Potato preset. On AMD or Intel, the safe way is to uninstall High Resolution Textures in the Epic Games Launcher (Fortnite → Options).
+
 **Fortnite crash help, potato levels that each look different, and capped presets.**
 
 - **Last crash, explained**: if Fortnite crashed in the past week, Games → Optimize → Fortnite now shows when, Fortnite's own error message (from its crash report) and the likely cause: graphics driver stopped responding, out of graphics or system memory, unreadable game files, or a crash while the texture packs were out. Each comes with what to try.

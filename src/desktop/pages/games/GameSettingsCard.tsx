@@ -386,7 +386,7 @@ function presetCap(hz: number): number {
   return [...FPS_CAPS].filter((c) => c >= hz).sort((a, b) => a - b)[0] ?? 0;
 }
 
-/** Fortnite's last crash (from its own crash reports) in the past week, with the likely cause. */
+/** Fortnite's last crash or kick from a match (from its own reports and log) in the past week, with the likely cause. */
 function LastCrash() {
   const [c, setC] = useState<FortniteCrash | null>(null);
   const [hidden, setHidden] = useState(false);
@@ -459,11 +459,7 @@ function PotatoTextures({ dx12 }: { dx12: boolean }) {
   );
 }
 
-/**
- * Fortnite without its optional texture packs for one session (the AMD and
- * Intel take on potato textures). The files are moved aside, never deleted,
- * and go back on their own once Fortnite closes.
- */
+/** Fortnite's optional texture packs still out from an earlier version, to put back. */
 function TexturePacks() {
   const [t, setT] = useState<FortniteTextures | null>(null);
   const [busy, setBusy] = useState(false);
@@ -473,50 +469,28 @@ function TexturePacks() {
   }, []);
   useEvent<{ restored: number }>('games:textures', (p) => {
     void load();
-    toast.success('Fortnite’s textures are back', `${p.restored} file${p.restored === 1 ? '' : 's'} returned after Fortnite closed.`);
+    toast.success('Fortnite’s textures are back', `${p.restored} file${p.restored === 1 ? '' : 's'} returned.`);
   });
-  const act = async (a: 'play' | 'back') => {
-    if (a === 'play') {
-      const ok = await confirm({
-        title: 'Remove textures and play?',
-        description: 'OmniHub moves Fortnite’s optional texture packs into a folder next to the game (nothing is deleted), then starts Fortnite. They go back by themselves when Fortnite closes, or when OmniHub next starts. Don’t run Verify in the Epic launcher while they are out: it would download them again. Works best on a Fortnite that isn’t mid-update.',
-        confirmLabel: 'Remove and play',
-      });
-      if (!ok) return;
-    }
+  const back = async () => {
     setBusy(true);
     try {
-      setT(await api.games.fortniteTextures(a));
-      if (a === 'back') toast.success('Textures are back in Fortnite');
+      setT(await api.games.fortniteTextures('back'));
+      toast.success('Textures are back in Fortnite');
     } catch (e) {
-      toast.error(a === 'play' ? 'Couldn’t remove the textures' : 'Couldn’t put the textures back', errorText(e));
+      toast.error('Couldn’t put the textures back', errorText(e));
       void load();
     } finally {
       setBusy(false);
     }
   };
-  if (!t?.found) return null;
-  const out = t.stashed > 0;
+  // Taking packs out is off (Fortnite's anti-cheat can remove you from a
+  // match); only packs still out from before are shown, to put back.
+  if (!t?.found || t.stashed === 0) return null;
   return (
-    <Row
-      title="Play without texture packs (experimental)"
-      hint={
-        out
-          ? `${t.stashed} texture file${t.stashed === 1 ? '' : 's'} (${formatBytes(t.stashedBytes)}) are out for this session. They go back once Fortnite closes.`
-          : t.files === 0
-            ? 'Fortnite has no optional texture packs installed (High Resolution Textures is off), so there is nothing to remove: it is already as light as it gets this way.'
-            : `Takes Fortnite’s optional texture packs (${formatBytes(t.bytes)}, ${t.files} files) out for one session, for flatter textures on any graphics card, then puts every file back when Fortnite closes. Nothing is deleted. Experimental: some parts of the game may still ask for these packs and crash; if that happens OmniHub shows it here.`
-      }
-    >
-      {out ? (
-        <Button size="sm" variant="secondary" icon={RotateCcw} loading={busy} onClick={() => void act('back')}>
-          Put back now
-        </Button>
-      ) : (
-        <Button size="sm" icon={Zap} disabled={t.files === 0} loading={busy} onClick={() => void act('play')}>
-          Remove &amp; play
-        </Button>
-      )}
+    <Row title="Texture packs are out" hint={`${t.stashed} texture file${t.stashed === 1 ? '' : 's'} (${formatBytes(t.stashedBytes)}) are still out from an earlier session. They go back when Fortnite closes; put them back now to be safe. Taking them out is no longer offered: Fortnite’s anti-cheat can remove you from a match without them.`}>
+      <Button size="sm" variant="secondary" icon={RotateCcw} loading={busy} onClick={() => void back()}>
+        Put back now
+      </Button>
     </Row>
   );
 }

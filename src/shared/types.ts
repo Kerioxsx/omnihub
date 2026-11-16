@@ -1579,11 +1579,12 @@ export interface FortniteTextures {
   stashedBytes: number;
 }
 
-/** Fortnite's last crash, from its own crash reports. */
+/** Fortnite's last crash (its crash reports) or kick from a match (its log). */
 export interface FortniteCrash {
+  kind: 'crash' | 'kick';
   at: number;
   message: string;
-  cause: 'gpu' | 'vram' | 'memory' | 'files' | 'textures' | 'other';
+  cause: 'gpu' | 'vram' | 'memory' | 'files' | 'textures' | 'anticheat' | 'network' | 'idle' | 'other';
   title: string;
   advice: string;
 }

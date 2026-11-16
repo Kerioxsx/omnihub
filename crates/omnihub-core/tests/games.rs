@@ -284,8 +284,7 @@ fn fortnite_textures_stay_out_until_it_runs_and_come_back_at_start() {
         std::fs::write(paks.join(n), b"x").unwrap();
     }
     let dir = tempfile::tempdir().unwrap();
-    let hub = GameHub::with_test_timing(dir.path(), EventBus::new(), Arc::new(ProcessMonitor::new()), Duration::from_millis(100), Duration::from_secs(10));
-    hub.set_fortnite_install(game.path().to_path_buf());
+    let hub = GameHub::with_test_timing(dir.path(), EventBus::new(), Arc::new(ProcessMonitor::new()), Duration::from_millis(100), Duration::from_secs(10)).with_fortnite_install(game.path().to_path_buf());
     hub.textures_tick(); // start: nothing out
     let s = hub.fortnite_textures_out().unwrap();
     assert_eq!((s.files, s.stashed), (0, 2));
@@ -294,8 +293,10 @@ fn fortnite_textures_stay_out_until_it_runs_and_come_back_at_start() {
     assert_eq!(hub.fortnite_textures().stashed, 2);
     // OmniHub closed mid-session: the next start puts them back.
     let dir2 = tempfile::tempdir().unwrap();
-    let hub2 = GameHub::with_test_timing(dir2.path(), EventBus::new(), Arc::new(ProcessMonitor::new()), Duration::from_millis(100), Duration::from_secs(10));
-    hub2.set_fortnite_install(game.path().to_path_buf());
+    let hub2 = GameHub::with_test_timing(dir2.path(), EventBus::new(), Arc::new(ProcessMonitor::new()), Duration::from_millis(100), Duration::from_secs(10)).with_fortnite_install(game.path().to_path_buf());
+    // The app itself refuses to take them out.
+    let plain = GameHub::with_test_timing(tempfile::tempdir().unwrap().path(), EventBus::new(), Arc::new(ProcessMonitor::new()), Duration::from_millis(100), Duration::from_secs(10));
+    assert!(plain.fortnite_textures_out().unwrap_err().contains("anti-cheat"));
     hub2.textures_tick();
     let s = hub2.fortnite_textures();
     assert_eq!((s.files, s.stashed), (2, 0));

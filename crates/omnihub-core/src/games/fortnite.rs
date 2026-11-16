@@ -251,6 +251,8 @@ mod imp {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Crash {
+    /// "crash" (the game closed) or "kick" (thrown out of a match).
+    pub kind: String,
     /// When (milliseconds since 1970).
     pub at: i64,
     /// Fortnite's own message (shortened).
@@ -313,7 +315,69 @@ pub fn last_crash(local: &Path, textures_out: Option<(i64, i64)>) -> Option<Cras
         .max_by_key(|(at, _)| *at)?;
     let message: String = message.lines().next().unwrap_or("").chars().take(300).collect();
     let (cause, title, advice) = classify(&message, at, textures_out);
-    Some(Crash { at, message, cause, title, advice })
+    Some(Crash { kind: "crash".into(), at, message, cause, title, advice })
+}
+
+/// `[2026.11.15-20.31.12:345]` at the start of a log line, in ms (UTC).
+fn log_time(line: &str) -> Option<i64> {
+    let t = line.strip_prefix('[')?.get(..23)?;
+    let d = chrono::NaiveDateTime::parse_from_str(t, "%Y.%m.%d-%H.%M.%S:%3f").ok()?;
+    Some(d.and_utc().timestamp_millis())
+}
+
+/// What a disconnect line most likely means.
+pub fn classify_kick(line: &str, at: i64, textures_out: Option<(i64, i64)>) -> (String, String, String) {
+    let m = line.to_ascii_lowercase();
+    let has = |ws: &[&str]| ws.iter().any(|w| m.contains(w));
+    let (cause, title, advice) = if textures_out.is_some_and(|(a, b)| at >= a - 60_000 && at <= b + 60_000) {
+        ("textures", "Fortnite threw you out while its texture packs were out", "Fortnite’s anti-cheat checks the game’s files during a match, and missing texture packs can get you removed. They are back now, and OmniHub no longer offers taking them out. For flat textures use Potato textures (NVIDIA) or the Potato preset.")
+    } else if has(&["anticheat", "anti-cheat", "easyanticheat", "battleye", "integrity", "untrusted", "violation"]) {
+        ("anticheat", "Fortnite’s anti-cheat removed you from the match", "Usually a game file it didn’t expect or a program it doesn’t trust. Put texture packs back if they are out, run Verify in the Epic Games launcher (Library → Fortnite → ⋯ → Manage → Verify), and close overlays, macro tools and auto clickers while you play.")
+    } else if has(&["package", "mismatch", "checksum", "missing", ".pak", "pakchunk"]) {
+        ("files", "Your game files didn’t match the server’s", "Put texture packs back if they are out, let the Epic Games launcher finish any update, then run Verify (Library → Fortnite → ⋯ → Manage → Verify).")
+    } else if has(&["idle", "afk", "inactiv"]) {
+        ("idle", "Fortnite removed you for being idle", "Fortnite kicks players who don’t move for a while.")
+    } else if has(&["timeout", "timed out", "connectionlost", "connection lost", "pendingconnectionfailure", "connection to the host"]) {
+        ("network", "Your connection to the match dropped", "Your PC stopped hearing from Fortnite’s server for a few seconds. On Wi-Fi, move closer to the router or use a cable, pause downloads and streams on your network, and try turning off Wi-Fi low-latency mode in the boost. Check the ping and packet loss test in Games.")
+    } else {
+        ("other", "Fortnite took you out of the match", "If it keeps happening, put your own settings back (Put back mine) and see whether it stops; that tells whether a change was the cause.")
+    };
+    (cause.into(), title.into(), advice.into())
+}
+
+/// The last time Fortnite's own log says you were disconnected or kicked
+/// from a match, in its newest logs (`Saved\Logs\FortniteGame*.log`).
+pub fn last_kick(local: &Path, textures_out: Option<(i64, i64)>) -> Option<Crash> {
+    let dir = local.join("FortniteGame").join("Saved").join("Logs");
+    let mut logs: Vec<(i64, PathBuf)> = std::fs::read_dir(&dir)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("FortniteGame") && n.ends_with(".log")))
+        .filter_map(|p| Some((mtime_ms(&p)?, p)))
+        .collect();
+    logs.sort_by_key(|l| std::cmp::Reverse(l.0));
+    for (mtime, path) in logs.into_iter().take(4) {
+        let Ok(bytes) = std::fs::read(&path) else { continue };
+        // The end of a long log is enough.
+        let text = String::from_utf8_lossy(&bytes[bytes.len().saturating_sub(16 << 20)..]).into_owned();
+        let hit = text.lines().rev().find(|l| {
+            let m = l.to_ascii_lowercase();
+            ["network failure", "networkfailure", "travel failure", "travelfailure", "kicked", "kick player", "anticheat", "battleye"].iter().any(|w| m.contains(w)) && (m.contains("warning") || m.contains("error") || m.contains("kick") || m.contains("disconnect"))
+        });
+        if let Some(line) = hit {
+            let at = log_time(line).unwrap_or(mtime);
+            let message: String = line.chars().take(300).collect();
+            let (cause, title, advice) = classify_kick(line, at, textures_out);
+            return Some(Crash { kind: "kick".into(), at, message, cause, title, advice });
+        }
+    }
+    None
+}
+
+/// The most recent crash or kick.
+pub fn last_problem(local: &Path, textures_out: Option<(i64, i64)>) -> Option<Crash> {
+    [last_crash(local, textures_out), last_kick(local, textures_out)].into_iter().flatten().max_by_key(|c| c.at)
 }
 
 #[cfg(test)]
@@ -368,5 +432,21 @@ mod tests {
         assert_eq!(classify("Corrupt pak file pakchunk10optional", 0, None).0, "files");
         assert_eq!(classify("Unhandled Exception: EXCEPTION_ACCESS_VIOLATION", 0, None).0, "other");
         assert!(last_crash(tempfile::tempdir().unwrap().path(), None).is_none());
+    }
+
+    #[test]
+    fn finds_the_last_kick_in_the_log() {
+        let t = tempfile::tempdir().unwrap();
+        let d = t.path().join("FortniteGame/Saved/Logs");
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(d.join("FortniteGame.log"), "[2026.11.15-20.00.00:000][  1]LogInit: Build\n[2026.11.15-20.31.12:345][900]LogNet: Warning: Network Failure: GameNetDriver[ConnectionTimeout]: UNetConnection::Tick: Connection TIMED OUT\n[2026.11.15-20.31.13:000][901]LogLoad: Took 1s\n").unwrap();
+        let k = last_kick(t.path(), None).unwrap();
+        assert_eq!((k.kind.as_str(), k.cause.as_str()), ("kick", "network"));
+        assert_eq!(k.at, chrono::NaiveDate::from_ymd_opt(2026, 11, 15).unwrap().and_hms_milli_opt(20, 31, 12, 345).unwrap().and_utc().timestamp_millis());
+        assert_eq!(last_kick(t.path(), Some((k.at - 5000, k.at + 5000))).unwrap().cause, "textures");
+        assert_eq!(classify_kick("LogEasyAntiCheatClient: Error: Kicked: Integrity violation", 0, None).0, "anticheat");
+        assert_eq!(classify_kick("LogNet: Warning: Travel Failure: [PackageMismatch]", 0, None).0, "files");
+        assert_eq!(last_problem(t.path(), None).unwrap().kind, "kick");
+        assert!(last_kick(tempfile::tempdir().unwrap().path(), None).is_none());
     }
 }
